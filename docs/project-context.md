@@ -237,9 +237,9 @@ All tools follow these contracts:
 | Person | `people/` | Profile of referenced person |
 | Summary | `summary/` | Area-level synthesis |
 
-**Edge types (core, partial):** `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
+**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 
-**Bidirectional `exempt-only` mode** is the default. Only `foundations/**`, `outputs/**`, `*://*` may have a forward link without a reverse. Anything else without a reverse is a lint error.
+**Bidirectional `exempt-only` mode** is the default. Only `outputs/**`, `*://*`, and (research pack only) `foundations/**` may have a forward link without a reverse. Anything else without a reverse is a lint error.
 
 ---
 
@@ -256,7 +256,7 @@ All tools follow these contracts:
 | check | `/lumi-check` | Run `lint.mjs`, auto-fix safe checks (L01/L03/L06/L07/L09), surface advisory issues |
 | reset | `/lumi-reset` | Dry-run-first destructive reset across 5 scopes |
 
-**Research pack (4) — opt-in, adds Python tools + `topics/`, `foundations/`, `ideas/`, `claims/`, `experiments/` page types:**
+**Research pack (4) — opt-in, adds Python tools + `topics/`, `foundations/` page types:**
 
 | Skill | Purpose |
 |---|---|
@@ -265,7 +265,7 @@ All tools follow these contracts:
 | `/lumi-prefill` | Seed `wiki/foundations/` terminal pages |
 | `/lumi-survey` | Narrative synthesis from existing wiki |
 
-**Reading pack (4) — opt-in, no new tools, adds `chapters/`, `characters/`, `themes/`:**
+**Reading pack (4) — opt-in, no new tools, adds `chapters/`, `characters/`, `themes/`, `plot/` page types:**
 
 | Skill | Purpose |
 |---|---|
@@ -361,7 +361,7 @@ Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 ID
 11. **Slug uniqueness is not lint-enforced.** Linter catches broken links but not duplicate slugs. Ingest skills must check existence before creating.
 12. **Bidirectional invariant.** Most common ingest mistake. Forward link without reverse = L06 fail.
 13. **README schema fence.** Edits inside `<!-- lumina:schema -->` markers are wiped on upgrade. User content must go outside.
-14. **Adding a new pack** requires threaded `{{#if pack_X}}` guards in `README.md` template, `lumina.config.yaml`, and possibly page templates. Forgetting one = orphaned content.
+14. **Adding a new pack** requires threaded `{{#if pack_X}}` guards in `lumina.config.yaml`, page templates, and these regions of `src/templates/README.md`: Repository Layout (`wiki/`, `raw/`, `_lumina/tools/` lines), the `raw/` rule sentence (named exception paths), Page Types table rows, Cross-Reference Rules table rows, Exemptions list, Skills section, Tooling Conventions. Forgetting any one = orphaned or leaking content.
 15. **Reading-pack skills missing `allowed-tools`** — known drift, fix when touching them.
 16. **`/lumi-discover` writes to `raw/discovered/`** — crosses the "raw is read-only" headline. The exception is implicit; document it explicitly when adding any new skill that touches `raw/`.
 17. **Stale planning artifact:** `docs/planning-artifacts/lumina-wiki-readme-template.md` lines 179–181 list dropped research skills. The shipped `README.md` at project root is authoritative.
