@@ -12,13 +12,22 @@ inputs:
 
 Single-author, single-package npm CLI. Replaces epics/stories. Each unit below is story-sized: one PR, one DoD checklist, dependency-ordered.
 
+## Path convention — repo source vs workspace
+
+This plan distinguishes the two artifact surfaces (BMAD-style):
+
+- **Repo source paths** (this build artifact) live under `src/`: `src/scripts/`, `src/tools/`, `src/skills/`, `src/installer/`, `src/templates/`.
+- **Workspace paths** (rendered/copied by the installer into the user's project) live under `_lumina/` and `.agents/`: `_lumina/scripts/`, `_lumina/tools/`, `.agents/skills/...`.
+
+Phases P0–P3, P5 author files at **repo source paths**. The installer (P8) copies them verbatim to workspace paths during `lumina install`. References below use repo source paths; equivalent workspace paths are noted parenthetically where the distinction matters.
+
 ## Build order (locked)
 
 ```
-P0  schemas.mjs
-P1  wiki.mjs
-P2  lint.mjs
-P3  reset.mjs
+P0  schemas.mjs                                     [DONE 2026-05-01]
+P1  wiki.mjs                                        [DONE 2026-05-01]
+P2  lint.mjs                                        [DONE 2026-05-01]
+P3  reset.mjs                                       [DONE 2026-05-01]
 P4  Core skills (6)        — edit → init → ingest → ask → check → reset
 P5  Research-pack tools    — _env, fetchers, discover, init_discovery, prepare_source
 P6  Research-pack skills (4)  — discover → prefill → survey → setup
@@ -27,11 +36,15 @@ P8  Installer + templates + manifest + symlink ladder
 P9  CI matrix + idempotency byte-diff test + npm publish prep
 ```
 
+**Progress (2026-05-01):** P0–P3 complete. 144 unit tests passing (wiki 59 / lint 74 / reset 11). 3 rounds of code review applied; all blockers + risks resolved. Ready for P4.
+
 Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. Installer is last because templates stabilize only after skills exist.
 
 ---
 
-## P0 — `_lumina/scripts/schemas.mjs`
+## P0 — `src/scripts/schemas.mjs` (workspace: `_lumina/scripts/schemas.mjs`) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. 411 raw / 196 logic LoC (within 300 budget). 8 named exports: `SCHEMA_VERSION`, `EXEMPTION_GLOBS`, `ENUMS`, `ENTITY_DIRS`, `RAW_DIRS`, `EDGE_TYPES`, `REQUIRED_FRONTMATTER`, `PACK_MANIFEST_SHAPE`. Two scope deviations accepted: (a) `EDGE_TYPES` lists forward and reverse as separate entries (vs single-entry-with-`reverse`-field) for direct lookup convenience; (b) added `pack` field on each edge type so lint/wiki can gate edge validation by installed pack.
 
 **Why first:** every other artifact (wiki engine, linter, skill prompts, templates) consumes the entity/edge vocabulary. Locking it first prevents downstream rewrites.
 
@@ -47,7 +60,9 @@ Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. I
 
 ---
 
-## P1 — `_lumina/scripts/wiki.mjs`
+## P1 — `src/scripts/wiki.mjs` (workspace: `_lumina/scripts/wiki.mjs`) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. 1,555 LoC (within 1,500–2,000 budget). 59 tests passing. All required subcommands plus 4 read-only bonus subcommands (`list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`). In-house YAML frontmatter parser handles bounded subset (no `js-yaml` dep added). Edge-key canonical format: `from|type|to`. Atomic write uses `fd.datasync` + rename; on error, orphan `.tmp` is cleaned via `unlink`.
 
 **Why second:** universal dependency (≥10 of 14 skills). Blocks all skill authoring beyond `/lumi-edit`.
 
@@ -62,15 +77,19 @@ Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. I
 
 ---
 
-## P2 — `_lumina/scripts/lint.mjs`
+## P2 — `src/scripts/lint.mjs` (workspace: `_lumina/scripts/lint.mjs`) — ✅ DONE
 
-**Scope:** 9 checks (port from OmegaWiki `lint.py`, adapted to Lumina schema). Flags: `--fix`, `--dry-run`, `--suggest`, `--json`.
+**Status:** Shipped 2026-05-01. 1,122 raw / ~720 logic LoC (logic slightly above 500–700 target; accepted — comment + JSON-schema doc block account for the difference). 74 tests passing. All 9 checks (L01–L09) implemented; fixers for L03/L06/L07/L09. JSON output schema documented at top of file. L07 fixer idempotency proven by regression test.
+
+**Scope:** 9 schema-validation checks against `schemas.mjs`. Flags: `--fix`, `--dry-run`, `--suggest`, `--json`.
 
 **DoD:** `--json` output schema documented + consumed by `/lumi-check`. `--fix --dry-run` shows diff without writing. CI consumes JSON mode. 500–700 LoC.
 
 ---
 
-## P3 — `_lumina/scripts/reset.mjs`
+## P3 — `src/scripts/reset.mjs` (workspace: `_lumina/scripts/reset.mjs`) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. 232 LoC (within 150–250 budget). 11 tests passing. All 5 scopes implemented: `wiki`, `raw`, `state`, `checkpoints`, `all`. `safePath` handles both `/` and `\` separators for Windows compatibility.
 
 **Scope:** Scoped destructive reset. `--yes` required. `--dry-run` prints plan tree. Refuses `..` / paths outside project root.
 
@@ -86,13 +105,13 @@ Each `SKILL.md`:
 - ≤300 lines
 - Single source of truth: `README.md` at project root (no symlinks for schema)
 - Single-model self-check replaces any cross-model verdict
-- Calls `wiki.mjs` / `lint.mjs` / `reset.mjs` via Bash + JSON, never imports
+- Calls workspace `_lumina/scripts/{wiki,lint,reset}.mjs` via Bash + JSON, never imports
 
 **DoD per skill:** Manual smoke run on a throwaway workspace produces expected `wiki/` mutations; idempotency byte-diff passes after second run.
 
 ---
 
-## P5 — Research-pack Python tools (`_lumina/tools/`)
+## P5 — Research-pack Python tools (`src/tools/`, workspace: `_lumina/tools/`)
 
 Order: `_env.py` → 4 fetchers → `discover.py` → `init_discovery.py` (slim port) → `prepare_source.py`.
 
@@ -120,7 +139,7 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 
 ## P8 — Installer + templates + manifest
 
-**Components:** `bin/lumina.js`, `src/installer/{commands, prompts, fs, manifest, template-engine, update-check}.js`.
+**Components:** `bin/lumina.js`, `src/installer/{commands, prompts, fs, manifest, template-engine, update-check}.js`. Installer copies `src/scripts/` → workspace `_lumina/scripts/`, `src/tools/` → workspace `_lumina/tools/` (research pack only), `src/skills/` → workspace `.agents/skills/`.
 
 **Risk-concentrated module:** `src/installer/fs.js` — symlink ladder (symlink → junction → directory copy), atomic writes, idempotency. Heaviest test surface.
 
