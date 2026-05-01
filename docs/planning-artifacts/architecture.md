@@ -80,7 +80,7 @@ This is the canonical workspace layout the installer produces. Two top-level fra
 - **`CLAUDE.md`**, **`AGENTS.md`**, **`GEMINI.md`** at project root — small rendered stub files (~5–10 lines each), one per IDE target, each instructing its agent to read `README.md` first. NOT symlinks. Plain copies.
 - **`.cursor/rules/lumina.mdc`** — same stub pattern, rendered into the user's `.cursor/`.
 - **`_lumina/`** — installer-managed sidecar. Holds `config/`, `schema/` (deeper reference docs: `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md` — agent reads them on demand when README.md tells it to), `scripts/` (Node engine: `wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`), `tools/` (Python research-pack utilities), `_state/` (gitignored checkpoints), `manifest.json`. **`_lumina/schema/` does NOT contain `CLAUDE.md`** — the canonical entry point is `README.md` at the project root.
-- **`.agents/`** — agent-invokable surface. Contains **only** `skills/` (`skills/core/`, `skills/packs/research/`, `skills/packs/reading/`). No engine code, no schema, no manifest.
+- **`.agents/`** — agent-invokable surface. Contains **only** `skills/`, laid out flat: one directory per skill, each named `lumi-<name>/` (e.g. `lumi-init/`, `lumi-discover/`, `lumi-chapter-ingest/`). No engine code, no schema, no manifest.
 
 ```
 <project-root>/
@@ -97,13 +97,13 @@ This is the canonical workspace layout the installer produces. Two top-level fra
 │   ├── tools/                     ← Python tools (research pack only)
 │   ├── _state/                    ← gitignored
 │   └── manifest.json
-├── .agents/skills/                ← skills only (core + opt-in packs)
-├── .claude/skills/lumi-*          ← per-skill symlinks → .agents/skills/<pack>/<skill>/
+├── .agents/skills/lumi-*/         ← skills only (core + opt-in packs, flat layout)
+├── .claude/skills/lumi-*          ← per-skill symlinks → .agents/skills/lumi-<skill>/
 ├── wiki/                          ← LLM-maintained
 └── raw/                           ← user-owned, immutable
 ```
 
-This split mirrors BMAD-METHOD's `_bmad/` sidecar pattern with one important variation: schema is NOT a symlinked file. Conceptual cleanliness: `.agents/` answers "what does the LLM invoke"; `_lumina/` answers "what does the installer manage"; `README.md` answers "what is this project about and how does the wiki work" — all three are independent surfaces. The Windows symlink/junction/copy fallback ladder applies only to per-skill symlinks under `.claude/skills/lumi-*`; schema entry-point files (`README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc`) are plain rendered files with no link semantics.
+This split mirrors BMAD-METHOD's `_bmad/` sidecar pattern with one important variation: schema is NOT a symlinked file. Conceptual cleanliness: `.agents/` answers "what does the LLM invoke"; `_lumina/` answers "what does the installer manage"; `README.md` answers "what is this project about and how does the wiki work" — all three are independent surfaces. The flat skill layout under `.agents/skills/lumi-*/` gives each skill a predictable, pack-neutral name: the symlink at `.claude/skills/lumi-<name>/` targets `.agents/skills/lumi-<name>/` with a 1:1 name mapping, making the target easy to scan and trivial to verify. No pack subdirectory appears in the installed path; core, research, and reading skills are peers at the same level. The Windows symlink/junction/copy fallback ladder applies only to per-skill symlinks under `.claude/skills/lumi-*`; schema entry-point files (`README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc`) are plain rendered files with no link semantics.
 
 ## Prior Art Study — OmegaWiki
 

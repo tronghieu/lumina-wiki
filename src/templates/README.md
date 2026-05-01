@@ -53,8 +53,7 @@ Keep this mental map in immediate context:
 
 ### `.agents/` is the skill source of truth
 
-- `.agents/skills/core/` — always-installed skills
-- `.agents/skills/packs/<pack>/` — opt-in skill bundles (research, reading)
+- `.agents/skills/lumi-*/` — installed skills (flat, one directory per skill)
 
 ### `_lumina/` is the installer-managed sidecar
 

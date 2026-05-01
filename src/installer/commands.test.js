@@ -66,8 +66,8 @@ describe('installCommand', () => {
       assert.match(config, /research: true/);
       assert.match(config, /reading: true/);
 
-      await access(join(tmp, '.agents', 'skills', 'packs', 'research', 'discover', 'SKILL.md'));
-      await access(join(tmp, '.agents', 'skills', 'packs', 'reading', 'chapter-ingest', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-discover', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-chapter-ingest', 'SKILL.md'));
       await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
       await access(join(tmp, 'AGENTS.md'));
       await access(join(tmp, 'GEMINI.md'));
@@ -154,8 +154,8 @@ describe('installCommand', () => {
       assert.match(config, /reading: true/);
       assert.match(config, /codex: true/);
 
-      await access(join(tmp, '.agents', 'skills', 'packs', 'research', 'discover', 'SKILL.md'));
-      await access(join(tmp, '.agents', 'skills', 'packs', 'reading', 'chapter-ingest', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-discover', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-chapter-ingest', 'SKILL.md'));
       await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
     } finally {
       await cleanTmp(tmp);

@@ -180,15 +180,13 @@ export async function installCommand(opts = {}) {
     ...CORE_WIKI_DIRS,
     ...CORE_RAW_DIRS,
     ...LUMINA_DIRS,
-    '.agents/skills/core',
+    '.agents/skills',
   ];
   if (hasResearch) {
     dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS, ...RESEARCH_LUMINA_DIRS);
-    dirsToCreate.push('.agents/skills/packs/research');
   }
   if (hasReading) {
     dirsToCreate.push(...READING_WIKI_DIRS);
-    dirsToCreate.push('.agents/skills/packs/reading');
   }
 
   for (const dir of dirsToCreate) {
@@ -681,9 +679,9 @@ async function copySkills(projectRoot, packs) {
   const skillDefs = getSkillDefs(packs);
 
   for (const skill of skillDefs) {
-    // packPath uses forward slashes — join handles OS differences
-    const srcDir = join(SKILLS_DIR, ...skill.packPath.split('/'), skill.name);
-    const destDir = join(projectRoot, '.agents', 'skills', ...skill.packPath.split('/'), skill.name);
+    // srcPackPath uses forward slashes — join handles OS differences
+    const srcDir = join(SKILLS_DIR, ...skill.srcPackPath.split('/'), skill.name);
+    const destDir = join(projectRoot, '.agents', 'skills', skill.canonicalId);
 
     await access(join(srcDir, 'SKILL.md'), fsConstants.F_OK);
     await rm(destDir, { recursive: true, force: true });
@@ -695,7 +693,7 @@ async function copySkills(projectRoot, packs) {
       display_name:    skill.displayName,
       pack:            skill.pack,
       source:          'built-in',
-      relative_path:   ['.agents', 'skills', skill.packPath, skill.name].join('/'),
+      relative_path:   `.agents/skills/${skill.canonicalId}`,
       target_link_path: join('.claude', 'skills', skill.canonicalId),
       version:         PKG.version,
     });
@@ -729,7 +727,7 @@ function getSkillDefs(packs) {
       { name: 'reset',   canonicalId: 'lumi-reset',   displayName: '/lumi-reset' },
     ];
     for (const s of coreSkills) {
-      defs.push({ ...s, pack: 'core', packPath: 'core' });
+      defs.push({ ...s, pack: 'core', srcPackPath: 'core' });
     }
   }
 
@@ -741,7 +739,7 @@ function getSkillDefs(packs) {
       { name: 'setup',    canonicalId: 'lumi-setup',    displayName: '/lumi-setup' },
     ];
     for (const s of researchSkills) {
-      defs.push({ ...s, pack: 'research', packPath: 'packs/research' });
+      defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
     }
   }
 
@@ -753,7 +751,7 @@ function getSkillDefs(packs) {
       { name: 'plot-recap',       canonicalId: 'lumi-plot-recap',       displayName: '/lumi-plot-recap' },
     ];
     for (const s of readingSkills) {
-      defs.push({ ...s, pack: 'reading', packPath: 'packs/reading' });
+      defs.push({ ...s, pack: 'reading', srcPackPath: 'packs/reading' });
     }
   }
 

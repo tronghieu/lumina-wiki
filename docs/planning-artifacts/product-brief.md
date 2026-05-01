@@ -83,7 +83,7 @@ Personal-use bar — measurable but unambitious by design:
 - `npx lumina-wiki install` interactive scaffolder (4 prompts: project name, IDE targets, packs, language pair).
 - Render `lumina.config.yaml` from prompts.
 - Scaffold directory structure: `.agents/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}`.
-- Copy `core` skills into `.agents/skills/core/`. Optionally install `research` and/or `reading` packs.
+- Copy `core` skills into `.agents/skills/` as `lumi-<name>/` directories. Optionally install `research` and/or `reading` packs (also written as `lumi-<name>/`).
 - Render `CLAUDE.md` schema into `.agents/schema/`; create symlinks: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` at project root + `.claude/skills/lumi-*` per installed skill.
 - Windows-aware: detect symlink support, fall back to junction (Windows directory symlinks) or copy-with-warning when symlink is unavailable.
 - `lumina --version`, `lumina --help`, `lumina install`, `lumina uninstall` commands.

@@ -17,7 +17,7 @@ Single-author, single-package npm CLI. Replaces epics/stories. Each unit below i
 This plan distinguishes the two artifact surfaces (BMAD-style):
 
 - **Repo source paths** (this build artifact) live under `src/`: `src/scripts/`, `src/tools/`, `src/skills/`, `src/installer/`, `src/templates/`.
-- **Workspace paths** (rendered/copied by the installer into the user's project) live under `_lumina/` and `.agents/`: `_lumina/scripts/`, `_lumina/tools/`, `.agents/skills/...`.
+- **Workspace paths** (rendered/copied by the installer into the user's project) live under `_lumina/` and `.agents/`: `_lumina/scripts/`, `_lumina/tools/`, `.agents/skills/lumi-*/`.
 
 Phases P0–P3, P5 author files at **repo source paths**. The installer (P8) copies them verbatim to workspace paths during `lumina install`. References below use repo source paths; equivalent workspace paths are noted parenthetically where the distinction matters.
 
@@ -154,7 +154,7 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 - README merge appends a Lumina schema region when an existing README has no markers.
 - `package.json#files` is a precise runtime allowlist; tests, `__pycache__`, `.pyc`, and planning artifacts are excluded from `npm pack`.
 
-**Components:** `bin/lumina.js`, `src/installer/{commands, prompts, fs, manifest, template-engine, update-check}.js`. Installer copies `src/scripts/` → workspace `_lumina/scripts/`, `src/tools/` → workspace `_lumina/tools/` (research pack only), `src/skills/` → workspace `.agents/skills/`.
+**Components:** `bin/lumina.js`, `src/installer/{commands, prompts, fs, manifest, template-engine, update-check}.js`. Installer copies `src/scripts/` → workspace `_lumina/scripts/`, `src/tools/` → workspace `_lumina/tools/` (research pack only), `src/skills/core/<name>/` and `src/skills/packs/<pack>/<name>/` → workspace `.agents/skills/lumi-<name>/` (flat, prefixed).
 
 **Risk-concentrated module:** `src/installer/fs.js` — symlink ladder (symlink → junction → directory copy), atomic writes, idempotency. Heaviest test surface.
 
