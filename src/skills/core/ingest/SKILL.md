@@ -101,7 +101,25 @@ Write checkpoint: `phase: "slug"`.
 
 ### Phase 3 — Write source page
 
-Read the full source content. Draft `wiki/sources/<slug>.md` using the Source
+Read the full source content.
+
+For PDFs: most non-Claude IDEs (Codex, Gemini CLI, Cursor) cannot read PDFs
+through their built-in file tool. Use the bundled extractor instead:
+
+```bash
+python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf
+# or a page range:
+python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf --pages 1-20
+```
+
+If the tool exits 3 with `pip install pypdf`, ask the user to run that one
+command and retry. If it warns "may be scanned", ask the user to paste the
+text manually — OCR is out of scope.
+
+(Claude Code's `Read` tool can parse PDFs natively; you may use it directly
+when running there. The extractor is the cross-IDE fallback.)
+
+Draft `wiki/sources/<slug>.md` using the Source
 template from `_lumina/schema/page-templates.md` (open it when in doubt about
 required fields). Required frontmatter fields: `id`, `title`, `type`, `created`,
 `updated`, `authors`, `year`, `importance` (1-5), `url` (optional).

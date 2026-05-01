@@ -19,7 +19,7 @@ This file contains critical rules and patterns AI agents MUST follow when implem
 Lumina-Wiki is an **npm-published, multi-IDE wiki scaffolder** that installs an LLM-maintainable knowledge workspace into any project. It is an originally-authored implementation of Karpathy's LLM-Wiki vision. Two layers:
 
 - **Installer** (Node, ESM, ≥20) — `bin/lumina.js` + `src/installer/*.js`. Idempotent, cross-platform, atomic.
-- **Wiki engine + skills** — `src/scripts/*.mjs` (Node) + `src/tools/*.py` (Python, research pack only) + `src/skills/**/*.md` (markdown agent prompts).
+- **Wiki engine + skills** — `src/scripts/*.mjs` (Node) + `src/tools/*.py` (Python; `extract_pdf.py` ships to all installs, the rest are research-pack only) + `src/skills/**/*.md` (markdown agent prompts).
 
 The installer projects a single source-of-truth template tree onto whichever CLI agent the user picks (Claude Code, AGENTS.md-compatible CLIs — Codex/Amp/Crush/Goose/Auggie/OpenCode/etc., Gemini CLI, Cursor, generic). After install, agents drive the wiki by invoking skills (`/lumi-*` slash commands) which call the Node/Python tools via Bash.
 
@@ -29,7 +29,7 @@ The installer projects a single source-of-truth template tree onto whichever CLI
 
 **Runtime:**
 - Node ≥20 (ESM-only, no transpile, no native modules)
-- Python 3.9+ (research pack only, opt-in, deferred install)
+- Python 3.9+ (soft dependency for all installs — `extract_pdf.py` needs `pip install pypdf`; research pack adds further tools and deps)
 
 **Direct JS deps (license-audited MIT/ISC/Apache-2.0):**
 - `commander@^12.1.0` — CLI parsing
@@ -87,7 +87,7 @@ These are absolutes. Every one corresponds to a real failure mode.
 
 ### `wiki/` ↔ `raw/` boundary
 
-17. **Python research-pack tools never write to `wiki/`.** That is exclusively for skills calling `wiki.mjs`. `init_discovery.py` documents this explicitly: "Never writes to `wiki/`. Skills own `wiki/`."
+17. **Python tools never write to `wiki/`.** That is exclusively for skills calling `wiki.mjs`. `extract_pdf.py` writes only to stdout; research-pack tools (`init_discovery.py`, etc.) document this explicitly: "Never writes to `wiki/`. Skills own `wiki/`."
 18. **`reset --scope wiki` (and `all`) never touch `raw/`.** `raw/` is destroyed only by `--scope raw` with `--yes`. Conversely, do not write entity files into `raw/`; they will not be indexed.
 
 ### OmegaWiki
@@ -337,7 +337,7 @@ Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 ID
 
 `npm pack --dry-run --json` in sanitized env (all `npm_config_*` stripped). Enforces:
 - **Prohibited:** `*.test.[cm]?js`, `src/tools/tests/`, `__pycache__/`, `*.pyc`, `_lumina/_state/`, `docs/planning-artifacts/`, `.github/`, `scripts/ci-*`
-- **Required present:** `bin/lumina.js`, `src/installer/commands.js`, three main scripts, two SKILL.md samples (core/init + 2 packs), `src/templates/README.md`, `src/tools/prepare_source.py` + `requirements.txt`, `README.md`, `LICENSE`
+- **Required present:** `bin/lumina.js`, `src/installer/commands.js`, three main scripts, two SKILL.md samples (core/init + 2 packs), `src/templates/README.md`, `src/tools/extract_pdf.py` (core PDF tool), `src/tools/prepare_source.py` + `requirements.txt`, `README.md`, `LICENSE`
 - **Hard rule:** any `pack.scripts.postinstall` → immediate fail
 
 **`skills-lock.json`:** hash-pin lockfile. Each entry: `source` (`owner/repo`), `sourceType: "github"`, `skillPath`, `computedHash` (SHA-256 hex). Vendored skills must have hash recomputed when content changes — never edit hash without re-fetching.

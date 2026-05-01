@@ -60,8 +60,8 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs; open when this file points you there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
-{{#if pack_research}}- `_lumina/tools/` — Python tools for the research pack
-{{/if}}- `_lumina/_state/` — installer/skill checkpoint state; gitignored
+- `_lumina/tools/` — Python tools (always: `extract_pdf.py`{{#if pack_research}}; research pack adds source-discovery and fetcher tools{{/if}})
+- `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer state; never edit by hand
 
 ---
@@ -189,7 +189,8 @@ Adds `/lumi-reading-chapter-ingest` (file a chapter, update characters/themes/pl
 - **`_lumina/scripts/lint.mjs`** — pure-Node markdown linter, runs offline.
 - **`_lumina/scripts/wiki.mjs`** — wiki engine (frontmatter, graph mutation, slug, log).
 - **`_lumina/scripts/reset.mjs`** — scoped destructive reset.
-{{#if pack_research}}- **`_lumina/tools/*.py`** — Python research tools (source fetching, discovery); only used by research-pack skills.
+- **`_lumina/tools/extract_pdf.py`** — PDF text extractor (pypdf-based); used by `/lumi-ingest` and `/lumi-chapter-ingest` when the host IDE cannot read PDFs natively. Run `pip install pypdf` once.
+{{#if pack_research}}- **`_lumina/tools/*.py`** (other) — Python research tools (source fetching, discovery); used by research-pack skills.
 {{/if}}
 
 ---

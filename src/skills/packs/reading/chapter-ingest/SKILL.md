@@ -72,9 +72,16 @@ re-running against the same chapter slug produces byte-identical output.
 
 ### Playbook B: PDF page range
 
-Follow Playbook A steps, but in step 1 extract text from the PDF page range using `Read`
-on the file and restrict your reading to the stated page range. If the PDF is not
-machine-readable (scanned), inform the user and ask them to paste the text directly.
+Follow Playbook A steps, but in step 1 extract text using the bundled tool:
+
+```bash
+python3 _lumina/tools/extract_pdf.py raw/sources/<book-slug>.pdf --pages <start>-<end>
+```
+
+If the tool exits 3 with `pip install pypdf`, ask the user to run that and retry.
+If it warns "may be scanned", inform the user and ask them to paste the text
+directly. Claude Code's native `Read` tool also parses PDFs and is an acceptable
+substitute when running in Claude Code.
 
 ## Output / DoD
 

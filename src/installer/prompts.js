@@ -158,7 +158,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   const packsRaw = await multiselect({
     message: 'Packs to install (core is always included)',
     options: [
-      { value: 'research', label: 'Research',  hint: 'discover/survey/prefill/setup skills + Python tools' },
+      { value: 'research', label: 'Research',  hint: 'discover/survey/prefill/setup skills + source-fetcher tools' },
       { value: 'reading',  label: 'Reading',   hint: 'chapter-ingest/character-track/theme-map/plot-recap skills' },
     ],
     required: false,

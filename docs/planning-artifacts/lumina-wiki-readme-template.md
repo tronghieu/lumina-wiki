@@ -57,7 +57,7 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs (`page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`); read on demand when this README points there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`); core skills shell out to these
-- `_lumina/tools/` — Python tools for the research pack (opt-in)
+- `_lumina/tools/` — Python tools (always: `extract_pdf.py` for PDF text; research pack adds source-discovery and fetcher tools)
 - `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer-managed; never edit by hand
 

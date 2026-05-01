@@ -115,9 +115,9 @@ const LUMINA_DIRS = [
   '_lumina/config',
   '_lumina/schema',
   '_lumina/scripts',
+  '_lumina/tools',
   '_lumina/_state',
 ];
-const RESEARCH_LUMINA_DIRS = ['_lumina/tools'];
 
 const VALID_PACKS = new Set(['core', 'research', 'reading']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
@@ -189,7 +189,7 @@ export async function installCommand(opts = {}) {
     '.agents/skills',
   ];
   if (hasResearch) {
-    dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS, ...RESEARCH_LUMINA_DIRS);
+    dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS);
   }
   if (hasReading) {
     dirsToCreate.push(...READING_WIKI_DIRS);
@@ -226,10 +226,8 @@ export async function installCommand(opts = {}) {
   // 9. Copy skills
   const skillRows = await copySkills(projectRoot, packs);
 
-  // 10. Copy Python tools (research pack)
-  if (hasResearch) {
-    await copyTools(projectRoot);
-  }
+  // 10. Copy Python tools (core: extract_pdf; research pack: discovery/fetchers)
+  await copyTools(projectRoot, { research: hasResearch });
 
   // 11. Render schema docs
   await renderSchemaDocs(projectRoot, templateVars);
@@ -776,12 +774,14 @@ function getSkillDefs(packs) {
   return defs;
 }
 
-async function copyTools(projectRoot) {
+async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
-  const toolFiles = [
+  const coreTools = ['extract_pdf.py'];
+  const researchTools = [
     '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
   ];
+  const toolFiles = research ? [...coreTools, ...researchTools] : coreTools;
   for (const file of toolFiles) {
     const src = join(TOOLS_DIR, file);
     const dest = join(destDir, file);
@@ -790,6 +790,11 @@ async function copyTools(projectRoot) {
     } catch (_) {
       // Tool not yet authored; skip
     }
+  }
+  try {
+    await copyFile(join(TOOLS_DIR, 'requirements.txt'), join(destDir, 'requirements.txt'));
+  } catch (_) {
+    // requirements.txt missing in dev; skip
   }
 }
 

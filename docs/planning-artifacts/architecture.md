@@ -79,7 +79,7 @@ This is the canonical workspace layout the installer produces. Two top-level fra
 - **`README.md`** at project root — canonical agent-context file. Schema, conventions, skill list, project overview, all in one rendered markdown file. NOT a symlink. Freely editable by the user; installer touches only the region between `<!-- lumina:schema -->` ... `<!-- /lumina:schema -->` markers on upgrade.
 - **`CLAUDE.md`**, **`AGENTS.md`**, **`GEMINI.md`** at project root — small rendered stub files (~5–10 lines each), one per IDE target, each instructing its agent to read `README.md` first. NOT symlinks. Plain copies.
 - **`.cursor/rules/lumina.mdc`** — same stub pattern, rendered into the user's `.cursor/`.
-- **`_lumina/`** — installer-managed sidecar. Holds `config/`, `schema/` (deeper reference docs: `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md` — agent reads them on demand when README.md tells it to), `scripts/` (Node engine: `wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`), `tools/` (Python research-pack utilities), `_state/` (gitignored checkpoints), `manifest.json`. **`_lumina/schema/` does NOT contain `CLAUDE.md`** — the canonical entry point is `README.md` at the project root.
+- **`_lumina/`** — installer-managed sidecar. Holds `config/`, `schema/` (deeper reference docs: `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md` — agent reads them on demand when README.md tells it to), `scripts/` (Node engine: `wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`), `tools/` (Python utilities — `extract_pdf.py` always present, fetcher/discovery tools added by research pack), `_state/` (gitignored checkpoints), `manifest.json`. **`_lumina/schema/` does NOT contain `CLAUDE.md`** — the canonical entry point is `README.md` at the project root.
 - **`.agents/`** — agent-invokable surface. Contains **only** `skills/`, laid out flat: one directory per skill, each named `lumi-<name>/` (e.g. `lumi-init/`, `lumi-research-discover/`, `lumi-reading-chapter-ingest/`). No engine code, no schema, no manifest.
 
 ```
@@ -94,7 +94,7 @@ This is the canonical workspace layout the installer produces. Two top-level fra
 │   │   ├── cross-reference-packs.md
 │   │   └── graph-packs.md
 │   ├── scripts/                   ← Node engine (core)
-│   ├── tools/                     ← Python tools (research pack only)
+│   ├── tools/                     ← Python tools (extract_pdf.py: all installs; fetchers/discovery: research pack)
 │   ├── _state/                    ← gitignored
 │   └── manifest.json
 ├── .agents/skills/lumi-*/         ← skills only (core + opt-in packs, flat layout)
@@ -272,11 +272,12 @@ Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with ex
 | `lint.mjs` | `lint.py` (865) | 9-check linter, `--fix --dry-run --suggest --json`. JSON mode for CI + `/lumi-check` UI. | 500–700 LoC |
 | `reset.mjs` | `reset_wiki.py` (180) | Scoped destructive reset; `--yes` required; `--dry-run` prints plan. | 150–250 LoC |
 
-**Python tools in `_lumina/tools/` (8 files, research pack only):**
+**Python tools in `_lumina/tools/` (9 files):**
 
 | File | Port of | Role | Notes |
 |---|---|---|---|
-| `_env.py` | identical (49) | dotenv loader (`~/.env` → `./.env` → process env) | imported as side-effect by every Python tool |
+| `extract_pdf.py` | new (originally authored) | PDF text extractor (pypdf-based) — stdout text, optional `--pages START-END` | **core; copied to all installs**. Used by `/lumi-ingest` and `/lumi-chapter-ingest` when host IDE cannot read PDFs natively (Codex, Gemini CLI, Cursor). |
+| `_env.py` | identical (49) | dotenv loader (`~/.env` → `./.env` → process env) | research-pack only; imported as side-effect by research-pack tools |
 | `discover.py` | identical (621) | ranked candidate shortlist; 3 seed modes; dedupe vs `wiki/`; JSON-on-stdout | research-pack only |
 | `init_discovery.py` | slim port (1,713 → ~1,200) | multi-phase prepare/plan/fetch/download with `_lumina/_state/<skill>-<phase>.json` checkpoints | drop arxiv-tarball-only paths if generalizable |
 | `prepare_source.py` | rename of `prepare_paper_source.py` (758) | input-side normalizer — turn one local PDF/tex into `raw/<slug>/` ingest-ready package | rename for neutrality (works on non-paper PDFs too) |

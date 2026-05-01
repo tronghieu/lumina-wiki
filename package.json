@@ -46,6 +46,7 @@
     "src/scripts/schemas.mjs",
     "src/skills/**/*.md",
     "src/tools/_env.py",
+    "src/tools/extract_pdf.py",
     "src/tools/discover.py",
     "src/tools/init_discovery.py",
     "src/tools/prepare_source.py",
