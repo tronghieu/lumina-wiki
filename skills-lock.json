@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "plugins/python-development/skills/python-testing-patterns/SKILL.md",
       "computedHash": "69915bb276b6aec61fe5b283a933f96584f66d14b616ce2060d95757629c6866"
+    },
+    "system-prompt-creator": {
+      "source": "tronghieu/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/system-prompt-creator/SKILL.md",
+      "computedHash": "28a2713cbf39b36dc8f86fc023389084d4d7bcf20d38d3f8d28546c02cadb24c"
     }
   }
 }
