@@ -1,0 +1,31 @@
+# Node
+node_modules/
+npm-debug.log*
+*.tgz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Lumina runtime state (only relevant if installer is run inside repo by mistake)
+_lumina/_state/
