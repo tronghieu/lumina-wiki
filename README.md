@@ -8,17 +8,26 @@
 
 Lumina-Wiki is a ready-to-use implementation of the **[LLM-Wiki vision](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)** articulated by **Andrej Karpathy, founding member of OpenAI and former Director of AI at Tesla.**
 
-<br>
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg"/>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg"/>
+  <img alt="Skills" src="https://img.shields.io/badge/Skills-14-purple.svg"/>
+  <br>
+  <img alt="Powered by" src="https://img.shields.io/badge/Powered%20by-grey?style=flat"/>
+  <img alt="Claude" src="https://img.shields.io/badge/-Claude%20Code-orange?style=flat"/>
+  <img alt="Codex" src="https://img.shields.io/badge/-Codex-blueviolet?style=flat"/>
+  <img alt="Gemini" src="https://img.shields.io/badge/-Gemini-4285F4?style=flat"/>
+</p>
 
 <p align="center">
-  <a href="#english-readme">English</a> • <a href="#vietnamese-readme-readme-tiếng-việt">Tiếng Việt</a>
+  <a href="#english">English</a> • <a href="#vietnamese">Tiếng Việt</a>
 </p>
 
 ---
-<br>
 
-<details>
-<summary><strong>English README</strong> (Click to expand)</summary>
+<a name="english"></a>
+***English README***
 
 ## 1. The Core Workflow
 
@@ -171,12 +180,11 @@ npm run test:all
 
 **License:** [MIT](LICENSE) © Lưu Trọng Hiếu.
 
-</details>
+---
+---
 
-<br>
-
-<details open>
-<summary><strong>README Tiếng Việt</strong> (Nhấn để mở)</summary>
+<a name="vietnamese"></a>
+***README Tiếng Việt***
 
 ## 1. Luồng làm việc cốt lõi
 
@@ -328,5 +336,3 @@ npm run test:all
 </details>
 
 **Giấy phép:** [MIT](LICENSE) © Lưu Trọng Hiếu.
-
-</details>
