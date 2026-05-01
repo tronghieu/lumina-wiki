@@ -1,6 +1,6 @@
 # Lumina-Wiki Roadmap
 
-Current shipped version: **v0.1.0**.
+Current shipped version: **v0.2.0**.
 
 This document tracks planned upgrades. Scope is non-binding — items move between milestones as priorities shift.
 
