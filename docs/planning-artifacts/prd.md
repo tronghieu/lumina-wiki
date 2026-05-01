@@ -117,7 +117,7 @@ The installer is correct, idempotent, and cross-platform:
 
 ### MVP — Minimum Viable Product (v0.1.0, Tier A)
 
-**Installer (interactive, four prompts: project name, IDE targets, packs, language pair)**
+**Installer (interactive, five prompts: project name, research purpose, IDE targets, packs, language pair)**
 - Render `_lumina/config/lumina.config.yaml` from prompts.
 - Scaffold directories: `_lumina/{config,schema,scripts,tools,_state}`, `.agents/skills/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}`.
 - Copy `core` skills into `.agents/skills/core/`. Optionally install `research` and `reading` packs into `.agents/skills/packs/`.
@@ -165,18 +165,19 @@ In v0.1, Lumina-Wiki has exactly one human persona — **Hieu, the solo technica
 
 **Opening scene.** Hieu has just cloned a new project repo (e.g., `lumina-wiki` itself, or a side-project where he is collecting source material). The repo has a few PDFs in `raw/` he dragged in from email and Obsidian Web Clipper, but no structure. He opens the terminal at the repo root.
 
-**Rising action.** He runs `npx lumina-wiki install`. An interactive prompt appears (Clack-style) and asks four questions:
+**Rising action.** He runs `npx lumina-wiki install`. An interactive prompt appears (Clack-style) and asks five questions:
 
 1. Project name (defaults to the directory name).
-2. IDE targets — multi-select: Claude Code, Codex, Cursor, Gemini CLI, Generic.
-3. Packs — multi-select: `core` (locked on), `research`, `reading`.
-4. Language pair — communication language (e.g., Vietnamese) and document output language (e.g., English).
+2. Research purpose (multi-line free-form text — e.g. "Track flash-attention variants for a survey paper"). Optional; Enter to skip.
+3. IDE targets — multi-select: Claude Code, Codex, Cursor, Gemini CLI, Generic.
+4. Packs — multi-select: `core` (locked on), `research`, `reading`.
+5. Language pair — communication language (e.g., Vietnamese) and document output language (e.g., English).
 
 **Climax.** The installer prints a tree of what it created: `.agents/`, `wiki/`, `raw/`, `lumina.config.yaml`, plus a list of symlinks created at the project root (`CLAUDE.md → .agents/schema/CLAUDE.md`, `AGENTS.md → ...`, `GEMINI.md → ...`) and inside `.claude/skills/lumi-*`. On Windows without Developer Mode, it prints a clearly-labelled fallback notice: which symlinks became junctions, which became copies, and how to fix it. Total wall-clock under 60 seconds.
 
 **Resolution.** Hieu opens his IDE; the agent reads `CLAUDE.md` and instantly understands the schema. He invokes `/lumi-init` and the agent produces a first wave of `wiki/sources/*.md` from the existing `raw/` content. The wiki exists.
 
-**Capabilities revealed.** Interactive prompt UX, four-question install flow, template engine (`lumina.config.yaml`, `CLAUDE.md`, scaffolded directories), pack-aware skill copy, cross-platform symlink/junction/copy strategy, manifest writer.
+**Capabilities revealed.** Interactive prompt UX, five-question install flow, template engine (`lumina.config.yaml`, `README.md` with title + purpose + schema regions, IDE stubs, scaffolded directories), pack-aware skill copy, cross-platform symlink/junction/copy strategy, three-file state writer (`manifest.json` + skills CSV + files CSV).
 
 ### Journey 2 — Daily Use
 
@@ -208,7 +209,7 @@ The three journeys collectively reveal the v0.1 capability set:
 
 | Capability area | Driven by | Notes |
 |---|---|---|
-| Interactive installer (4 prompts) | J1 | Clack-based; defaults derived from cwd. |
+| Interactive installer (5 prompts) | J1 | Clack-based; defaults derived from cwd. Purpose prompt accepts multi-line free-form text and is optional. |
 | Template rendering (config + schema + scaffold) | J1 | Handlebars-style placeholders for project name, language pair, pack flags. |
 | Pack-aware skill copy | J1, J3 | `core` locked; `research` + `reading` opt-in. |
 | Cross-platform symlink with fallback | J1, J3 | Symlink → junction → copy ladder; logged to manifest. |
@@ -238,7 +239,7 @@ The domain is developer tooling — specifically, an npm-distributed CLI scaffol
 
 - **Node ≥20, ESM-only.** No CommonJS interop layer; targets the runtime versions Claude Code, Codex, and Cursor users already have.
 - **Cross-platform symlink support.** macOS / Linux: native symlinks. Windows: junction for directories; copy-with-warning for files when Developer Mode is off. Strategy applied per-target is recorded in `.agents/manifest.json` so upgrades behave consistently.
-- **Idempotency invariants.** Re-running `lumina install` MUST: (a) replace `.agents/skills/` and `.agents/schema/` exactly to the new pack set, (b) refresh symlinks but preserve any user-edited files marked with the `<!-- user-edited -->` comment, (c) never read or write `wiki/` or `raw/`, (d) update `.agents/manifest.json` atomically (write to temp, fsync, rename).
+- **Idempotency invariants.** Re-running `lumina install` MUST: (a) replace `.agents/skills/` and `_lumina/schema/` exactly to the new pack set, (b) refresh symlinks but preserve any user-edited files marked with the `<!-- user-edited -->` comment, (c) never read or write `wiki/` or `raw/`, (d) update `_lumina/manifest.json`, `_lumina/_state/skills-manifest.csv`, and `_lumina/_state/files-manifest.csv` atomically (write to temp, fsync, rename per file).
 - **Filesystem path safety.** All path joins go through Node's `path` module; no string concatenation. Workspace paths must reject any input containing `..` or absolute paths after normalization. The installer refuses to operate outside the user's chosen project root.
 - **Encoding discipline.** All template output is UTF-8 with LF line endings, regardless of host OS, to avoid round-trip corruption when the user opens the wiki on a second machine.
 
@@ -314,7 +315,7 @@ lumi <command> [options]    # alias
 
 | Command | Purpose | Interactive? |
 |---|---|---|
-| `lumina install` | First-time scaffold or upgrade | Yes (4 prompts on first run; non-interactive on upgrade if config + manifest exist) |
+| `lumina install` | First-time scaffold or upgrade | Yes (5 prompts on first run; non-interactive on upgrade if config + manifest exist) |
 | `lumina uninstall` | Remove `.agents/`, symlinks, and config; preserve `wiki/` and `raw/` | Yes (confirmation prompt; warns about `wiki/` retention) |
 | `lumina --version`, `-v` | Print installed version; perform auto-update check (skippable) | No |
 | `lumina --help`, `-h` | Print usage and command list | No |
@@ -333,7 +334,7 @@ lumi <command> [options]    # alias
 
 ### Config Schema
 
-The user-facing config is `lumina.config.yaml`, written by the installer from the four interactive prompts and editable by hand thereafter. Schema (already drafted in `docs/planning-artifacts/lumina-wiki-config-schema.yaml`) covers:
+The user-facing config is `lumina.config.yaml`, written by the installer from the five interactive prompts and editable by hand thereafter. Schema (already drafted in `docs/planning-artifacts/lumina-wiki-config-schema.yaml`) covers:
 
 - `identity` — project_name, repo URL.
 - `languages` — communication_language, document_output_language.
@@ -403,7 +404,7 @@ No dev-time-only postinstall scripts. No native modules. No optional dependencie
 
 ### Documentation & Examples (v0.1)
 
-- `README.md` — installation, the four prompts, what gets created, multi-IDE notes, Windows fallback notes. May credit Karpathy's LLM-Wiki post and mention OmegaWiki as inspiration, but makes no derivation claim.
+- `README.md` — installation, the five prompts, what gets created, multi-IDE notes, Windows fallback notes. May credit Karpathy's LLM-Wiki post and mention OmegaWiki as inspiration, but makes no derivation claim.
 - `LICENSE` — MIT.
 - No separate docs site in v0.1. The schema file (`CLAUDE.md`) is itself the main reference for end users; once installed, `cat CLAUDE.md` answers most usage questions.
 - Example workspace: a hidden `__example__` flag (`lumina install --example`) is **out of scope for v0.1** but noted for v0.2.
@@ -431,7 +432,7 @@ The product brief already commits to phased delivery (v0.1 MVP Tier A → v0.2 G
 
 Re-stating the §Product Scope MVP set as a strategic capability inventory, in priority order. Each item is justified against the question *"without this, does v0.1 fail to clear the personal-use bar?"*
 
-1. **Interactive `npx lumina-wiki install` with four prompts** — without it, there is no install path. **Must.**
+1. **Interactive `npx lumina-wiki install` with five prompts** — without it, there is no install path. **Must.**
 2. **Workspace scaffold** (`.agents/`, `wiki/`, `raw/`, `lumina.config.yaml`, `.gitignore`) — without it, the wiki has no place to live. **Must.**
 3. **`core` skill copy + `CLAUDE.md` schema render** — without it, the LLM has no contract. **Must.**
 4. **Symlink ladder for multi-IDE entry points** (symlink → junction → copy fallback, recorded in manifest) — without it, the multi-IDE wedge collapses to "Claude Code only", erasing a primary differentiator. **Must.**
@@ -484,18 +485,27 @@ This is the binding capability contract for v0.1. Any capability not listed here
 
 - **FR1:** User can run `npx lumina-wiki install` from any directory and have the Installer treat that directory as the project root.
 - **FR2:** User can override the project root with `--cwd <path>`.
-- **FR3:** Installer can collect four pieces of configuration from the User interactively: project name, IDE targets (multi-select), packs (multi-select; `core` always selected), language pair (communication + document output).
+- **FR3:** Installer can collect five pieces of configuration from the User interactively: project name, **research purpose** (multi-line free-form text describing what the wiki is for — e.g. "Track flash-attention variants for a survey paper" or "Read 19th-century Russian novels with character/theme tracking"), IDE targets (multi-select), packs (multi-select; `core` always selected), language pair (communication + document output). Pressing Enter on the purpose prompt with no input is allowed; the rendered README purpose region is then a single placeholder line the User edits later.
 - **FR4:** Installer can render `_lumina/config/lumina.config.yaml` from the four collected inputs.
-- **FR5:** Installer can scaffold the directory tree `_lumina/{config,schema,scripts,tools,_state}`, `.agents/skills/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}` at the project root.
+- **FR5:** Installer can scaffold the directory tree `_lumina/{config,schema,scripts,tools,_state}`, `.agents/skills/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}` at the project root. When the `research` pack is selected, additionally scaffold `wiki/foundations/`, `wiki/topics/`, and `raw/discovered/`. When the `reading` pack is selected, additionally scaffold `wiki/chapters/`, `wiki/characters/`, `wiki/themes/`, and `wiki/plot/`.
 - **FR6:** Installer can copy the `core` skill set into `.agents/skills/core/` on every install.
 - **FR7:** Installer can optionally copy the `research` and `reading` packs into `.agents/skills/packs/` based on the User's pack selection.
-- **FR8:** Installer can render `README.md` at the project root from the schema template with project- and language-specific values substituted. If `README.md` already exists, the Installer prompts the User to (a) merge the schema content between `<!-- lumina:schema -->` ... `<!-- /lumina:schema -->` markers, (b) back up the existing file to `README.md.bak` and replace, or (c) abort. The schema content within markers is the only region the Installer touches on subsequent upgrades.
+- **FR8:** Installer can render `README.md` at the project root from the schema template with project- and language-specific values substituted. The rendered file has three distinct regions in fixed top-to-bottom order:
+    1. **Title** (project name as H1).
+    2. **Purpose region** — populated verbatim from the FR3 purpose prompt. This region lives **outside** any Lumina markers and is treated as fully User-owned: subsequent upgrades never read or rewrite it (per FR16, only the schema region is touched). The first install renders the User's typed text or, if the User pressed Enter, a single placeholder line such as `_(Describe what this wiki is for. Edit freely — Lumina will not touch this section on upgrade.)_`.
+    3. **Schema region** — wrapped in `<!-- lumina:schema -->` ... `<!-- /lumina:schema -->` markers. This is the canonical agent-context block (entity types, link conventions, skill list) that Lumina rewrites on every upgrade.
+
+    If `README.md` already exists, the Installer prompts the User to (a) merge the schema content between the `<!-- lumina:schema -->` markers (preserving everything outside the markers, including any pre-existing User-authored purpose), (b) back up the existing file to `README.md.bak` and replace, or (c) abort. Only the schema region is the Installer's responsibility on subsequent upgrades.
 - **FR8a:** Installer can copy Node engine scripts (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`) into `_lumina/scripts/` and deeper schema reference docs (`page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`) into `_lumina/schema/` on every install. When the `research` pack is selected, Installer can additionally copy Python tools into `_lumina/tools/`. Pack-specific reference doc fragments are appended to `cross-reference-packs.md` and `graph-packs.md` only when the corresponding pack is installed.
 - **FR9:** Installer can render small stub files (~5–10 lines each) at each User-selected IDE target's expected entry point: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex), `GEMINI.md` (Gemini CLI), `.cursor/rules/lumina.mdc` (Cursor). Each stub instructs its agent to read `README.md` for project context and wiki schema. **Stubs are independent rendered files, never symlinks.**
 - **FR10:** Installer can create per-skill symlinks under `.claude/skills/lumi-*` pointing into `.agents/skills/<pack>/<skill>/` for each installed skill when Claude Code is a selected IDE target. These per-skill symlinks are the only filesystem-link surface.
 - **FR11:** Installer can detect symlink capability on the host platform for the per-skill symlinks under `.claude/skills/`, and fall back to junction (Windows directory link) or copy (Windows when Developer Mode is off) per skill. The fallback choice is recorded in `_lumina/manifest.json`. Schema entry-point files (`README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc`) are plain rendered files and have no fallback concern.
-- **FR12:** Installer can write `_lumina/manifest.json` capturing package version, ISO timestamp, installed packs, per-skill link strategy, and per-file checksums for stubs and schema regions.
-- **FR13:** Installer can bundle a `.gitignore` template at the project root that ignores `_lumina/_state/` and `raw/tmp/` when no `.gitignore` already exists; otherwise leave the existing file alone.
+- **FR12:** Installer can write three separate state artifacts, each with a single concern:
+    - **`_lumina/manifest.json`** — installation state. Records: package version, install ISO timestamp, last-updated ISO timestamp, installed packs (with pack version + source = `built-in` | `external`), selected IDE targets, per-target symlink strategy (`symlink` / `junction` / `copy`), resolved absolute paths from `paths.*` config (so upgrade does not re-resolve unless `--re-link`), and a `schemaVersion` integer. Read first on every install to detect upgrade vs fresh.
+    - **`_lumina/_state/skills-manifest.csv`** — verbatim skill inventory. One row per installed skill with columns: `canonical_id`, `display_name`, `pack`, `source`, `relative_path` (under `.agents/skills/`), `target_link_path` (under `.claude/skills/` if Claude Code selected, else empty), `version`. Rewritten on every install. Drives uninstall and per-skill symlink refresh.
+    - **`_lumina/_state/files-manifest.csv`** — hash tracking for installer-managed files. One row per file with columns: `relative_path`, `sha256`, `source_pack`, `installed_version`. Used on upgrade to detect User edits via hash mismatch (drift → backup as `<file>.bak` then overwrite, per FR19 pattern). Excludes anything under `wiki/`, `raw/`, and `_lumina/_state/` itself.
+- **FR12a:** All three state artifacts are written atomically (temp file + fsync + rename per NFR-R2). A crash between writes must leave each file individually consistent, even if the trio drifts; the next `lumina install` reconciles by treating any missing artifact as a hard failure that triggers `--re-link` semantics.
+- **FR13:** Installer can bundle a `.gitignore` template at the project root that ignores `_lumina/_state/`, `raw/tmp/`, and `.env` when no `.gitignore` already exists; otherwise leave the existing file alone.
 - **FR14:** User can run install non-interactively with `--yes` / `-y`, accepting all defaults.
 
 ### Upgrade & Reinstallation
@@ -521,7 +531,7 @@ This is the binding capability contract for v0.1. Any capability not listed here
 ### Wiki Schema Contract
 
 - **FR29:** Installer can produce a `CLAUDE.md` schema that defines four core page types — Source, Concept, Person, Summary — with directory mappings and section structure documented inline.
-- **FR30:** Installer can include pack-specific page-type sections in `CLAUDE.md` (research: topics, foundations, ideas, claims, experiments; reading: chapters, characters, themes) only when the corresponding pack is installed.
+- **FR30:** Installer can include pack-specific page-type sections in `CLAUDE.md` (research: topics, foundations; reading: chapters, characters, themes, plot) only when the corresponding pack is installed.
 - **FR31:** Installer can render `lumina.config.yaml` with bidirectional-link mode set to `exempt-only` by default and exemption globs `foundations/**`, `outputs/**`, `*://*` documented and editable.
 - **FR32:** Installer can record `wiki.link_syntax: obsidian` and `wiki.slug_style: kebab-case` in the rendered config.
 - **FR33:** Installer can produce an empty `wiki/index.md` (catalog placeholder) and empty `wiki/log.md` (append-only activity log placeholder) on first install.
@@ -531,9 +541,11 @@ This is the binding capability contract for v0.1. Any capability not listed here
 The Installer ships skill content; the Agent executes it. These FRs describe what skill files must exist, not what the LLM does with them.
 
 - **FR34:** Installer can ship six `core` skills: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`. Each skill is a directory with a `SKILL.md` and optional `references/`.
-- **FR35:** Installer can ship the `research` pack containing **four** originally-authored skills covering the research-assistant workflow: `/lumi-discover` (ranked candidate shortlist), `/lumi-survey` (narrative synthesis from claim graph), `/lumi-prefill` (seed `foundations/` to prevent concept duplication on ingest), `/lumi-setup` (interactive API-key configuration). Skill names are inspired by prior art; contents are written for Lumina-Wiki. v0.1 explicitly does **not** ship cross-model review skills (`/novelty`, `/review`, `/refine`), the LaTeX paper pipeline (`/paper-plan`, `/paper-draft`, `/paper-compile`, `/rebuttal`), the experiment cluster (`/exp-design`, `/exp-run`, `/exp-status`, `/exp-eval`), the orchestrator (`/research`), `/ideate`, or `/daily-arxiv`. None of these depend on infrastructure (cross-model review LLM, remote GPU runner, LaTeX toolchain) that v0.1 commits to ship.
+- **FR35:** Installer can ship the `research` pack containing **four** originally-authored skills covering the research-assistant workflow: `/lumi-discover` (ranked candidate shortlist), `/lumi-survey` (narrative synthesis from sources + concepts graph), `/lumi-prefill` (seed `foundations/` to prevent concept duplication on ingest), `/lumi-setup` (interactive API-key configuration; writes `<project>/.env`). Skill names are inspired by prior art; contents are written for Lumina-Wiki. v0.1 explicitly does **not** ship cross-model review skills (`/novelty`, `/review`, `/refine`), the LaTeX paper pipeline (`/paper-plan`, `/paper-draft`, `/paper-compile`, `/rebuttal`), the experiment cluster (`/exp-design`, `/exp-run`, `/exp-status`, `/exp-eval`), the orchestrator (`/research`), `/ideate`, or `/daily-arxiv`. None of these depend on infrastructure (cross-model review LLM, remote GPU runner, LaTeX toolchain) that v0.1 commits to ship.
 - **FR36:** Installer can ship the `reading` pack containing four skills: `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-plot-recap`.
-- **FR37:** Installer can ship Python helper scripts into `_lumina/tools/` when the `research` pack is selected. The v0.1 set is: `_env.py` (dotenv loader), `discover.py` (candidate ranking), `init_discovery.py` (multi-phase fetch with checkpoint manifest), `prepare_source.py` (normalize local PDF/tex into ingest-ready package), and four optional fetcher plugins (`fetch_arxiv.py`, `fetch_wikipedia.py`, `fetch_s2.py`, `fetch_deepxiv.py`) — each fetcher activates only when the user provides its API key via `/lumi-setup`. The Installer does not create a Python virtual environment in v0.1; pip-install of `requirements.txt` is deferred to the first invocation of a Python-needing skill. v0.1 does not ship `remote.py` (no remote experiment runner) or output-side LaTeX preparation tools.
+- **FR37:** Installer can ship Python helper scripts into `_lumina/tools/` when the `research` pack is selected. The v0.1 set is: `_env.py` (dotenv loader; reads `~/.env` then `<project>/.env`, project overrides global), `discover.py` (candidate ranking), `init_discovery.py` (multi-phase fetch with checkpoint manifest; writes fetched sources to `raw/discovered/`), `prepare_source.py` (normalize local PDF/tex into ingest-ready package; writes sidecars to `raw/tmp/`), and four optional fetcher plugins (`fetch_arxiv.py`, `fetch_wikipedia.py`, `fetch_s2.py`, `fetch_deepxiv.py`) — each fetcher activates only when the user provides its API key via `/lumi-setup`, and writes results into `raw/discovered/`. The Installer does not create a Python virtual environment in v0.1; pip-install of `requirements.txt` is deferred to the first invocation of a Python-needing skill. v0.1 does not ship `remote.py` (no remote experiment runner) or output-side LaTeX preparation tools.
+
+- **FR37a:** When the `research` pack is selected, the Installer can render `.env.example` at the project root listing every API key consumed by the shipped fetchers/tools (e.g. `SEMANTIC_SCHOLAR_API_KEY`, `DEEPXIV_TOKEN`) with one-line comments describing required vs optional status and where to obtain each key. The Installer never creates `.env` itself; `.env` is populated by the User directly or via `/lumi-setup`. `.env.example` is committed; `.env` is gitignored by the FR13 template.
 
 ### Multi-IDE Integration
 
@@ -568,7 +580,7 @@ Only categories that meaningfully apply to a single-user CLI scaffolder run on t
 ### Reliability & Data Safety
 
 - **NFR-R1:** Re-running `lumina install` against any prior version's workspace must leave `wiki/` and `raw/` **byte-identical** (asserted by `git diff` in CI). This invariant has zero tolerance.
-- **NFR-R2:** `.agents/manifest.json` writes use the temp-file + fsync + rename pattern. A crash mid-install must leave either the prior manifest intact or the new manifest fully written, never a torn JSON.
+- **NFR-R2:** All three state artifacts (`_lumina/manifest.json`, `_lumina/_state/skills-manifest.csv`, `_lumina/_state/files-manifest.csv`) are written using temp-file + fsync + rename. A crash mid-install must leave each file individually consistent (no torn JSON / no truncated CSV), even if the trio drifts.
 - **NFR-R3:** Symlink/junction/copy operations are transactional per-target: a failure on one target reverses any partial state for that target before exiting with code 2. Already-completed targets stand.
 - **NFR-R4:** `lumina uninstall` must require an explicit confirmation prompt (suppressed only by `--yes`) and must never remove `wiki/`, `raw/`, or any User-authored content.
 - **NFR-R5:** All template renders are atomic per-file: write to `<file>.tmp`, fsync, rename. No partially-rendered files visible to a concurrent reader.
@@ -597,7 +609,7 @@ Only categories that meaningfully apply to a single-user CLI scaffolder run on t
 
 ### Usability
 
-- **NFR-U1:** The four-prompt install flow has typed defaults derived from the project directory and host platform. Pressing Enter on every prompt completes a working install.
+- **NFR-U1:** The five-prompt install flow has typed defaults derived from the project directory and host platform. Pressing Enter on every prompt (including a blank purpose) completes a working install.
 - **NFR-U2:** Error messages on filesystem failures (permission denied, target outside cwd, conflicting existing file) name the offending path and the corrective action in plain text. No raw stack traces in normal operation.
 - **NFR-U3:** Color output respects `NO_COLOR` environment variable and detects non-TTY stdout (e.g., piped output) automatically.
 - **NFR-U4:** `lumina --help` fits in **under 50 lines** of stdout and lists every command, flag, and exit code.

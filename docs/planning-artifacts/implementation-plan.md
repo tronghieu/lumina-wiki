@@ -36,10 +36,12 @@ Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. I
 **Why first:** every other artifact (wiki engine, linter, skill prompts, templates) consumes the entity/edge vocabulary. Locking it first prevents downstream rewrites.
 
 **Scope:**
-- Export entity dirs: `sources/`, `concepts/`, `people/`, `summaries/` (+ pack-specific: `chapters/`, `characters/`, `themes/`, `plot/`).
-- Export edge types (bidirectional `exempt-only` default per FR32).
+- Export entity dirs: core `sources/`, `concepts/`, `people/`, `summary/`, `outputs/`, `graph/`; research-pack `foundations/`, `topics/`; reading-pack `chapters/`, `characters/`, `themes/`, `plot/`. Pack-conditional dirs are tagged with their pack so installer + lint know when to materialize/skip them.
+- Export raw dirs: core `sources/`, `notes/`, `assets/`, `tmp/`; research-pack `discovered/`.
+- Export edge types (bidirectional `exempt-only` default per FR31).
 - Export required frontmatter per entity type.
 - Export enum values consumed by lint.
+- Export pack manifest shape (`pack.yaml`) so v0.2 third-party packs cannot break v0.1 readers.
 
 **DoD:** Pure data module, no I/O, no deps. Imported by `wiki.mjs` and `lint.mjs` without circular reference. Matches PRD FR29–FR33. ≤300 LoC.
 
@@ -123,18 +125,26 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 **Risk-concentrated module:** `src/installer/fs.js` — symlink ladder (symlink → junction → directory copy), atomic writes, idempotency. Heaviest test surface.
 
 **Templates rendered by installer:**
-- `README.md` (canonical schema hub, with `<!-- lumina:schema -->` markers)
+- `README.md` — three regions top-to-bottom: title (project name H1), purpose (verbatim from prompt 2, outside any markers, fully User-owned), schema region between `<!-- lumina:schema -->` markers (only region rewritten on upgrade).
 - `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/lumina.mdc` (~5–10-line stubs pointing to `README.md`)
 - `_lumina/config/lumina.config.yaml`
 - `_lumina/schema/{page-templates, cross-reference-packs, graph-packs}.md`
-- `.gitignore` covering `_lumina/_state/`
+- `.env.example` (only when `research` pack selected)
+- `.gitignore` covering `_lumina/_state/`, `raw/tmp/`, `.env`
 
-**Manifest:** `_lumina/manifest.json` records every projected target + strategy used (symlink/junction/copy). Read by `--re-link`, upgrade, uninstall.
+**State (three files, single concern each, atomic write per file):**
+- `_lumina/manifest.json` — install state: package version, timestamps, packs (with version + source), IDE targets, per-target symlink strategy, resolved absolute paths, `schemaVersion`.
+- `_lumina/_state/skills-manifest.csv` — verbatim skill inventory: `canonical_id, display_name, pack, source, relative_path, target_link_path, version`. Drives uninstall + per-skill symlink refresh.
+- `_lumina/_state/files-manifest.csv` — hash tracking for installer-managed files: `relative_path, sha256, source_pack, installed_version`. Drives upgrade drift detection (`<file>.bak` on hash mismatch).
+
+`--re-link`, upgrade, and uninstall read all three. A missing artifact is a hard failure that triggers `--re-link` semantics.
+
+**Prompts (5):** project name → research purpose (multi-line free-form, optional) → IDE targets → packs → language pair.
 
 **DoD:**
 - Install < 60s (NFR-Pe1), cold-start < 300ms (NFR-Pe2), `--version` < 2s with 2s hard-timeout npm check (NFR-Pe3, NFR-Pr2).
 - Reinstall on second machine from committed config produces byte-identical workspace (FR21, NFR-R1).
-- Manifest survives `kill -9` mid-write (atomic rename).
+- All three state files survive `kill -9` mid-write (atomic temp+fsync+rename per file).
 
 ---
 
