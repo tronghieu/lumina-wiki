@@ -11,11 +11,12 @@ decisions:
   wiki_index_seed: leave empty (lumi-init produces first content)
   omegawiki_inspiration: read-only local clone at ../OmegaWiki for inspiration only — no fork, no derived code, no attribution dependency
   pack_research_python_install: defer to first invocation (brief lean)
-  gitignore_template: bundle (.agents/_state/, raw/tmp/) (brief lean)
+  gitignore_template: bundle (_lumina/_state/, raw/tmp/) (brief lean)
+  workspace_layout: BMAD-style sidecar — `_lumina/` holds config/scripts/tools/manifest; `.agents/` is skills-only; `README.md` at project root is canonical schema (NOT a symlink); `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` are tiny rendered stub files pointing to README.md (NOT symlinks)
 inputDocuments:
   - docs/planning-artifacts/product-brief.md
   - docs/llm-wiki.md
-  - docs/planning-artifacts/lumina-wiki-claude-md-template.md
+  - docs/planning-artifacts/lumina-wiki-readme-template.md
   - docs/planning-artifacts/lumina-wiki-config-schema.yaml
   - docs/planning-artifacts/lumina-wiki-package-stub.json
   - docs/planning-artifacts/lumina-wiki-bin-stub.js
@@ -43,7 +44,15 @@ This PRD is dual-audience: a human (the author) reads it once before starting im
 
 Lumina-Wiki is a one-command npm scaffolder (`npx lumina-wiki install`) that drops a self-maintaining research wiki into any project, ready for any modern coding agent — Claude Code, Codex, Cursor, Gemini CLI — to read, ingest, cross-reference, and lint over time. It realizes Karpathy's LLM-Wiki pattern (the LLM compiles knowledge into a persistent, structured wiki rather than re-deriving it from raw chunks every query), rebuilt cross-platform, multi-IDE, and pack-based so the user picks only the surface area they need. OmegaWiki is studied as prior art for ideas only — no code, schema, or skill content is copied.
 
-The build artifact (the npm package) and the workspace artifact (the user's wiki) are strictly separated. The package ships an installer, schema templates, and curated skills. The workspace it produces contains `.agents/` (single source of truth for skills + schema), `wiki/` (LLM-maintained), and `raw/` (user-owned, immutable). Every IDE-specific entry point — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.claude/skills/lumi-*` — is a symlink into `.agents/`, so upgrades touch one location and propagate everywhere.
+The build artifact (the npm package) and the workspace artifact (the user's wiki) are strictly separated. The package ships an installer, a README.md schema template, and curated skills. The workspace it produces uses a BMAD-style split:
+
+- **`README.md`** at the project root is the canonical agent-context file — schema, conventions, skill list, project overview — rendered once at install time and freely editable thereafter. This is the single source of truth for "what is this wiki and how do I maintain it". It is a normal markdown file, not a symlink.
+- **`CLAUDE.md`**, **`AGENTS.md`**, **`GEMINI.md`** at the project root are **tiny rendered stub files** (~5–10 lines), one per IDE target, each instructing its agent to read `README.md` first. They are independent files, not symlinks. `.cursor/rules/lumina.mdc` follows the same stub pattern.
+- **`_lumina/`** holds installer-managed framework state: `config/lumina.config.yaml`, `schema/` (deeper reference docs: `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md` — opened on demand by the agent when README.md instructs), `scripts/` (Node engine: `wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`), `tools/` (opt-in Python tools for the research pack), `manifest.json`, `_state/` (gitignored checkpoints). The canonical entry-point CLAUDE.md content lives at `README.md` (project root), NOT inside `_lumina/schema/`.
+- **`.agents/`** contains **only** `skills/` (`skills/core/`, `skills/packs/research/`, `skills/packs/reading/`). Per-skill symlinks `.claude/skills/lumi-*` point into `.agents/skills/<pack>/<skill>/`; this is the only place where the cross-platform symlink/junction/copy ladder still applies.
+- **`wiki/`** is LLM-maintained; **`raw/`** is user-owned and immutable.
+
+The "single source of truth" wedge is preserved as a content convention (every agent reads `README.md`) rather than a filesystem trick. Removing schema-file symlinks eliminates Windows symlink fragility for the load-bearing entry points.
 
 This is a personal tool first. The author is the primary user; alignment with their research workflow is the only success criterion that matters in v0.1. If others find it useful, that is a free externality.
 
@@ -52,7 +61,7 @@ This is a personal tool first. The author is the primary user; alignment with th
 Four wedges, all live simultaneously:
 
 - **Cross-platform installer.** Pure Node ≥20 — one command (`npx lumina-wiki install`), Windows works without WSL.
-- **Multi-IDE via symlink.** Schema and skills are agent-agnostic; symlinks expose them under each IDE's expected path. The user is never locked to one runtime.
+- **Multi-IDE via README hub.** A single `README.md` at the project root carries the canonical schema. `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/lumina.mdc` are tiny stub files that point each agent to read `README.md` first. The user is never locked to one runtime, and there is no symlink fragility for the load-bearing entry points.
 - **Pack system.** A small `core` skill set is always installed (`/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`). Optional packs — `research` and `reading` — extend the wiki for specific domains. Surface area matches actual use; nobody pays the cognitive tax of skills they will not use.
 - **Domain-agnostic core.** Four core page types (Source, Concept, Person, Summary) work for papers, books, articles, podcasts, and beyond. Specialization comes from packs, not from the core.
 
@@ -106,11 +115,14 @@ The installer is correct, idempotent, and cross-platform:
 ### MVP — Minimum Viable Product (v0.1.0, Tier A)
 
 **Installer (interactive, four prompts: project name, IDE targets, packs, language pair)**
-- Render `lumina.config.yaml` from prompts.
-- Scaffold directories: `.agents/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}`.
-- Copy `core` skills into `.agents/skills/core/`. Optionally install `research` and `reading` packs.
-- Render `CLAUDE.md` schema into `.agents/schema/`. Create symlinks: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` at project root, plus `.claude/skills/lumi-*` for each installed skill.
-- Windows-aware: detect symlink support; fall back to junction (directories) or copy-with-warning (files) when symlink is unavailable. Record fallback in `.agents/manifest.json`.
+- Render `_lumina/config/lumina.config.yaml` from prompts.
+- Scaffold directories: `_lumina/{config,schema,scripts,tools,_state}`, `.agents/skills/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}`.
+- Copy `core` skills into `.agents/skills/core/`. Optionally install `research` and `reading` packs into `.agents/skills/packs/`.
+- Copy Node engine scripts (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`) into `_lumina/scripts/`. Render deeper reference docs (`page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`) into `_lumina/schema/`. When `research` pack is selected, copy Python tools into `_lumina/tools/`.
+- Render `README.md` at project root from the schema template. If `README.md` already exists, prompt the user to merge between `<!-- lumina:schema -->` markers, back up + replace, or abort.
+- Render tiny stub files for each selected IDE target: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` at project root, plus `.cursor/rules/lumina.mdc`. Each stub contains a one-line instruction for its agent to read `README.md` first. None are symlinks.
+- Create per-skill symlinks `.claude/skills/lumi-*` → `.agents/skills/<pack>/<skill>/` when Claude Code is a selected target. This is the only place the symlink/junction/copy ladder applies.
+- Windows-aware: detect symlink support for the per-skill symlinks; fall back to junction (directories) or copy-with-warning when unavailable. Record per-target strategy in `_lumina/manifest.json`. Schema-level entry points are plain files, never symlinks, so they have no fallback concern.
 
 **CLI surface**
 - `lumina --version`, `lumina --help`, `lumina install`, `lumina uninstall`. Alias: `lumi`.
@@ -227,11 +239,11 @@ The domain is developer tooling — specifically, an npm-distributed CLI scaffol
 
 ### Integration Requirements
 
-- **Claude Code** — entry points: `CLAUDE.md` at project root (symlink → `.agents/schema/CLAUDE.md`), skill files at `.claude/skills/lumi-*/SKILL.md`. Skills follow the SKILL.md + `references/` convention so the agent loads them on demand.
-- **Codex** — entry point: `AGENTS.md` at project root (symlink → `.agents/schema/CLAUDE.md`).
-- **Cursor** — entry point: `.cursor/rules/lumina.mdc` (rendered file rather than symlink, since Cursor's MDC format requires a file in-place; content is generated from the same schema source and refreshed on every install).
-- **Gemini CLI** — entry point: `GEMINI.md` at project root (symlink → `.agents/schema/CLAUDE.md`).
-- **Generic agent** — entry point: bare `.agents/schema/CLAUDE.md`; user wires their own agent's loader to it.
+- **Claude Code** — entry points: `CLAUDE.md` at project root (rendered stub pointing to `README.md`), skill files at `.claude/skills/lumi-*/SKILL.md` (per-skill symlinks → `.agents/skills/<pack>/<skill>/`). Skills follow the SKILL.md + `references/` convention so the agent loads them on demand.
+- **Codex** — entry point: `AGENTS.md` at project root (rendered stub pointing to `README.md`).
+- **Cursor** — entry point: `.cursor/rules/lumina.mdc` (rendered stub pointing to `README.md`; refreshed on every install).
+- **Gemini CLI** — entry point: `GEMINI.md` at project root (rendered stub pointing to `README.md`).
+- **Generic agent** — entry point: `README.md` at project root; user wires their own agent's loader to it.
 - **OmegaWiki** — inspiration only. A local read-only clone at `../OmegaWiki` informs design decisions; no runtime, build, or attribution dependency.
 
 ### Risk Mitigations
@@ -468,34 +480,35 @@ This is the binding capability contract for v0.1. Any capability not listed here
 - **FR1:** User can run `npx lumina-wiki install` from any directory and have the Installer treat that directory as the project root.
 - **FR2:** User can override the project root with `--cwd <path>`.
 - **FR3:** Installer can collect four pieces of configuration from the User interactively: project name, IDE targets (multi-select), packs (multi-select; `core` always selected), language pair (communication + document output).
-- **FR4:** Installer can render `lumina.config.yaml` at the project root from the four collected inputs.
-- **FR5:** Installer can scaffold the directory tree `.agents/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}` at the project root.
+- **FR4:** Installer can render `_lumina/config/lumina.config.yaml` from the four collected inputs.
+- **FR5:** Installer can scaffold the directory tree `_lumina/{config,schema,scripts,tools,_state}`, `.agents/skills/`, `wiki/{sources,concepts,people,summary,outputs,graph,index.md,log.md}`, `raw/{sources,notes,assets,tmp}` at the project root.
 - **FR6:** Installer can copy the `core` skill set into `.agents/skills/core/` on every install.
 - **FR7:** Installer can optionally copy the `research` and `reading` packs into `.agents/skills/packs/` based on the User's pack selection.
-- **FR8:** Installer can render the `CLAUDE.md` schema template into `.agents/schema/CLAUDE.md` with project- and language-specific values substituted.
-- **FR9:** Installer can create symlinks to `.agents/schema/CLAUDE.md` at each User-selected IDE target's expected entry point: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex), `GEMINI.md` (Gemini CLI). For Cursor, render a generated `.cursor/rules/lumina.mdc` file rather than a symlink.
-- **FR10:** Installer can create per-skill symlinks under `.claude/skills/lumi-*` for each installed skill when Claude Code is a selected IDE target.
-- **FR11:** Installer can detect symlink capability on the host platform and fall back to junction (Windows directories) or copy (Windows files when Developer Mode is off) per target. The fallback choice is recorded in `.agents/manifest.json`.
-- **FR12:** Installer can write `.agents/manifest.json` capturing package version, ISO timestamp, installed packs, per-target link strategy, and per-file checksums.
-- **FR13:** Installer can bundle a `.gitignore` template at the project root that ignores `.agents/_state/` and `raw/tmp/` when no `.gitignore` already exists; otherwise leave the existing file alone.
+- **FR8:** Installer can render `README.md` at the project root from the schema template with project- and language-specific values substituted. If `README.md` already exists, the Installer prompts the User to (a) merge the schema content between `<!-- lumina:schema -->` ... `<!-- /lumina:schema -->` markers, (b) back up the existing file to `README.md.bak` and replace, or (c) abort. The schema content within markers is the only region the Installer touches on subsequent upgrades.
+- **FR8a:** Installer can copy Node engine scripts (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`) into `_lumina/scripts/` and deeper schema reference docs (`page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`) into `_lumina/schema/` on every install. When the `research` pack is selected, Installer can additionally copy Python tools into `_lumina/tools/`. Pack-specific reference doc fragments are appended to `cross-reference-packs.md` and `graph-packs.md` only when the corresponding pack is installed.
+- **FR9:** Installer can render small stub files (~5–10 lines each) at each User-selected IDE target's expected entry point: `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex), `GEMINI.md` (Gemini CLI), `.cursor/rules/lumina.mdc` (Cursor). Each stub instructs its agent to read `README.md` for project context and wiki schema. **Stubs are independent rendered files, never symlinks.**
+- **FR10:** Installer can create per-skill symlinks under `.claude/skills/lumi-*` pointing into `.agents/skills/<pack>/<skill>/` for each installed skill when Claude Code is a selected IDE target. These per-skill symlinks are the only filesystem-link surface.
+- **FR11:** Installer can detect symlink capability on the host platform for the per-skill symlinks under `.claude/skills/`, and fall back to junction (Windows directory link) or copy (Windows when Developer Mode is off) per skill. The fallback choice is recorded in `_lumina/manifest.json`. Schema entry-point files (`README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc`) are plain rendered files and have no fallback concern.
+- **FR12:** Installer can write `_lumina/manifest.json` capturing package version, ISO timestamp, installed packs, per-skill link strategy, and per-file checksums for stubs and schema regions.
+- **FR13:** Installer can bundle a `.gitignore` template at the project root that ignores `_lumina/_state/` and `raw/tmp/` when no `.gitignore` already exists; otherwise leave the existing file alone.
 - **FR14:** User can run install non-interactively with `--yes` / `-y`, accepting all defaults.
 
 ### Upgrade & Reinstallation
 
-- **FR15:** Installer can detect on second run that `.agents/manifest.json` exists and treat the run as an upgrade, reading the manifest for prior decisions.
-- **FR16:** Installer can replace files in `.agents/skills/` and `.agents/schema/` exactly to the current pack set without prompting the User.
-- **FR17:** Installer can refresh symlinks and per-target generated files (`.cursor/rules/lumina.mdc`) on every upgrade.
-- **FR18:** Installer must not read or modify any file under `wiki/` or `raw/` during install or upgrade. Verifiable by `git diff` over those paths being empty.
+- **FR15:** Installer can detect on second run that `_lumina/manifest.json` exists and treat the run as an upgrade, reading the manifest for prior decisions.
+- **FR16:** Installer can replace files in `.agents/skills/`, `_lumina/schema/`, `_lumina/scripts/`, and `_lumina/tools/` (when research pack is installed) exactly to the current pack set without prompting the User. The Installer rewrites only the schema region of `README.md` (between `<!-- lumina:schema -->` markers), preserving any User content outside the markers byte-for-byte. Stub files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc`) are regenerated from template on every upgrade.
+- **FR17:** Installer can refresh per-skill symlinks under `.claude/skills/lumi-*` on every upgrade and rewrite stub files in place when their template content has changed.
+- **FR18:** Installer must not read or modify any file under `wiki/`, `raw/`, or `_lumina/_state/` during install or upgrade. Verifiable by `git diff` over `wiki/` and `raw/` being empty.
 - **FR19:** Installer can preserve User customizations to schema files marked with the `<!-- user-edited -->` comment by appending updates to a new section rather than overwriting.
 - **FR20:** Installer can run with `--re-link` to recompute the symlink/junction/copy strategy from current platform capabilities, ignoring the manifest's prior choice.
-- **FR21:** Installer can produce a fresh workspace with the same shape (same packs, same symlinks, same skill versions) on a second machine when `lumina.config.yaml` and `.agents/manifest.json` are committed and present, without re-prompting.
+- **FR21:** Installer can produce a fresh workspace with the same shape (same packs, same symlinks, same skill versions) on a second machine when `_lumina/config/lumina.config.yaml` and `_lumina/manifest.json` are committed and present, without re-prompting.
 
 ### CLI Surface
 
 - **FR22:** User can invoke the CLI as either `lumina` or `lumi` (alias) with identical behavior.
 - **FR23:** User can run `lumina --version` (or `-v`) and receive the installed package version on stdout.
 - **FR24:** User can run `lumina --help` (or `-h`) and receive usage and command list on stdout.
-- **FR25:** User can run `lumina uninstall` to remove `.agents/`, project-root symlinks, generated `.cursor/rules/lumina.mdc`, and `lumina.config.yaml`. The Installer must prompt for confirmation and must preserve `wiki/`, `raw/`, and any User-authored content.
+- **FR25:** User can run `lumina uninstall` to remove `_lumina/`, `.agents/`, the rendered stub files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`), and `.cursor/rules/lumina.mdc`. The Installer offers two `README.md` paths: (a) keep `README.md` intact (default; Lumina-managed schema region remains as plain markdown), or (b) strip the `<!-- lumina:schema -->` region and leave the User's surrounding content. The Installer must prompt for confirmation and must preserve `wiki/`, `raw/`, and any User-authored content.
 - **FR26:** Installer can perform an auto-update check via `npm view lumina-wiki@latest version` on `--version` invocation and surface a single-line notice when a newer version exists.
 - **FR27:** User can suppress the auto-update check via `LUMINA_NO_UPDATE_CHECK=1` environment variable or `--no-update` flag.
 - **FR28:** Installer can exit with documented exit codes: `0` success, `1` user error, `2` filesystem error, `3` upgrade incompatibility.
@@ -519,8 +532,8 @@ The Installer ships skill content; the Agent executes it. These FRs describe wha
 
 ### Multi-IDE Integration
 
-- **FR38:** Agent can read the wiki schema at its native expected entry point (`CLAUDE.md` for Claude Code; `AGENTS.md` for Codex; `GEMINI.md` for Gemini CLI; `.cursor/rules/lumina.mdc` for Cursor; `.agents/schema/CLAUDE.md` directly for `generic`) without any further User configuration after install.
-- **FR39:** A single edit to `.agents/schema/CLAUDE.md` propagates to all selected IDE entry points (via symlink, or via regenerated file for Cursor on the next install).
+- **FR38:** Agent can find the canonical project schema by following its native expected entry point (`CLAUDE.md` for Claude Code; `AGENTS.md` for Codex; `GEMINI.md` for Gemini CLI; `.cursor/rules/lumina.mdc` for Cursor; `README.md` directly for `generic`). Each IDE-specific stub redirects to `README.md` in its first lines, where the canonical schema lives.
+- **FR39:** All schema content lives in a single file (`README.md` at project root). A User edit between `<!-- lumina:schema -->` markers persists across upgrades only if the User adds a `<!-- user-edited -->` marker on the changed line; otherwise the schema region is rewritten on upgrade. Edits outside the markers are always preserved.
 - **FR40:** User can re-run `lumina install` to add a new IDE target to an existing workspace; the Installer creates the new entry point without disturbing existing ones.
 
 ### Reporting & User Feedback

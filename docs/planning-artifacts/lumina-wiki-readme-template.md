@@ -1,10 +1,11 @@
-# {{project_name}} — Runtime Schema
+# {{project_name}}
 
-> A research wiki built with [lumina-wiki](https://github.com/tronghieu/lumina-wiki).
-> Realizes Andrej Karpathy's [LLM-Wiki](https://karpathy.bearblog.dev/llm-wiki/) vision, with structural conventions adapted from [ΩmegaWiki](https://github.com/skyllwt/OmegaWiki).
-> This file is the wiki's runtime entry point: defines page structure, link conventions, and workflow constraints.
+> The canonical agent-context file for this Lumina-Wiki research workspace.
 >
-> **Maintenance note**: This file is a symlink to `.agents/schema/CLAUDE.md` — the single source of truth. AGENTS.md / GEMINI.md / CLAUDE.md at the project root all point here. Edit at the source.
+> A research wiki built with [lumina-wiki](https://github.com/tronghieu/lumina-wiki), realizing Andrej Karpathy's [LLM-Wiki](https://karpathy.bearblog.dev/llm-wiki/) vision.
+> This file (`README.md`) is the canonical agent-context file at the project root: it defines page structure, link conventions, and workflow constraints. CLAUDE.md, AGENTS.md, GEMINI.md, and `.cursor/rules/lumina.mdc` are tiny stubs that point each agent to read this file first.
+>
+> **Maintenance note:** This is `README.md` at the project root — the canonical agent-context file for this workspace. It is rendered from a Lumina-Wiki template at install time. The schema region between `<!-- lumina:schema -->` and `<!-- /lumina:schema -->` markers is rewritten on `lumina install` upgrades; content outside the markers is preserved byte-for-byte. CLAUDE.md, AGENTS.md, GEMINI.md, and `.cursor/rules/lumina.mdc` are independent rendered stub files that simply instruct each agent to read this file first — none of them are symlinks.
 
 ---
 
@@ -47,18 +48,25 @@ Keep this mental map in immediate context:
 
 **You may read `raw/` but never modify it without explicit user instruction.**
 
-### `.agents/` is the skill + schema source of truth
+### `.agents/` is the skill source of truth
 
-- `.agents/schema/` — schema files (this file lives here)
 - `.agents/skills/core/` — always-installed skills
-- `.agents/skills/packs/<pack>/` — opt-in skill bundles
-- `.agents/manifest.json` — installer-managed; never edit by hand
+- `.agents/skills/packs/<pack>/` — opt-in skill bundles (research, reading)
+
+### `_lumina/` is the installer-managed sidecar
+
+- `_lumina/config/lumina.config.yaml` — workspace config; editable
+- `_lumina/schema/` — deeper reference docs (`page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`); read on demand when this README points there
+- `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`); core skills shell out to these
+- `_lumina/tools/` — Python tools for the research pack (opt-in)
+- `_lumina/_state/` — installer/skill checkpoint state; gitignored
+- `_lumina/manifest.json` — installer-managed; never edit by hand
 
 ---
 
 ## Page Types
 
-Every wiki page has a defined type, frontmatter, and section structure. See `.agents/schema/page-templates.md` for full templates.
+Every wiki page has a defined type, frontmatter, and section structure. See `_lumina/schema/page-templates.md` for full templates.
 
 **Core types** (always available):
 
@@ -107,7 +115,7 @@ Some links are intentionally one-way. The lint config in `lumina.config.yaml →
 - **`outputs/**`** — ephemeral artifacts (comparisons, slide decks, exports). Output → source is fine; back-linking from sources to every output that mentions them creates noise.
 - **External URLs** (`*://*`) — out of wiki scope; nothing to update on the other end.
 
-Anything outside an exemption glob must be bidirectional. Pack-specific rules live in `.agents/schema/cross-reference-packs.md` and only apply when the pack is installed.
+Anything outside an exemption glob must be bidirectional. Pack-specific rules live in `_lumina/schema/cross-reference-packs.md` and only apply when the pack is installed.
 
 ---
 
@@ -136,7 +144,7 @@ Example:
 
 Core edge types: `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`. Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges are stored once with sorted endpoints and `symmetric: true`.
 
-Packs may extend the edge type vocabulary — see `.agents/schema/graph-packs.md`.
+Packs may extend the edge type vocabulary — see `_lumina/schema/graph-packs.md`.
 
 ---
 
@@ -155,7 +163,7 @@ Packs may extend the edge type vocabulary — see `.agents/schema/graph-packs.md
 
 ## Skills
 
-Skills live in `.agents/skills/` and are invoked via slash commands. The active install is recorded in `.agents/manifest.json`.
+Skills live in `.agents/skills/` and are invoked via slash commands. The active install is recorded in `_lumina/manifest.json`.
 
 ### Core skills (always present)
 
@@ -179,8 +187,9 @@ Adds `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-
 
 ## Tooling Conventions
 
-- **`.agents/scripts/lint.mjs`** — pure-Node markdown linter, runs offline.
-- **`.agents/scripts/log-parse.mjs`** — extract recent log entries.
+- **`_lumina/scripts/lint.mjs`** — pure-Node markdown linter, runs offline.
+- **`_lumina/scripts/wiki.mjs`** — wiki engine (frontmatter read/write, graph mutation, slug, log).
+- **`_lumina/scripts/reset.mjs`** — scoped destructive reset.
 - **Optional `qmd` integration** — if the user has installed [qmd](https://github.com/tobi/qmd), prefer it for full-text search over `wiki/`.
 - **Python tooling is opt-in** — only required by some packs (research's arxiv/S2 fetchers). Core skills are Node-only.
 
@@ -192,7 +201,7 @@ Adds `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-
 2. Read `wiki/index.md` to learn what already exists.
 3. Read `wiki/log.md`'s last 20 entries to learn what happened recently.
 4. When the user invokes a skill, read the skill's `SKILL.md` first; only open `references/` files when needed.
-5. When in doubt about page structure, open `.agents/schema/page-templates.md`.
+5. When in doubt about page structure, open `_lumina/schema/page-templates.md`.
 6. When in doubt about scope, ask the user — never silently expand it.
 
 The wiki is a long-running collaboration. Maintain it patiently.

@@ -1,6 +1,7 @@
 # lumina.config.yaml — workspace config rendered by `npx lumina-wiki install`.
-# Lives at the project root. Editable by the user; re-read on every skill run.
-# Every key has a sensible default — installer prompts only for the essentials.
+# Lives at `_lumina/config/lumina.config.yaml` (sidecar). Editable by the user;
+# re-read on every skill run. Every key has a sensible default — installer
+# prompts only for the essentials.
 
 # ─── Identity ────────────────────────────────────────────────────────────────
 project_name: "My Research Wiki"         # display name (used in CLAUDE.md header)
@@ -14,15 +15,20 @@ document_output_language: "English"      # language wiki pages are written in
 # searchable in another (usually English for cross-source compatibility).
 
 # ─── IDE targets ─────────────────────────────────────────────────────────────
-# Installer creates symlinks from each enabled IDE's skill location to
-# .agents/skills/. Schema files (CLAUDE.md, AGENTS.md, GEMINI.md) are also
-# symlinks → .agents/schema/CLAUDE.md (single source of truth).
+# The canonical agent-context file is `README.md` at the project root (rendered
+# from template, freely editable). CLAUDE.md / AGENTS.md / GEMINI.md /
+# .cursor/rules/lumina.mdc are tiny rendered stubs (~5–10 lines each) that
+# point each agent to read README.md — they are NOT symlinks. The only
+# filesystem symlinks the installer creates are per-skill at
+# `.claude/skills/lumi-*` → `.agents/skills/<pack>/<skill>/` when claude_code
+# is enabled; that's the only place the symlink/junction/copy fallback ladder
+# (Windows compatibility) applies.
 ide_targets:
-  claude_code: true                      # → .claude/skills/lumi-* + CLAUDE.md
-  codex: false                           # → AGENTS.md
-  cursor: false                          # → .cursor/rules/ + AGENTS.md
-  gemini_cli: false                      # → GEMINI.md
-  generic: false                         # → AGENTS.md only (fallback)
+  claude_code: true                      # → .claude/skills/lumi-* + CLAUDE.md stub
+  codex: false                           # → AGENTS.md stub
+  cursor: false                          # → .cursor/rules/lumina.mdc stub
+  gemini_cli: false                      # → GEMINI.md stub
+  generic: false                         # → README.md only (no stub needed; user wires their own loader)
 
 # ─── Packs (skill bundles) ───────────────────────────────────────────────────
 # `core` is always installed. Domain packs add page types + skills + schema
@@ -42,7 +48,8 @@ packs:
 paths:
   raw: "raw"                             # immutable user-owned sources
   wiki: "wiki"                           # LLM-maintained product
-  agents: ".agents"                      # single source of truth for skills/schema
+  agents: ".agents"                      # skills only — installer-managed
+  _lumina: "_lumina"                     # installer sidecar (config, schema/, scripts/, tools/, manifest)
   index: "wiki/index.md"
   log: "wiki/log.md"
 
@@ -88,4 +95,4 @@ telemetry: false                         # never send anything off-machine
 
 # ─── Manifest reference ──────────────────────────────────────────────────────
 # Read-only — managed by installer. Do not edit by hand.
-# Actual contents live in .agents/manifest.json (version, installed packs, hashes).
+# Actual contents live in _lumina/manifest.json (version, installed packs, hashes).
