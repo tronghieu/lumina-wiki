@@ -395,6 +395,30 @@ async function ensureDir(dir) {
   await mkdir(dir, { recursive: true });
 }
 
+function toPosixPath(value) {
+  return value.replace(/\\/g, '/');
+}
+
+function stripMdSuffix(value) {
+  return value.endsWith('.md') ? value.slice(0, -3) : value;
+}
+
+function isTypedEntitySlug(slug) {
+  const normalizedSlug = stripMdSuffix(toPosixPath(slug));
+  const [first] = normalizedSlug.split('/');
+  return Boolean(first && ENTITY_DIRS[first]);
+}
+
+function safeWikiRelativePath(projectRoot, relPath) {
+  const normalizedRel = toPosixPath(relPath);
+  if (!pathSafe(normalizedRel, projectRoot)) {
+    const err = new Error(`Unsafe wiki path: ${relPath}`);
+    err.code = 2;
+    throw err;
+  }
+  return normalizedRel;
+}
+
 // ---------------------------------------------------------------------------
 // 4. Entity ops
 // ---------------------------------------------------------------------------
@@ -408,6 +432,18 @@ async function ensureDir(dir) {
  */
 async function findEntityFile(projectRoot, slug) {
   const wikiDir = join(projectRoot, 'wiki');
+
+  if (isTypedEntitySlug(slug)) {
+    const normalizedSlug = stripMdSuffix(safeWikiRelativePath(projectRoot, slug));
+    const candidate = join(wikiDir, `${normalizedSlug}.md`);
+    try {
+      await access(candidate, fsConstants.F_OK);
+      return candidate;
+    } catch (_) {
+      return null;
+    }
+  }
+
   for (const entry of Object.values(ENTITY_DIRS)) {
     const candidate = join(wikiDir, entry.dir, `${slug}.md`);
     try {
@@ -467,25 +503,55 @@ async function setMeta(projectRoot, slug, key, value) {
  * @param {string} projectRoot
  * @returns {Promise<Array<{slug: string, dir: string, type: string, filePath: string}>>}
  */
-async function listEntities(projectRoot) {
+async function listEntities(projectRoot, prefix = null) {
   const wikiDir = join(projectRoot, 'wiki');
   const results = [];
-  for (const [typeName, entry] of Object.entries(ENTITY_DIRS)) {
-    const dir = join(wikiDir, entry.dir);
+
+  async function walk(dir) {
+    const files = [];
+    let entries;
     try {
-      const files = await readdir(dir);
-      for (const f of files) {
-        if (f.endsWith('.md')) {
-          results.push({
-            slug: f.slice(0, -3),
-            dir: entry.dir,
-            type: typeName,
-            filePath: join(dir, f),
-          });
-        }
-      }
+      entries = await readdir(dir, { withFileTypes: true });
     } catch (_) {
-      // dir may not exist (pack not installed)
+      return files;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...await walk(fullPath));
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        files.push(fullPath);
+      }
+    }
+    return files;
+  }
+
+  for (const [typeName, entry] of Object.entries(ENTITY_DIRS)) {
+    const baseDir = join(wikiDir, entry.dir);
+    let scanDir = baseDir;
+
+    if (prefix) {
+      const normalizedPrefix = stripMdSuffix(safeWikiRelativePath(projectRoot, prefix));
+      if (normalizedPrefix !== entry.dir.slice(0, -1) && !normalizedPrefix.startsWith(entry.dir)) {
+        continue;
+      }
+      scanDir = join(wikiDir, normalizedPrefix);
+    }
+
+    const files = await walk(scanDir);
+    for (const filePath of files) {
+      const relUnderWiki = toPosixPath(relative(wikiDir, filePath));
+      const relUnderEntityDir = toPosixPath(relative(baseDir, filePath));
+      const slugUnderEntityDir = stripMdSuffix(relUnderEntityDir);
+      const canonicalSlug = stripMdSuffix(relUnderWiki);
+      results.push({
+        slug: slugUnderEntityDir.includes('/') ? canonicalSlug : slugUnderEntityDir,
+        path: canonicalSlug,
+        dir: entry.dir,
+        type: typeName,
+        filePath,
+      });
     }
   }
   return results;
@@ -964,11 +1030,14 @@ async function initWorkspace(projectRoot, opts = {}) {
  * @param {string} slug
  * @returns {Promise<{outbound: object[], inbound: object[]}>}
  */
-async function readEdgesForSlug(projectRoot, slug) {
+async function readEdgesForSlug(projectRoot, slug, opts = {}) {
   const edgesFile = join(projectRoot, 'wiki', 'graph', 'edges.jsonl');
   const all = await readJsonl(edgesFile);
-  const outbound = all.filter(e => e.from === slug);
-  const inbound = all.filter(e => e.to === slug);
+  const typeFilter = opts.type;
+  const direction = opts.direction || 'both';
+  const matchesType = (edge) => !typeFilter || edge.type === typeFilter;
+  const outbound = direction === 'inbound' ? [] : all.filter(e => e.from === slug && matchesType(e));
+  const inbound = direction === 'outbound' ? [] : all.filter(e => e.to === slug && matchesType(e));
   return { outbound, inbound };
 }
 
@@ -1177,8 +1246,8 @@ async function main(argv) {
       '  add-citation <from> <to>        Append cites edge to citations.jsonl',
       '  batch-edges <json-file>         Apply array of edges from JSON file',
       '  dedup-edges                     Deduplicate edges.jsonl',
-      '  list-entities [--type <type>]    List all entity slugs as JSON',
-      '  read-edges <slug>               Read all edges for a slug',
+      '  list-entities [path-prefix] [--type <type>]  List entity slugs as JSON',
+      '  read-edges <slug>|--from <slug> [--type <type>] [--direction outbound|inbound|both]',
       '  read-citations <slug>           Read all citations for a slug',
       '  verify-frontmatter <slug>       Validate frontmatter fields',
       '  checkpoint-read <skill> <phase>',
@@ -1426,16 +1495,22 @@ async function main(argv) {
       case 'list-entities': {
         const projectRoot = await requireProjectRoot();
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
+        const prefix = positional[0] || null;
         if (typeFilter && !ENTITY_DIRS[typeFilter]) {
           emitError(`Unknown entity type: ${typeFilter}. Valid types: ${Object.keys(ENTITY_DIRS).join(', ')}`, 2);
           process.exit(2);
         }
-        const entities = await listEntities(projectRoot);
+        if (prefix && !pathSafe(prefix, projectRoot)) {
+          emitError(`Unsafe prefix: ${prefix}`, 2);
+          process.exit(2);
+        }
+        const entities = await listEntities(projectRoot, prefix);
         const filtered = typeFilter ? entities.filter(e => e.type === typeFilter) : entities;
         emitJson({
           count: filtered.length,
           entities: filtered.map(e => ({
             slug: e.slug,
+            path: e.path,
             type: e.type,
             dir: e.dir,
             filePath: relative(projectRoot, e.filePath),
@@ -1446,18 +1521,28 @@ async function main(argv) {
 
       // -----------------------------------------------------------------------
       case 'read-edges': {
-        const slug = positional[0];
+        const slug = (flags.from && typeof flags.from === 'string') ? flags.from : positional[0];
         if (!slug) {
-          emitError('read-edges requires <slug>', 2);
+          emitError('read-edges requires <slug> or --from <slug>', 2);
           process.exit(2);
         }
         if (slug.includes('..')) {
           emitError('Slug may not contain ..', 2);
           process.exit(2);
         }
+        const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
+        const direction = flags.direction && typeof flags.direction === 'string' ? flags.direction : 'both';
+        if (typeFilter && !EDGE_TYPES.some(t => t.name === typeFilter)) {
+          emitError(`Unknown edge type: ${typeFilter}`, 2);
+          process.exit(2);
+        }
+        if (!['outbound', 'inbound', 'both'].includes(direction)) {
+          emitError(`Invalid --direction: ${direction}. Must be outbound, inbound, or both.`, 2);
+          process.exit(2);
+        }
         const projectRoot = await requireProjectRoot();
-        const { outbound, inbound } = await readEdgesForSlug(projectRoot, slug);
-        emitJson({ slug, outbound, inbound });
+        const { outbound, inbound } = await readEdgesForSlug(projectRoot, slug, { type: typeFilter, direction });
+        emitJson({ slug, type: typeFilter, direction, outbound, inbound });
         break;
       }
 

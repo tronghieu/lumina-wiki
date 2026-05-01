@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "lumina-wiki",
-  "version": "0.0.1",
-  "description": "Karpathy's LLM-Wiki vision — domain-agnostic, multi-IDE wiki scaffolder. Coming soon.",
+  "version": "0.1.0",
+  "description": "Domain-agnostic, multi-IDE wiki scaffolder — Karpathy's LLM-Wiki vision, cross-platform and pack-based.",
   "keywords": [
     "llm-wiki",
     "knowledge-base",
@@ -31,12 +31,48 @@
     "lumi": "bin/lumina.js"
   },
   "files": [
-    "bin/",
+    "bin/lumina.js",
+    "src/installer/commands.js",
+    "src/installer/fs.js",
+    "src/installer/manifest.js",
+    "src/installer/prompts.js",
+    "src/installer/template-engine.js",
+    "src/installer/update-check.js",
+    "src/templates/**/*",
+    "src/scripts/wiki.mjs",
+    "src/scripts/lint.mjs",
+    "src/scripts/reset.mjs",
+    "src/scripts/schemas.mjs",
+    "src/skills/**/*.md",
+    "src/tools/_env.py",
+    "src/tools/discover.py",
+    "src/tools/init_discovery.py",
+    "src/tools/prepare_source.py",
+    "src/tools/fetch_arxiv.py",
+    "src/tools/fetch_wikipedia.py",
+    "src/tools/fetch_s2.py",
+    "src/tools/fetch_deepxiv.py",
+    "src/tools/requirements.txt",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "commander": "^12.1.0",
+    "glob": "^11.0.0",
+    "js-yaml": "^4.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "node --test src/installer/*.test.js",
+    "test:fs": "node --test src/installer/fs.test.js",
+    "test:manifest": "node --test src/installer/manifest.test.js",
+    "test:template": "node --test src/installer/template-engine.test.js",
+    "test:update": "node --test src/installer/update-check.test.js"
   },
   "publishConfig": {
     "access": "public"

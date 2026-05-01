@@ -1,0 +1,18 @@
+# Lumina research-pack Python tools — runtime dependencies
+#
+# Core (required for all tools):
+requests>=2.31.0
+
+# PDF text extraction for prepare_source.py:
+# pypdf is the pure-Python default (no native extensions).
+# pdfminer.six is an alternative with better layout analysis.
+# Install at least one:
+pypdf>=4.0.0
+
+# Optional but recommended for better PDF extraction quality:
+# pdfminer.six>=20221105
+# pdfplumber>=0.10.0
+
+# Testing:
+pytest>=7.0.0
+pytest-cov>=4.0.0

@@ -207,6 +207,14 @@ export const EDGE_TYPES = [
 
   // Any entity -> external URL (core; *://* is in EXEMPTION_GLOBS)
   { name: 'see_also_url',       from: '*', to: '*',           reverse: null, terminal: true, pack: 'core' },
+
+  // --- reading pack --------------------------------------------------------
+  { name: 'features',           from: 'chapters',   to: 'characters', reverse: 'appears_in',      symmetric: false, pack: 'reading' },
+  { name: 'appears_in',         from: '*',          to: 'chapters',   reverse: null,              symmetric: false, pack: 'reading' },
+  { name: 'tagged_with',        from: 'chapters',   to: 'themes',     reverse: 'appears_in',      symmetric: false, pack: 'reading' },
+  { name: 'associated_with',    from: 'themes',     to: 'characters', reverse: 'expresses_theme', symmetric: false, pack: 'reading' },
+  { name: 'expresses_theme',    from: 'characters', to: 'themes',     reverse: 'associated_with', symmetric: false, pack: 'reading' },
+  { name: 'appears_with',       from: 'characters', to: 'characters', reverse: 'appears_with',    symmetric: true,  pack: 'reading' },
 ];
 
 // ---------------------------------------------------------------------------

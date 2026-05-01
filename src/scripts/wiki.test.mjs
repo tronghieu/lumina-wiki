@@ -462,6 +462,26 @@ related_concepts: []
     }
   });
 
+  test('read-meta and set-meta support typed path slugs', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeFile(join(tmp, 'wiki', 'concepts', 'typed-concept.md'), '---\nid: concepts/typed-concept\ntitle: Typed Concept\ntype: concept\ncreated: 2024-01-01\nupdated: 2024-01-01\nkey_sources: []\nrelated_concepts: []\n---\n', 'utf8');
+
+      const read = runWiki(['read-meta', 'concepts/typed-concept'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      assert.equal(parseJson(read.stdout).frontmatter.title, 'Typed Concept');
+
+      const set = runWiki(['set-meta', 'concepts/typed-concept', 'updated', '2024-02-01'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const readAfter = runWiki(['read-meta', 'concepts/typed-concept'], { cwd: tmp });
+      assert.equal(parseJson(readAfter.stdout).frontmatter.updated, '2024-02-01');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('read-meta rejects .. in slug', async () => {
     const tmp = await makeTmp();
     try {
@@ -1091,6 +1111,24 @@ describe('list-entities', () => {
       await cleanTmp(tmp);
     }
   });
+
+  test('lists nested entities by typed prefix', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'reading']);
+      await mkdir(join(tmp, 'wiki', 'chapters', 'great-gatsby'), { recursive: true });
+      await writeFile(join(tmp, 'wiki', 'chapters', 'great-gatsby', 'chapter-1.md'), '---\nid: chapters/great-gatsby/chapter-1\ntitle: Chapter 1\ntype: chapter\ncreated: 2024-01-01\nupdated: 2024-01-01\nbook: great-gatsby\nnumber: 1\n---\n', 'utf8');
+
+      const r = runWiki(['list-entities', 'chapters/great-gatsby'], { cwd: tmp });
+      assert.equal(r.status, 0, `list-entities failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.count, 1);
+      assert.equal(json.entities[0].slug, 'chapters/great-gatsby/chapter-1');
+      assert.equal(json.entities[0].path, 'chapters/great-gatsby/chapter-1');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1110,6 +1148,24 @@ describe('read-edges and read-citations', () => {
       assert.equal(json.slug, 'src-a');
       assert.equal(json.outbound.length, 1);
       assert.equal(json.outbound[0].type, 'builds_on');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('read-edges supports --from, --type, and --direction filters', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'reading']);
+      runWiki(['add-edge', 'chapters/book/ch1', 'features', 'characters/book/alice'], { cwd: tmp });
+      runWiki(['add-edge', 'chapters/book/ch1', 'tagged_with', 'themes/book/loneliness'], { cwd: tmp });
+
+      const r = runWiki(['read-edges', '--from', 'chapters/book/ch1', '--type', 'features', '--direction', 'outbound'], { cwd: tmp });
+      assert.equal(r.status, 0, `read-edges failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.outbound.length, 1);
+      assert.equal(json.outbound[0].type, 'features');
+      assert.equal(json.inbound.length, 0);
     } finally {
       await cleanTmp(tmp);
     }

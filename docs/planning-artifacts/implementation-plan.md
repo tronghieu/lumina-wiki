@@ -28,15 +28,15 @@ P0  schemas.mjs                                     [DONE 2026-05-01]
 P1  wiki.mjs                                        [DONE 2026-05-01]
 P2  lint.mjs                                        [DONE 2026-05-01]
 P3  reset.mjs                                       [DONE 2026-05-01]
-P4  Core skills (6)        — edit → init → ingest → ask → check → reset
-P5  Research-pack tools    — _env, fetchers, discover, init_discovery, prepare_source
-P6  Research-pack skills (4)  — discover → prefill → survey → setup
-P7  Reading-pack skills (4)   — chapter-ingest → character-track → theme-map → plot-recap
-P8  Installer + templates + manifest + symlink ladder
+P4  Core skills (6)        — edit → init → ingest → ask → check → reset     [DONE 2026-05-01]
+P5  Research-pack tools    — _env, fetchers, discover, init_discovery, prepare_source [DONE 2026-05-01]
+P6  Research-pack skills (4)  — discover → prefill → survey → setup         [DONE 2026-05-01]
+P7  Reading-pack skills (4)   — chapter-ingest → character-track → theme-map → plot-recap [DONE 2026-05-01]
+P8  Installer + templates + manifest + symlink ladder                       [DONE 2026-05-01]
 P9  CI matrix + idempotency byte-diff test + npm publish prep
 ```
 
-**Progress (2026-05-01):** P0–P3 complete. 144 unit tests passing (wiki 59 / lint 74 / reset 11). 3 rounds of code review applied; all blockers + risks resolved. Ready for P4.
+**Progress (2026-05-01):** P0–P8 complete in repo source. Post-review fixes applied for CLI `--version`, missing research skills, skill/wiki API drift, typed path slugs, non-interactive upgrade preservation, README schema merge, npm package allowlist, and streamed `prepare_source.py` source copies. Verified: installer tests 82 passed, scripts tests 147 passed, Python tools tests 135 passed, `node bin/lumina.js --version --no-update` outputs `0.1.0`, `npm pack --dry-run --json` contains runtime files only, and `git diff --check` passes.
 
 Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. Installer is last because templates stabilize only after skills exist.
 
@@ -97,7 +97,9 @@ Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. I
 
 ---
 
-## P4 — Core skills (6 markdown files)
+## P4 — Core skills (6 markdown files) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. Six core skills authored under `src/skills/core/`: `init`, `ingest`, `ask`, `edit`, `check`, `reset`. Skills point agents to project-root `README.md` as the canonical context, call workspace `_lumina/scripts/{wiki,lint,reset}.mjs` through Bash, and avoid cross-model workflows.
 
 Order within phase: `edit` (no tool deps, smoke-test markdown harness) → `init` → `ingest` → `ask` → `check` → `reset`.
 
@@ -111,17 +113,21 @@ Each `SKILL.md`:
 
 ---
 
-## P5 — Research-pack Python tools (`src/tools/`, workspace: `_lumina/tools/`)
+## P5 — Research-pack Python tools (`src/tools/`, workspace: `_lumina/tools/`) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. Implemented `_env.py`, fetchers (`fetch_arxiv.py`, `fetch_s2.py`, `fetch_wikipedia.py`, `fetch_deepxiv.py`), `discover.py`, `init_discovery.py`, and `prepare_source.py`. Post-review fix: `prepare_source.py` now copies the original source into `raw/tmp/<slug>/source<ext>` with streamed atomic copy instead of `read_bytes()` to avoid large-file memory spikes.
 
 Order: `_env.py` → 4 fetchers → `discover.py` → `init_discovery.py` (slim port) → `prepare_source.py`.
 
 **Pattern:** one fetcher per API, JSON-on-stdout, documented exit codes (0/2/3). Skills compose via Bash; never import Python modules.
 
-**DoD:** Each fetcher returns valid JSON for a known input; missing API key → exit 2 with actionable message. `prepare_source.py` turns one local PDF into a `raw/<slug>/` package whose subsequent ingest is byte-stable.
+**DoD:** Each fetcher returns valid JSON for a known input; missing API key → exit 2 with actionable message. `prepare_source.py` turns one local file into a `raw/tmp/<slug>/` package whose subsequent ingest is byte-stable.
 
 ---
 
-## P6 — Research-pack skills (4)
+## P6 — Research-pack skills (4) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. Added all four research-pack skills under `src/skills/packs/research/`: `discover`, `prefill`, `survey`, `setup`. Scope remains locked to FR35: source discovery shortlist, foundation prefill, wiki-grounded survey synthesis, and research runtime setup. No `/ideate`, LaTeX authoring, orchestrator, daily arXiv, or cross-model flows.
 
 Order: `discover` → `prefill` (seeds `wiki/foundations/` — must run before bulk ingest to prevent concept duplication) → `survey` → `setup`.
 
@@ -129,7 +135,9 @@ Order: `discover` → `prefill` (seeds `wiki/foundations/` — must run before b
 
 ---
 
-## P7 — Reading-pack skills (4)
+## P7 — Reading-pack skills (4) — ✅ DONE
+
+**Status:** Shipped 2026-05-01. Added reading skills under `src/skills/packs/reading/`: `chapter-ingest`, `character-track`, `theme-map`, `plot-recap`. Post-review fix: command snippets now match `wiki.mjs`; typed/namespaced slugs such as `chapters/<book>/<chapter>` are supported; reading edges use `features`, `appears_in`, `tagged_with`, `associated_with`, `expresses_theme`, and `appears_with`; the obsolete `--book` flag is not used.
 
 Order: `chapter-ingest` → `character-track` → `theme-map` → `plot-recap`.
 
@@ -137,7 +145,14 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 
 ---
 
-## P8 — Installer + templates + manifest
+## P8 — Installer + templates + manifest — ✅ DONE
+
+**Status:** Shipped 2026-05-01. Implemented npm CLI entrypoint, installer commands/prompts, filesystem helpers, manifest readers/writers, template renderer, update check, templates, schema docs, IDE stubs, and pack copying. Post-review fixes applied:
+- `node bin/lumina.js --version --no-update` prints package version and exits 0 before Commander is loaded.
+- Built-in skill sources are fail-fast: missing `SKILL.md` no longer creates empty advertised skills.
+- `install --yes` on an existing Lumina workspace reads existing config/manifest instead of resetting to defaults.
+- README merge appends a Lumina schema region when an existing README has no markers.
+- `package.json#files` is a precise runtime allowlist; tests, `__pycache__`, `.pyc`, and planning artifacts are excluded from `npm pack`.
 
 **Components:** `bin/lumina.js`, `src/installer/{commands, prompts, fs, manifest, template-engine, update-check}.js`. Installer copies `src/scripts/` → workspace `_lumina/scripts/`, `src/tools/` → workspace `_lumina/tools/` (research pack only), `src/skills/` → workspace `.agents/skills/`.
 

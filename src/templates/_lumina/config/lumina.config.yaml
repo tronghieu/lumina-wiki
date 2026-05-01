@@ -1,0 +1,75 @@
+# lumina.config.yaml — workspace config rendered by lumina-wiki installer.
+# Lives at _lumina/config/lumina.config.yaml. Editable by hand.
+# Re-read on every skill run. Every key has a sensible default.
+
+# Identity
+project_name: "{{project_name}}"
+created_at: "{{created_at}}"
+
+# Languages
+communication_language: "{{communication_language}}"
+document_output_language: "{{document_output_language}}"
+
+# IDE targets
+ide_targets:
+  claude_code: {{pack_core}}
+  codex: false
+  cursor: false
+  gemini_cli: false
+  generic: false
+
+# Packs
+packs:
+  core: true
+  research: {{pack_research}}
+  reading: {{pack_reading}}
+
+# Paths (relative to project root)
+paths:
+  raw: "raw"
+  wiki: "wiki"
+  agents: ".agents"
+  _lumina: "_lumina"
+  index: "wiki/index.md"
+  log: "wiki/log.md"
+
+# Wiki conventions
+wiki:
+  link_syntax: "obsidian"
+  slug_style: "kebab-case"
+  log_prefix: "## [{{date}}] {{skill}} | {{details}}"
+  bidirectional_links:
+    mode: "exempt-only"
+    exemptions:
+      - "foundations/**"
+      - "outputs/**"
+      - "*://*"
+  graph:
+    enabled: true
+    edge_types_core:
+      - related_to
+      - builds_on
+      - contradicts
+      - cites
+      - mentions
+      - part_of
+
+# Lint
+lint:
+  default_mode: "report"
+  checks:
+    broken_links: true
+    orphan_pages: true
+    missing_reverse_links: true
+    log_format: true
+    index_freshness: true
+    stale_claims: false
+
+# Optional integrations
+integrations:
+  qmd_search: false
+  obsidian_vault: false
+  marp_slides: false
+
+# Telemetry — always false
+telemetry: false
