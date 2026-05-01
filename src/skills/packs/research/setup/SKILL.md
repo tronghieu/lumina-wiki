@@ -35,7 +35,18 @@ python3 _lumina/tools/fetch_deepxiv.py --help
 python3 _lumina/tools/fetch_wikipedia.py --help
 ```
 
-3. Report missing optional keys by name only. Never print secret values.
+3. Report missing optional keys by name only. Never print secret values. For
+   each missing key, tell the user what the provider is for, whether it is
+   required or optional, and where to register:
+
+   | Key                          | Provider          | Required? | Register at                                          |
+   |------------------------------|-------------------|-----------|------------------------------------------------------|
+   | (none)                       | arXiv             | no key    | Public XML API at `export.arxiv.org` — no signup     |
+   | `SEMANTIC_SCHOLAR_API_KEY`   | Semantic Scholar  | optional  | https://www.semanticscholar.org/product/api (request form; raises rate limits from ~100/5min to higher tier) |
+   | `DEEPXIV_TOKEN`              | DeepXiv           | optional  | https://deepxiv.com (sign up, copy token from account settings; enables full-text PDF + semantic search) |
+
+   Wikipedia fetcher uses the public REST API and needs no key.
+
 4. If the user asks you to write `.env`, preserve existing keys and write only
    the provided values.
 5. Run a harmless smoke check for the selected provider when credentials are
