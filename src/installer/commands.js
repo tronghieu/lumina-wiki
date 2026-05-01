@@ -119,6 +119,9 @@ const LUMINA_DIRS = [
 ];
 const RESEARCH_LUMINA_DIRS = ['_lumina/tools'];
 
+const VALID_PACKS = new Set(['core', 'research', 'reading']);
+const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'generic']);
+
 // ---------------------------------------------------------------------------
 // install command
 // ---------------------------------------------------------------------------
@@ -129,6 +132,11 @@ const RESEARCH_LUMINA_DIRS = ['_lumina/tools'];
  * @param {boolean} opts.yes           - Accept defaults (--yes)
  * @param {boolean} opts.reLink        - Force re-compute symlink strategy
  * @param {boolean} opts.noUpdate      - Skip update check
+ * @param {string|string[]} [opts.packs] - Pack override for non-interactive installs
+ * @param {string|string[]} [opts.ideTargets] - IDE target override
+ * @param {string} [opts.projectName]
+ * @param {string} [opts.communicationLang]
+ * @param {string} [opts.documentOutputLang]
  */
 export async function installCommand(opts = {}) {
   const { cwd = process.cwd(), yes = false, reLink = false } = opts;
@@ -154,6 +162,7 @@ export async function installCommand(opts = {}) {
   } else {
     answers = await runInstallPrompts({ acceptDefaults: yes, cwd: projectRoot });
   }
+  answers = applyInstallOverrides(answers, opts);
 
   const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang } = answers;
   const hasResearch = packs.includes('research');
@@ -423,6 +432,57 @@ async function readAnswersFromConfig(projectRoot, existingManifest) {
   }
 }
 
+function parseListOption(value, label) {
+  if (value === undefined || value === null || value === '') return null;
+  const parts = Array.isArray(value)
+    ? value
+    : String(value).split(',');
+  const result = parts.map(p => String(p).trim()).filter(Boolean);
+  if (result.length === 0) {
+    const err = new Error(`${label} must contain at least one value`);
+    err.code = 2;
+    throw err;
+  }
+  return result;
+}
+
+function unique(values) {
+  return [...new Set(values)];
+}
+
+function validateValues(values, validSet, label) {
+  const invalid = values.filter(v => !validSet.has(v));
+  if (invalid.length > 0) {
+    const err = new Error(`Unknown ${label}: ${invalid.join(', ')}. Valid values: ${[...validSet].join(', ')}`);
+    err.code = 2;
+    throw err;
+  }
+}
+
+function applyInstallOverrides(answers, opts) {
+  const next = { ...answers };
+
+  const packOverride = parseListOption(opts.packs, '--packs');
+  if (packOverride) {
+    validateValues(packOverride, VALID_PACKS, 'pack');
+    next.packs = unique(['core', ...packOverride.filter(p => p !== 'core')]);
+  } else {
+    next.packs = unique(['core', ...(next.packs || []).filter(p => p !== 'core')]);
+  }
+
+  const ideOverride = parseListOption(opts.ideTargets, '--ide-targets');
+  if (ideOverride) {
+    validateValues(ideOverride, VALID_IDE_TARGETS, 'IDE target');
+    next.ideTargets = unique(ideOverride);
+  }
+
+  if (opts.projectName) next.projectName = String(opts.projectName);
+  if (opts.communicationLang) next.communicationLang = String(opts.communicationLang);
+  if (opts.documentOutputLang) next.documentOutputLang = String(opts.documentOutputLang);
+
+  return next;
+}
+
 async function renderAndWriteConfig(projectRoot, templateVars, answers) {
   const yaml = await import('js-yaml');
 
@@ -543,10 +603,11 @@ async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrad
 function extractSchemaTemplate(fullTemplate) {
   const openMarker = '<!-- lumina:schema -->';
   const closeMarker = '<!-- /lumina:schema -->';
-  const start = fullTemplate.indexOf(openMarker);
-  const end = fullTemplate.indexOf(closeMarker);
-  if (start === -1 || end === -1) return fullTemplate;
-  return fullTemplate.slice(start + openMarker.length, end);
+  const lines = fullTemplate.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const startLine = lines.findIndex(line => line.trim() === openMarker);
+  const endLine = lines.findIndex((line, idx) => idx > startLine && line.trim() === closeMarker);
+  if (startLine === -1 || endLine === -1) return fullTemplate;
+  return lines.slice(startLine + 1, endLine).join('\n');
 }
 
 async function renderIdeStubs(projectRoot, ideTargets, templateVars) {
@@ -644,8 +705,9 @@ async function copySkills(projectRoot, packs) {
 }
 
 function replaceOrAppendSchemaRegion(existingContent, newSchemaContent) {
-  const replaced = replaceSchemaRegion(existingContent, newSchemaContent);
-  if (replaced !== existingContent) return replaced;
+  if (extractSchemaRegion(existingContent) !== null) {
+    return replaceSchemaRegion(existingContent, newSchemaContent);
+  }
 
   const openMarker = '<!-- lumina:schema -->';
   const closeMarker = '<!-- /lumina:schema -->';

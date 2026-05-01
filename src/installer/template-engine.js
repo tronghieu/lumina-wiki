@@ -156,10 +156,11 @@ export function renderReadme(template, variables, purpose = '') {
 export function extractSchemaRegion(readmeContent) {
   const openMarker = '<!-- lumina:schema -->';
   const closeMarker = '<!-- /lumina:schema -->';
-  const start = readmeContent.indexOf(openMarker);
-  const end = readmeContent.indexOf(closeMarker);
-  if (start === -1 || end === -1 || end <= start) return null;
-  return readmeContent.slice(start + openMarker.length, end);
+  const lines = readmeContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const startLine = lines.findIndex(line => line.trim() === openMarker);
+  const endLine = lines.findIndex((line, idx) => idx > startLine && line.trim() === closeMarker);
+  if (startLine === -1 || endLine === -1) return null;
+  return lines.slice(startLine + 1, endLine).join('\n');
 }
 
 /**
@@ -173,15 +174,18 @@ export function extractSchemaRegion(readmeContent) {
 export function replaceSchemaRegion(existingContent, newSchemaContent) {
   const openMarker = '<!-- lumina:schema -->';
   const closeMarker = '<!-- /lumina:schema -->';
-  const start = existingContent.indexOf(openMarker);
-  const end = existingContent.indexOf(closeMarker);
-  if (start === -1 || end === -1 || end <= start) {
+  const normalized = existingContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalized.split('\n');
+  const startLine = lines.findIndex(line => line.trim() === openMarker);
+  const endLine = lines.findIndex((line, idx) => idx > startLine && line.trim() === closeMarker);
+  if (startLine === -1 || endLine === -1) {
     // Markers not found — return existing content unchanged
     return existingContent;
   }
-  const before = existingContent.slice(0, start + openMarker.length);
-  const after = existingContent.slice(end);
-  // Ensure newSchemaContent starts with a newline
-  const schemaBody = newSchemaContent.startsWith('\n') ? newSchemaContent : '\n' + newSchemaContent;
-  return before + schemaBody + after;
+  const schemaLines = newSchemaContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  return [
+    ...lines.slice(0, startLine + 1),
+    ...schemaLines,
+    ...lines.slice(endLine),
+  ].join('\n');
 }

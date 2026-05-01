@@ -39,6 +39,60 @@ describe('CLI version', () => {
 });
 
 describe('installCommand', () => {
+  test('CLI install supports non-interactive full-pack overrides', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [
+          CLI,
+          'install',
+          '--yes',
+          '--no-update',
+          '--cwd', tmp,
+          '--packs', 'core,research,reading',
+          '--ide-targets', 'claude_code,codex,cursor,gemini_cli',
+          '--project-name', 'Override Wiki',
+          '--communication-language', 'Vietnamese',
+          '--document-output-language', 'English',
+        ],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /project_name: Override Wiki/);
+      assert.match(config, /communication_language: Vietnamese/);
+      assert.match(config, /research: true/);
+      assert.match(config, /reading: true/);
+
+      await access(join(tmp, '.agents', 'skills', 'packs', 'research', 'discover', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'packs', 'reading', 'chapter-ingest', 'SKILL.md'));
+      await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(tmp, 'AGENTS.md'));
+      await access(join(tmp, 'GEMINI.md'));
+      await access(join(tmp, '.cursor', 'rules', 'lumina.mdc'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install rejects unknown pack overrides', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--cwd', tmp, '--packs', 'research,unknown'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /Unknown pack: unknown/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('first install merges schema into an existing README without markers', async () => {
     const tmp = await makeTmpDir();
     try {

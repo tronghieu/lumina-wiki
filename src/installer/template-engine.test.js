@@ -133,6 +133,17 @@ describe('extractSchemaRegion', () => {
     assert.ok(!region.includes('after'));
   });
 
+  test('ignores marker text that is not on its own line', () => {
+    const content = [
+      'Schema markers like `<!-- lumina:schema -->` can be described inline.',
+      '<!-- lumina:schema -->',
+      'real schema',
+      '<!-- /lumina:schema -->',
+    ].join('\n');
+    const region = extractSchemaRegion(content);
+    assert.equal(region, 'real schema');
+  });
+
   test('returns null when open marker is missing', () => {
     const content = 'no markers here\n<!-- /lumina:schema -->\n';
     assert.equal(extractSchemaRegion(content), null);
@@ -186,6 +197,22 @@ describe('replaceSchemaRegion', () => {
     const existing = '# Title\n\nPurpose\n\n<!-- lumina:schema -->\nold\n<!-- /lumina:schema -->\n';
     const result = replaceSchemaRegion(existing, '\nnew\n');
     assert.ok(result.startsWith('# Title\n\nPurpose\n\n<!-- lumina:schema -->'));
+  });
+
+  test('replaces only marker lines, not inline marker mentions', () => {
+    const existing = [
+      'Inline docs mention `<!-- lumina:schema -->` and `<!-- /lumina:schema -->`.',
+      '',
+      '<!-- lumina:schema -->',
+      'old',
+      '<!-- /lumina:schema -->',
+    ].join('\n');
+
+    const result = replaceSchemaRegion(existing, 'new');
+
+    assert.ok(result.includes('Inline docs mention'));
+    assert.ok(result.includes('new'));
+    assert.ok(!result.includes('\nold\n'));
   });
 });
 

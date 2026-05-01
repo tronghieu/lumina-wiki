@@ -33,7 +33,7 @@ P5  Research-pack tools    — _env, fetchers, discover, init_discovery, prepare
 P6  Research-pack skills (4)  — discover → prefill → survey → setup         [DONE 2026-05-01]
 P7  Reading-pack skills (4)   — chapter-ingest → character-track → theme-map → plot-recap [DONE 2026-05-01]
 P8  Installer + templates + manifest + symlink ladder                       [DONE 2026-05-01]
-P9  CI matrix + idempotency byte-diff test + npm publish prep
+P9  CI matrix + idempotency byte-diff test + package readiness checks
 ```
 
 **Progress (2026-05-01):** P0–P8 complete in repo source. Post-review fixes applied for CLI `--version`, missing research skills, skill/wiki API drift, typed path slugs, non-interactive upgrade preservation, README schema merge, npm package allowlist, and streamed `prepare_source.py` source copies. Verified: installer tests 82 passed, scripts tests 147 passed, Python tools tests 135 passed, `node bin/lumina.js --version --no-update` outputs `0.1.0`, `npm pack --dry-run --json` contains runtime files only, and `git diff --check` passes.
@@ -182,12 +182,15 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 
 ---
 
-## P9 — CI + publish prep
+## P9 — CI + installability/package readiness checks
+
+**Status:** Implemented 2026-05-01. CI verifies Lumina as an installable npm package, not as a deployable service. It creates disposable workspaces only for tests and never publishes to npm.
 
 - 6-cell matrix: Node {20, 22} × OS {macOS, Linux, Windows} (NFR-C1).
-- Canonical assertion: `install → reinstall → git diff` must be empty over `wiki/` and `raw/` (FR47, NFR-R1).
-- Unit tests for symlink ladder dispatcher + manifest reader/writer.
-- npm publish dry-run; license audit (MIT/ISC/Apache-2.0 only); `files` allowlist excludes `_state/` and dev artifacts; no postinstall scripts.
+- Canonical assertion: `install → reinstall → git diff` must be empty over installer-managed runtime/user-facing workspace surfaces, excluding runtime timestamp state such as `_lumina/manifest.json` (FR47, NFR-R1).
+- Unit tests for installer, scripts, Python tools, symlink ladder dispatcher, and manifest reader/writer.
+- npm pack dry-run; `files` allowlist excludes `_state/`, tests, bytecode, planning artifacts, CI helper scripts, and dev artifacts; no postinstall scripts.
+- No deploy, no `npm publish`, and no live network/API fetcher calls in CI.
 
 ---
 

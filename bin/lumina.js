@@ -14,6 +14,8 @@
  *   --yes, -y           — accept all defaults (non-interactive / CI)
  *   --no-update         — skip npm registry version check
  *   --re-link           — recompute symlink/junction/copy strategy
+ *   --packs <list>      — comma-separated pack list for non-interactive install
+ *   --ide-targets <list> — comma-separated IDE target list for non-interactive install
  *
  * Exit codes: 0 success, 1 user error, 2 filesystem error, 3 upgrade incompatibility
  */
@@ -88,10 +90,13 @@ Flags applicable to all commands:
   --yes, -y        accept all defaults; non-interactive (CI use)
   --no-update      skip npm registry version check
   --re-link        recompute symlink/junction/copy strategy from platform
+  --packs <list>   install packs: core,research,reading
+  --ide-targets <list>  target IDEs: claude_code,codex,cursor,gemini_cli,generic
 
 Examples:
   npx lumina-wiki install
   lumina install --yes
+  lumina install --yes --packs core,research,reading --ide-targets claude_code,codex
   lumina install --cwd /path/to/project
   lumina uninstall
   lumina --version
@@ -123,6 +128,11 @@ program
   .option('-y, --yes', 'accept all defaults')
   .option('--no-update', 'skip update check')
   .option('--re-link', 'recompute symlink strategy')
+  .option('--packs <list>', 'comma-separated packs to install: core,research,reading')
+  .option('--ide-targets <list>', 'comma-separated IDE targets')
+  .option('--project-name <name>', 'project name for non-interactive install')
+  .option('--communication-language <language>', 'language agents use when talking to the user')
+  .option('--document-output-language <language>', 'language used for wiki documents')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
     const mergedCwd      = cmdOpts.cwd      ?? globalOpts.cwd      ?? process.cwd();
@@ -137,13 +147,18 @@ program
         yes:      Boolean(mergedYes),
         reLink:   Boolean(mergedReLink),
         noUpdate: Boolean(mergedNoUpdate),
+        packs: cmdOpts.packs,
+        ideTargets: cmdOpts.ideTargets,
+        projectName: cmdOpts.projectName,
+        communicationLang: cmdOpts.communicationLanguage,
+        documentOutputLang: cmdOpts.documentOutputLanguage,
       });
     } catch (err) {
       const isPermError  = err.code === 'EACCES' || err.code === 'EPERM';
       const isRangeError = err instanceof RangeError;
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(isPermError || isRangeError ? 2 : 1);
+      process.exit(isPermError || isRangeError || err.code === 2 ? 2 : 1);
     }
   });
 
