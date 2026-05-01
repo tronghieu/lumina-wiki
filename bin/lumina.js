@@ -146,6 +146,8 @@ program
     const mergedNoUpdate = cmdOpts.noUpdate ?? globalOpts.noUpdate ?? false;
 
     try {
+      const { displayBanner } = await import('../src/installer/banner.js');
+      await displayBanner();
       const { installCommand } = await import('../src/installer/commands.js');
       await installCommand({
         directory: resolve(mergedDir),
