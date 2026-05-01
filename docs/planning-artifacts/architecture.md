@@ -228,3 +228,78 @@ Mapped against Lumina's planned skill set:
 | **Total v0.1 (excluding research Python)** | | **~5,000–7,500 LoC + ~3,000 markdown** |
 
 NFR-M1 sets a 3,000-LoC soft cap for original JS in the installer + Node scripts; the estimate sits within that envelope when research-pack Python is excluded from the count.
+
+### v0.1 Final Scope Lock
+
+Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with explicit reasoning for each include/defer/drop.
+
+**Skills shipped in v0.1 (14 total):**
+
+| Pack | Skill | Source | Notes |
+|---|---|---|---|
+| core | `/lumi-init` | port (generalize) | bootstrap workspace + first ingest wave |
+| core | `/lumi-ingest` | port | universal — adds source, concept, person, summary pages with cross-refs |
+| core | `/lumi-ask` | port | retrieve + synthesize + crystallize back into wiki |
+| core | `/lumi-edit` | port (markdown-only) | add/remove sources, update content; no tool dependencies |
+| core | `/lumi-check` | port | 9-check linter with exemption rules |
+| core | `/lumi-reset` | port | scoped destructive reset; `--dry-run` plan |
+| research | `/lumi-discover` | port (generalize) | ranked candidate shortlist, plug-in fetchers |
+| research | `/lumi-survey` | port | narrative synthesis from claim graph |
+| research | `/lumi-prefill` | port | seeds `wiki/foundations/` to prevent concept duplication on ingest |
+| research | `/lumi-setup` | port | interactive `.env` walkthrough for fetcher API keys |
+| reading | `/lumi-chapter-ingest` | original | ingest a book chapter |
+| reading | `/lumi-character-track` | original | maintain character pages and inter-character edges |
+| reading | `/lumi-theme-map` | original | thematic clustering |
+| reading | `/lumi-plot-recap` | original | spoiler-aware progressive recap |
+
+**Skills explicitly NOT shipped in v0.1:**
+
+| Skill | Disposition | Reason |
+|---|---|---|
+| `/novelty`, `/review` | drop | Depend on cross-model verdict (a second LLM independently judging primary output). Decision: no `llm-review` MCP server, no second model. |
+| `/refine` | defer v0.2 | Core mechanism is `loop { /review → fix } until score`. With cross-model review dropped, can be repurposed as single-model self-critique loop, but value diminished. Re-evaluate after v0.1 dogfooding. |
+| `/research` orchestrator | drop | Composes 8 sub-skills; 6 of those are dropped (ideate, exp-* ×3, paper-* ×3). Pattern (pipeline-progress.md checkpoint, human gates) is studied but any future Lumina orchestrator is a NEW skill, not a port. |
+| `/ideate`, `/rebuttal`, `/daily-arxiv` | drop | AI/ML conference workflow specific. Re-add as a separate optional pack if author's use case re-emerges. |
+| `/paper-plan`, `/paper-draft`, `/paper-compile` | drop | Output-side LaTeX submission pipeline. Author does not write conference papers as a daily loop in v0.1's horizon. |
+| `/exp-design`, `/exp-run`, `/exp-status`, `/exp-eval` | drop | Require `remote.py` (SSH+GPU+screen orchestration); not in author's daily loop. |
+
+**Node scripts in `_lumina/scripts/` (4 files, v0.1):**
+
+| File | Port of | Role | Sized estimate |
+|---|---|---|---|
+| `schemas.mjs` | `_schemas.py` (321) | Single source of truth — entity dirs, edge types, required frontmatter, enum values. Lint and writer both consume. | 200–300 LoC |
+| `wiki.mjs` | `research_wiki.py` (2,843) | Wiki engine — `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `add-citation`, `batch-edges`, `dedup-edges`, checkpoint helpers. **Universal dependency** (≥10 of 14 skills). | 1,500–2,000 LoC |
+| `lint.mjs` | `lint.py` (865) | 9-check linter, `--fix --dry-run --suggest --json`. JSON mode for CI + `/lumi-check` UI. | 500–700 LoC |
+| `reset.mjs` | `reset_wiki.py` (180) | Scoped destructive reset; `--yes` required; `--dry-run` prints plan. | 150–250 LoC |
+
+**Python tools in `_lumina/tools/` (8 files, research pack only):**
+
+| File | Port of | Role | Notes |
+|---|---|---|---|
+| `_env.py` | identical (49) | dotenv loader (`~/.env` → `./.env` → process env) | imported as side-effect by every Python tool |
+| `discover.py` | identical (621) | ranked candidate shortlist; 3 seed modes; dedupe vs `wiki/`; JSON-on-stdout | research-pack only |
+| `init_discovery.py` | slim port (1,713 → ~1,200) | multi-phase prepare/plan/fetch/download with `_lumina/_state/<skill>-<phase>.json` checkpoints | drop arxiv-tarball-only paths if generalizable |
+| `prepare_source.py` | rename of `prepare_paper_source.py` (758) | input-side normalizer — turn one local PDF/tex into `raw/<slug>/` ingest-ready package | rename for neutrality (works on non-paper PDFs too) |
+| `fetch_arxiv.py` | identical (152) | API wrapper, JSON-on-stdout, exit codes 0/2/3 | optional plugin |
+| `fetch_wikipedia.py` | identical (129) | Wikipedia API | optional plugin |
+| `fetch_s2.py` | identical (239) | Semantic Scholar — citations, references, recommendations. Covers all academic fields, not AI/ML-only. | optional plugin |
+| `fetch_deepxiv.py` | identical (355) | DeepXiv SDK — semantic search + progressive reading over arxiv-hosted papers | optional plugin |
+
+**Python tools NOT shipped:** `prepare_paper_source.py` is RENAMED to `prepare_source.py` and IS shipped (input-side normalizer; differs from output-side LaTeX pipeline). `remote.py` (SSH+GPU+screen) is dropped — no `/exp-*` cluster.
+
+**v0.1 explicitly does not ship:**
+- MCP `llm-review` server. No cross-model review anywhere. Wherever a skill ported from OmegaWiki invokes a Review LLM (e.g., `/check` verdict gate, `/discover` ranking review), Lumina substitutes single-model self-check by the running agent.
+- Output-side LaTeX paper pipeline (`paper-*` skills + `prepare_paper_source.py` LaTeX paths).
+- Remote experiment runner (`remote.py`, `exp-*` skills).
+- A pipeline orchestrator (`/research`).
+
+**Dependency-matrix-derived implementation order:**
+
+1. `schemas.mjs` — no dependencies; defines vocabulary every other artifact consumes.
+2. `wiki.mjs` — depends on `schemas.mjs`. Universal dependency for ≥10 skills, so blocks all skill authoring beyond `/lumi-edit` (markdown-only).
+3. `lint.mjs` — depends on `schemas.mjs` + `wiki.mjs`. Blocks `/lumi-check` and CI idempotency assertions.
+4. `reset.mjs` — depends on `schemas.mjs`. Blocks `/lumi-reset`.
+5. Core skills (6 SKILL.md files) — `/lumi-edit` first (no tool deps), then `/lumi-init` + `/lumi-ingest` + `/lumi-ask` + `/lumi-check` + `/lumi-reset`.
+6. Research pack — Python tools first (`_env.py`, `discover.py`, fetchers), then four research skills (`/lumi-discover`, `/lumi-survey`, `/lumi-prefill`, `/lumi-setup`).
+7. Reading pack — original four skills, no new tools required (consume `wiki.mjs`).
+8. Installer — wires everything together; depends on stable templates so authored last among the engine artifacts.

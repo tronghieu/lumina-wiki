@@ -13,6 +13,9 @@ decisions:
   pack_research_python_install: defer to first invocation (brief lean)
   gitignore_template: bundle (_lumina/_state/, raw/tmp/) (brief lean)
   workspace_layout: BMAD-style sidecar — `_lumina/` holds config/scripts/tools/manifest; `.agents/` is skills-only; `README.md` at project root is canonical schema (NOT a symlink); `CLAUDE.md`/`AGENTS.md`/`GEMINI.md` are tiny rendered stub files pointing to README.md (NOT symlinks)
+  v01_skill_set: 14 skills total — core (6) `init/ingest/ask/edit/check/reset`; research pack (4) `discover/survey/prefill/setup`; reading pack (4) `chapter-ingest/character-track/theme-map/plot-recap`. Cross-model review and LaTeX/exp pipelines explicitly dropped (no MCP llm-review, no `novelty/review/refine/research/ideate/rebuttal/paper-*/exp-*/daily-arxiv`).
+  v01_node_scripts: 4 files in `_lumina/scripts/` — `wiki.mjs` (engine), `lint.mjs` (9-check linter), `reset.mjs` (scoped destructive reset), `schemas.mjs` (single source of truth for entity dirs/edges/required frontmatter)
+  v01_python_tools: 8 files in `_lumina/tools/` (research pack only) — `_env.py`, `discover.py`, `init_discovery.py`, `prepare_source.py`, plus four optional fetcher plugins (`fetch_arxiv.py`, `fetch_wikipedia.py`, `fetch_s2.py`, `fetch_deepxiv.py`)
 inputDocuments:
   - docs/planning-artifacts/product-brief.md
   - docs/llm-wiki.md
@@ -139,10 +142,12 @@ The installer is correct, idempotent, and cross-platform:
 ### Growth Features (Post-MVP, v0.2+)
 
 - Runtime CLI commands: `lumina status`, `lumina lint`, `lumina search`, `lumina pack add/remove`.
-- Bundled MCP server (`lumina_search`, `lumina_lint`, `lumina_ingest_url`) so any MCP-aware agent can call wiki operations natively.
-- GitHub Actions cron workflow template wiring `daily-arxiv`-style skills.
+- Bundled MCP server (`lumina_search`, `lumina_lint`, `lumina_ingest_url`) so any MCP-aware agent can call wiki operations natively. Note: v0.1 explicitly does **not** ship a cross-model `llm-review` MCP server (decision: single-model self-check is sufficient for personal use).
+- `/lumi-refine` skill — single-model iterative self-critique loop (max-rounds, target-score, focus filter, history log). Re-evaluated after v0.1 dogfooding to judge whether structural value justifies the surface area.
+- GitHub Actions cron workflow template wiring scheduled-fetch skills (generalize beyond arxiv).
 - `qmd` integration; Marp slide rendering; Dataview-style frontmatter generators.
 - i18n beyond English for installer UI strings (wiki output language is already user-configurable).
+- Skills explicitly **out of scope** in v0.1 and **out of scope** in v0.2 unless evidence forces a reconsideration: `/ideate`, `/novelty`, `/review`, `/research` orchestrator, `/rebuttal`, `/paper-plan`, `/paper-draft`, `/paper-compile`, `/daily-arxiv`, and the `/exp-*` cluster (`exp-design`, `exp-run`, `exp-status`, `exp-eval`). These belong to AI/ML conference workflow patterns the author does not run as a daily loop and can be re-added as a separate optional pack if the use case re-emerges.
 
 ### Vision (12-month horizon)
 
@@ -526,9 +531,9 @@ This is the binding capability contract for v0.1. Any capability not listed here
 The Installer ships skill content; the Agent executes it. These FRs describe what skill files must exist, not what the LLM does with them.
 
 - **FR34:** Installer can ship six `core` skills: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`. Each skill is a directory with a `SKILL.md` and optional `references/`.
-- **FR35:** Installer can ship the `research` pack containing originally-authored skills covering the research-assistant workflow (`/lumi-discover`, `/lumi-ideate`, `/lumi-novelty`, `/lumi-survey`, `/lumi-paper-plan`, `/lumi-paper-draft`, `/lumi-rebuttal`, `/lumi-daily-arxiv`, `/lumi-exp-design`, `/lumi-exp-run`, `/lumi-exp-eval`). Skill names and scope are inspired by prior art, but contents are written for Lumina-Wiki.
+- **FR35:** Installer can ship the `research` pack containing **four** originally-authored skills covering the research-assistant workflow: `/lumi-discover` (ranked candidate shortlist), `/lumi-survey` (narrative synthesis from claim graph), `/lumi-prefill` (seed `foundations/` to prevent concept duplication on ingest), `/lumi-setup` (interactive API-key configuration). Skill names are inspired by prior art; contents are written for Lumina-Wiki. v0.1 explicitly does **not** ship cross-model review skills (`/novelty`, `/review`, `/refine`), the LaTeX paper pipeline (`/paper-plan`, `/paper-draft`, `/paper-compile`, `/rebuttal`), the experiment cluster (`/exp-design`, `/exp-run`, `/exp-status`, `/exp-eval`), the orchestrator (`/research`), `/ideate`, or `/daily-arxiv`. None of these depend on infrastructure (cross-model review LLM, remote GPU runner, LaTeX toolchain) that v0.1 commits to ship.
 - **FR36:** Installer can ship the `reading` pack containing four skills: `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-plot-recap`.
-- **FR37:** Installer can ship original Python helper scripts under the `research`-pack directory for skills that benefit from Python (e.g., arxiv fetcher, lint helper). The Installer does not set up a Python virtual environment in v0.1; setup is deferred to the first invocation of a Python-needing skill.
+- **FR37:** Installer can ship Python helper scripts into `_lumina/tools/` when the `research` pack is selected. The v0.1 set is: `_env.py` (dotenv loader), `discover.py` (candidate ranking), `init_discovery.py` (multi-phase fetch with checkpoint manifest), `prepare_source.py` (normalize local PDF/tex into ingest-ready package), and four optional fetcher plugins (`fetch_arxiv.py`, `fetch_wikipedia.py`, `fetch_s2.py`, `fetch_deepxiv.py`) — each fetcher activates only when the user provides its API key via `/lumi-setup`. The Installer does not create a Python virtual environment in v0.1; pip-install of `requirements.txt` is deferred to the first invocation of a Python-needing skill. v0.1 does not ship `remote.py` (no remote experiment runner) or output-side LaTeX preparation tools.
 
 ### Multi-IDE Integration
 
