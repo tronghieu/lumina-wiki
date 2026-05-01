@@ -161,7 +161,25 @@ These are the scripts that the agent's skills use to perform actions.
 
 ---
 
-## 6. Contributing & License
+## 6. What's Coming Next
+
+The current release is **v0.1** (preview). The full plan lives in [`ROADMAP.md`](./ROADMAP.md). Headline items:
+
+**v1.0.0 — First Stable**
+- **Daily search & fetch** — watchlist queries (`_lumina/config/watchlist.yml`) run on a cadence; new arXiv / Semantic Scholar hits land in `raw/discovered/<date>/` automatically.
+- New `/lumi-daily` skill to triage what landed since last run.
+- Stability lock for the v0.1 surface (CLI flags, exit codes, schema field names).
+- Cross-platform CI matrix (macOS + Linux + Windows, Node 20 + 22).
+
+**v2.0.0 — Research Pack Source Expansion**
+- **New paper sources:** OpenAlex, Unpaywall, CORE (Priority 1) → OpenReview, Hugging Face Papers, Papers With Code (Priority 2) → Crossref, DOAJ, research-blog RSS (Priority 3).
+- **Paper ranking:** new `/lumi-rank` skill surfacing influential-citation count, field-normalized citation rank, Scite support/contrast tally, and Altmetric attention — all into a `ranking:` block on the paper's frontmatter.
+
+**Want to help?** Pick any unchecked item in `ROADMAP.md`, open an issue to claim it, then send a PR. Source fetchers all follow the same pattern in `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`) so they're a friendly first contribution. See the local-dev steps below.
+
+---
+
+## 7. Contributing & License
 
 <details>
 <summary>🛠️ Local Development (for contributors)</summary>
@@ -318,7 +336,25 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 
 ---
 
-## 6. Đóng góp & Giấy phép
+## 6. Lộ trình sắp tới
+
+Phiên bản hiện tại là **v0.1** (preview). Kế hoạch đầy đủ ở [`ROADMAP.md`](./ROADMAP.md). Những hạng mục chính:
+
+**v1.0.0 — Bản ổn định đầu tiên**
+- **Daily search & fetch** — watchlist (`_lumina/config/watchlist.yml`) chạy theo lịch; paper mới từ arXiv / Semantic Scholar tự động đáp xuống `raw/discovered/<ngày>/`.
+- Skill mới `/lumi-daily` để triage những gì vừa thu thập kể từ lần chạy trước.
+- Khoá ổn định bề mặt v0.1 (CLI flags, exit codes, tên trường schema).
+- CI matrix đa nền tảng (macOS + Linux + Windows, Node 20 + 22).
+
+**v2.0.0 — Mở rộng nguồn paper cho Research Pack**
+- **Nguồn paper mới:** OpenAlex, Unpaywall, CORE (Ưu tiên 1) → OpenReview, Hugging Face Papers, Papers With Code (Ưu tiên 2) → Crossref, DOAJ, RSS từ các blog research lab (Ưu tiên 3).
+- **Đánh giá paper:** skill mới `/lumi-rank` đưa các chỉ số influential-citation count, xếp hạng theo lĩnh vực, Scite support/contrast, và Altmetric vào block `ranking:` trong frontmatter.
+
+**Muốn đóng góp?** Chọn bất kỳ hạng mục chưa tick trong `ROADMAP.md`, mở issue để nhận, rồi gửi PR. Các fetcher nguồn paper đều tuân theo cùng pattern trong `src/tools/` (CLI + JSON, không async, exit codes `0/2/3`) nên rất phù hợp cho lần contribute đầu tiên. Xem hướng dẫn dev cục bộ bên dưới.
+
+---
+
+## 7. Đóng góp & Giấy phép
 
 <details>
 <summary>🛠️ Phát triển cục bộ (dành cho người đóng góp)</summary>
