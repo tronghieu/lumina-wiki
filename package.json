@@ -79,7 +79,9 @@
     "test:update": "node --test src/installer/update-check.test.js",
     "ci:idempotency": "node scripts/ci-idempotency.mjs",
     "ci:package": "node scripts/ci-package.mjs",
-    "pack:check": "npm run ci:package"
+    "pack:check": "npm run ci:package",
+    "dev:install": "node bin/lumina.js install",
+    "dev:sandbox": "node scripts/dev-sandbox.mjs"
   },
   "publishConfig": {
     "access": "public"
