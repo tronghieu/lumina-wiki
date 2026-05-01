@@ -91,7 +91,9 @@ Flags applicable to all commands:
   --no-update      skip npm registry version check
   --re-link        recompute symlink/junction/copy strategy from platform
   --packs <list>   install packs: core,research,reading
-  --ide-targets <list>  target IDEs: claude_code,codex,cursor,gemini_cli,generic
+  --ide-targets <list>  target CLIs: claude_code,codex,gemini_cli,qwen,iflow,cursor,generic
+                          codex covers all AGENTS.md-compatible CLIs
+                          (Codex, Amp, Crush, Goose, Auggie, OpenCode, etc.)
 
 Examples:
   npx lumina-wiki install

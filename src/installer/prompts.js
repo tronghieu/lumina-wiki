@@ -113,11 +113,13 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   const ideTargetsRaw = await multiselect({
     message: 'IDE targets (space to toggle, enter to confirm)',
     options: [
-      { value: 'claude_code', label: 'Claude Code',  hint: 'CLAUDE.md + .claude/skills/ symlinks' },
-      { value: 'codex',       label: 'Codex',         hint: 'AGENTS.md stub' },
-      { value: 'cursor',      label: 'Cursor',        hint: '.cursor/rules/lumina.mdc stub' },
-      { value: 'gemini_cli',  label: 'Gemini CLI',    hint: 'GEMINI.md stub' },
-      { value: 'generic',     label: 'Generic',       hint: 'README.md only' },
+      { value: 'claude_code', label: 'Claude Code',                 hint: 'CLAUDE.md + .claude/skills/ symlinks' },
+      { value: 'codex',       label: 'AGENTS.md CLIs',               hint: 'Codex, Amp, Crush, Goose, Auggie, OpenCode, Kimi, Mistral Vibe — writes AGENTS.md' },
+      { value: 'gemini_cli',  label: 'Gemini CLI',                   hint: 'GEMINI.md stub' },
+      { value: 'qwen',        label: 'Qwen Code',                    hint: 'QWEN.md stub' },
+      { value: 'iflow',       label: 'iFlow CLI',                    hint: 'IFLOW.md stub' },
+      { value: 'cursor',      label: 'Cursor',                       hint: '.cursor/rules/lumina.mdc stub' },
+      { value: 'generic',     label: 'Generic',                      hint: 'README.md only' },
     ],
     initialValues: ['claude_code'],
     required: false,

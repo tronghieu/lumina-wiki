@@ -16,6 +16,8 @@ ide_targets:
   codex: false
   cursor: false
   gemini_cli: false
+  qwen: false
+  iflow: false
   generic: false
 
 # Packs

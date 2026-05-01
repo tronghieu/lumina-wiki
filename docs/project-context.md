@@ -21,7 +21,7 @@ Lumina-Wiki is an **npm-published, multi-IDE wiki scaffolder** that installs an 
 - **Installer** (Node, ESM, ≥20) — `bin/lumina.js` + `src/installer/*.js`. Idempotent, cross-platform, atomic.
 - **Wiki engine + skills** — `src/scripts/*.mjs` (Node) + `src/tools/*.py` (Python, research pack only) + `src/skills/**/*.md` (markdown agent prompts).
 
-The installer projects a single source-of-truth template tree onto whichever IDE the user picks (Claude Code, Codex, Gemini, Cursor, generic). After install, agents drive the wiki by invoking skills (`/lumi-*` slash commands) which call the Node/Python tools via Bash.
+The installer projects a single source-of-truth template tree onto whichever CLI agent the user picks (Claude Code, AGENTS.md-compatible CLIs — Codex/Amp/Crush/Goose/Auggie/OpenCode/etc., Gemini CLI, Cursor, generic). After install, agents drive the wiki by invoking skills (`/lumi-*` slash commands) which call the Node/Python tools via Bash.
 
 ---
 
@@ -295,7 +295,7 @@ Body opens with: "Read `README.md` at the project root before this SKILL.md." th
 
 ### Entry-point stub pattern (confirmed)
 
-`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc` — all are **rendered stubs** (~5 lines), byte-for-byte identical except H1 and (Cursor) frontmatter `globs`/`alwaysApply`. **They are NOT symlinks.** All redirect to `README.md` as canonical context. The `generic` IDE target has no stub — README.md is the entry point.
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor/rules/lumina.mdc` — all are **rendered stubs** (~5 lines), nearly identical except H1 and (Cursor) frontmatter `globs`/`alwaysApply`. The `AGENTS.md` stub also names the AGENTS.md-compatible CLIs it serves (Codex, Amp, Crush, Goose, Auggie, OpenCode, etc.). **They are NOT symlinks.** All redirect to `README.md` as canonical context. The `generic` IDE target has no stub — README.md is the entry point.
 
 ---
 
@@ -315,10 +315,10 @@ Steps (in order):
 
 **Idempotency invariant (`scripts/ci-idempotency.mjs`):**
 
-Two scenarios: `core-default` and `full-pack` (core + research + reading × 4 IDE targets). For each:
+Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 IDE targets). For each:
 1. `git init`, install once, commit baseline
 2. Install again with same args
-3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `.env.example`, `wiki`, `raw`
+3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `.env.example`, `wiki`, `raw`
 
 **Any byte-level drift fails CI.** Runtime state outside watched paths is intentionally ignored.
 
@@ -414,7 +414,8 @@ npm run test:python        # src/tools/tests/ via pytest
 `scripts/ci-idempotency.mjs` runs `git diff --exit-code` only over these paths after the second install:
 
 ```
-README.md, CLAUDE.md, AGENTS.md, GEMINI.md, .cursor/, .claude/, .agents/,
+README.md, CLAUDE.md, AGENTS.md, GEMINI.md, QWEN.md, IFLOW.md,
+.cursor/, .claude/, .agents/,
 _lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/,
 .env.example, wiki/, raw/
 ```

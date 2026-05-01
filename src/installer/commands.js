@@ -120,7 +120,7 @@ const LUMINA_DIRS = [
 const RESEARCH_LUMINA_DIRS = ['_lumina/tools'];
 
 const VALID_PACKS = new Set(['core', 'research', 'reading']);
-const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'generic']);
+const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
 
 // ---------------------------------------------------------------------------
 // install command
@@ -495,6 +495,8 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       codex:       answers.ideTargets.includes('codex'),
       cursor:      answers.ideTargets.includes('cursor'),
       gemini_cli:  answers.ideTargets.includes('gemini_cli'),
+      qwen:        answers.ideTargets.includes('qwen'),
+      iflow:       answers.ideTargets.includes('iflow'),
       generic:     answers.ideTargets.includes('generic'),
     },
     packs: {
@@ -625,6 +627,8 @@ function ideTargetFilePath(projectRoot, target) {
     case 'codex':       return join(projectRoot, 'AGENTS.md');
     case 'gemini_cli':  return join(projectRoot, 'GEMINI.md');
     case 'cursor':      return join(projectRoot, '.cursor', 'rules', 'lumina.mdc');
+    case 'qwen':        return join(projectRoot, 'QWEN.md');
+    case 'iflow':       return join(projectRoot, 'IFLOW.md');
     case 'generic':     return null; // No stub needed; README.md is the entry point
     default:            return null;
   }
@@ -638,6 +642,8 @@ function ideTargetStubFiles(ideTargets) {
         case 'codex':       return 'AGENTS.md';
         case 'gemini_cli':  return 'GEMINI.md';
         case 'cursor':      return '.cursor/rules/lumina.mdc';
+        case 'qwen':        return 'QWEN.md';
+        case 'iflow':       return 'IFLOW.md';
         default:            return null;
       }
     })
@@ -650,11 +656,15 @@ function buildIdeStub(target, vars) {
     case 'claude_code':
       return `# Claude Code — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
     case 'codex':
-      return `# Codex — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
+      return `# AGENTS.md — Lumina Wiki\n\nThis file is the entry point for any CLI agent that reads \`AGENTS.md\` (Codex, Amp, Crush, Goose, Auggie, OpenCode, Kimi Code, Mistral Vibe, and other AGENTS.md-compatible tools).\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
     case 'gemini_cli':
       return `# Gemini CLI — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
     case 'cursor':
       return `---\ndescription: Lumina Wiki workspace rules for Cursor\nglobs: ["**/*.md"]\nalwaysApply: true\n---\n\n# Cursor — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
+    case 'qwen':
+      return `# Qwen Code — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
+    case 'iflow':
+      return `# iFlow CLI — Lumina Wiki\n\nYou are the wiki maintainer for **${name}**.\n\nRead \`README.md\` at the project root first — it contains the full schema, page types, link conventions, and skill list for this workspace.\n\nCommunicate with the user in **${vars.communication_language}**. Write wiki pages in **${vars.document_output_language}**.\n`;
     default:
       return null;
   }
@@ -878,6 +888,8 @@ async function buildFilesManifest(projectRoot, packs, pkgVersion) {
     'CLAUDE.md',
     'AGENTS.md',
     'GEMINI.md',
+    'QWEN.md',
+    'IFLOW.md',
     '.cursor/rules/lumina.mdc',
   ];
 
