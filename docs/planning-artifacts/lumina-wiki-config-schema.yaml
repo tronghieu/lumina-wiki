@@ -1,0 +1,91 @@
+# lumina.config.yaml — workspace config rendered by `npx lumina-wiki install`.
+# Lives at the project root. Editable by the user; re-read on every skill run.
+# Every key has a sensible default — installer prompts only for the essentials.
+
+# ─── Identity ────────────────────────────────────────────────────────────────
+project_name: "My Research Wiki"         # display name (used in CLAUDE.md header)
+user_name: "Lưu Hiếu"                    # how the LLM addresses you
+created_at: "2026-05-01"                 # ISO date, set once by installer
+
+# ─── Languages ───────────────────────────────────────────────────────────────
+communication_language: "Vietnamese"     # LLM ↔ user chat language
+document_output_language: "English"      # language wiki pages are written in
+# Decoupled on purpose: many users think in one language, want their wiki
+# searchable in another (usually English for cross-source compatibility).
+
+# ─── IDE targets ─────────────────────────────────────────────────────────────
+# Installer creates symlinks from each enabled IDE's skill location to
+# .agents/skills/. Schema files (CLAUDE.md, AGENTS.md, GEMINI.md) are also
+# symlinks → .agents/schema/CLAUDE.md (single source of truth).
+ide_targets:
+  claude_code: true                      # → .claude/skills/lumi-* + CLAUDE.md
+  codex: false                           # → AGENTS.md
+  cursor: false                          # → .cursor/rules/ + AGENTS.md
+  gemini_cli: false                      # → GEMINI.md
+  generic: false                         # → AGENTS.md only (fallback)
+
+# ─── Packs (skill bundles) ───────────────────────────────────────────────────
+# `core` is always installed. Domain packs add page types + skills + schema
+# fragments. User can install/remove packs anytime via:
+#   lumina pack add research
+#   lumina pack remove reading
+packs:
+  core: true                             # init, ingest, ask, edit, check, reset
+  research: false                        # papers, claims, experiments, ideate, novelty, …
+  reading: false                         # chapters, characters, themes, plot threads
+  # NOTE: pack `personal` was considered then dropped from MVP scope.
+  # Lumina-Wiki is positioned as a research assistant — personal-KB use cases
+  # are too heterogeneous to package. See docs/recipes/ for DIY guidance.
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+# All paths are relative to the project root. Override only if you must.
+paths:
+  raw: "raw"                             # immutable user-owned sources
+  wiki: "wiki"                           # LLM-maintained product
+  agents: ".agents"                      # single source of truth for skills/schema
+  index: "wiki/index.md"
+  log: "wiki/log.md"
+
+# ─── Wiki conventions ────────────────────────────────────────────────────────
+wiki:
+  link_syntax: "obsidian"                # only "obsidian" supported in v0.1
+  slug_style: "kebab-case"               # lowercase + hyphen
+  log_prefix: "## [{{date}}] {{skill}} | {{details}}"
+  bidirectional_links:
+    mode: "exempt-only"                  # strict | exempt-only | off
+    # strict     = every internal link must have a reverse link, no exceptions
+    # exempt-only (default) = strict, except for the globs below
+    # off        = forward-only allowed everywhere (NOT recommended — breaks the wiki's
+    #              "compounding" property; lint will warn loudly)
+    exemptions:
+      - "foundations/**"                 # terminal pages: receive inward links, write none
+      - "outputs/**"                     # ephemeral artifacts; one-way from output → source
+      - "*://*"                          # any URL-shaped link (external, no page to update)
+  graph:
+    enabled: true                        # auto-generate wiki/graph/edges.jsonl
+    edge_types_core: ["related_to", "builds_on", "contradicts", "cites", "mentions", "part_of"]
+    # packs append their own edge types (research adds same_problem_as, surveys, …)
+
+# ─── Lint ────────────────────────────────────────────────────────────────────
+lint:
+  default_mode: "report"                 # report | fix | suggest
+  checks:
+    broken_links: true
+    orphan_pages: true
+    missing_reverse_links: true
+    log_format: true
+    index_freshness: true                # warn if a page exists but is not in index.md
+    stale_claims: false                  # needs LLM, off by default
+
+# ─── Optional integrations (off by default) ─────────────────────────────────
+integrations:
+  qmd_search: false                      # https://github.com/tobi/qmd
+  obsidian_vault: false                  # mark wiki/ as Obsidian vault root
+  marp_slides: false                     # render outputs/*.md as Marp decks
+
+# ─── Telemetry ───────────────────────────────────────────────────────────────
+telemetry: false                         # never send anything off-machine
+
+# ─── Manifest reference ──────────────────────────────────────────────────────
+# Read-only — managed by installer. Do not edit by hand.
+# Actual contents live in .agents/manifest.json (version, installed packs, hashes).

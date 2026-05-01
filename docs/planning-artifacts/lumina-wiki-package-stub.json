@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "lumina-wiki",
+  "version": "0.0.1",
+  "description": "Karpathy's LLM-Wiki vision — domain-agnostic, multi-IDE wiki scaffolder. Coming soon.",
+  "keywords": [
+    "llm-wiki",
+    "knowledge-base",
+    "wiki",
+    "ai",
+    "claude-code",
+    "codex",
+    "obsidian",
+    "scaffolder",
+    "karpathy"
+  ],
+  "homepage": "https://github.com/tronghieu/lumina-wiki#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tronghieu/lumina-wiki.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tronghieu/lumina-wiki/issues"
+  },
+  "license": "MIT",
+  "author": "Lưu Trọng Hiếu <tronghieu.luu@gmail.com>",
+  "type": "module",
+  "bin": {
+    "lumina": "bin/lumina.js",
+    "lumi": "bin/lumina.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
