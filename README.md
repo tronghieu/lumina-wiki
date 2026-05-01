@@ -4,7 +4,9 @@
 
 # Lumina-Wiki
 
-> **The LLM-maintained Knowledge Artifact for Technical Research.**
+> **Where Knowledge Starts to Glow.**
+>
+> The LLM-maintained Knowledge Artifact for Technical Research.
 
 Lumina-Wiki is a ready-to-use implementation of the **[LLM-Wiki vision](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)** articulated by **Andrej Karpathy, founding member of OpenAI and former Director of AI at Tesla.**
 
@@ -163,7 +165,7 @@ These are the scripts that the agent's skills use to perform actions.
 
 ## 6. What's Coming Next
 
-The current release is **v0.1** (preview). The full plan lives in [`ROADMAP.md`](./ROADMAP.md). Headline items:
+The current release is **v0.2** (preview). The full plan lives in [`ROADMAP.md`](./ROADMAP.md). Headline items:
 
 **v1.0.0 — First Stable**
 - **Daily search & fetch** — watchlist queries (`_lumina/config/watchlist.yml`) run on a cadence; new arXiv / Semantic Scholar hits land in `raw/discovered/<date>/` automatically.
@@ -203,6 +205,10 @@ npm run test:all
 
 <a name="vietnamese"></a>
 ***README Tiếng Việt***
+
+> **Where Knowledge Starts to Glow.**
+>
+> Khối Tri thức được duy trì bởi LLM dành cho nghiên cứu kỹ thuật.
 
 ## 1. Luồng làm việc cốt lõi
 
@@ -338,7 +344,7 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 
 ## 6. Lộ trình sắp tới
 
-Phiên bản hiện tại là **v0.1** (preview). Kế hoạch đầy đủ ở [`ROADMAP.md`](./ROADMAP.md). Những hạng mục chính:
+Phiên bản hiện tại là **v0.2** (preview). Kế hoạch đầy đủ ở [`ROADMAP.md`](./ROADMAP.md). Những hạng mục chính:
 
 **v1.0.0 — Bản ổn định đầu tiên**
 - **Daily search & fetch** — watchlist (`_lumina/config/watchlist.yml`) chạy theo lịch; paper mới từ arXiv / Semantic Scholar tự động đáp xuống `raw/discovered/<ngày>/`.

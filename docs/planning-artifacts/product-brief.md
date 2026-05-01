@@ -1,5 +1,7 @@
 # Product Brief: Lumina-Wiki
 
+> **Tagline:** *Where Knowledge Starts to Glow.*
+
 **Status:** Draft v1 · **Date:** 2026-05-01 · **Author:** Lưu Trọng Hiếu (with Mary, BMad Business Analyst) · **License:** MIT
 
 ---
