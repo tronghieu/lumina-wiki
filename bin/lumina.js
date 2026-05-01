@@ -10,7 +10,8 @@
  *   lumina --help       — print usage
  *
  * Flags (all commands):
- *   --cwd <path>        — operate against a different project root
+ *   --directory <path>  — installation directory (defaults to current directory)
+ *   --cwd <path>        — backward-compat alias for --directory
  *   --yes, -y           — accept all defaults (non-interactive / CI)
  *   --no-update         — skip npm registry version check
  *   --re-link           — recompute symlink/junction/copy strategy
@@ -71,7 +72,7 @@ async function handleVersionOptionIfPresent(argv) {
 const handledVersion = await handleVersionOptionIfPresent(process.argv);
 if (handledVersion) process.exit(0);
 
-const { Command } = await import('commander');
+const { Command, Option } = await import('commander');
 const program = new Command();
 
 program
@@ -86,11 +87,11 @@ Exit codes:
   3  upgrade incompatibility (manifest references unknown pack)
 
 Flags applicable to all commands:
-  --cwd <path>     project root (defaults to current directory)
-  --yes, -y        accept all defaults; non-interactive (CI use)
-  --no-update      skip npm registry version check
-  --re-link        recompute symlink/junction/copy strategy from platform
-  --packs <list>   install packs: core,research,reading
+  --directory <path>  installation directory (defaults to current directory)
+  --yes, -y           accept all defaults; non-interactive (CI use)
+  --no-update         skip npm registry version check
+  --re-link           recompute symlink/junction/copy strategy from platform
+  --packs <list>      install packs: core,research,reading
   --ide-targets <list>  target CLIs: claude_code,codex,gemini_cli,qwen,iflow,cursor,generic
                           codex covers all AGENTS.md-compatible CLIs
                           (Codex, Amp, Crush, Goose, Auggie, OpenCode, etc.)
@@ -99,7 +100,7 @@ Examples:
   npx lumina-wiki install
   lumina install --yes
   lumina install --yes --packs core,research,reading --ide-targets claude_code,codex
-  lumina install --cwd /path/to/project
+  lumina install --directory /path/to/project
   lumina uninstall
   lumina --version
 `);
@@ -108,7 +109,8 @@ Examples:
 // Global options
 // ---------------------------------------------------------------------------
 program
-  .option('--cwd <path>', 'project root directory', process.cwd())
+  .option('--directory <path>', 'installation directory', process.cwd())
+  .addOption(new Option('--cwd <path>', 'alias for --directory').hideHelp())
   .option('-y, --yes', 'accept all defaults (non-interactive)')
   .option('--no-update', 'skip npm registry version check')
   .option('--re-link', 'recompute symlink strategy from current platform capabilities');
@@ -126,18 +128,19 @@ program
 program
   .command('install')
   .description('scaffold or upgrade a Lumina Wiki workspace')
-  .option('--cwd <path>', 'project root directory')
+  .option('--directory <path>', 'installation directory')
+  .addOption(new Option('--cwd <path>', 'alias for --directory').hideHelp())
   .option('-y, --yes', 'accept all defaults')
   .option('--no-update', 'skip update check')
   .option('--re-link', 'recompute symlink strategy')
   .option('--packs <list>', 'comma-separated packs to install: core,research,reading')
   .option('--ide-targets <list>', 'comma-separated IDE targets')
-  .option('--project-name <name>', 'project name for non-interactive install')
+  .addOption(new Option('--project-name <name>', 'override auto-derived project name').hideHelp())
   .option('--communication-language <language>', 'language agents use when talking to the user')
   .option('--document-output-language <language>', 'language used for wiki documents')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
-    const mergedCwd      = cmdOpts.cwd      ?? globalOpts.cwd      ?? process.cwd();
+    const mergedDir      = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes      = cmdOpts.yes      ?? globalOpts.yes      ?? false;
     const mergedReLink   = cmdOpts.reLink   ?? globalOpts.reLink   ?? false;
     const mergedNoUpdate = cmdOpts.noUpdate ?? globalOpts.noUpdate ?? false;
@@ -145,7 +148,7 @@ program
     try {
       const { installCommand } = await import('../src/installer/commands.js');
       await installCommand({
-        cwd:      resolve(mergedCwd),
+        directory: resolve(mergedDir),
         yes:      Boolean(mergedYes),
         reLink:   Boolean(mergedReLink),
         noUpdate: Boolean(mergedNoUpdate),
@@ -170,17 +173,18 @@ program
 program
   .command('uninstall')
   .description('remove Lumina-managed files (wiki/ and raw/ are preserved)')
-  .option('--cwd <path>', 'project root directory')
+  .option('--directory <path>', 'installation directory')
+  .addOption(new Option('--cwd <path>', 'alias for --directory').hideHelp())
   .option('-y, --yes', 'skip confirmation prompt')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
-    const mergedCwd = cmdOpts.cwd ?? globalOpts.cwd ?? process.cwd();
+    const mergedDir = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes = cmdOpts.yes ?? globalOpts.yes ?? false;
 
     try {
       const { uninstallCommand } = await import('../src/installer/commands.js');
       await uninstallCommand({
-        cwd: resolve(mergedCwd),
+        cwd: resolve(mergedDir),
         yes: Boolean(mergedYes),
       });
     } catch (err) {

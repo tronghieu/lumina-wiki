@@ -156,7 +156,7 @@ Three state files, paths fixed under `_lumina/`:
 
 ### `src/installer/prompts.js`
 
-`@clack/prompts` lazy-loaded. Under `--yes`, prompts are never imported — `defaultAnswers(cwd)` returns immediately with `projectName = basename(cwd) || 'my-wiki'`. Ctrl-C / `isCancel()` calls `process.exit(0)`. `core` is **never** in the multi-select — prepended after the user picks optional packs.
+`@clack/prompts` lazy-loaded. Under `--yes`, prompts are never imported — `defaultAnswers(directory)` returns immediately with `projectName = basename(directory) || 'my-wiki'`. In interactive mode, the first prompt asks for the **installation directory** (default = `process.cwd()`, supports `~` expansion via `expandUserPath`); `project_name` is then auto-derived from `basename(directory)` — no separate name prompt. Ctrl-C / `isCancel()` calls `process.exit(0)`. `core` is **never** in the multi-select — prepended after the user picks optional packs.
 
 **Note:** `prompts.js` has no test file; TTY interaction is hard to automate.
 

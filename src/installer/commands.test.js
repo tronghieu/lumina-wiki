@@ -41,6 +41,8 @@ describe('CLI version', () => {
 describe('installCommand', () => {
   test('CLI install supports non-interactive full-pack overrides', async () => {
     const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'override-wiki');
+    await mkdir(workspace, { recursive: true });
     try {
       const result = spawnSync(
         process.execPath,
@@ -49,10 +51,9 @@ describe('installCommand', () => {
           'install',
           '--yes',
           '--no-update',
-          '--cwd', tmp,
+          '--directory', workspace,
           '--packs', 'core,research,reading',
           '--ide-targets', 'claude_code,codex,cursor,gemini_cli',
-          '--project-name', 'Override Wiki',
           '--communication-language', 'Vietnamese',
           '--document-output-language', 'English',
         ],
@@ -60,18 +61,18 @@ describe('installCommand', () => {
       );
 
       assert.equal(result.status, 0, result.stderr);
-      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
-      assert.match(config, /project_name: Override Wiki/);
+      const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /project_name: override-wiki/);
       assert.match(config, /communication_language: Vietnamese/);
       assert.match(config, /research: true/);
       assert.match(config, /reading: true/);
 
-      await access(join(tmp, '.agents', 'skills', 'lumi-discover', 'SKILL.md'));
-      await access(join(tmp, '.agents', 'skills', 'lumi-chapter-ingest', 'SKILL.md'));
-      await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
-      await access(join(tmp, 'AGENTS.md'));
-      await access(join(tmp, 'GEMINI.md'));
-      await access(join(tmp, '.cursor', 'rules', 'lumina.mdc'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-discover', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-chapter-ingest', 'SKILL.md'));
+      await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(workspace, 'AGENTS.md'));
+      await access(join(workspace, 'GEMINI.md'));
+      await access(join(workspace, '.cursor', 'rules', 'lumina.mdc'));
     } finally {
       await cleanTmp(tmp);
     }

@@ -2,18 +2,21 @@
  * @module installer/prompts
  * @description Interactive prompt wrapper using @clack/prompts.
  *
- * The five PRD-locked install prompts (in order):
- *   1. Project name
+ * Install prompts (in order):
+ *   1. Installation directory (default: process.cwd())
  *   2. Research purpose (multi-line free-form, optional)
  *   3. IDE targets (multi-select)
  *   4. Packs (multi-select; core always included)
  *   5. Language pair (communication_language, document_output_language)
  *
+ * `project_name` is auto-derived as `basename(directory)` — not prompted.
+ *
  * When --yes flag is active, all prompts are skipped and defaults are returned.
  * Respects NO_COLOR and TTY detection via @clack/prompts internals.
  */
 
-import { basename } from 'node:path';
+import { basename, isAbsolute, resolve } from 'node:path';
+import { homedir } from 'node:os';
 
 // Lazy-load @clack/prompts to keep cold-start under 300ms
 let clack;
@@ -39,14 +42,33 @@ export function defaultProjectName(cwd = process.cwd()) {
 }
 
 /**
+ * Expand a user-typed path: trim, expand leading `~`, resolve to absolute.
+ * Empty input falls back to `fallback`.
+ *
+ * @param {string} raw
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function expandUserPath(raw, fallback) {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return fallback;
+  let expanded = trimmed;
+  if (expanded === '~') expanded = homedir();
+  else if (expanded.startsWith('~/')) expanded = `${homedir()}/${expanded.slice(2)}`;
+  return isAbsolute(expanded) ? expanded : resolve(process.cwd(), expanded);
+}
+
+/**
  * Default install answers (used with --yes).
  *
  * @param {string} [cwd]
  * @returns {InstallAnswers}
  */
 export function defaultAnswers(cwd = process.cwd()) {
+  const directory = resolve(cwd);
   return {
-    projectName:          defaultProjectName(cwd),
+    directory,
+    projectName:          defaultProjectName(directory),
     researchPurpose:      '',
     ideTargets:           ['claude_code'],
     packs:                ['core'],
@@ -61,7 +83,8 @@ export function defaultAnswers(cwd = process.cwd()) {
 
 /**
  * @typedef {Object} InstallAnswers
- * @property {string}   projectName
+ * @property {string}   directory       — absolute install path
+ * @property {string}   projectName     — auto-derived from basename(directory)
  * @property {string}   researchPurpose
  * @property {string[]} ideTargets
  * @property {string[]} packs
@@ -92,14 +115,16 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
 
   intro('Lumina Wiki Installer');
 
-  // ── Prompt 1: Project name ──────────────────────────────────────────────
-  const projectNameRaw = await text({
-    message: 'Project name',
-    placeholder: defaultProjectName(cwd),
-    defaultValue: defaultProjectName(cwd),
+  // ── Prompt 1: Installation directory ─────────────────────────────────────
+  const cwdAbs = resolve(cwd);
+  const directoryRaw = await text({
+    message: 'Installation directory',
+    placeholder: cwdAbs,
+    defaultValue: cwdAbs,
   });
-  if (isCancel(projectNameRaw)) { cancel('Installation cancelled.'); process.exit(0); }
-  const projectName = projectNameRaw || defaultProjectName(cwd);
+  if (isCancel(directoryRaw)) { cancel('Installation cancelled.'); process.exit(0); }
+  const directory = expandUserPath(directoryRaw, cwdAbs);
+  const projectName = defaultProjectName(directory);
 
   // ── Prompt 2: Research purpose (multi-line free-form, optional) ─────────
   const researchPurposeRaw = await text({
@@ -160,6 +185,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   const documentOutputLang = documentOutputLangRaw || 'English';
 
   return {
+    directory,
     projectName,
     researchPurpose,
     ideTargets,

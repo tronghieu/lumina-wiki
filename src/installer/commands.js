@@ -128,22 +128,24 @@ const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli
 
 /**
  * @param {object} opts
- * @param {string}  opts.cwd           - Project root
+ * @param {string}  [opts.directory]   - Installation directory (BMAD-style canonical flag)
+ * @param {string}  [opts.cwd]         - Backward-compat alias for `directory`
  * @param {boolean} opts.yes           - Accept defaults (--yes)
  * @param {boolean} opts.reLink        - Force re-compute symlink strategy
  * @param {boolean} opts.noUpdate      - Skip update check
  * @param {string|string[]} [opts.packs] - Pack override for non-interactive installs
  * @param {string|string[]} [opts.ideTargets] - IDE target override
- * @param {string} [opts.projectName]
+ * @param {string} [opts.projectName]  - Hidden escape hatch; default = basename(directory)
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
  */
 export async function installCommand(opts = {}) {
-  const { cwd = process.cwd(), yes = false, reLink = false } = opts;
-  const projectRoot = resolve(cwd);
+  const { yes = false, reLink = false } = opts;
+  const initialDir = opts.directory ?? opts.cwd ?? process.cwd();
+  let projectRoot = resolve(initialDir);
   const colors = await getColorFns();
 
-  // 1. Read existing manifest
+  // 1. Read existing manifest at the initial path (upgrade detection)
   let existingManifest = null;
   try {
     existingManifest = await readManifest(projectRoot);
@@ -161,6 +163,10 @@ export async function installCommand(opts = {}) {
     answers = await readAnswersFromConfig(projectRoot, existingManifest);
   } else {
     answers = await runInstallPrompts({ acceptDefaults: yes, cwd: projectRoot });
+    // Re-resolve projectRoot from the directory the user typed.
+    if (answers.directory) {
+      projectRoot = resolve(answers.directory);
+    }
   }
   answers = applyInstallOverrides(answers, opts);
 
@@ -408,7 +414,8 @@ async function readAnswersFromConfig(projectRoot, existingManifest) {
       .map(([k]) => k);
 
     return {
-      projectName:        config.project_name || 'My Wiki',
+      directory:          projectRoot,
+      projectName:        config.project_name || basename(projectRoot),
       researchPurpose:    '',
       ideTargets:         ideTargets.length ? ideTargets : ['claude_code'],
       packs:              packs.length ? packs : ['core'],
@@ -420,7 +427,8 @@ async function readAnswersFromConfig(projectRoot, existingManifest) {
     const ideTargets = existingManifest?.ideTargets ?? ['claude_code'];
     const packs = Object.keys(existingManifest?.packs ?? { core: true });
     return {
-      projectName:        'My Wiki',
+      directory:          projectRoot,
+      projectName:        basename(projectRoot),
       researchPurpose:    '',
       ideTargets,
       packs:              packs.length ? packs : ['core'],

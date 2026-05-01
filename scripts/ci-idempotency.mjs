@@ -7,7 +7,7 @@
  * files drift. Runtime state timestamps are intentionally excluded.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,17 +21,18 @@ const cliPath = join(repoRoot, 'bin', 'lumina.js');
 const scenarios = [
   {
     name: 'core-default',
+    workspaceBasename: 'ci-core-default',
     args: ['install', '--yes', '--no-update'],
   },
   {
     name: 'full-pack',
+    workspaceBasename: 'ci-full-pack-wiki',
     args: [
       'install',
       '--yes',
       '--no-update',
       '--packs', 'core,research,reading',
       '--ide-targets', 'claude_code,codex,cursor,gemini_cli,qwen,iflow',
-      '--project-name', 'CI Full Pack Wiki',
       '--communication-language', 'English',
       '--document-output-language', 'English',
     ],
@@ -78,17 +79,20 @@ function run(command, args, opts = {}) {
 }
 
 async function runScenario(scenario) {
-  const workspace = await mkdtemp(join(tmpdir(), `lumina-ci-${scenario.name}-`));
+  // Stable basename so the auto-derived project_name is identical across runs.
+  const parent = await mkdtemp(join(tmpdir(), `lumina-ci-${scenario.name}-`));
+  const workspace = join(parent, scenario.workspaceBasename);
+  await mkdir(workspace, { recursive: true });
   try {
     run('git', ['init'], { cwd: workspace });
     run('git', ['config', 'user.email', 'ci@example.invalid'], { cwd: workspace });
     run('git', ['config', 'user.name', 'Lumina CI'], { cwd: workspace });
 
-    run(process.execPath, [cliPath, ...scenario.args, '--cwd', workspace], { cwd: repoRoot });
+    run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
     run('git', ['add', '-A'], { cwd: workspace });
     run('git', ['commit', '-m', 'baseline'], { cwd: workspace });
 
-    run(process.execPath, [cliPath, ...scenario.args, '--cwd', workspace], { cwd: repoRoot });
+    run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
 
     const diff = spawnSync('git', ['diff', '--exit-code', '--', ...managedDiffPaths], {
       cwd: workspace,
@@ -106,7 +110,7 @@ async function runScenario(scenario) {
 
     console.log(`[ok] ${scenario.name}`);
   } finally {
-    await rm(workspace, { recursive: true, force: true });
+    await rm(parent, { recursive: true, force: true });
   }
 }
 
