@@ -407,7 +407,7 @@ export const PACK_MANIFEST_SHAPE = {
     },
   ],
 
-  // Required: list of skill slugs this pack ships (e.g. ['lumi-discover']).
+  // Required: list of skill slugs this pack ships (e.g. ['lumi-research-discover']).
   // Installer maps each slug to .agents/skills/lumi-<slug>/ (flat).
   skills: ['string'],
 

@@ -175,11 +175,11 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 {{#if pack_research}}### Pack: research
 
-Adds `/lumi-discover` (ranked candidate shortlist), `/lumi-survey` (narrative synthesis), `/lumi-prefill` (seed foundations/ to prevent concept duplication), `/lumi-setup` (interactive API key configuration).
+Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-setup` (interactive API key configuration).
 {{/if}}
 {{#if pack_reading}}### Pack: reading
 
-Adds `/lumi-chapter-ingest` (file a chapter, update characters/themes/plot pages), `/lumi-character-track` (build or refresh a character profile across chapters), `/lumi-theme-map` (trace a theme across chapters with citations), `/lumi-plot-recap` (summarize plot up to a chapter, spoiler-bounded).
+Adds `/lumi-reading-chapter-ingest` (file a chapter, update characters/themes/plot pages), `/lumi-reading-character-track` (build or refresh a character profile across chapters), `/lumi-reading-theme-map` (trace a theme across chapters with citations), `/lumi-reading-plot-recap` (summarize plot up to a chapter, spoiler-bounded).
 {{/if}}
 
 ---

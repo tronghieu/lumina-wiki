@@ -5,7 +5,7 @@ CLI:
     python fetch_wikipedia.py page <title>
     python fetch_wikipedia.py search <query> [--limit N]
 
-Used by /lumi-prefill to seed wiki/foundations/ with established definitions.
+Used by /lumi-research-prefill to seed wiki/foundations/ with established definitions.
 JSON emitted to stdout on success.
 Errors emitted to stderr; exit codes:
     0  success

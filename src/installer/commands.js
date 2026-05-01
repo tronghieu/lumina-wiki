@@ -751,10 +751,10 @@ function getSkillDefs(packs) {
 
   if (packs.includes('research')) {
     const researchSkills = [
-      { name: 'discover', canonicalId: 'lumi-discover', displayName: '/lumi-discover' },
-      { name: 'survey',   canonicalId: 'lumi-survey',   displayName: '/lumi-survey' },
-      { name: 'prefill',  canonicalId: 'lumi-prefill',  displayName: '/lumi-prefill' },
-      { name: 'setup',    canonicalId: 'lumi-setup',    displayName: '/lumi-setup' },
+      { name: 'discover', canonicalId: 'lumi-research-discover', displayName: '/lumi-research-discover' },
+      { name: 'survey',   canonicalId: 'lumi-research-survey',   displayName: '/lumi-research-survey' },
+      { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
+      { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
     ];
     for (const s of researchSkills) {
       defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
@@ -763,10 +763,10 @@ function getSkillDefs(packs) {
 
   if (packs.includes('reading')) {
     const readingSkills = [
-      { name: 'chapter-ingest',   canonicalId: 'lumi-chapter-ingest',   displayName: '/lumi-chapter-ingest' },
-      { name: 'character-track',  canonicalId: 'lumi-character-track',  displayName: '/lumi-character-track' },
-      { name: 'theme-map',        canonicalId: 'lumi-theme-map',        displayName: '/lumi-theme-map' },
-      { name: 'plot-recap',       canonicalId: 'lumi-plot-recap',       displayName: '/lumi-plot-recap' },
+      { name: 'chapter-ingest',   canonicalId: 'lumi-reading-chapter-ingest',   displayName: '/lumi-reading-chapter-ingest' },
+      { name: 'character-track',  canonicalId: 'lumi-reading-character-track',  displayName: '/lumi-reading-character-track' },
+      { name: 'theme-map',        canonicalId: 'lumi-reading-theme-map',        displayName: '/lumi-reading-theme-map' },
+      { name: 'plot-recap',       canonicalId: 'lumi-reading-plot-recap',       displayName: '/lumi-reading-plot-recap' },
     ];
     for (const s of readingSkills) {
       defs.push({ ...s, pack: 'reading', srcPackPath: 'packs/reading' });

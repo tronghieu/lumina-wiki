@@ -1,5 +1,5 @@
 ---
-name: lumi-setup
+name: lumi-research-setup
 description: >
   Configure the research pack runtime by checking Python dependencies and
   helping the user populate local API-key environment files.
@@ -9,7 +9,7 @@ allowed-tools:
   - Write
 ---
 
-# /lumi-setup
+# /lumi-research-setup
 
 ## Role
 

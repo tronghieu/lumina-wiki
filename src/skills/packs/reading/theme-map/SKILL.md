@@ -1,5 +1,5 @@
 ---
-name: lumi-theme-map
+name: lumi-reading-theme-map
 description: >
   Build and maintain thematic cluster pages in wiki/themes/<book-slug>/ by linking
   themes to the chapters and characters they appear in. Use whenever the user wants to
@@ -8,7 +8,7 @@ description: >
   "theme analysis", or "update theme pages".
 ---
 
-# /lumi-theme-map
+# /lumi-reading-theme-map
 
 ## TL;DR
 

@@ -1,5 +1,5 @@
 ---
-name: lumi-prefill
+name: lumi-research-prefill
 description: >
   Seed terminal foundation pages for stable background knowledge so future
   ingestion can link to common concepts without duplicating definitions.
@@ -9,7 +9,7 @@ allowed-tools:
   - Write
 ---
 
-# /lumi-prefill
+# /lumi-research-prefill
 
 ## Role
 
@@ -43,7 +43,7 @@ node _lumina/scripts/wiki.mjs slug "<topic title>"
 6. Log the addition:
 
 ```bash
-node _lumina/scripts/wiki.mjs log lumi-prefill "prefilled foundation <slug>"
+node _lumina/scripts/wiki.mjs log lumi-research-prefill "prefilled foundation <slug>"
 ```
 
 ## Constraints

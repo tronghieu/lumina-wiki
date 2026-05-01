@@ -260,27 +260,38 @@ All tools follow these contracts:
 
 | Skill | Purpose |
 |---|---|
-| `/lumi-setup` | Check Python deps, populate API-key env files |
-| `/lumi-discover` | Find + rank candidate sources; stops at shortlist |
-| `/lumi-prefill` | Seed `wiki/foundations/` terminal pages |
-| `/lumi-survey` | Narrative synthesis from existing wiki |
+| `/lumi-research-setup` | Check Python deps, populate API-key env files |
+| `/lumi-research-discover` | Find + rank candidate sources; stops at shortlist |
+| `/lumi-research-prefill` | Seed `wiki/foundations/` terminal pages |
+| `/lumi-research-survey` | Narrative synthesis from existing wiki |
 
 **Reading pack (4) — opt-in, no new tools, adds `chapters/`, `characters/`, `themes/`, `plot/` page types:**
 
 | Skill | Purpose |
 |---|---|
-| `/lumi-chapter-ingest` | Ingest one chapter; extract characters, themes, plot beats |
-| `/lumi-character-track` | Maintain character pages + inter-character edges |
-| `/lumi-theme-map` | Build theme cluster pages; threshold ≥2 chapters |
-| `/lumi-plot-recap` | Spoiler-safe recap up to (not including) cursor chapter |
+| `/lumi-reading-chapter-ingest` | Ingest one chapter; extract characters, themes, plot beats |
+| `/lumi-reading-character-track` | Maintain character pages + inter-character edges |
+| `/lumi-reading-theme-map` | Build theme cluster pages; threshold ≥2 chapters |
+| `/lumi-reading-plot-recap` | Spoiler-safe recap up to (not including) cursor chapter |
+
+### Skill naming convention (canonical IDs)
+
+Source tree is hierarchical (`src/skills/core/<name>/`, `src/skills/packs/<pack>/<name>/`); the **installed `canonicalId`** is flat under `.agents/skills/` and follows a pack-prefix rule:
+
+- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`.
+- **Pack skills** insert the pack name between `lumi-` and the leaf: `lumi-<pack>-<name>`. Examples: `lumi-research-discover`, `lumi-research-survey`, `lumi-reading-chapter-ingest`, `lumi-reading-plot-recap`.
+
+The slash command equals the `canonicalId` verbatim (`/lumi-research-discover`). The source leaf directory (`src/skills/packs/research/discover/`) does **not** carry the pack prefix — only the rendered output does. The mapping is centralized in `getSkillDefs()` in `src/installer/commands.js`; SKILL.md `name:` frontmatter must match the `canonicalId`, not the leaf.
+
+Why the prefix: namespaces pack-owned skills, prevents collisions when a future pack reuses a common verb (e.g. `discover`), and lets a user grepping `.agents/skills/lumi-reading-*` see the full reading surface at a glance.
 
 ### Skill file conventions
 
-Located at `src/skills/<subtree>/<name>/SKILL.md`. Frontmatter:
+Located at `src/skills/<subtree>/<leaf>/SKILL.md`. Frontmatter:
 
 ```yaml
 ---
-name: lumi-<name>           # maps 1:1 to slash command
+name: lumi-<canonicalId>    # maps 1:1 to slash command; pack skills include pack prefix
 description: >              # multi-line trigger heuristic
   ...
 allowed-tools:              # explicit allowlist (Bash, Read, Write, Edit)
@@ -361,9 +372,9 @@ Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 ID
 11. **Slug uniqueness is not lint-enforced.** Linter catches broken links but not duplicate slugs. Ingest skills must check existence before creating.
 12. **Bidirectional invariant.** Most common ingest mistake. Forward link without reverse = L06 fail.
 13. **README schema fence.** Edits inside `<!-- lumina:schema -->` markers are wiped on upgrade. User content must go outside.
-14. **Adding a new pack** requires threaded `{{#if pack_X}}` guards in `lumina.config.yaml`, page templates, and these regions of `src/templates/README.md`: Repository Layout (`wiki/`, `raw/`, `_lumina/tools/` lines), the `raw/` rule sentence (named exception paths), Page Types table rows, Cross-Reference Rules table rows, Exemptions list, Skills section, Tooling Conventions. Forgetting any one = orphaned or leaking content.
+14. **Adding a new pack** requires threaded `{{#if pack_X}}` guards in `lumina.config.yaml`, page templates, and these regions of `src/templates/README.md`: Repository Layout (`wiki/`, `raw/`, `_lumina/tools/` lines), the `raw/` rule sentence (named exception paths), Page Types table rows, Cross-Reference Rules table rows, Exemptions list, Skills section, Tooling Conventions. New pack skills MUST follow the `lumi-<pack>-<name>` canonicalId convention (see §6 "Skill naming convention") — the SKILL.md `name:` frontmatter, body header, `getSkillDefs()` entry, and any cross-skill references must all carry the pack prefix. Forgetting any one = orphaned or leaking content.
 15. **Reading-pack skills missing `allowed-tools`** — known drift, fix when touching them.
-16. **`/lumi-discover` writes to `raw/discovered/`** — crosses the "raw is read-only" headline. The exception is implicit; document it explicitly when adding any new skill that touches `raw/`.
+16. **`/lumi-research-discover` writes to `raw/discovered/`** — crosses the "raw is read-only" headline. The exception is implicit; document it explicitly when adding any new skill that touches `raw/`.
 17. **Stale planning artifact:** `docs/planning-artifacts/lumina-wiki-readme-template.md` lines 179–181 list dropped research skills. The shipped `README.md` at project root is authoritative.
 18. **Pre-release semver not handled** — `isNewerVersion('1.0.0-alpha.1', '1.0.0')` returns nonsense. Don't use for pre-release tags.
 19. **DeepXiv:** `read` is GET with `?section=`; `search` is POST with JSON body. Don't mix.

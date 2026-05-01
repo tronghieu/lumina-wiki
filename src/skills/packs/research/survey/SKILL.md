@@ -1,5 +1,5 @@
 ---
-name: lumi-survey
+name: lumi-research-survey
 description: >
   Produce a grounded survey from existing wiki sources, concepts, and graph
   edges. Writes a summary page only when the user asks to save the survey.
@@ -9,7 +9,7 @@ allowed-tools:
   - Write
 ---
 
-# /lumi-survey
+# /lumi-research-survey
 
 ## Role
 
@@ -39,7 +39,7 @@ node _lumina/scripts/wiki.mjs read-edges sources/<slug>
 5. Log the saved survey:
 
 ```bash
-node _lumina/scripts/wiki.mjs log lumi-survey "saved survey <survey-slug>"
+node _lumina/scripts/wiki.mjs log lumi-research-survey "saved survey <survey-slug>"
 ```
 
 ## Constraints

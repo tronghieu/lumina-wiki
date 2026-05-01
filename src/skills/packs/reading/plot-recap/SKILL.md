@@ -1,5 +1,5 @@
 ---
-name: lumi-plot-recap
+name: lumi-reading-plot-recap
 description: >
   Generate a spoiler-safe progressive recap of a book up to (but NOT including) the
   user's current chapter cursor. Use whenever the user asks for a summary of what has
@@ -8,7 +8,7 @@ description: >
   know so far", or "summarize the story to this point".
 ---
 
-# /lumi-plot-recap
+# /lumi-reading-plot-recap
 
 ## TL;DR
 
@@ -181,7 +181,7 @@ Signals that a spoiler may have leaked:
 - This skill is read-only. Do not call `set-meta`, `add-edge`, or `batch-edges`.
 - If the user asks for a recap beyond what has been ingested ("what happened in chapter 7"
   when only chapters 1-5 are in the wiki), respond: "Chapter 7 has not been ingested yet.
-  Run `/lumi-chapter-ingest` first."
+  Run `/lumi-reading-chapter-ingest` first."
 
 ## Examples
 

@@ -1,5 +1,5 @@
 ---
-name: lumi-discover
+name: lumi-research-discover
 description: >
   Discover candidate sources for a research topic using the opt-in Python
   research tools, rank them, and present a shortlist for user approval. This
@@ -10,7 +10,7 @@ allowed-tools:
   - Write
 ---
 
-# /lumi-discover
+# /lumi-research-discover
 
 ## Role
 

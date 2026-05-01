@@ -1,5 +1,5 @@
 ---
-name: lumi-chapter-ingest
+name: lumi-reading-chapter-ingest
 description: >
   Ingest one book chapter into the wiki and extract character mentions, theme tags, and
   plot beats into the graph. Use whenever the user wants to ingest, file, or process a
@@ -7,7 +7,7 @@ description: >
   wiki", "file chapter 2 of [book]", or "track what happened in chapter 5".
 ---
 
-# /lumi-chapter-ingest
+# /lumi-reading-chapter-ingest
 
 ## TL;DR
 

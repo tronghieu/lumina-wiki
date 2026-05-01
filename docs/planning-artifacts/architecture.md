@@ -80,7 +80,7 @@ This is the canonical workspace layout the installer produces. Two top-level fra
 - **`CLAUDE.md`**, **`AGENTS.md`**, **`GEMINI.md`** at project root — small rendered stub files (~5–10 lines each), one per IDE target, each instructing its agent to read `README.md` first. NOT symlinks. Plain copies.
 - **`.cursor/rules/lumina.mdc`** — same stub pattern, rendered into the user's `.cursor/`.
 - **`_lumina/`** — installer-managed sidecar. Holds `config/`, `schema/` (deeper reference docs: `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md` — agent reads them on demand when README.md tells it to), `scripts/` (Node engine: `wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`), `tools/` (Python research-pack utilities), `_state/` (gitignored checkpoints), `manifest.json`. **`_lumina/schema/` does NOT contain `CLAUDE.md`** — the canonical entry point is `README.md` at the project root.
-- **`.agents/`** — agent-invokable surface. Contains **only** `skills/`, laid out flat: one directory per skill, each named `lumi-<name>/` (e.g. `lumi-init/`, `lumi-discover/`, `lumi-chapter-ingest/`). No engine code, no schema, no manifest.
+- **`.agents/`** — agent-invokable surface. Contains **only** `skills/`, laid out flat: one directory per skill, each named `lumi-<name>/` (e.g. `lumi-init/`, `lumi-research-discover/`, `lumi-reading-chapter-ingest/`). No engine code, no schema, no manifest.
 
 ```
 <project-root>/
@@ -206,9 +206,9 @@ Mapped against Lumina's planned skill set:
 8. **`.checkpoints/` for multi-phase batch state** → Lumina convention: `_lumina/_state/<skill>-<phase>.json`. Long-running workflow resumability.
 9. **MCP llm-review is a 9-skill enabler.** Without it, 9 research-pack skills must either fall back to single-model self-review or be stubbed out. Defer to v0.2 acceptable; document fallback explicitly.
 10. **Three skills to add to research pack from OmegaWiki pattern:**
-    - `/lumi-prefill` — seeds `foundations/` to prevent concept duplication on ingest. Cheap (uses `fetch_wikipedia.py` only).
+    - `/lumi-research-prefill` — seeds `foundations/` to prevent concept duplication on ingest. Cheap (uses `fetch_wikipedia.py` only).
     - `/lumi-refine` — iterative review-fix loop. Defer the multi-model dependency to v0.2 by allowing a single-model variant.
-    - `/lumi-setup` — interactive `.env` walkthrough for API keys when research pack is installed.
+    - `/lumi-research-setup` — interactive `.env` walkthrough for API keys when research pack is installed.
 11. **`/research` orchestrator and `exp-*` cluster → v0.2 or later.** Orchestrator needs checkpoint infra mature; `exp-*` needs SSH/GPU infra not in author's daily loop.
 
 ### Component sizing estimate (informed by OmegaWiki)
@@ -243,14 +243,14 @@ Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with ex
 | core | `/lumi-edit` | port (markdown-only) | add/remove sources, update content; no tool dependencies |
 | core | `/lumi-check` | port | 9-check linter with exemption rules |
 | core | `/lumi-reset` | port | scoped destructive reset; `--dry-run` plan |
-| research | `/lumi-discover` | port (generalize) | ranked candidate shortlist, plug-in fetchers |
-| research | `/lumi-survey` | port | narrative synthesis from claim graph |
-| research | `/lumi-prefill` | port | seeds `wiki/foundations/` to prevent concept duplication on ingest |
-| research | `/lumi-setup` | port | interactive `.env` walkthrough for fetcher API keys |
-| reading | `/lumi-chapter-ingest` | original | ingest a book chapter |
-| reading | `/lumi-character-track` | original | maintain character pages and inter-character edges |
-| reading | `/lumi-theme-map` | original | thematic clustering |
-| reading | `/lumi-plot-recap` | original | spoiler-aware progressive recap |
+| research | `/lumi-research-discover` | port (generalize) | ranked candidate shortlist, plug-in fetchers |
+| research | `/lumi-research-survey` | port | narrative synthesis from claim graph |
+| research | `/lumi-research-prefill` | port | seeds `wiki/foundations/` to prevent concept duplication on ingest |
+| research | `/lumi-research-setup` | port | interactive `.env` walkthrough for fetcher API keys |
+| reading | `/lumi-reading-chapter-ingest` | original | ingest a book chapter |
+| reading | `/lumi-reading-character-track` | original | maintain character pages and inter-character edges |
+| reading | `/lumi-reading-theme-map` | original | thematic clustering |
+| reading | `/lumi-reading-plot-recap` | original | spoiler-aware progressive recap |
 
 **Skills explicitly NOT shipped in v0.1:**
 
@@ -300,6 +300,6 @@ Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with ex
 3. `lint.mjs` — depends on `schemas.mjs` + `wiki.mjs`. Blocks `/lumi-check` and CI idempotency assertions.
 4. `reset.mjs` — depends on `schemas.mjs`. Blocks `/lumi-reset`.
 5. Core skills (6 SKILL.md files) — `/lumi-edit` first (no tool deps), then `/lumi-init` + `/lumi-ingest` + `/lumi-ask` + `/lumi-check` + `/lumi-reset`.
-6. Research pack — Python tools first (`_env.py`, `discover.py`, fetchers), then four research skills (`/lumi-discover`, `/lumi-survey`, `/lumi-prefill`, `/lumi-setup`).
+6. Research pack — Python tools first (`_env.py`, `discover.py`, fetchers), then four research skills (`/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`).
 7. Reading pack — original four skills, no new tools required (consume `wiki.mjs`).
 8. Installer — wires everything together; depends on stable templates so authored last among the engine artifacts.

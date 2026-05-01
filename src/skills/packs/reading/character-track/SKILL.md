@@ -1,5 +1,5 @@
 ---
-name: lumi-character-track
+name: lumi-reading-character-track
 description: >
   Maintain character pages in wiki/characters/<book-slug>/ and update inter-character
   relationship edges as new chapters are ingested. Use whenever the user wants to update
@@ -8,7 +8,7 @@ description: >
   far", "track character appearances", or "refresh character pages".
 ---
 
-# /lumi-character-track
+# /lumi-reading-character-track
 
 ## TL;DR
 
