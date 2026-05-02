@@ -83,12 +83,14 @@ These are absolutes. Every one corresponds to a real failure mode.
 
 ### README schema region
 
-16. The `<!-- lumina:schema --> ... <!-- /lumina:schema -->` markers in `README.md` are the **only** region the installer rewrites on upgrade. Markers must be on their own lines (`line.trim() === marker`) — inline backtick mentions are skipped. Never put user content inside this region.
+16. The `<!-- lumina:schema --> ... <!-- /lumina:schema -->` markers in `README.md` (and its localized versions) are the **only** region the installer rewrites on upgrade. Markers must be on their own lines (`line.trim() === marker`) — inline backtick mentions are skipped. Never put user content inside this region.
 
-### `wiki/` ↔ `raw/` boundary
+### Documentation & User Content
 
-17. **Python tools never write to `wiki/`.** That is exclusively for skills calling `wiki.mjs`. `extract_pdf.py` writes only to stdout; research-pack tools (`init_discovery.py`, etc.) document this explicitly: "Never writes to `wiki/`. Skills own `wiki/`."
-18. **`reset --scope wiki` (and `all`) never touch `raw/`.** `raw/` is destroyed only by `--scope raw` with `--yes`. Conversely, do not write entity files into `raw/`; they will not be indexed.
+17. **READMEs are User Manuals.** They are written specifically for the end-user to use the wiki workspace, not as a general project introduction or marketing material.
+18. **Multi-language Synchronization.** Lumina-Wiki supports multiple languages (English: `README.md`, Vietnamese: `README.vi.md`, Chinese: `README.zh.md`). Any change that affects the user experience — such as adding/removing skills, changing command names, or modifying core workflows — MUST be updated across ALL language versions to maintain technical consistency. All files must follow BCP 47 language tags.
+19. **Python tools never write to `wiki/`.** That is exclusively for skills calling `wiki.mjs`. `extract_pdf.py` writes only to stdout; research-pack tools (`init_discovery.py`, etc.) document this explicitly: "Never writes to `wiki/`. Skills own `wiki/`."
+20. **`reset --scope wiki` (and `all`) never touch `raw/`.** `raw/` is destroyed only by `--scope raw` with `--yes`. Conversely, do not write entity files into `raw/`; they will not be indexed.
 
 ### OmegaWiki
 
