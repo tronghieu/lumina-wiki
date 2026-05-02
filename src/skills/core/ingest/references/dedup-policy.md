@@ -15,6 +15,36 @@ If `wiki/sources/<slug>.md` already exists, treat the run as a re-ingest. Confir
 with the user before overwriting body content. If the user confirms, keep stable
 frontmatter values when possible and only update fields supported by the source.
 
+## Foundation Resolution (Before Creating Concept Stubs)
+
+Before creating any concept stub, check whether the term already has a foundation
+page. This avoids duplicate concept pages when a foundation covers the same term
+under its canonical name.
+
+```bash
+node _lumina/scripts/wiki.mjs resolve-alias "<concept-name>"
+```
+
+Decision tree by exit code:
+
+- **exit 0, exactly 1 match (`ambiguous: false`)** — do NOT create a concept stub.
+  Link to `[[foundations/<match-slug>]]` in the source page's `## Concepts` section.
+  Add edge:
+  ```bash
+  node _lumina/scripts/wiki.mjs add-edge sources/<source-slug> grounded_in foundations/<match-slug>
+  ```
+  Note: `grounded_in` is terminal — no reverse edge will be written.
+
+- **exit 0, `ambiguous: true`** — present the candidate foundations to the user
+  with their slugs and ask which one applies. If none match the source's intended
+  meaning, fall back to creating a concept stub.
+
+- **exit 2 (no match)** — proceed with normal concept stub creation per the next
+  section.
+
+Run resolve-alias for every candidate concept name extracted in Phase 4, before
+making any `add-edge concepts/<slug>` calls.
+
 ## Concept And Person Stubs
 
 Before creating a concept or person page, check metadata:

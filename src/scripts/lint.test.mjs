@@ -1,6 +1,6 @@
 /**
  * @file lint.test.mjs
- * Tests for src/scripts/lint.mjs — covers all 9 checks, fix idempotency, --json schema,
+ * Tests for src/scripts/lint.mjs — covers all 10 checks, fix idempotency, --json schema,
  * --fix --dry-run no-write guarantee, and NO_COLOR output.
  *
  * Run: node --test src/scripts/lint.test.mjs
@@ -22,7 +22,7 @@ import {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09,
+  checkL06, checkL07, checkL08, checkL09, checkL10,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
   INDEX_MARKER_OPEN,
@@ -722,7 +722,7 @@ describe('--json output schema', () => {
     const output = {
       schema_version: '0.1.0',
       scanned_files: scannedFiles,
-      checks_run: ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09'],
+      checks_run: ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10'],
       findings,
       summary: { errors, warnings, info: infos, fixes_applied: fixesApplied },
     };
@@ -983,5 +983,126 @@ describe('R3 regression: fixL07 idempotency for non-symmetric duplicate', () => 
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
     const l07remaining = r2.findings.filter(f => f.id === 'L07-symmetric-edge-duplicate');
     assert.equal(l07remaining.length, 0, 'fixL07 must be idempotent: no L07 findings after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L10: alias-conflict
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L10 alias-conflict', () => {
+
+  // 1. Clean: disjoint aliases and titles — no L10 findings.
+  test('clean: two foundations with disjoint aliases and titles', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/attention.md', fm: { title: 'Attention', aliases: ['Self-Attention'] } },
+      { wikiRelPath: 'foundations/rlhf.md',      fm: { title: 'RLHF',      aliases: ['Reinforcement Learning from Human Feedback'] } },
+    ];
+    const result = checkL10(entries);
+    assert.equal(result.length, 0);
+  });
+
+  // 2. Alias-alias collision: two foundations both list "common" in aliases.
+  test('violation: alias-alias collision emits error on both foundations', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/alpha.md', fm: { title: 'Alpha', aliases: ['common'] } },
+      { wikiRelPath: 'foundations/beta.md',  fm: { title: 'Beta',  aliases: ['common'] } },
+    ];
+    const result = checkL10(entries);
+    // Expect at least 2 findings (one per slug involved).
+    assert.ok(result.length >= 2, 'Expected at least 2 findings for alias-alias collision');
+    assert.ok(result.every(f => f.id === 'L10-alias-conflict'), 'All findings must be L10-alias-conflict');
+    assert.ok(result.every(f => f.severity === 'error'), 'All findings must be severity error');
+    assert.ok(result.every(f => f.fixable === false), 'L10 must not be fixable');
+    // Each finding mentions the other slug.
+    const alphaFinding = result.find(f => f.file === 'foundations/alpha.md');
+    assert.ok(alphaFinding, 'Expected finding for foundations/alpha.md');
+    assert.ok(alphaFinding.message.includes('foundations/beta.md'), 'alpha finding should mention beta slug');
+    const betaFinding = result.find(f => f.file === 'foundations/beta.md');
+    assert.ok(betaFinding, 'Expected finding for foundations/beta.md');
+    assert.ok(betaFinding.message.includes('foundations/alpha.md'), 'beta finding should mention alpha slug');
+  });
+
+  // 3. Alias-title collision: foundation A title "Transformer", foundation B has alias "Transformer".
+  test('violation: alias-title collision emits error on both foundations', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/transformer.md', fm: { title: 'Transformer', aliases: [] } },
+      { wikiRelPath: 'foundations/bert.md',         fm: { title: 'BERT', aliases: ['Transformer'] } },
+    ];
+    const result = checkL10(entries);
+    assert.ok(result.length >= 2, 'Expected at least 2 findings for alias-title collision');
+    assert.ok(result.every(f => f.id === 'L10-alias-conflict'));
+    const txFinding = result.find(f => f.file === 'foundations/transformer.md');
+    assert.ok(txFinding, 'Expected finding for foundations/transformer.md');
+    assert.ok(txFinding.message.includes('foundations/bert.md'), 'transformer finding should mention bert slug');
+  });
+
+  // 4. Case and whitespace insensitive collision.
+  test('violation: case/whitespace-insensitive alias collision', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/a.md', fm: { title: 'A', aliases: ['  RLHF  '] } },
+      { wikiRelPath: 'foundations/b.md', fm: { title: 'B', aliases: ['rlhf'] } },
+    ];
+    const result = checkL10(entries);
+    assert.ok(result.length >= 2, 'Expected collision to be detected case-insensitively');
+    assert.ok(result.every(f => f.id === 'L10-alias-conflict'));
+  });
+
+  // 5. No aliases field — must not crash and must detect title-title collision if present.
+  test('no aliases field: does not crash', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/x.md', fm: { title: 'X' } },
+      { wikiRelPath: 'foundations/y.md', fm: { title: 'Y' } },
+    ];
+    const result = checkL10(entries);
+    assert.equal(result.length, 0, 'No collision expected for disjoint titles without aliases');
+  });
+
+  test('no aliases field: still detects title-title collision when titles happen to match', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/x.md', fm: { title: 'Shared Title' } },
+      { wikiRelPath: 'foundations/y.md', fm: { title: 'Shared Title' } },
+    ];
+    const result = checkL10(entries);
+    assert.ok(result.length >= 2, 'Title-title collision should be detected');
+    assert.ok(result.every(f => f.id === 'L10-alias-conflict'));
+  });
+
+  test('non-string alias entries are silently skipped', () => {
+    const entries = [
+      { wikiRelPath: 'foundations/a.md', fm: { title: 'A', aliases: [null, 42, 'valid-alias'] } },
+      { wikiRelPath: 'foundations/b.md', fm: { title: 'B', aliases: ['other'] } },
+    ];
+    // Should not throw and should not produce spurious findings.
+    const result = checkL10(entries);
+    assert.equal(result.length, 0, 'Non-string aliases should be silently skipped');
+  });
+
+  // 6. Only foundations are checked — concepts with colliding title must NOT trigger L10.
+  test('scope: concepts with same title as a foundation do not trigger L10', async () => {
+    const tmpDir = await makeTmp();
+    try {
+      const wikiDir = await makeWiki(tmpDir);
+      // Create a foundations/ directory.
+      await mkdir(join(wikiDir, 'foundations'), { recursive: true });
+
+      // Foundation "Transformer".
+      const foundationFm = `---\nid: transformer\ntitle: Transformer\ntype: foundation\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n`;
+      await writeFile(join(wikiDir, 'foundations', 'transformer.md'), foundationFm);
+
+      // Concept also named "Transformer" — different entity type, should NOT trigger L10.
+      const conceptFm = `---\nid: transformer-concept\ntitle: Transformer\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\n`;
+      await writeFile(join(wikiDir, 'concepts', 'transformer-concept.md'), conceptFm);
+
+      // Update index to include both.
+      await writeFile(join(wikiDir, 'index.md'),
+        `${INDEX_MARKER_OPEN}\n- [[foundations/transformer]]\n- [[concepts/transformer-concept]]\n${INDEX_MARKER_CLOSE}\n`);
+
+      const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+      const l10 = findings.filter(f => f.id === 'L10-alias-conflict');
+      assert.equal(l10.length, 0, 'L10 must not fire for concept with same title as foundation');
+    } finally {
+      await removeTmp(tmpDir);
+    }
   });
 });

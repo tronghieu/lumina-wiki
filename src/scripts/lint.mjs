@@ -1,6 +1,6 @@
 /**
  * @module lint
- * @description LuminaWiki v0.1 wiki linter — 9 schema checks, optional --fix.
+ * @description LuminaWiki v0.1 wiki linter — 10 schema checks, optional --fix.
  *
  * CLI usage:
  *   node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]
@@ -62,7 +62,7 @@ const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
 /** All check IDs in run order. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10'];
 
 /** Kebab-case pattern: lowercase letters, digits, hyphens; no leading/trailing hyphen. */
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -611,6 +611,57 @@ function checkL09(indexPath, indexContent, entityFiles) {
   return [];
 }
 
+/**
+ * L10: Two foundations share an alias, or a foundation's alias collides with
+ * another foundation's title. Foundations-only; no --fix mode.
+ *
+ * @param {Array<{wikiRelPath: string, fm: Record<string,unknown>}>} foundationEntries
+ *   Each entry has the wiki-relative path and parsed frontmatter of one foundation file.
+ * @returns {Finding[]}
+ */
+function checkL10(foundationEntries) {
+  /** @type {Map<string, Array<{slug: string, source: 'title'|'alias', original: string}>>} */
+  const index = new Map();
+
+  for (const { wikiRelPath, fm } of foundationEntries) {
+    const slug = wikiRelPath; // e.g. "foundations/transformer.md"
+
+    // Collect title.
+    if (typeof fm.title === 'string') {
+      const norm = fm.title.trim().toLowerCase();
+      if (!index.has(norm)) index.set(norm, []);
+      index.get(norm).push({ slug, source: 'title', original: fm.title });
+    }
+
+    // Collect aliases (skip non-string entries defensively).
+    const aliases = Array.isArray(fm.aliases) ? fm.aliases : [];
+    for (const alias of aliases) {
+      if (typeof alias !== 'string') continue;
+      const norm = alias.trim().toLowerCase();
+      if (!index.has(norm)) index.set(norm, []);
+      index.get(norm).push({ slug, source: 'alias', original: alias });
+    }
+  }
+
+  const findings = [];
+  for (const [, claimants] of index) {
+    if (claimants.length < 2) continue;
+    // Each claimant gets a finding mentioning the others.
+    for (const claimant of claimants) {
+      const others = claimants.filter(c => c !== claimant);
+      const othersDesc = others
+        .map(c => `${c.slug} (as ${c.source})`)
+        .join(', ');
+      findings.push(finding(
+        'L10-alias-conflict', 'error', false,
+        claimant.slug, null,
+        `alias conflict on "${claimant.original}" — also claimed by ${othersDesc}`
+      ));
+    }
+  }
+  return findings;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -873,6 +924,19 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL09(indexPath, indexContent, entityFiles));
   }
 
+  // L10: collect all foundation frontmatters in one pass, then check for alias conflicts.
+  {
+    const foundationEntries = [];
+    for (const wikiRelPath of entityFiles) {
+      if (!wikiRelPath.startsWith('foundations/')) continue;
+      const abs = safejoin(wikiRoot, wikiRelPath);
+      const content = await readFile(abs, 'utf8');
+      const parsed = parseFrontmatter(content);
+      foundationEntries.push({ wikiRelPath, fm: parsed ? parsed.data : {} });
+    }
+    allFindings.push(...checkL10(foundationEntries));
+  }
+
   // Apply fixes if requested.
   if (opts.fix || opts.dryRun) {
     await applyFixes(allFindings, wikiRoot, edgesPath, indexPath, indexContent, entityFiles, allAbsMd, edges, edgeSet, opts);
@@ -1119,7 +1183,7 @@ export {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09,
+  checkL06, checkL07, checkL08, checkL09, checkL10,
   fixL01, fixL03, fixL06, fixL07, fixL09,
   runLint,
   INDEX_MARKER_OPEN,

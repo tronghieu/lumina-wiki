@@ -49,7 +49,7 @@ node _lumina/scripts/wiki.mjs read-meta foundations/<slug>
      ```
      Foundation "<title>" already exists.
        [s] skip    — abort, no changes (default)
-       [r] refresh — re-fetch from Wikipedia, update non-marked sections and `updated`
+       [r] refresh — re-fetch from Wikipedia, update non-marked sections and `updated`; preserve `created`, `aliases`, and `<!-- user-edited -->` sections
        [a] abort   — same as skip but log the user's intent
      ```
 
@@ -82,6 +82,14 @@ python3 _lumina/tools/fetch_wikipedia.py page "<title>"
      paste content manually.
 4. Write `wiki/foundations/<slug>.md` with valid foundation frontmatter:
    `id`, `title`, `type: foundation`, `created`, `updated`.
+
+   Also include the optional `aliases` field — an array of strings listing
+   alternative names users or sources might write for this concept (abbreviations,
+   expansions, common misspellings). Example: for a foundation titled "Reinforcement
+   Learning from Human Feedback", use `aliases: ["RLHF", "human feedback RL"]`.
+   Propose a list of 2–5 plausible aliases, then ask the user to confirm or edit
+   before writing. An empty array `[]` is fine if nothing obvious applies. Aliases
+   must be unique across all foundations — `lint.mjs` L10 will error on collisions.
 5. Keep the body concise: definition, scope notes, and external references.
 6. Log the addition:
 
@@ -104,6 +112,9 @@ node _lumina/scripts/lint.mjs --fix --json
 - When refreshing an existing foundation, preserve the original `created` date and
   any `<!-- user-edited -->` sections verbatim. Only `updated` and non-marked
   sections may change.
+- Aliases must be unique across all foundations. If `lint.mjs --fix --json` reports
+  `L10-alias-conflict`, resolve manually before completing the run — there is no
+  automatic fix.
 
 ## Definition of Done
 

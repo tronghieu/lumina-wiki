@@ -133,6 +133,7 @@ title: "Foundation concept"
 slug: foundation-slug
 date_added: YYYY-MM-DD
 tags: []
+aliases: []
 ---
 ```
 

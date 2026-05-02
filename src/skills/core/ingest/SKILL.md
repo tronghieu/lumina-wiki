@@ -128,6 +128,12 @@ Write checkpoint: `phase: "source-page"`.
 
 ### Phase 4 — Write concept and person stubs
 
+For every candidate concept name extracted in Phase 3, first run
+`node _lumina/scripts/wiki.mjs resolve-alias "<concept-name>"`. If it resolves to
+a foundation, link to that foundation via `[[foundations/<slug>]]` and add a
+`grounded_in` edge instead of creating a concept stub. See
+`references/dedup-policy.md` § Foundation Resolution for the full decision tree.
+
 Apply `references/dedup-policy.md` before creating or updating stubs. Existing
 concept/person pages are updated conservatively; new pages use the templates
 below.
@@ -248,6 +254,20 @@ Guardrail escalation — user asking to skip concept extraction:
 Explain that concept and person stubs are what make the wiki compound over time.
 Ask whether they want a minimal ingest (source page only, no stubs) or a full
 ingest. Proceed only with explicit direction. Log which phases were skipped.
+</example>
+
+<example>
+User: "/lumi-ingest raw/sources/rlhf-overview.pdf"
+
+Foundation resolution — concept name maps to an existing foundation:
+```bash
+node _lumina/scripts/wiki.mjs resolve-alias "RLHF"
+# → {"query":"RLHF","matches":[{"slug":"reinforcement-learning-from-human-feedback","path":"foundations/reinforcement-learning-from-human-feedback","source":"alias"}],"ambiguous":false}
+node _lumina/scripts/wiki.mjs add-edge sources/rlhf-overview grounded_in foundations/reinforcement-learning-from-human-feedback
+# (no concept stub created for "RLHF")
+```
+Link added to `## Concepts` in `wiki/sources/rlhf-overview.md`:
+`[[foundations/reinforcement-learning-from-human-feedback]]`
 </example>
 
 ## Guardrails

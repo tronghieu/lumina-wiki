@@ -1247,6 +1247,7 @@ async function main(argv) {
       '  batch-edges <json-file>         Apply array of edges from JSON file',
       '  dedup-edges                     Deduplicate edges.jsonl',
       '  list-entities [path-prefix] [--type <type>]  List entity slugs as JSON',
+      '  resolve-alias <text>            Map free-text query to a foundations/* slug',
       '  read-edges <slug>|--from <slug> [--type <type>] [--direction outbound|inbound|both]',
       '  read-citations <slug>           Read all citations for a slug',
       '  verify-frontmatter <slug>       Validate frontmatter fields',
@@ -1598,6 +1599,71 @@ async function main(argv) {
           valid: errors.length === 0,
           errors,
           filePath: relative(projectRoot, filePath),
+        });
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'resolve-alias': {
+        const text = positional.join(' ').trim();
+        if (!text) {
+          emitError('resolve-alias requires <text>', 2);
+          process.exit(2);
+        }
+        const projectRoot = await requireProjectRoot();
+        const allEntities = await listEntities(projectRoot);
+        const foundations = allEntities.filter(e => e.type === 'foundations');
+
+        const needle = text.toLowerCase();
+        const matches = [];
+
+        for (const entity of foundations) {
+          const content = await readFile(entity.filePath, 'utf8');
+          const { frontmatter } = parseFrontmatter(content);
+
+          // Build candidate set with priority: slug > title > alias
+          const slugNorm = entity.slug.toLowerCase().trim();
+          const titleNorm = typeof frontmatter.title === 'string'
+            ? frontmatter.title.toLowerCase().trim()
+            : null;
+
+          let matchSource = null;
+
+          if (slugNorm === needle) {
+            matchSource = 'slug';
+          } else if (titleNorm !== null && titleNorm === needle) {
+            matchSource = 'title';
+          } else {
+            // Check aliases defensively
+            const aliases = frontmatter.aliases;
+            if (Array.isArray(aliases)) {
+              for (const alias of aliases) {
+                if (typeof alias !== 'string') continue;
+                if (alias.toLowerCase().trim() === needle) {
+                  matchSource = 'alias';
+                  break;
+                }
+              }
+            }
+          }
+
+          if (matchSource !== null) {
+            matches.push({ slug: entity.slug, path: entity.path, source: matchSource });
+          }
+        }
+
+        if (matches.length === 0) {
+          emitError(JSON.stringify({ error: 'no match', query: text }), 2);
+          process.exit(2);
+        }
+
+        // Sort ascending by slug for deterministic output
+        matches.sort((a, b) => a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0);
+
+        emitJson({
+          query: text,
+          matches,
+          ambiguous: matches.length >= 2,
         });
         break;
       }

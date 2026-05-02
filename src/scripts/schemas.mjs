@@ -299,6 +299,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'type',    type: 'string',   required: true,  pack: 'research' },
     { key: 'created', type: 'iso-date', required: true,  pack: 'research' },
     { key: 'updated', type: 'iso-date', required: true,  pack: 'research' },
+    { key: 'aliases', type: 'array',    required: false, pack: 'research' },
   ],
 
   // Research pack: topic page

@@ -1248,6 +1248,227 @@ describe('unknown subcommand', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: resolve-alias
+// ---------------------------------------------------------------------------
+
+describe('resolve-alias', () => {
+  /**
+   * Helper: create a foundations entity .md file in tmp workspace.
+   * @param {string} tmp - project root
+   * @param {string} slug - e.g. "reinforcement-learning-from-human-feedback"
+   * @param {string} title - frontmatter title
+   * @param {string[]|null} aliases - optional aliases array
+   */
+  async function makeFoundation(tmp, slug, title, aliases = null) {
+    const foundationsDir = join(tmp, 'wiki', 'foundations');
+    await mkdir(foundationsDir, { recursive: true });
+    let aliasBlock = '';
+    if (Array.isArray(aliases) && aliases.length > 0) {
+      aliasBlock = `aliases:\n${aliases.map(a => `  - ${a}`).join('\n')}\n`;
+    } else if (aliases !== null && !Array.isArray(aliases)) {
+      // For defensive test: write malformed aliases
+      aliasBlock = `aliases: ${String(aliases)}\n`;
+    }
+    const content = `---\nid: ${slug}\ntitle: ${title}\ntype: foundation\ncreated: 2024-01-01\nupdated: 2024-01-01\n${aliasBlock}---\n\nBody.\n`;
+    await writeFile(join(foundationsDir, `${slug}.md`), content, 'utf8');
+  }
+
+  test('slug match — query equals slug exactly', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'reinforcement-learning', 'Reinforcement Learning', null);
+      const r = runWiki(['resolve-alias', 'reinforcement-learning'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.query, 'reinforcement-learning');
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].slug, 'reinforcement-learning');
+      assert.equal(json.matches[0].source, 'slug');
+      assert.equal(json.ambiguous, false);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('title match — query equals frontmatter title (case-insensitive), no aliases field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'rl-foundation', 'Reinforcement Learning', null);
+      const r = runWiki(['resolve-alias', 'Reinforcement Learning'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].slug, 'rl-foundation');
+      assert.equal(json.matches[0].source, 'title');
+      assert.equal(json.ambiguous, false);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('alias match — query found in aliases array', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'reinforcement-learning-from-human-feedback', 'Reinforcement Learning from Human Feedback', ['RLHF', 'RL from HF']);
+      const r = runWiki(['resolve-alias', 'RLHF'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].slug, 'reinforcement-learning-from-human-feedback');
+      assert.equal(json.matches[0].source, 'alias');
+      assert.equal(json.ambiguous, false);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('case-insensitive — query "rlhf" matches alias "RLHF"', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'rlhf-foundation', 'RLHF Full Name', ['RLHF']);
+      const r = runWiki(['resolve-alias', 'rlhf'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].source, 'alias');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('whitespace-trimmed — query "  RLHF  " matches alias "RLHF"', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'rlhf-ws', 'RLHF Trimmed', ['RLHF']);
+      const r = runWiki(['resolve-alias', '  RLHF  '], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].source, 'alias');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('no match — exits 2 and stderr includes query', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'some-foundation', 'Some Foundation', null);
+      const r = runWiki(['resolve-alias', 'totally-unknown-query'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.ok(r.stderr.includes('totally-unknown-query'), `stderr should include query, got: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('ambiguous — two foundations share the same alias, exit 0, ambiguous true, sorted by slug', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      await makeFoundation(tmp, 'alpha-foundation', 'Alpha', ['common']);
+      await makeFoundation(tmp, 'beta-foundation', 'Beta', ['common']);
+      const r = runWiki(['resolve-alias', 'common'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.ambiguous, true);
+      assert.equal(json.matches.length, 2);
+      // Sorted ascending by slug
+      assert.equal(json.matches[0].slug, 'alpha-foundation');
+      assert.equal(json.matches[1].slug, 'beta-foundation');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('non-foundations excluded — concept with matching title is not returned', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      // Create a concept file with the same title as our query
+      const conceptsDir = join(tmp, 'wiki', 'concepts');
+      await mkdir(conceptsDir, { recursive: true });
+      await writeFile(
+        join(conceptsDir, 'rlhf-concept.md'),
+        `---\nid: rlhf-concept\ntitle: RLHF\ntype: concept\ncreated: 2024-01-01\nupdated: 2024-01-01\nkey_sources: []\nrelated_concepts: []\n---\n`,
+        'utf8',
+      );
+      const r = runWiki(['resolve-alias', 'RLHF'], { cwd: tmp });
+      // No foundations exist with that query — should be no match
+      assert.equal(r.status, 2, `expected no-match exit 2, got stdout: ${r.stdout}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('defensive: malformed aliases field (string instead of array) does not crash', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      // Write a foundation where aliases is a plain string (not an array)
+      const foundationsDir = join(tmp, 'wiki', 'foundations');
+      await mkdir(foundationsDir, { recursive: true });
+      await writeFile(
+        join(foundationsDir, 'malformed-aliases.md'),
+        `---\nid: malformed-aliases\ntitle: Malformed Aliases\ntype: foundation\ncreated: 2024-01-01\nupdated: 2024-01-01\naliases: not-an-array\n---\n\nBody.\n`,
+        'utf8',
+      );
+      // Query that won't match slug or title — should get no-match exit 2 without crashing
+      const r = runWiki(['resolve-alias', 'not-an-array'], { cwd: tmp });
+      // The aliases field is a string, not an array, so it is skipped.
+      // The query "not-an-array" happens to match the slug here:
+      assert.ok(r.status === 0 || r.status === 2, `exit code should be 0 or 2, got: ${r.status} stderr: ${r.stderr}`);
+      // More importantly: no crash (status should not be 3)
+      assert.notEqual(r.status, 3, `unexpected internal error: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('defensive: aliases array with non-string entries — only string entries matched', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      const foundationsDir = join(tmp, 'wiki', 'foundations');
+      await mkdir(foundationsDir, { recursive: true });
+      // Write YAML with a mixed alias list: [123, "valid-alias"]
+      await writeFile(
+        join(foundationsDir, 'mixed-aliases.md'),
+        `---\nid: mixed-aliases\ntitle: Mixed Aliases\ntype: foundation\ncreated: 2024-01-01\nupdated: 2024-01-01\naliases:\n  - 123\n  - valid-alias\n---\n\nBody.\n`,
+        'utf8',
+      );
+      // "valid-alias" should match
+      const r = runWiki(['resolve-alias', 'valid-alias'], { cwd: tmp });
+      assert.equal(r.status, 0, `unexpected failure: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.matches.length, 1);
+      assert.equal(json.matches[0].source, 'alias');
+      // Should not crash on numeric alias entry
+      assert.notEqual(r.status, 3, `unexpected internal error: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('empty text — exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp, ['--pack', 'research']);
+      const r = runWiki(['resolve-alias', ''], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: B1 regression — atomic-write does not leak .tmp on failure
 // ---------------------------------------------------------------------------
 
