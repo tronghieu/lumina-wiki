@@ -113,6 +113,26 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 
 **Lưu ý:** Bạn thường không cần phải sửa đổi các Thư mục hệ thống.
 
+### **Duyệt Wiki với Obsidian (Tùy chọn)**
+
+[Obsidian](https://obsidian.md) là ứng dụng đọc wiki được khuyến nghị dùng cùng Lumina-Wiki. Vì wiki dùng cú pháp `[[wikilink]]` gốc của Obsidian, bạn có ngay graph view, backlinks panel và query theo frontmatter mà không cần cấu hình thêm.
+
+**Trỏ vault vào thư mục gốc của project** — không phải chỉ vào `wiki/`. Thư mục gốc chứa `index.md`, `log.md`, và các cross-link giữa trang `wiki/` với file gốc trong `raw/` — những link này chỉ resolve được khi Obsidian nhìn thấy cả hai thư mục.
+
+**Cấu hình gợi ý sau khi chạy `npx lumina-wiki install`:**
+
+1. Obsidian → **Open folder as vault** → chọn thư mục gốc của project.
+2. **Settings → Files & links → Excluded files** — thêm:
+   - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+3. **Settings → Files & links**:
+   - Use `[[Wikilinks]]`: **bật**
+   - New link format: **Shortest path when possible**
+   - Default attachment location: `In the folder specified below` → `raw/assets/`
+4. **Core plugins nên bật:** Graph view, Backlinks, Outgoing links, Tags, Properties, Outline.
+5. *(Tùy chọn)* Community plugin **Dataview** — cho phép query các trang theo frontmatter như `type`, `importance`, `confidence`, `date_added`.
+
+> Thư mục `wiki/graph/` chứa `edges.jsonl` và `citations.jsonl` (dữ liệu máy đọc, không phải markdown). Exclude thư mục này giúp graph view không bị nhiễu.
+
 ---
 
 ## 5. Các Kỹ năng và Công cụ có sẵn (v0.1)

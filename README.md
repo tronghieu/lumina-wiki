@@ -115,6 +115,26 @@ Lumina creates a workspace with a clear purpose for each directory.
 
 **Note:** You generally do not need to modify the System Folders.
 
+### **Browsing Your Wiki with Obsidian (Optional)**
+
+[Obsidian](https://obsidian.md) is the recommended visual companion for Lumina-Wiki. Because the wiki uses native Obsidian `[[wikilinks]]`, you get a full graph view, backlinks panel, and property queries out of the box.
+
+**Point your vault at the project root** — not just the `wiki/` subfolder. The root contains `index.md`, `log.md`, and cross-links between `wiki/` pages and `raw/` source files that only resolve when Obsidian can see both directories.
+
+**Recommended setup after `npx lumina-wiki install`:**
+
+1. Obsidian → **Open folder as vault** → select the project root.
+2. **Settings → Files & links → Excluded files** — add:
+   - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+3. **Settings → Files & links**:
+   - Use `[[Wikilinks]]`: **on**
+   - New link format: **Shortest path when possible**
+   - Default attachment location: `In the folder specified below` → `raw/assets/`
+4. **Core plugins to enable:** Graph view, Backlinks, Outgoing links, Tags, Properties, Outline.
+5. *(Optional)* Community plugin **Dataview** — lets you query pages by frontmatter fields like `type`, `importance`, `confidence`, and `date_added`.
+
+> The `wiki/graph/` folder contains `edges.jsonl` and `citations.jsonl` (machine-readable data files, not markdown). Excluding it keeps the graph view clean.
+
 ---
 
 ## 5. Available Skills and Tools (v0.1)

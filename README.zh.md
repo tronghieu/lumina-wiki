@@ -113,6 +113,26 @@ Lumina 创建的工作区为每个目录都设定了明确的用途。
 
 **注意：** 您通常不需要修改系统文件夹。
 
+### **使用 Obsidian 浏览您的 Wiki（可选）**
+
+[Obsidian](https://obsidian.md) 是与 Lumina-Wiki 配合使用的推荐可视化工具。由于 Wiki 使用原生 Obsidian `[[wikilinks]]` 语法，您无需额外配置即可获得完整的图谱视图、反向链接面板和属性查询功能。
+
+**将 Vault 指向项目根目录** — 而非仅指向 `wiki/` 子文件夹。项目根目录包含 `index.md`、`log.md`，以及 `wiki/` 页面与 `raw/` 原始文件之间的交叉链接——只有当 Obsidian 能同时访问两个目录时，这些链接才能正确解析。
+
+**运行 `npx lumina-wiki install` 后的推荐配置：**
+
+1. Obsidian → **Open folder as vault** → 选择项目根目录。
+2. **Settings → Files & links → Excluded files** — 添加：
+   - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+3. **Settings → Files & links**：
+   - Use `[[Wikilinks]]`：**开启**
+   - New link format：**Shortest path when possible**
+   - Default attachment location：`In the folder specified below` → `raw/assets/`
+4. **建议开启的核心插件：** Graph view、Backlinks、Outgoing links、Tags、Properties、Outline。
+5. *（可选）* 社区插件 **Dataview** — 允许按 frontmatter 字段（如 `type`、`importance`、`confidence`、`date_added`）查询页面。
+
+> `wiki/graph/` 文件夹包含 `edges.jsonl` 和 `citations.jsonl`（机器可读数据文件，非 Markdown）。排除该文件夹可保持图谱视图整洁。
+
 ---
 
 ## 5. 可用技能与工具 (v0.1)
