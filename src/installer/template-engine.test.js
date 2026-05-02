@@ -224,12 +224,14 @@ describe('renderReadme', () => {
   test('injects purpose text when provided', () => {
     const template = '# {{project_name}}\n\n<!-- lumina:schema -->\nschema\n<!-- /lumina:schema -->\n';
     const result = renderReadme(template, { project_name: 'TestWiki' }, 'Track attention variants');
+    assert.ok(result.includes('## Project Purpose'));
     assert.ok(result.includes('Track attention variants'));
   });
 
   test('uses placeholder when no purpose given', () => {
     const template = '# {{project_name}}\n\n<!-- lumina:schema -->\nschema\n<!-- /lumina:schema -->\n';
     const result = renderReadme(template, { project_name: 'TestWiki' }, '');
+    assert.ok(result.includes('## Project Purpose'));
     assert.ok(result.includes('_(Describe what this wiki'));
   });
 

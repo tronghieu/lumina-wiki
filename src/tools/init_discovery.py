@@ -229,6 +229,7 @@ def phase1_keyword_search(
     fetchers: list[str],
     limit: int,
     env: dict[str, str],
+    exclude_ids: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 1: keyword search across configured fetchers."""
     results: list[dict[str, Any]] = []
@@ -249,7 +250,7 @@ def phase1_keyword_search(
 
         for paper in papers:
             pid = paper.get("id") or paper.get("paperId") or ""
-            if pid and pid in seen_ids:
+            if pid and (pid in seen_ids or pid in exclude_ids):
                 continue
             if pid:
                 seen_ids.add(pid)
@@ -265,6 +266,7 @@ def phase2_author_backfill(
     discovered_dir: Path,
     limit: int,
     env: dict[str, str],
+    exclude_ids: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 2: fetch more papers by the most prolific authors from phase 1."""
     # Count author occurrences across phase-1 results
@@ -290,7 +292,7 @@ def phase2_author_backfill(
             continue
         for paper in papers:
             pid = paper.get("id") or paper.get("paperId") or ""
-            if pid and pid in seen_ids:
+            if pid and (pid in seen_ids or pid in exclude_ids):
                 continue
             if pid:
                 seen_ids.add(pid)
@@ -305,6 +307,7 @@ def phase3_citation_expansion(
     slug: str,
     discovered_dir: Path,
     env: dict[str, str],
+    exclude_ids: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 3: fetch citations of top phase-1 papers."""
     # Sort by citation count to pick the most-cited seeds
@@ -330,7 +333,7 @@ def phase3_citation_expansion(
             continue
         for paper in citations:
             cid = paper.get("id") or paper.get("paperId") or ""
-            if cid and cid in seen_ids:
+            if cid and (cid in seen_ids or cid in exclude_ids):
                 continue
             if cid:
                 seen_ids.add(cid)
@@ -364,6 +367,11 @@ def main(argv: list[str] | None = None) -> None:
                         help=f"Comma-separated fetchers (default: {DEFAULT_FETCHERS}).")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
                         help=f"Max results per fetcher per phase (default: {DEFAULT_LIMIT}).")
+    parser.add_argument(
+        "--exclude-ids", default="",
+        help="Comma-separated list of paper IDs (arXiv IDs or S2 paperIds) to "
+             "skip. Use to exclude papers already ingested into wiki/sources/.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -382,6 +390,9 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(2)
 
     fetchers = [f.strip() for f in args.fetchers.split(",") if f.strip()]
+    exclude_ids: set[str] = {
+        s.strip() for s in args.exclude_ids.split(",") if s.strip()
+    }
     slug = _slugify(args.topic)
     env = load_env(project_root)
 
@@ -406,16 +417,20 @@ def main(argv: list[str] | None = None) -> None:
                     summary["phases"]["1"] = {"status": "resumed", "count": len(phase1_results)}
                     _err(f"Phase 1 resumed from checkpoint ({len(phase1_results)} results).")
                 else:
+                    _err(f"Phase 1: keyword search across {fetchers} (limit={args.limit})...")
                     phase1_results = phase1_keyword_search(
-                        args.topic, slug, discovered_dir, fetchers, args.limit, env
+                        args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_ids
                     )
                     _save_checkpoint(state_dir, 1, {"results": phase1_results, "slug": slug})
+                    _err(f"Phase 1 complete: {len(phase1_results)} unique candidates.")
                     summary["phases"]["1"] = {"status": "complete", "count": len(phase1_results)}
             else:
+                _err(f"Phase 1: keyword search across {fetchers} (limit={args.limit})...")
                 phase1_results = phase1_keyword_search(
-                    args.topic, slug, discovered_dir, fetchers, args.limit, env
+                    args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_ids
                 )
                 _save_checkpoint(state_dir, 1, {"results": phase1_results, "slug": slug})
+                _err(f"Phase 1 complete: {len(phase1_results)} unique candidates.")
                 summary["phases"]["1"] = {"status": "complete", "count": len(phase1_results)}
         else:
             # Load from checkpoint if phase 1 was run previously
@@ -432,16 +447,20 @@ def main(argv: list[str] | None = None) -> None:
                     summary["phases"]["2"] = {"status": "resumed", "count": len(phase2_results)}
                     _err(f"Phase 2 resumed from checkpoint ({len(phase2_results)} results).")
                 else:
+                    _err(f"Phase 2: author backfill (top {MAX_AUTHORS_BACKFILL} authors, limit={args.limit})...")
                     phase2_results = phase2_author_backfill(
-                        phase1_results, slug, discovered_dir, args.limit, env
+                        phase1_results, slug, discovered_dir, args.limit, env, exclude_ids
                     )
                     _save_checkpoint(state_dir, 2, {"results": phase2_results, "slug": slug})
+                    _err(f"Phase 2 complete: {len(phase2_results)} unique candidates.")
                     summary["phases"]["2"] = {"status": "complete", "count": len(phase2_results)}
             else:
+                _err(f"Phase 2: author backfill (top {MAX_AUTHORS_BACKFILL} authors, limit={args.limit})...")
                 phase2_results = phase2_author_backfill(
-                    phase1_results, slug, discovered_dir, args.limit, env
+                    phase1_results, slug, discovered_dir, args.limit, env, exclude_ids
                 )
                 _save_checkpoint(state_dir, 2, {"results": phase2_results, "slug": slug})
+                _err(f"Phase 2 complete: {len(phase2_results)} unique candidates.")
                 summary["phases"]["2"] = {"status": "complete", "count": len(phase2_results)}
 
         # --- Phase 3 ---
@@ -453,16 +472,20 @@ def main(argv: list[str] | None = None) -> None:
                     summary["phases"]["3"] = {"status": "resumed", "count": len(phase3_results)}
                     _err(f"Phase 3 resumed from checkpoint ({len(phase3_results)} results).")
                 else:
+                    _err(f"Phase 3: citation expansion (top 5 seeds × {CITATIONS_PER_SEED} citations)...")
                     phase3_results = phase3_citation_expansion(
-                        phase1_results, slug, discovered_dir, env
+                        phase1_results, slug, discovered_dir, env, exclude_ids
                     )
                     _save_checkpoint(state_dir, 3, {"results": phase3_results, "slug": slug})
+                    _err(f"Phase 3 complete: {len(phase3_results)} unique candidates.")
                     summary["phases"]["3"] = {"status": "complete", "count": len(phase3_results)}
             else:
+                _err(f"Phase 3: citation expansion (top 5 seeds × {CITATIONS_PER_SEED} citations)...")
                 phase3_results = phase3_citation_expansion(
-                    phase1_results, slug, discovered_dir, env
+                    phase1_results, slug, discovered_dir, env, exclude_ids
                 )
                 _save_checkpoint(state_dir, 3, {"results": phase3_results, "slug": slug})
+                _err(f"Phase 3 complete: {len(phase3_results)} unique candidates.")
                 summary["phases"]["3"] = {"status": "complete", "count": len(phase3_results)}
 
     except ValueError as exc:

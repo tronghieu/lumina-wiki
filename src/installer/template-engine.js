@@ -124,6 +124,8 @@ export function renderReadme(template, variables, purpose = '') {
     return [
       titleLine,
       '',
+      '## Project Purpose',
+      '',
       purposeText,
       '',
       '<!-- lumina:schema -->',
@@ -140,7 +142,7 @@ export function renderReadme(template, variables, purpose = '') {
   // Find end of title block (first non-empty, non-H1 line before marker)
   let insertIdx = schemaMarkerIdx;
   // Insert purpose region before schema marker
-  const purposeLines = ['', purposeText, ''];
+  const purposeLines = ['', '## Project Purpose', '', purposeText, ''];
   lines.splice(insertIdx, 0, ...purposeLines);
 
   return lines.join('\n');

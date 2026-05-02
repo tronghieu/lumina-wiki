@@ -32,7 +32,18 @@ References:
 ## Instructions
 
 1. Clarify the discovery query if the topic, domain, or source type is unclear.
-2. Check research tool setup:
+2. Build the exclude list from already-ingested sources. Run:
+
+   ```bash
+   node _lumina/scripts/wiki.mjs list-entities
+   ```
+
+   For each entity with `type: "sources"`, `Read` the `filePath` and extract any
+   arXiv ID or Semantic Scholar paperId from frontmatter or body URLs. Patterns
+   to scan: `arxiv.org/abs/<id>`, `arXiv:<id>`, `semanticscholar.org/paper/<id>`.
+   Pass the deduped list to `init_discovery.py --exclude-ids id1,id2,...`. If
+   no sources exist yet, skip this step (omit the flag).
+3. Check research tool setup:
 
 ```bash
 python3 _lumina/tools/init_discovery.py --help
@@ -43,15 +54,21 @@ python3 _lumina/tools/fetch_deepxiv.py --help
 python3 _lumina/tools/discover.py --help
 ```
 
-3. Pick one seed mode from `references/source-modes.md`: `topic`, `anchor`, or
+4. Pick one seed mode from `references/source-modes.md`: `topic`, `anchor`, or
    `from-wiki`. Use only the documented commands and flags.
-4. Deduplicate candidates against existing wiki/discovered/checkpoint state using
+5. Deduplicate candidates against existing wiki/discovered/checkpoint state using
    `references/ranking-signals.md`.
-5. Rank candidate JSON with `discover.py --topic "<topic>"`; preserve returned
+6. Rank candidate JSON with `discover.py --topic "<topic>"`; preserve returned
    `_score`, then add a human-readable rationale and risk note.
-6. Present a checkpointed shortlist with title, authors/year, URL or identifier,
+7. Apply purpose alignment. Read the `## Project Purpose` section in
+   `README.md`. For each shortlisted candidate, judge alignment with that
+   purpose (high / medium / low) and include the judgment in the rationale.
+   Move clearly off-purpose candidates to MAYBE or SKIP regardless of `_score`.
+   If the purpose section is empty or contains only the placeholder text, skip
+   this step and note "no project purpose set" in the response.
+8. Present a checkpointed shortlist with title, authors/year, URL or identifier,
    `_score`, rationale, duplicate status, and recommended next action.
-7. Ask the user which candidates should be ingested. Do not create source pages
+9. Ask the user which candidates should be ingested. Do not create source pages
    or graph edges in this skill.
 
 ## Constraints
@@ -59,7 +76,8 @@ python3 _lumina/tools/discover.py --help
 - Do not mutate `wiki/`.
 - Do not invent source metadata not returned by a fetcher or supplied by the user.
 - Do not invent tool flags. Use only `--topic`, `--project-root`, `--phases`,
-  `--resume`, `--fetchers`, and `--limit` for `init_discovery.py`.
+  `--resume`, `--fetchers`, `--limit`, and `--exclude-ids` for
+  `init_discovery.py`.
 - Do not include any non-FR35 workflows such as ideation, LaTeX writing,
   orchestrator mode, or cross-model debate.
 
@@ -67,6 +85,9 @@ python3 _lumina/tools/discover.py --help
 
 - Shortlist is deduped against wiki sources and discovered state.
 - Every shortlisted item includes `_score`, rationale, and risk/duplicate note.
+- Purpose alignment is reflected in each candidate's rationale (or the response
+  explicitly notes "no project purpose set" when the README purpose is empty
+  or placeholder).
 - Discovery checkpoints or an explicit resume decision are reflected in the
   response.
 - No `wiki/` files, index entries, graph edges, or log entries are written.

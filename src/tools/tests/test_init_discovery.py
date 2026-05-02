@@ -180,7 +180,7 @@ class TestPhase1KeywordSearch:
 
         with patch("init_discovery._arxiv_search", return_value=mock_papers):
             results = phase1_keyword_search(
-                "test topic", slug, discovered_dir, ["arxiv"], 10, env
+                "test topic", slug, discovered_dir, ["arxiv"], 10, env, set()
             )
 
         assert len(results) == 1
@@ -199,7 +199,7 @@ class TestPhase1KeywordSearch:
 
         with patch("init_discovery._arxiv_search", return_value=[paper, paper]):
             results = phase1_keyword_search(
-                "topic", slug, discovered_dir, ["arxiv"], 10, env
+                "topic", slug, discovered_dir, ["arxiv"], 10, env, set()
             )
 
         # Same ID should only appear once
@@ -215,11 +215,52 @@ class TestPhase1KeywordSearch:
 
         with patch("init_discovery._arxiv_search", side_effect=RuntimeError("network down")):
             results = phase1_keyword_search(
-                "topic", slug, discovered_dir, ["arxiv"], 10, env
+                "topic", slug, discovered_dir, ["arxiv"], 10, env, set()
             )
 
         # Should return empty list, not raise
         assert results == []
+
+    def test_phase1_skips_excluded_ids(self, tmp_path: Path) -> None:
+        """Phase 1 skips papers whose ID is in exclude_ids and does not save them."""
+        discovered_dir = tmp_path / "raw" / "discovered"
+        discovered_dir.mkdir(parents=True)
+        slug = "exclude-test"
+        env = {}
+
+        mock_papers = [
+            {"id": "p1", "title": "Keep 1", "authors": [], "year": 2023},
+            {"id": "p2", "title": "Excluded", "authors": [], "year": 2023},
+            {"id": "p3", "title": "Keep 2", "authors": [], "year": 2023},
+        ]
+
+        with patch("init_discovery._arxiv_search", return_value=mock_papers):
+            results = phase1_keyword_search(
+                "topic", slug, discovered_dir, ["arxiv"], 10, env, {"p2"}
+            )
+
+        ids = [p["id"] for p in results]
+        assert "p2" not in ids
+        assert set(ids) == {"p1", "p3"}
+        written = sorted(p.name for p in (discovered_dir / slug).glob("*.json"))
+        assert written == ["p1.json", "p3.json"]
+
+    def test_phase1_empty_exclude_ids_no_op(self, tmp_path: Path) -> None:
+        """Empty exclude_ids set behaves identically to baseline."""
+        discovered_dir = tmp_path / "raw" / "discovered"
+        discovered_dir.mkdir(parents=True)
+        slug = "noop-test"
+        env = {}
+
+        mock_papers = [{"id": "p1", "title": "Paper", "authors": [], "year": 2023}]
+
+        with patch("init_discovery._arxiv_search", return_value=mock_papers):
+            results = phase1_keyword_search(
+                "topic", slug, discovered_dir, ["arxiv"], 10, env, set()
+            )
+
+        assert len(results) == 1
+        assert results[0]["id"] == "p1"
 
 
 # ---------------------------------------------------------------------------
