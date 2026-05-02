@@ -218,7 +218,16 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(0)
 
     except ValueError as exc:
-        _err(f"Error: {exc}")
+        msg = str(exc)
+        if "disambiguation" in msg:
+            err_obj: dict[str, str] = {
+                "error": msg,
+                "kind": "disambiguation",
+                "hint": "Use the search subcommand to enumerate candidates.",
+            }
+        else:
+            err_obj = {"error": msg}
+        print(json.dumps(err_obj, ensure_ascii=False), file=sys.stderr)
         sys.exit(2)
     except requests.exceptions.ConnectionError as exc:
         _err(f"Network error: {exc}")

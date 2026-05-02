@@ -229,4 +229,39 @@ class TestCLI:
                 fetch_wikipedia.main(["page", "Mercury"])
         assert exc_info.value.code == 2
         captured = capsys.readouterr()
-        assert "disambiguation" in captured.err.lower()
+        parsed = json.loads(captured.err)
+        assert "disambiguation" in parsed["error"].lower()
+
+    def test_disambiguation_emits_structured_json_on_stderr(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Disambiguation page -> exit 2; stderr is JSON with kind='disambiguation' and non-empty hint."""
+        disambiguation = {**MOCK_SUMMARY, "type": "disambiguation"}
+        with patch("fetch_wikipedia.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response(disambiguation)
+            with pytest.raises(SystemExit) as exc_info:
+                fetch_wikipedia.main(["page", "Mercury"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.err)
+        assert parsed.get("kind") == "disambiguation"
+        assert parsed.get("hint", "")
+
+    def test_non_disambiguation_value_error_still_exits_2_with_json(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Non-disambiguation ValueError -> exit 2; stderr is JSON without 'kind' field."""
+        with patch("fetch_wikipedia.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            # 404 causes a ValueError("Page not found: ...") — no "disambiguation" in message
+            sess.get.return_value = _make_mock_response(status_code=404)
+            with pytest.raises(SystemExit) as exc_info:
+                fetch_wikipedia.main(["page", "NonExistentPage12345XYZ"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.err)
+        assert "error" in parsed
+        assert "kind" not in parsed
