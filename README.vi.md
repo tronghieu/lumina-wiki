@@ -60,7 +60,7 @@ Trình cài đặt sẽ hướng dẫn bạn qua một vài bước thiết lậ
 Nếu bạn đã cài đặt gói `research`, một số kỹ năng sẽ cần API key để tìm kiếm trực tuyến. Hãy chạy kỹ năng setup để cấu hình chúng. Trong cuộc trò chuyện với AI:
 
 > **Bạn:**
-> `/lumi-setup`
+> `/lumi-research-setup`
 
 Agent sẽ hướng dẫn bạn qua một quy trình cài đặt tương tác để lưu các key của bạn vào file `.env` cục bộ.
 

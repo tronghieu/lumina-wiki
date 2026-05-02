@@ -60,7 +60,7 @@ npx lumina-wiki install
 如果您安装了 `research` 包，某些技能需要 API 密钥才能进行在线搜索。请在 AI 聊天窗口中运行设置技能进行配置：
 
 > **您：**
-> `/lumi-setup`
+> `/lumi-research-setup`
 
 Agent 将引导您通过交互式设置将密钥保存到本地 `.env` 文件中。
 

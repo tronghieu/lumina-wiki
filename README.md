@@ -62,7 +62,7 @@ The installer will guide you through a quick setup, including selecting optional
 If you installed the `research` pack, some skills need API keys to search online. Run the setup skill to configure them. In your AI chat window:
 
 > **You:**
-> `/lumi-setup`
+> `/lumi-research-setup`
 
 The agent will guide you through an interactive setup to save your keys to a local `.env` file.
 
