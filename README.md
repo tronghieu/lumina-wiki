@@ -126,6 +126,7 @@ Lumina creates a workspace with a clear purpose for each directory.
 1. Obsidian → **Open folder as vault** → select the project root.
 2. **Settings → Files & links → Excluded files** — add:
    - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+   - Agent entry-point stubs: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md` — they only redirect to `README.md` and would otherwise add empty nodes to the graph view. Keep `README.md` itself visible: it is the canonical schema reference.
 3. **Settings → Files & links**:
    - Use `[[Wikilinks]]`: **on**
    - New link format: **Shortest path when possible**

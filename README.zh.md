@@ -124,6 +124,7 @@ Lumina 创建的工作区为每个目录都设定了明确的用途。
 1. Obsidian → **Open folder as vault** → 选择项目根目录。
 2. **Settings → Files & links → Excluded files** — 添加：
    - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+   - 重定向到 README.md 的 Agent 入口 stub 文件：`CLAUDE.md`、`AGENTS.md`、`GEMINI.md`、`QWEN.md` — 它们仅指向 `README.md`，若保留会在图谱视图中产生空节点。保留 `README.md` 本身：它是规范的 Schema 参考文档。
 3. **Settings → Files & links**：
    - Use `[[Wikilinks]]`：**开启**
    - New link format：**Shortest path when possible**

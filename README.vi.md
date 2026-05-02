@@ -124,6 +124,7 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 1. Obsidian → **Open folder as vault** → chọn thư mục gốc của project.
 2. **Settings → Files & links → Excluded files** — thêm:
    - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
+   - Các file stub redirect sang README.md: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md` — chỉ trỏ về `README.md` và sẽ tạo node rỗng trong graph view nếu để lại. Giữ `README.md` lại trong vault: đây là tài liệu schema chính.
 3. **Settings → Files & links**:
    - Use `[[Wikilinks]]`: **bật**
    - New link format: **Shortest path when possible**
