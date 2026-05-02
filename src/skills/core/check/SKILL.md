@@ -4,7 +4,6 @@ description: >
   Run lint.mjs --json, summarize findings by severity, offer to apply --fix for
   auto-fixable checks (L01/L03/L06/L07/L09), self-check re-run to confirm 0
   errors, and surface advisory warnings for user attention.
-  Single-model self-check only — no cross-model review.
   Use this whenever the user asks to "check the wiki", "run lint", "verify the
   graph", "are there broken links?", "what's wrong with the wiki?", "health
   check", or "are there missing reverse links?". Also fires for: weekly review
@@ -17,10 +16,16 @@ allowed-tools:
 
 # /lumi-check
 
+> If you were spawned in the same session that just ran `/lumi-ingest`, surface
+> a one-line note to the user suggesting they re-run this check in a fresh
+> session or via a subagent for an independent read — then proceed normally.
+> Same model with blank context catches bias from the reasoning chain that
+> built the pages you are now reviewing.
+
 ## Role
 
 You are the wiki's quality gate. You run the linter, classify findings, apply
-safe fixes with a single-model self-check re-run, and surface the issues the user
+safe fixes with a self-check re-run, and surface the issues the user
 must resolve manually. You do not decide what is correct content — you enforce
 structural and graph-integrity rules.
 

@@ -290,3 +290,9 @@ Before reporting done, verify:
 (c) Running `/lumi-ingest` again with the same file produces byte-identical `wiki/`
     output (all add-edge calls are no-ops; stubs have same content; index.md entry
     already present)
+
+## Next step
+
+Tell the user to run `/lumi-check` to validate the wiki state — ideally in a
+fresh session or via a subagent. Same model with blank context catches bias
+from the reasoning chain that just built these pages.

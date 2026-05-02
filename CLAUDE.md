@@ -109,7 +109,7 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 5. **`devDependencies: {}` is a feature** — don't add test frameworks.
 6. **Cold-start budget < 300 ms** — keep lazy imports lazy.
 7. **No emoji in shipped files** unless explicitly requested.
-8. **No cross-model review** anywhere — single-model self-check only. No `llm-review` MCP, no second-model verdict gates.
+8. **v0.1 does not bundle MCP `llm-review` or any second-provider API/key plumbing** — shipping simplicity, not ideology. To reduce bias, run `/lumi-check` in a fresh session or via a subagent after `/lumi-ingest` (same model, blank context — free on every supported platform). If a user wants a second-model reviewer, that is their choice to wire in; it is not forbidden, just not bundled.
 9. **OmegaWiki** at `../OmegaWiki` is read-only **prior art for patterns only** — never copy code/schema/skills, never mention in user-facing strings (PRD, README, installer output, skill prompts, errors). All content is originally authored.
 10. **Zero telemetry** — only outbound call is the optional `npm view` update check (2 s timeout, suppressible via `--no-update` or `LUMINA_NO_UPDATE_CHECK=1`).
 

@@ -150,14 +150,14 @@ A second axis of v2.0.0 work: enable `/lumi-survey` and a new `/lumi-rank` skill
 
 - **Elicit API** — interesting but young (announced 2026); revisit in v2.1 once the API surface stabilizes.
 - **Scholarcy API** — overlaps with what the host LLM (Claude/GPT/Gemini in the user's IDE) can already do at ingest time. Adding a paid third-party summarizer is poor ROI.
-- **LLM-based scoring with a separate model** — explicitly forbidden by project rule #8 (no cross-model review). Any rubric-based scoring (`/lumi-rank` Novelty/Rigor/Impact) must be performed by the *same* model already driving the user's session, never delegated to a second LLM.
+- **LLM-based scoring with a separate model** — not bundled in v0.1 (no MCP llm-review server shipped). Any rubric-based scoring (`/lumi-rank` Novelty/Rigor/Impact) runs in the user's host session. Users who want a second-model scorer can wire it in themselves.
 
 #### New skill: `/lumi-rank`
 
 - Inputs: a `paper` entity (or a list) already in the wiki.
 - Pipeline: pull all available signals (citations, influential citations, scite tally, altmetric) → write them into the paper's frontmatter under a `ranking:` block → optionally produce a single-model rubric scorecard (Novelty / Methodological Rigor / Reproducibility / Impact) appended to the paper note as a `<!-- user-edited -->`-respecting section.
 - Pure read-from-graph + write-back via `wiki.mjs` — no new write paths.
-- Exempt from the cross-model review rule because the rubric scoring runs in the user's host session, not against a second model.
+- Rubric scoring runs in the user's host session like all other skills — no special exemption needed.
 
 #### Dedup with existing tools
 

@@ -99,7 +99,7 @@ These are absolutes. Every one corresponds to a real failure mode.
 
 ### Cross-model review
 
-21. **No cross-model review anywhere.** No "Review LLM", no MCP `llm-review` server, no second-model verdict gate. Wherever OmegaWiki invokes a reviewer, Lumina uses single-model self-check by the running agent. If user later asks for cross-model anything, treat as new scope and confirm.
+21. **v0.1 does not ship MCP `llm-review` or second-provider API/key plumbing.** This is a shipping-simplicity decision, not an absolute ban. To reduce bias without extra infrastructure, run `/lumi-check` in a fresh session or via a subagent after `/lumi-ingest` — same model, blank context (cross-context, not cross-model). If a user later wants to wire in an actual second-model reviewer, that is their choice; treat as new scope and confirm before building.
 
 ### Privacy
 

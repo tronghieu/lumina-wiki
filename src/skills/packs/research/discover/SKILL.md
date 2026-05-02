@@ -78,8 +78,8 @@ python3 _lumina/tools/discover.py --help
 - Do not invent tool flags. Use only `--topic`, `--project-root`, `--phases`,
   `--resume`, `--fetchers`, `--limit`, and `--exclude-ids` for
   `init_discovery.py`.
-- Do not include any non-FR35 workflows such as ideation, LaTeX writing,
-  orchestrator mode, or cross-model debate.
+- Do not include any non-FR35 workflows such as ideation, LaTeX writing, or
+  orchestrator mode.
 
 ## Definition of Done
 

@@ -128,7 +128,7 @@ OmegaWiki is read-only at `../OmegaWiki` and informs **patterns only**. No code,
 
 OpenAI-compatible cross-model review server bundled in the OmegaWiki repo. Exposes `chat`, `chat-reply`, `web_search`. Configuration via `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` env vars (DeepSeek / Qwen / OpenRouter / OpenAI…). Used by skills that need a **second LLM** to independently judge an artifact produced by the primary agent — reducing primary-model bias.
 
-**Decision for Lumina:** ship MCP server in **v0.2**, not v0.1. Primary user dogfoods with single model (Claude Code); single-model self-review is acceptable for personal use. Cross-model verdict becomes load-bearing only at conference-submission scale, which is out of scope for v0.1.
+**Decision for Lumina:** do not bundle the MCP llm-review server in v0.1 — out of scope, not forbidden. Users who want second-model review can install it themselves. The recommended bias-reduction pattern for v0.1 is running `/lumi-check` in a fresh session or via a subagent (same model, blank context). Cross-model verdict becomes load-bearing only at conference-submission scale, which is out of v0.1 scope.
 
 ### Skills inventory (`i18n/en/skills/`, 24 skills)
 
@@ -139,11 +139,11 @@ Mapped against Lumina's planned skill set:
 | init, ingest, ask, edit, check, reset | Lumina **core** (6 skills) | 1-1 correspondence; same names without `lumi-` prefix |
 | discover, ideate, novelty, survey, paper-plan, paper-draft, rebuttal, daily-arxiv | Lumina **research** (8 skills) | Already in research pack scope |
 | **prefill** | Lumina research (add) | ⭐ Seeds `wiki/foundations/` to prevent duplicate concepts on ingest |
-| **refine** | Lumina research (add) | ⭐ Iterative `/review` loop — depends on MCP llm-review (v0.2 capability) |
+| **refine** | Lumina research (add) | ⭐ Iterative `/review` loop — depends on MCP llm-review; not bundled in v0.1 (user-installable) |
 | **setup** | Lumina research (add) | ⭐ Interactive `.env` walkthrough for API keys |
 | exp-design, exp-run, exp-status, exp-eval | **Out of scope v0.1** | Require `remote.py` (SSH+GPU); author does not run remote experiments daily |
 | paper-compile | **Out of scope v0.1** | LaTeX submission concern; not in author's daily loop |
-| review | **v0.2** with MCP | Single-pass cross-model review |
+| review | **v0.2** with MCP | Single-pass cross-model review (user-installable MCP; not bundled in v0.1) |
 | research (orchestrator) | **v0.2** | End-to-end chain with human gates + resumable state; needs checkpoint infra |
 | (none) | Lumina **reading** pack (4 skills) | OmegaWiki has no equivalent; Lumina-original |
 
@@ -181,7 +181,7 @@ Mapped against Lumina's planned skill set:
 | Tool | Skills | When |
 |---|:-:|---|
 | **`research_wiki.py`** (engine) | **20 / 24** | ⭐⭐ Universal. Frontmatter + graph mutation. Every wiki-writing skill needs it |
-| `mcp:llm-review` | 9 | Cross-model verdict for ideate, novelty, paper-plan/draft, rebuttal, exp-design/run/eval, review |
+| `mcp:llm-review` | 9 | Cross-model verdict for ideate, novelty, paper-plan/draft, rebuttal, exp-design/run/eval, review — not bundled in v0.1; user-installable |
 | `fetch_s2.py` | 9 | Semantic Scholar — citations, recommendations |
 | `fetch_deepxiv.py` | 6 | Paper full-text + trending |
 | `lint.py` | 4 | check, ingest (post-validation), init, ideate |
@@ -204,10 +204,10 @@ Mapped against Lumina's planned skill set:
 6. **Linter has JSON mode + `--fix --dry-run`.** OmegaWiki 865 LoC; Lumina equivalent ~500–700 LoC due to lighter schema. JSON mode lets CI and `/lumi-check` UI consume identical output.
 7. **One fetcher per API; JSON-on-stdout; documented exit codes.** Skills compose via Bash, never import Python modules. Skill markdown only needs to know command line + JSON shape.
 8. **`.checkpoints/` for multi-phase batch state** → Lumina convention: `_lumina/_state/<skill>-<phase>.json`. Long-running workflow resumability.
-9. **MCP llm-review is a 9-skill enabler.** Without it, 9 research-pack skills must either fall back to single-model self-review or be stubbed out. Defer to v0.2 acceptable; document fallback explicitly.
+9. **MCP llm-review is a 9-skill enabler.** Without it, 9 research-pack skills must either fall back to single-model self-review or be stubbed out. Not bundled in v0.1 (out of scope, not forbidden); user-installable. For bias reduction, fresh-session or subagent invocation of `/lumi-check` is the recommended v0.1 pattern.
 10. **Three skills to add to research pack from OmegaWiki pattern:**
     - `/lumi-research-prefill` — seeds `foundations/` to prevent concept duplication on ingest. Cheap (uses `fetch_wikipedia.py` only).
-    - `/lumi-refine` — iterative review-fix loop. Defer the multi-model dependency to v0.2 by allowing a single-model variant.
+    - `/lumi-refine` — iterative review-fix loop. Not bundled in v0.1; re-evaluate after dogfooding whether a single-model self-critique variant has enough value.
     - `/lumi-research-setup` — interactive `.env` walkthrough for API keys when research pack is installed.
 11. **`/research` orchestrator and `exp-*` cluster → v0.2 or later.** Orchestrator needs checkpoint infra mature; `exp-*` needs SSH/GPU infra not in author's daily loop.
 
@@ -256,8 +256,8 @@ Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with ex
 
 | Skill | Disposition | Reason |
 |---|---|---|
-| `/novelty`, `/review` | drop | Depend on cross-model verdict (a second LLM independently judging primary output). Decision: no `llm-review` MCP server, no second model. |
-| `/refine` | defer v0.2 | Core mechanism is `loop { /review → fix } until score`. With cross-model review dropped, can be repurposed as single-model self-critique loop, but value diminished. Re-evaluate after v0.1 dogfooding. |
+| `/novelty`, `/review` | drop | Depend on MCP llm-review server, which is not bundled in v0.1. Out of scope — no bundled second-model infrastructure. |
+| `/refine` | defer v0.2 | Core mechanism is `loop { /review → fix } until score`. Without bundled llm-review, value is diminished. Re-evaluate after v0.1 dogfooding. |
 | `/research` orchestrator | drop | Composes 8 sub-skills; 6 of those are dropped (ideate, exp-* ×3, paper-* ×3). Pattern (pipeline-progress.md checkpoint, human gates) is studied but any future Lumina orchestrator is a NEW skill, not a port. |
 | `/ideate`, `/rebuttal`, `/daily-arxiv` | drop | AI/ML conference workflow specific. Re-add as a separate optional pack if author's use case re-emerges. |
 | `/paper-plan`, `/paper-draft`, `/paper-compile` | drop | Output-side LaTeX submission pipeline. Author does not write conference papers as a daily loop in v0.1's horizon. |
@@ -288,8 +288,8 @@ Locked 2026-05-01 after a second pass over OmegaWiki's tools and skills, with ex
 
 **Python tools NOT shipped:** `prepare_paper_source.py` is RENAMED to `prepare_source.py` and IS shipped (input-side normalizer; differs from output-side LaTeX pipeline). `remote.py` (SSH+GPU+screen) is dropped — no `/exp-*` cluster.
 
-**v0.1 explicitly does not ship:**
-- MCP `llm-review` server. No cross-model review anywhere. Wherever a skill ported from OmegaWiki invokes a Review LLM (e.g., `/check` verdict gate, `/discover` ranking review), Lumina substitutes single-model self-check by the running agent.
+**v0.1 does not bundle:**
+- MCP `llm-review` server or second-provider API/key plumbing. Shipping simplicity, not a permanent ban. Wherever a skill ported from OmegaWiki invokes a Review LLM, Lumina substitutes single-model self-check. For bias reduction, run `/lumi-check` in a fresh session or via a subagent (same model, blank context).
 - Output-side LaTeX paper pipeline (`paper-*` skills + `prepare_paper_source.py` LaTeX paths).
 - Remote experiment runner (`remote.py`, `exp-*` skills).
 - A pipeline orchestrator (`/research`).

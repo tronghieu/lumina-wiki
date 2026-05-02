@@ -99,14 +99,14 @@ Rationale: every skill consumes `wiki.mjs`; `wiki.mjs` consumes `schemas.mjs`. I
 
 ## P4 — Core skills (6 markdown files) — ✅ DONE
 
-**Status:** Shipped 2026-05-01. Six core skills authored under `src/skills/core/`: `init`, `ingest`, `ask`, `edit`, `check`, `reset`. Skills point agents to project-root `README.md` as the canonical context, call workspace `_lumina/scripts/{wiki,lint,reset}.mjs` through Bash, and avoid cross-model workflows.
+**Status:** Shipped 2026-05-01. Six core skills authored under `src/skills/core/`: `init`, `ingest`, `ask`, `edit`, `check`, `reset`. Skills point agents to project-root `README.md` as the canonical context, call workspace `_lumina/scripts/{wiki,lint,reset}.mjs` through Bash, and do not bundle MCP llm-review or second-provider config.
 
 Order within phase: `edit` (no tool deps, smoke-test markdown harness) → `init` → `ingest` → `ask` → `check` → `reset`.
 
 Each `SKILL.md`:
 - ≤300 lines
 - Single source of truth: `README.md` at project root (no symlinks for schema)
-- Single-model self-check replaces any cross-model verdict
+- No bundled MCP llm-review or second-provider config; fresh-session/subagent review encouraged for bias reduction
 - Calls workspace `_lumina/scripts/{wiki,lint,reset}.mjs` via Bash + JSON, never imports
 
 **DoD per skill:** Manual smoke run on a throwaway workspace produces expected `wiki/` mutations; idempotency byte-diff passes after second run.
@@ -199,7 +199,7 @@ No new tools. Consume `wiki.mjs` only. Spoiler-aware progressive recap is the mo
 - [ ] No emoji in shipped files unless explicitly requested
 - [ ] No mention of OmegaWiki in user-facing strings (PRD, README template, installer output)
 - [ ] No `NOTICE` file, no MIT-attribution chain
-- [ ] No cross-model review code paths; single-model self-check only
+- [ ] No bundled MCP llm-review or second-provider config; fresh-session/subagent review encouraged
 - [ ] All file writes go through atomic temp+fsync+rename helper
 - [ ] Path joins via `node:path`; reject `..` and absolute traversal
 - [ ] `NO_COLOR` honored, TTY-aware output
