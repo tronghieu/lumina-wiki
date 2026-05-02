@@ -42,8 +42,22 @@ node _lumina/scripts/wiki.mjs read-edges sources/<slug>
 node _lumina/scripts/wiki.mjs log lumi-research-survey "saved survey <survey-slug>"
 ```
 
+6. When a survey page is saved, run lint with fix so `wiki/index.md` and graph
+   checks stay current:
+
+```bash
+node _lumina/scripts/lint.mjs --fix --json
+```
+
 ## Constraints
 
 - Do not read raw source files unless the user explicitly asks for a gap audit.
 - Do not create new source or concept pages.
 - Do not claim coverage beyond the current wiki graph.
+
+## Definition of Done
+
+- Unsaved survey responses name supporting wiki pages and explicit gaps.
+- Saved survey pages have valid summary frontmatter and cite covered pages.
+- If saved, lint leaves `summary.errors === 0`, `wiki/index.md` is current, and
+  `wiki/log.md` has an append-only `lumi-research-survey` entry.

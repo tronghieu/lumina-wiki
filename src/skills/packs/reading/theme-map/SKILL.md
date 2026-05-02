@@ -6,6 +6,11 @@ description: >
   analyze, map, or update themes — including phrasings like "map out the themes",
   "cluster the themes after chapter 5", "what themes appear across the book",
   "theme analysis", or "update theme pages".
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
 ---
 
 # /lumi-reading-theme-map
@@ -29,6 +34,10 @@ Read `README.md` at the project root for the full schema. Theme pages live under
 
 Theme stubs are seeded by chapter-ingest; this skill promotes stubs to full pages and
 updates them as more chapters are ingested.
+
+All graph and frontmatter mutations go through `_lumina/scripts/wiki.mjs`. Never edit
+`wiki/graph/edges.jsonl` directly. `add-edge` is idempotent and writes reverse edges
+automatically except terminal/symmetric cases.
 
 ## Inputs
 
@@ -97,11 +106,11 @@ association edge:
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge themes/<book-slug>/<theme-slug> associated_with characters/<book-slug>/<character-slug>
-node _lumina/scripts/wiki.mjs add-edge characters/<book-slug>/<character-slug> expresses_theme themes/<book-slug>/<theme-slug>
 ```
 
 Use judgment: not every character in a chapter expresses every theme. Link only when
 the character's role is central to the theme's manifestation in that chapter.
+The engine writes the `expresses_theme` reverse edge automatically.
 
 ### Step 5 — Self-verification
 
@@ -114,14 +123,25 @@ node _lumina/scripts/wiki.mjs read-edges --from themes/<book-slug>/<theme-slug> 
 Every promoted theme page must have `>= 2` `appears_in` edges. If any page has only
 one, it was promoted prematurely — revert to stub status and note in the report.
 
+Then update `wiki/index.md` if new theme pages were created, append the activity via:
+
+```bash
+node _lumina/scripts/wiki.mjs log theme-map "<book-slug> -> <K> themes promoted, <M> stubs pending"
+```
+
+Run `node _lumina/scripts/lint.mjs --json` when available; use `--fix` only for
+index/frontmatter fixes within this skill's scope.
+
 ## Output / Definition of Done
 
 - Every theme that appears in >= 2 chapters has a full page under `wiki/themes/<book-slug>/`.
 - Each theme page has bidirectional links: `tagged_with`/`appears_in` to chapters,
   `associated_with`/`expresses_theme` to characters.
 - Theme stubs for single-chapter tags remain as stubs (not promoted).
+- `wiki/index.md` updated when pages were created or promoted.
 - `wiki/log.md` has a new entry:
   `## [YYYY-MM-DD] theme-map | <book-slug> → <K> themes promoted, <M> stubs pending`
+- Lint/check run where available; unresolved issues are reported with exact slugs.
 
 ## Guardrails
 
@@ -130,10 +150,15 @@ one, it was promoted prematurely — revert to stub status and note in the repor
   wiki pages atomically.
 - Use `Write` only to create a new theme stub with complete frontmatter. For
   frontmatter mutations on an existing page, use `wiki.mjs set-meta`.
+- Graph/frontmatter mutation must go through `_lumina/scripts/wiki.mjs`; never edit
+  `wiki/graph/edges.jsonl`, generated citation files, or existing frontmatter by raw
+  text edits.
 - Do not create theme pages from single-chapter evidence. The two-chapter threshold is
   the quality gate.
 - Do not pass `--book` to `add-edge`; the `<book-slug>` namespace is part of the slug
   path.
+- Do not add reverse `expresses_theme` edges manually; `add-edge associated_with`
+  creates the reverse automatically.
 
 ## Examples
 

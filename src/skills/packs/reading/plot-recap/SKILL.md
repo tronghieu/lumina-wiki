@@ -6,6 +6,9 @@ description: >
   happened so far — including phrasings like "where am I in the story", "what's happened
   so far", "recap up to chapter 3", "remind me of the plot", "catch me up", "what do I
   know so far", or "summarize the story to this point".
+allowed-tools:
+  - Bash
+  - Read
 ---
 
 # /lumi-reading-plot-recap
@@ -171,6 +174,8 @@ Signals that a spoiler may have leaked:
 - Every sourced chapter slug is listed in the pre-flight check with its confirmed number.
 - No events, characters, or themes from the cursor chapter or later appear in the output.
 - This skill makes no writes to `wiki/`. It is entirely read-only.
+- No `wiki.mjs` mutation commands are called (`set-meta`, `add-edge`, `batch-edges`,
+  `log`, or checkpoint writes).
 
 ## Guardrails
 

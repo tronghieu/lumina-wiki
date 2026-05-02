@@ -46,9 +46,22 @@ node _lumina/scripts/wiki.mjs slug "<topic title>"
 node _lumina/scripts/wiki.mjs log lumi-research-prefill "prefilled foundation <slug>"
 ```
 
+7. Run lint with fix so `wiki/index.md` and structural checks stay current:
+
+```bash
+node _lumina/scripts/lint.mjs --fix --json
+```
+
 ## Constraints
 
 - Do not create concept pages from this skill; use `/lumi-ingest` for wiki
   knowledge extracted from project sources.
 - Do not store secrets or API keys in foundation pages.
 - Do not add reverse graph edges for foundations.
+
+## Definition of Done
+
+- Foundation page exists with valid frontmatter and concise source-backed body.
+- `node _lumina/scripts/lint.mjs --fix --json` has updated `wiki/index.md` if
+  needed and leaves `summary.errors === 0`.
+- `wiki/log.md` has an append-only `lumi-research-prefill` entry.

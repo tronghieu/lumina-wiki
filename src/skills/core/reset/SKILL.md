@@ -10,7 +10,7 @@ description: >
   "the ingest got stuck and I want to restart", or any request to bulk-delete
   wiki or raw content. Also fires for: "I want a clean slate", "remove all
   ingested content", "clear the state files". When the scope is ambiguous,
-  ask before running dry-run — "did you mean wiki/, raw/, or both?"
+  ask before running dry-run — "did you mean wiki/, raw/, or all (wiki + state)?"
 allowed-tools:
   - Bash
   - Read
@@ -49,7 +49,7 @@ Key workspace paths:
 | `raw` | All files under `raw/sources/`, `raw/notes/`, `raw/assets/` | Not from wiki |
 | `state` | `_lumina/_state/*.json` checkpoint files | Yes — re-ingest regenerates |
 | `checkpoints` | `_lumina/_state/ingest-*.json` only | Yes — re-ingest regenerates |
-| `all` | `wiki` + `raw` + `state` — full workspace wipe | Only wiki from git |
+| `all` | `wiki` + `state` — leaves `raw/` untouched | Only wiki from git |
 
 The `checkpoints` scope is the safest reset — it only clears in-progress ingest
 state. Use it when an ingest got stuck and you want a clean restart.
@@ -69,12 +69,11 @@ Do not infer a destructive scope from an ambiguous request.
 Show the user what will be deleted **before** asking for confirmation:
 
 ```bash
-node _lumina/scripts/reset.mjs --scope <scope> --dry-run --yes
+node _lumina/scripts/reset.mjs --scope <scope> --dry-run
 ```
 
 The `--dry-run` flag makes `reset.mjs` print the deletion plan without deleting
-anything. `--yes` is required even for dry-run (by design — forces deliberate
-invocation). Example output:
+anything and does not require `--yes`. Example output:
 
 ```
 [DRY RUN] Scope: wiki
@@ -164,7 +163,7 @@ User: "The ingest for attention-revisited got killed. Start it over."
 
 Safest reset — clear a single stuck checkpoint:
 ```bash
-node _lumina/scripts/reset.mjs --scope checkpoints --dry-run --yes
+node _lumina/scripts/reset.mjs --scope checkpoints --dry-run
 # shows: Would delete: _lumina/_state/ingest-attention-revisited-2026.json
 # User confirms: yes
 node _lumina/scripts/reset.mjs --scope checkpoints --yes
@@ -190,9 +189,10 @@ After reset, log.md is gone — recreate it with the reset entry, then suggest
 User: "Reset everything." (then reconsiders after seeing the plan)
 
 Escalation / reconsideration — user sees the dry-run plan for `all` scope:
-Show the full deletion tree including raw/ files. Explicitly warn: "raw/ files
-are not recoverable from the wiki and may not be in git." User replies "cancel".
-Report: "Reset cancelled. No files were deleted." Never execute without the
+Show the deletion tree for wiki/ and state only. Explicitly state: "`all` does
+not delete raw/; use `--scope raw` only when you intend to remove user-owned
+sources." User replies "cancel". Report: "Reset cancelled. No files were deleted."
+Never execute without the
 literal word "yes" — ambiguous confirmations like "ok" or "sure" do not count.
 </example>
 
@@ -203,9 +203,9 @@ literal word "yes" — ambiguous confirmations like "ok" or "sure" do not count.
   confirmation phrasing is not sufficient.
 - Never construct or modify paths passed to reset.mjs. Pass the scope name only;
   let reset.mjs resolve the paths. This prevents path traversal.
-- The `all` scope deletes both wiki/ and raw/. Warn the user explicitly that raw/
-  files are not recoverable from the wiki and may not be in git if they were
-  gitignored.
+- The `all` scope deletes wiki/ and state only. `raw/` is deleted only by
+  `--scope raw` with confirmation; warn that raw files are not recoverable from
+  the wiki and may not be in git.
 - If reset.mjs exits 2 (path safety violation), do not retry. Report the error and
   stop. This is a signal that something unexpected is being targeted.
 

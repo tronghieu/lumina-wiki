@@ -68,6 +68,10 @@ describe('installCommand', () => {
       assert.match(config, /reading: true/);
 
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-ingest', 'references', 'pdf-preprocessing.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
       await access(join(workspace, 'AGENTS.md'));
@@ -156,6 +160,10 @@ describe('installCommand', () => {
       assert.match(config, /codex: true/);
 
       await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-ingest', 'references', 'dedup-policy.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
     } finally {

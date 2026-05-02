@@ -6,6 +6,11 @@ description: >
   or review character information — including phrasings like "update character profiles
   after chapter 4", "add the relationship between Alice and Bob", "who has Alice met so
   far", "track character appearances", or "refresh character pages".
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
 ---
 
 # /lumi-reading-character-track
@@ -26,6 +31,10 @@ Book namespaces are encoded in the slug path, e.g.
 `characters/<book-slug>/<character-slug>`. See `README.md` for the full edge-type
 vocabulary; the reading-pack inter-character edge used here is `appears_with`
 (symmetric, stored once).
+
+All graph and frontmatter mutations go through `_lumina/scripts/wiki.mjs`. Never edit
+`wiki/graph/edges.jsonl` directly. `add-edge` is idempotent and writes reverse edges
+automatically except terminal/symmetric cases such as `appears_with`.
 
 ## Inputs
 
@@ -66,14 +75,15 @@ For each character found:
    node _lumina/scripts/wiki.mjs set-meta characters/<book-slug>/<character-slug> updated YYYY-MM-DD
    ```
 
-3. Add an `appears_in` edge back to this chapter if not already present (chapter-ingest
-   should have written it, but verify):
+3. Verify the `appears_in` edge back to this chapter (chapter-ingest should have written
+   it automatically from the chapter's `features` edge):
    ```bash
    node _lumina/scripts/wiki.mjs read-edges --from characters/<book-slug>/<character-slug> --type appears_in --json
    ```
-   If the chapter is missing from the results, add it:
+   If the chapter is missing from the results, add the chapter-to-character edge so the
+   engine can create the reverse:
    ```bash
-   node _lumina/scripts/wiki.mjs add-edge characters/<book-slug>/<character-slug> appears_in chapters/<book-slug>/<chapter-slug>
+   node _lumina/scripts/wiki.mjs add-edge chapters/<book-slug>/<chapter-slug> features characters/<book-slug>/<character-slug>
    ```
 
 4. Write a prose `## Appearances` section update to the character's body — append the
@@ -104,6 +114,15 @@ Every inter-character edge must use the `characters/<book-slug>/<character-slug>
 slug form. If any bare character slug appears, add the edge again with the namespaced
 slug. The engine is idempotent: re-adding a correctly formed edge is a safe no-op.
 
+Update `wiki/index.md` if new character pages were created, append the activity via:
+
+```bash
+node _lumina/scripts/wiki.mjs log character-track "<book-slug> ch<N> -> <K> characters updated, <M> edges added"
+```
+
+Run `node _lumina/scripts/lint.mjs --json` when available; use `--fix` only for
+index/frontmatter fixes within this skill's scope.
+
 ## Output / Definition of Done
 
 - Every character mentioned in the target chapter(s) has an up-to-date page under
@@ -112,13 +131,18 @@ slug. The engine is idempotent: re-adding a correctly formed edge is a safe no-o
 - Inter-character `appears_with` edges are registered for all pairs that interact in
   the processed chapter(s).
 - All inter-character edges use namespaced slugs.
+- `wiki/index.md` updated when character pages were created.
 - `wiki/log.md` has a new entry:
   `## [YYYY-MM-DD] character-track | <book-slug> ch<N> → <K> characters updated, <M> edges added`
+- Lint/check run where available; unresolved issues are reported with exact slugs.
 
 ## Guardrails
 
 - Use `Write` only to create a new character stub with complete frontmatter. For
   frontmatter mutations on an existing page, use `wiki.mjs set-meta`.
+- Graph/frontmatter mutation must go through `_lumina/scripts/wiki.mjs`; never edit
+  `wiki/graph/edges.jsonl`, generated citation files, or existing frontmatter by raw
+  text edits.
 - Do not overwrite existing character page body text; append only.
 - Do not infer character attributes not stated in the text. Record only what is explicit.
 - `appears_with` is symmetric — call `add-edge` once with the two character slugs in

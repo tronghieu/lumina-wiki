@@ -79,8 +79,10 @@ Use the Edit tool to modify the file. Follow these rules from README.md:
 
 ### Step 5 — Re-derive edges
 
-For every forward link you add or change, write the corresponding reverse edge in
-the same operation. This is the load-bearing bidirectional invariant.
+For every cross-reference you add or change, call `add-edge` once for the forward
+relationship. `wiki.mjs add-edge` is the only graph mutation path; it writes the
+required reverse edge automatically unless the edge is terminal, exempt, or
+symmetric.
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge <from-slug> <edge-type> <to-slug>
@@ -89,16 +91,14 @@ node _lumina/scripts/wiki.mjs add-edge <from-slug> <edge-type> <to-slug>
 Example — source page gains a new concept link:
 ```bash
 node _lumina/scripts/wiki.mjs add-edge sources/attention-revisited uses_concept concepts/softmax-temperature
-node _lumina/scripts/wiki.mjs add-edge concepts/softmax-temperature used_in sources/attention-revisited
 ```
 
-Both calls are idempotent: re-running them leaves the graph byte-identical (no
+The call is idempotent: re-running it leaves the graph byte-identical (no
 duplicate edges are written).
 
 For a removed link, removing the wikilink from the body does not auto-remove the
-edge. Call `dedup-edges` and then manually check if the old edge is still
-appropriate. If not, edit `wiki/graph/edges.jsonl` directly (remove the line), then
-re-run `dedup-edges` to verify consistency.
+edge. Run lint and surface stale relationships for user attention; do not
+hand-edit `wiki/graph/edges.jsonl`.
 
 ### Step 6 — Lint and fix
 
@@ -110,12 +110,12 @@ node _lumina/scripts/lint.mjs --fix --json
 
 Read the JSON output. If `summary.errors > 0` after fix, address each remaining
 error:
-- L06 (missing reverse edge): add the reverse with `add-edge`
+- L06 (missing reverse edge): re-run the forward `add-edge`; it auto-adds reverse
 - L07 (duplicate symmetric edge): run `dedup-edges`
 - Other errors: apply inline
 
-L02 (orphan), L04 (missing key_sources), L05 (low-confidence claim), L08 (stale
-date) are warnings — surface them to the user as advisory but do not block completion.
+Warnings are advisory, but errors block completion until fixed or surfaced as
+manual follow-up.
 
 ### Step 7 — Log the operation
 
@@ -135,7 +135,7 @@ Example:
 Edited concepts/softmax-temperature.md:
 - Added definition paragraph in ## Overview
 - Linked back to sources/attention-revisited (used_in edge added)
-Lint: 0 errors, 1 warning (L08: stale updated date — check if intentional)
+Lint: 0 errors, 1 warning (L04: orphan page — advisory)
 ```
 
 ## Examples
@@ -147,7 +147,6 @@ from sources/attention-revisited."
 Normal case — fix a missing reverse edge:
 ```bash
 node _lumina/scripts/wiki.mjs read-edges concepts/positional-encoding
-node _lumina/scripts/wiki.mjs add-edge concepts/positional-encoding used_in sources/attention-revisited
 node _lumina/scripts/wiki.mjs add-edge sources/attention-revisited uses_concept concepts/positional-encoding
 node _lumina/scripts/lint.mjs --fix --json
 node _lumina/scripts/wiki.mjs log edit "Fixed missing reverse link: concepts/positional-encoding <-> sources/attention-revisited"
@@ -175,7 +174,7 @@ as a template and confirm before continuing. Never silently expand scope.
 ## Guardrails
 
 - Never modify files in `raw/`. This skill is wiki/-only.
-- Never modify `wiki/graph/edges.jsonl` except by calling `add-edge` or `dedup-edges`.
+- Never hand-edit `wiki/graph/edges.jsonl`; graph mutation goes through `wiki.mjs`.
 - If the user asks to edit multiple pages, process them one at a time and confirm
   each before proceeding.
 - If a page does not exist, do not create it — use `/lumi-ingest` instead.

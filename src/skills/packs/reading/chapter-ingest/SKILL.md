@@ -5,6 +5,11 @@ description: >
   plot beats into the graph. Use whenever the user wants to ingest, file, or process a
   chapter — including phrasings like "I just finished chapter 3", "add this chapter to the
   wiki", "file chapter 2 of [book]", or "track what happened in chapter 5".
+allowed-tools:
+  - Bash
+  - Read
+  - Write
+  - Edit
 ---
 
 # /lumi-reading-chapter-ingest
@@ -14,6 +19,10 @@ description: >
 Turns one chapter (raw text or PDF page range) into a `wiki/chapters/<book-slug>/` page,
 seeds character stubs, records theme tags, writes plot beats, and registers bidirectional
 edges — all idempotently. Re-running against the same slug is always safe.
+
+All graph and frontmatter mutations go through `_lumina/scripts/wiki.mjs`. Never edit
+`wiki/graph/edges.jsonl` directly. `add-edge` is idempotent and writes reverse edges
+automatically except terminal/symmetric cases.
 
 ## When to use
 
@@ -62,13 +71,20 @@ re-running against the same chapter slug produces byte-identical output.
    - The engine writes the `appears_in` reverse edge automatically.
 6. Write plot beats into `wiki/plot/<book-slug>/ch<N>-beats.md` with valid plot
    frontmatter (`book`, `up_to_chapter: <N>`, etc.) and body.
-7. Update `wiki/index.md` by appending the new chapter entry (log format: book, chapter
-   number, slug, date).
-8. Append one line to `wiki/log.md`:
+7. Update `wiki/index.md` so the new chapter, character/theme stubs, and plot page are
+   cataloged. Prefer the workspace linter/index workflow when available; do not edit
+   graph files by hand.
+8. Append one line through the wiki engine:
+   ```bash
+   node _lumina/scripts/wiki.mjs log chapter-ingest "<book-slug> ch<N> \"<chapter-title>\" -> <K> characters, <M> themes"
+   ```
+   Log entry text:
    `## [YYYY-MM-DD] chapter-ingest | <book-slug> ch<N> "<chapter-title>" → <K> characters, <M> themes`
 9. Self-verification: run `node _lumina/scripts/wiki.mjs read-edges chapters/<book-slug>/<chapter-slug> --json`
    and confirm that at least one `features` edge and one `tagged_with` edge are present.
    If either is missing, add the missing edges before finishing.
+10. Run `node _lumina/scripts/lint.mjs --json` when the workspace has the linter. Use
+    `--fix` only for index/frontmatter fixes that match the user's requested scope.
 
 ### Playbook B: PDF page range
 
@@ -92,14 +108,20 @@ substitute when running in Claude Code.
 - `wiki/plot/<book-slug>/ch<N>-beats.md` exists with the chapter's plot beats.
 - Bidirectional edges registered: `features`/`appears_in` and `tagged_with`/`appears_in`.
 - `wiki/index.md` updated. `wiki/log.md` appended.
+- Lint/check run where available; unresolved issues are reported with exact slugs.
 - Re-running this skill against the same chapter slug produces byte-identical files.
 
 ## Guardrails
 
 - Use `Write` only when creating a new page with complete frontmatter. For frontmatter
   mutations on an existing page, use `wiki.mjs set-meta`.
+- Graph/frontmatter mutation must go through `_lumina/scripts/wiki.mjs`; never edit
+  `wiki/graph/edges.jsonl`, generated citation files, or existing frontmatter by raw
+  text edits.
 - Do not pass `--book` to `add-edge`; the `<book-slug>` namespace is part of the slug
   path, e.g. `characters/<book-slug>/<character-slug>`.
+- Do not add reverse edges manually for `features` or `tagged_with`; `add-edge` writes
+  `appears_in` automatically and remains a no-op on re-run.
 - Do not infer character genders, ages, or relationships from a single chapter. Record
   only what the text states directly.
 - Limit theme tags to 2-5 per chapter. Over-tagging dilutes theme pages.

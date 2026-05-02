@@ -2,7 +2,7 @@
 name: lumi-ingest
 description: >
   Turn a raw source file into structured wiki pages: source page, concept and
-  person stubs, bidirectional edges, citation edges, and a log entry.
+  person stubs, wiki.mjs-managed graph edges, citation edges, and a log entry.
   Checkpoint-resumable so interrupted runs pick up where they left off.
   Use this whenever the user says "ingest", "add", "file", "process", "summarize
   into the wiki", "create a wiki page for", or drops a filename from raw/sources/.
@@ -41,6 +41,12 @@ Key workspace paths:
 - `_lumina/scripts/wiki.mjs` — all graph mutations go through this engine
 - `_lumina/scripts/lint.mjs` — final validation
 - `_lumina/_state/ingest-<slug>.json` — phase checkpoint per source (gitignored)
+
+References:
+- Read `references/pdf-preprocessing.md` when the source is a PDF, scanned
+  document, or too large to read in one pass.
+- Read `references/dedup-policy.md` before creating/updating source, concept,
+  person, citation, or graph records.
 
 ## Checkpoint Format
 
@@ -103,21 +109,8 @@ Write checkpoint: `phase: "slug"`.
 
 Read the full source content.
 
-For PDFs: most non-Claude IDEs (Codex, Gemini CLI, Cursor) cannot read PDFs
-through their built-in file tool. Use the bundled extractor instead:
-
-```bash
-python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf
-# or a page range:
-python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf --pages 1-20
-```
-
-If the tool exits 3 with `pip install pypdf`, ask the user to run that one
-command and retry. If it warns "may be scanned", ask the user to paste the
-text manually — OCR is out of scope.
-
-(Claude Code's `Read` tool can parse PDFs natively; you may use it directly
-when running there. The extractor is the cross-IDE fallback.)
+For PDFs or very large sources, follow `references/pdf-preprocessing.md` before
+drafting the page.
 
 Draft `wiki/sources/<slug>.md` using the Source
 template from `_lumina/schema/page-templates.md` (open it when in doubt about
@@ -135,11 +128,9 @@ Write checkpoint: `phase: "source-page"`.
 
 ### Phase 4 — Write concept and person stubs
 
-Check before writing — exit 2 from `read-meta` means safe to create:
-```bash
-node _lumina/scripts/wiki.mjs read-meta concepts/<slug>
-```
-If it exists, append to its `## Key sources` list instead of overwriting.
+Apply `references/dedup-policy.md` before creating or updating stubs. Existing
+concept/person pages are updated conservatively; new pages use the templates
+below.
 
 New concept stub: required frontmatter `id`, `title`, `type`, `created`,
 `updated`, `key_sources: [sources/<slug>]`, `related_concepts: []`.
@@ -153,33 +144,28 @@ Full templates in `_lumina/schema/page-templates.md`.
 
 Write checkpoint: `phase: "stubs"`.
 
-### Phase 5 — Build bidirectional edges
+### Phase 5 — Build graph edges
 
-For every forward link in the source page, write the reverse link in the same
-`add-edge` operation. This is not optional — it is what makes the wiki compound.
+For every cross-reference in the source page, call `add-edge` once for the forward
+relationship. `wiki.mjs add-edge` is idempotent and automatically writes the
+reverse edge unless the edge is terminal, exempt, or symmetric.
 
 ```bash
 # Source introduces a concept
 node _lumina/scripts/wiki.mjs add-edge sources/<slug> introduces_concept concepts/<concept>
-node _lumina/scripts/wiki.mjs add-edge concepts/<concept> introduced_in sources/<slug>
 
 # Source uses an existing concept
 node _lumina/scripts/wiki.mjs add-edge sources/<slug> uses_concept concepts/<concept>
-node _lumina/scripts/wiki.mjs add-edge concepts/<concept> used_in sources/<slug>
 
 # Author attribution
 node _lumina/scripts/wiki.mjs add-edge sources/<slug> authored_by people/<person>
-node _lumina/scripts/wiki.mjs add-edge people/<person> authored sources/<slug>
 
 # Source builds on another source
 node _lumina/scripts/wiki.mjs add-edge sources/<slug> builds_on sources/<other>
-node _lumina/scripts/wiki.mjs add-edge sources/<other> built_upon_by sources/<slug>
 ```
 
-`add-edge` is idempotent: calling it twice with the same arguments is a safe no-op.
-
 Exemptions (see README.md Cross-Reference Rules): `foundations/**`, `outputs/**`,
-and external URLs are terminal — no reverse edge needed for these.
+and external URLs do not require reverse edges.
 
 Write checkpoint: `phase: "edges"`.
 
@@ -239,9 +225,7 @@ node _lumina/scripts/wiki.mjs slug "Attention Revisited: Softmax Temperature Sca
 # Write wiki/concepts/softmax-temperature.md (new)
 # Append to wiki/concepts/flash-attention.md (existing, add to key_sources)
 node _lumina/scripts/wiki.mjs add-edge sources/attention-revisited-2026 introduces_concept concepts/softmax-temperature
-node _lumina/scripts/wiki.mjs add-edge concepts/softmax-temperature introduced_in sources/attention-revisited-2026
 node _lumina/scripts/wiki.mjs add-edge sources/attention-revisited-2026 uses_concept concepts/flash-attention
-node _lumina/scripts/wiki.mjs add-edge concepts/flash-attention used_in sources/attention-revisited-2026
 node _lumina/scripts/lint.mjs --fix --json
 node _lumina/scripts/wiki.mjs log ingest "Added \"Attention Revisited\" → 3 pages touched"
 ```
@@ -269,6 +253,8 @@ ingest. Proceed only with explicit direction. Log which phases were skipped.
 ## Guardrails
 
 - Never modify files in `raw/`. Read-only.
+- Never hand-edit `wiki/graph/edges.jsonl` or `wiki/graph/citations.jsonl`; use
+  `wiki.mjs add-edge` and `wiki.mjs add-citation`.
 - Never overwrite an existing wiki page without user confirmation.
 - Never fabricate citations for sources not yet in the wiki.
 - Keep a checkpoint after every phase — an interrupted ingest must be resumable.

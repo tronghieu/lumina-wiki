@@ -57,3 +57,10 @@ python3 _lumina/tools/fetch_wikipedia.py --help
 - Never commit, log, or display secret values.
 - Do not mutate `wiki/` or `raw/`.
 - Do not install system packages unless the user explicitly requests it.
+
+## Definition of Done
+
+- Tool help commands completed or failures are reported with the missing
+  dependency/key by name only.
+- `.env` is unchanged unless the user supplied values and asked you to write it.
+- No `wiki/`, `raw/`, index, graph, or log files are changed.

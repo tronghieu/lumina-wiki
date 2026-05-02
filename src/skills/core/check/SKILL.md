@@ -3,7 +3,7 @@ name: lumi-check
 description: >
   Run lint.mjs --json, summarize findings by severity, offer to apply --fix for
   auto-fixable checks (L01/L03/L06/L07/L09), self-check re-run to confirm 0
-  errors, and surface advisory issues (L02/L04/L05/L08) for user attention.
+  errors, and surface advisory warnings for user attention.
   Single-model self-check only — no cross-model review.
   Use this whenever the user asks to "check the wiki", "run lint", "verify the
   graph", "are there broken links?", "what's wrong with the wiki?", "health
@@ -35,26 +35,8 @@ Key workspace paths:
 - `_lumina/config/lumina.config.yaml` — bidirectional exemption globs
 - `wiki/log.md` — log the check result here
 
-## Lint Check Reference
-
-| ID | Name | Severity | Auto-fixable |
-|----|------|----------|-------------|
-| L01 | Missing frontmatter field | error | Yes — adds placeholder value |
-| L02 | Orphan page (no inbound links) | warning | No — user must link or exempt |
-| L03 | Broken wikilink (target missing) | error | Yes — removes the dead link |
-| L04 | Missing key_sources | warning | No — user must add sources |
-| L05 | Low-confidence claim without citation | warning | No — user must add citation |
-| L06 | Missing reverse edge | error | Yes — writes the reverse edge |
-| L07 | Duplicate symmetric edge | error | Yes — deduplicates |
-| L08 | Stale updated date | warning | No — user must decide if the date is right |
-| L09 | Index out of sync | error | Yes — rebuilds the index catalog |
-
-L01/L03/L06/L07/L09 are auto-fixable. L02/L04/L05/L08 require user judgment.
-
-The linter reads `lumina.config.yaml` for exemption globs. Pages matching
-`foundations/**` or `outputs/**` are exempt from the reverse-link requirement
-(L06). External URLs are exempt from broken-link checks (L03). See README.md
-Cross-Reference Rules for the full exemption list.
+Read `references/lint-checks.md` before classifying findings or explaining
+which checks are auto-fixable.
 
 ## Instructions
 
@@ -91,27 +73,15 @@ JSON output shape:
 
 ### Step 2 — Classify findings
 
-Group the findings:
-
-**Errors (must fix before done):**
-- L01: missing frontmatter fields
-- L03: broken wikilinks
-- L06: missing reverse edges
-- L07: duplicate symmetric edges
-- L09: index out of sync
-
-**Advisories (present to user, no auto-fix):**
-- L02: orphan pages — user decides whether to link, exempt, or leave
-- L04: missing key_sources — user must add the relationship
-- L05: low-confidence claim — user must add a citation or downgrade
-- L08: stale updated date — user decides if the date is accurate
+Group findings using `references/lint-checks.md`: errors first, then advisory
+warnings. Surface warnings even when `summary.errors === 0`.
 
 ### Step 3 — Offer to apply fixes
 
-If there are auto-fixable errors, tell the user what will be fixed and ask for
+If there are auto-fixable findings, tell the user what will be fixed and ask for
 confirmation:
 
-"I found <N> errors. I can auto-fix the following:
+"I found <N> fixable findings. I can auto-fix the following:
 - L06 (missing reverse edge): <list of files>
 - L09 (index out of sync)
 Shall I apply --fix?"
@@ -123,11 +93,8 @@ node _lumina/scripts/lint.mjs --fix --json
 ```
 
 The `--fix` pass:
-- L01: inserts a `TODO` placeholder for the missing field
-- L03: removes the dead `[[link]]` text from the page body
-- L06: calls `add-edge` to write the reverse edge (via wiki.mjs internally)
-- L07: calls `dedup-edges` (via wiki.mjs internally)
-- L09: regenerates the `<!-- lumina:index --> ... <!-- /lumina:index -->` block
+- Applies the supported auto-fixes listed in `references/lint-checks.md`
+- Leaves L02, L05, and L08 for manual correction
 
 ### Step 4 — Self-check re-run
 
@@ -145,6 +112,8 @@ If errors remain, do not report done. Address each remaining error specifically:
   ```bash
   node _lumina/scripts/wiki.mjs set-meta <slug> <key> "<value>"
   ```
+- If L02, L05, or L08 remain, report the exact fields, wikilinks, or edges that
+  need manual correction.
 
 Repeat until `summary.errors === 0`. Do not loop more than 3 times — if errors
 persist, surface them to the user as needing manual attention.
@@ -164,13 +133,13 @@ Lint check: <scanned_files> files scanned
 
 Errors (N):
   [L06] concepts/positional-encoding.md:18 — Missing reverse edge to sources/attention-revisited
-  [L03] summary/transformers-overview.md:42 — Broken link [[flash-decoding]] (page not found)
+  [L05] summary/transformers-overview.md:42 — Broken link [[flash-decoding]] (page not found)
 
-Warnings (M, advisory — no auto-fix):
-  [L02] concepts/rotary-embeddings.md — Orphan page (no inbound links)
-  [L08] sources/lora-2021.md — Updated date 2024-01-01 may be stale
+Warnings (M, advisory):
+  [L04] concepts/rotary-embeddings.md — Orphan page (no inbound links)
+  [L09] wiki/index.md — Index catalog is stale
 
-Fixes available: L06, L03 (N total). Apply? [yes/no]
+Fixes available: L06, L09 (N total). Apply? [yes/no]
 ```
 
 After fix + re-run:
@@ -216,8 +185,8 @@ User: "Check the wiki and auto-fix everything without asking me."
 
 Guardrail escalation — user wants silent auto-fix:
 Never apply --fix without first showing what will change. Explain what the fix
-list contains and ask for confirmation. This protects against L03 --fix silently
-removing wikilinks the user intended to keep once the target is ingested.
+list contains and ask for confirmation. This protects against file renames and
+index rewrites the user may want to review first.
 </example>
 
 ## Guardrails
