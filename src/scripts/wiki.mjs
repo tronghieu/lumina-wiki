@@ -1653,7 +1653,7 @@ async function main(argv) {
         }
 
         if (matches.length === 0) {
-          emitError(JSON.stringify({ error: 'no match', query: text }), 2);
+          emitError(`no match for query: ${text}`, 2);
           process.exit(2);
         }
 
