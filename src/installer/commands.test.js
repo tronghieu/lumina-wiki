@@ -6,16 +6,17 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, access, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 import { installCommand } from './commands.js';
 import { writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
 const PKG = require('../../package.json');
-const CLI = resolve(new URL('../..', import.meta.url).pathname, 'bin', 'lumina.js');
+const CLI = fileURLToPath(new URL('../../bin/lumina.js', import.meta.url));
 
 async function makeTmpDir() {
   return mkdtemp(join(tmpdir(), 'lumina-command-test-'));

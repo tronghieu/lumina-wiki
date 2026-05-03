@@ -71,8 +71,8 @@
   "devDependencies": {},
   "scripts": {
     "test": "npm run test:installer",
-    "test:installer": "node --test \"src/installer/*.test.js\"",
-    "test:scripts": "node --test \"src/scripts/*.test.mjs\"",
+    "test:installer": "node --test src/installer/commands.test.js src/installer/fs.test.js src/installer/manifest.test.js src/installer/template-engine.test.js src/installer/update-check.test.js",
+    "test:scripts": "node --test src/scripts/lint.test.mjs src/scripts/reset.test.mjs src/scripts/wiki.test.mjs",
     "test:python": "python3 -m pytest src/tools/tests -q",
     "test:all": "npm run test:installer && npm run test:scripts && npm run test:python",
     "test:fs": "node --test src/installer/fs.test.js",
