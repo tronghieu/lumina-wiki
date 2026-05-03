@@ -293,8 +293,10 @@ export async function writeFilesManifest(projectRoot, rows) {
  */
 const MIGRATIONS = {
   '1->2': (m) => ({ ...m, legacyMigrationNeeded: true }),
-  // 2->3: workspace schema additions (raw_paths field, raw/download/ dir, lint L12) are
-  // additive and backward-compatible. No manifest field shape change — bump only.
+  // 2->3 (v0.8): workspace schema additions — raw_paths field, raw/download/ dir,
+  // lint L12, source frontmatter url (string) -> urls (array). All additive /
+  // backward-compatible at the manifest level. Wiki content migration is handled
+  // by /lumi-migrate-legacy, not by the installer. No manifest shape change.
   '2->3': (m) => ({ ...m }),
 };
 

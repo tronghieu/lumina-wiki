@@ -425,4 +425,5 @@ describe('migrateManifest', () => {
     assert.equal(result.packageVersion, '0.6.0');
     assert.deepEqual(result.ideTargets, ['cursor']);
   });
+
 });

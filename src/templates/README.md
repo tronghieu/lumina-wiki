@@ -64,7 +64,7 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs; open when this file points you there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
-- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
+- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
 - `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer state; never edit by hand
 
@@ -194,6 +194,7 @@ Adds `/lumi-reading-chapter-ingest` (file a chapter, update characters/themes/pl
 - **`_lumina/scripts/wiki.mjs`** — wiki engine (frontmatter, graph mutation, slug, log).
 - **`_lumina/scripts/reset.mjs`** — scoped destructive reset.
 - **`_lumina/tools/extract_pdf.py`** — PDF text extractor (pypdf-based); used by `/lumi-ingest` and `/lumi-reading-chapter-ingest` when the host IDE cannot read PDFs natively.
+- **`_lumina/tools/fetch_pdf.py`** — URL → `raw/download/<resource>/` PDF downloader (streaming, atomic, idempotent); used by `/lumi-ingest` Mode B when the input is a URL or paper identifier.
 - **`_lumina/tools/requirements.txt`** — Python dependencies for bundled tools. Run `pip install -r _lumina/tools/requirements.txt` when a tool reports a missing package.
 {{#if pack_research}}- **`_lumina/tools/_env.py`** — shared `.env` loader for research tools.
 - **`_lumina/tools/prepare_source.py`** — normalizes local source files into tool-readable JSON.

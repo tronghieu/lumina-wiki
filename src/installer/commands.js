@@ -878,7 +878,7 @@ function getSkillDefs(packs) {
 
 async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
-  const coreTools = ['extract_pdf.py'];
+  const coreTools = ['extract_pdf.py', 'fetch_pdf.py'];
   const researchTools = [
     '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',

@@ -258,7 +258,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'authors',    type: 'array',    required: true  },
     { key: 'year',       type: 'number',   required: true  },
     { key: 'importance', type: 'enum',     required: true,  values: [1, 2, 3, 4, 5] },
-    { key: 'url',        type: 'string',   required: false },
+    { key: 'urls',       type: 'array',    required: false },
     { key: 'raw_paths',  type: 'array',    required: false },
     { key: 'provenance', type: 'enum',     required: true,  values: ['replayable', 'partial', 'missing'] },
     { key: 'confidence', type: 'enum',     required: false, values: ['high', 'medium', 'low', 'unverified'] },

@@ -214,6 +214,30 @@ describe('L02 frontmatter-types', () => {
     const result = checkL02('sources/test.md', fm);
     assert.ok(result.some(f => f.message.includes('"created"')));
   });
+
+  test('clean: urls as array of strings', () => {
+    const fm = { ...validSourceFm(), urls: ['https://arxiv.org/abs/1234', 'https://doi.org/10.1/foo'] };
+    const result = checkL02('sources/test.md', fm);
+    assert.equal(result.length, 0);
+  });
+
+  test('clean: urls as empty array', () => {
+    const fm = { ...validSourceFm(), urls: [] };
+    const result = checkL02('sources/test.md', fm);
+    assert.equal(result.length, 0);
+  });
+
+  test('clean: urls absent (optional field)', () => {
+    const fm = validSourceFm(); // no urls key
+    const result = checkL02('sources/test.md', fm);
+    assert.equal(result.length, 0);
+  });
+
+  test('violation: urls is not an array', () => {
+    const fm = { ...validSourceFm(), urls: 'https://example.com' };
+    const result = checkL02('sources/test.md', fm);
+    assert.ok(result.some(f => f.message.includes('"urls"')));
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

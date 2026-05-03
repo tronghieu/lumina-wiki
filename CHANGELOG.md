@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-03
+
 ### Added
 - Schema: `raw_paths` field (array, optional) on `sources` — relative paths to permanent raw artifacts backing the source page (`raw/sources/*`, `raw/notes/*`, `raw/download/<resource>/*`, `raw/discovered/<topic>/*.json`). Replaces implicit "URL is the anchor" semantic with an explicit pointer set; verify Stage A (planned v1.0) reads this directly instead of re-deriving from heuristics.
 - `raw/download/<resource>/` — permanent agent-writable zone for auto-fetched full-text artifacts, partitioned by source (`arxiv`, `doi`, `s2`, `web`). Distinct from `raw/tmp/` (transient) and `raw/sources/` (human-curated).
@@ -13,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `/lumi-ingest` Mode B: input may be a URL, arxiv ID, DOI, or paper title from discover shortlist. Skill resolves to URL, calls `fetch_pdf.py`, ingests from the resulting `raw/download/` path. Mode A (local file path) unchanged.
 
 ### Changed
+- Source frontmatter field `url: <string>` renamed to `urls: <array>` for symmetry with `raw_paths: array`. Multiple URLs supported per source (arxiv abs, DOI, repo, slides). Lint type validation expects `urls` to be an array; legacy `url` string entries flagged as unknown field. Migration handled by `/lumi-migrate-legacy` (detects and rewrites `url: <str>` → `urls: [<str>]`).
 - Provenance semantic reframed raw-centric (enum unchanged, 3 values):
   - `replayable` now requires `raw_paths` non-empty with at least one entry resolving to disk (URL is no longer a precondition — file-only sources qualify).
   - `partial` requires `url` present and no resolvable `raw_paths`.

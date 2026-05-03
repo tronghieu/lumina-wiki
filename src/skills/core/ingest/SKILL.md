@@ -102,7 +102,9 @@ python3 _lumina/tools/fetch_pdf.py "<url-or-id>"
 - For bare arxiv ID: pass `https://arxiv.org/abs/<id>`
 - For DOI: pass `https://doi.org/<doi>`
 
-On exit 0: read JSON output. Use the returned `path` as `source_path`. Proceed to Phase 1.
+On exit 0: read JSON output. Use the returned `path` as `source_path`. Write the input URL as
+the first entry of `urls` on the source page; additional URLs (DOI, repo, slides, etc.) can be
+appended after. Proceed to Phase 1.
 
 On exit 2 (HTML response): the URL likely points to a paywall or non-PDF page.
 Report to user and ask for a direct PDF URL or manual download. Do not proceed
@@ -156,7 +158,7 @@ drafting the page.
 Draft `wiki/sources/<slug>.md` using the Source
 template from `_lumina/schema/page-templates.md` (open it when in doubt about
 required fields). Required frontmatter fields: `id`, `title`, `type`, `created`,
-`updated`, `authors`, `year`, `importance` (1-5), `url` (optional).
+`updated`, `authors`, `year`, `importance` (1-5), `urls` (optional, array).
 
 Required body sections: `## Summary` (2-4 sentences), `## Key Claims` (bulleted
 with confidence level), `## Concepts` (all `[[concept-slug]]` links), `## People`
@@ -173,9 +175,12 @@ whether it can re-check the material end-to-end.
 Provenance rubric — raw-centric; pick the one that fits:
 - `replayable` — `raw_paths` is non-empty AND every entry resolves to an existing file.
   Source can be re-grounded end-to-end against these files.
-- `partial` — has `url` but `raw_paths` is empty or every listed entry is missing.
+- `partial` — has at least one entry in `urls` but `raw_paths` is empty or every listed entry is missing.
   Drift detection works against the URL, but grounding cannot be re-checked.
-- `missing` — no `url`, no `raw_paths`. Manual entry; verification has nothing to grip on.
+- `missing` — no `urls`, no `raw_paths`. Manual entry; verification has nothing to grip on.
+
+A source can have multiple URLs (arxiv abs + DOI + repo + slides). List the most authoritative
+first; the agent uses `urls[0]` when a single canonical URL is needed (e.g., for `fetch_pdf.py` Mode B).
 
 Set `raw_paths` to the list of permanent raw artifacts backing this page:
 - The primary file passed to ingest (`raw/sources/*`, `raw/notes/*`, or
@@ -192,7 +197,8 @@ the claims or the user has confirmed them.
 
 Example frontmatter:
 ```yaml
-url: https://arxiv.org/abs/2604.03501v2
+urls:
+  - https://arxiv.org/abs/2604.03501v2
 raw_paths:
   - raw/download/arxiv/2604.03501v2.pdf
   - raw/discovered/ai-economics/2604.03501v2.json

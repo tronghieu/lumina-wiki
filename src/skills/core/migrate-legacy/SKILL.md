@@ -187,7 +187,7 @@ If a checkpoint exists with a `source_path` field:
   "`<slug>` was ingested from a transient location (`<source_path>`). Move the
   file to `raw/sources/` or `raw/download/<resource>/` and re-run
   `/lumi-migrate-legacy` to backfill `raw_paths` properly."
-  Set `provenance` to `partial` (if `url` exists) or `missing` (no `url`).
+  Set `provenance` to `partial` (if `urls` is non-empty) or `missing` (no `urls`).
 - Otherwise: set `raw_paths` to `[source_path]` and `provenance` to `replayable`.
   Skip Tiers 2 and 3.
 
@@ -196,17 +196,17 @@ If a checkpoint exists with a `source_path` field:
 - Slug-prefix match: `raw/sources/<slug>*`, `raw/notes/<slug>*`, or
   `raw/download/<resource>/<slug>*`
 - URL-derived ID match: extract arxiv ID, DOI, or URL basename from the page's
-  `url` frontmatter; scan `raw/sources/`, `raw/notes/`, `raw/download/**` for
-  filenames containing that ID.
+  `urls` array (or legacy `url` string for backward compat); scan `raw/sources/`,
+  `raw/notes/`, `raw/download/**` for filenames containing that ID.
 - Research-pack flow: also scan `raw/discovered/<topic>/<id>.json` for a JSON
-  whose `id` or `url` matches the page's `url` frontmatter.
+  whose `id` or `url` matches any entry in the page's `urls` array.
 
 All non-`raw/tmp/` matches go into `raw_paths`. Set `provenance` to `replayable`
 if any match was found.
 
-**Tier 3 (fall back to url heuristic): no checkpoint, no file match.**
+**Tier 3 (fall back to urls heuristic): no checkpoint, no file match.**
 
-- Has `url`, no raw match → `partial` (leave `raw_paths` unset or `[]`)
+- Has at least one entry in `urls`, no raw match → `partial` (leave `raw_paths` unset or `[]`)
 - Neither → `missing`
 
 #### confidence (optional-but-recommended on `sources` and `concepts`)
@@ -274,6 +274,42 @@ node _lumina/scripts/wiki.mjs set-meta concepts/softmax-temperature confidence m
 
 `set-meta` is atomic (temp + fsync + rename) and idempotent — calling it twice
 with the same value is a no-op. It is safe to re-run this phase.
+
+**Schema-shape upgrade — `url` → `urls` (v0.9+):**
+
+For every source page that has a top-level `url:` key (singular string) in frontmatter,
+rewrite it as `urls:` (array) and remove the old key. Preserve placement — keep `urls`
+where `url` was.
+
+```bash
+# Detect source pages that still have legacy url: (singular)
+node _lumina/scripts/wiki.mjs list-entities | node -e "
+const lines=require('fs').readFileSync('/dev/stdin','utf8').trim().split('\n');
+const ents=lines.map(l=>{ try{return JSON.parse(l);}catch{return null;} }).filter(Boolean);
+ents.filter(e=>e.type==='sources').forEach(e=>console.log(e.slug));
+" | while read slug; do
+  node _lumina/scripts/wiki.mjs read-meta "$slug" | node -e "
+const m=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+if(m.url && !m.urls) console.log(process.argv[1]);
+" "$slug"
+done
+```
+
+For each slug with a legacy `url:` field:
+
+```bash
+# Step 1 — read current url value
+URL=$(node _lumina/scripts/wiki.mjs read-meta sources/<slug> | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).url)")
+
+# Step 2 — write urls array
+node _lumina/scripts/wiki.mjs set-meta sources/<slug> urls "[\"$URL\"]" --json-value
+
+# Step 3 — remove legacy url key (set-meta with empty string removes the key)
+node _lumina/scripts/wiki.mjs set-meta sources/<slug> url --remove
+```
+
+If `set-meta --remove` is not supported by the installed wiki.mjs version, use `Edit` to
+remove the `url:` line directly after confirming `urls:` was written successfully.
 
 After backfilling all entries, proceed immediately to Phase 4.
 
@@ -375,7 +411,7 @@ node _lumina/scripts/lint.mjs --json
 
 # Phase 2 — for each source:
 node _lumina/scripts/wiki.mjs read-meta sources/attention-is-all-you-need
-# → { url: "https://arxiv.org/abs/1706.03762", ... }
+# → { urls: ["https://arxiv.org/abs/1706.03762"], ... }
 ls raw/sources/attention-is-all-you-need*
 # → raw/sources/attention-is-all-you-need.pdf (found)
 # → infer: provenance = replayable
