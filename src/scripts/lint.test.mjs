@@ -238,6 +238,22 @@ describe('L02 frontmatter-types', () => {
     const result = checkL02('sources/test.md', fm);
     assert.ok(result.some(f => f.message.includes('"urls"')));
   });
+
+  test('legacy renamed field: url (string) on source -> warning pointing at urls', () => {
+    const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234' };
+    const result = checkL02('sources/test.md', fm);
+    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "url"'));
+    assert.ok(legacy, 'expected a legacy-field warning');
+    assert.equal(legacy.severity, 'warning');
+    assert.ok(legacy.message.includes('"urls"'));
+    assert.ok(legacy.message.includes('/lumi-migrate-legacy'));
+  });
+
+  test('legacy renamed field: no warning when url absent', () => {
+    const fm = validSourceFm();
+    const result = checkL02('sources/test.md', fm);
+    assert.ok(!result.some(f => f.message.includes('Legacy frontmatter field')));
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

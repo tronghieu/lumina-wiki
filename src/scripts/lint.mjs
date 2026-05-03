@@ -69,6 +69,21 @@ const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 /** All check IDs in run order. */
 const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12'];
 
+/**
+ * Legacy frontmatter fields that have been renamed across versions.
+ * Detected by L02 as warnings so upgrade banners surface them and
+ * users know to run /lumi-migrate-legacy. Severity is warning (not
+ * error) to keep upgrades non-breaking — the legacy field is ignored,
+ * not invalid.
+ *
+ *   { entityType: { oldKey: { newKey, since } } }
+ */
+const LEGACY_RENAMED_FIELDS = {
+  sources: {
+    url: { newKey: 'urls', since: 'v0.8' },
+  },
+};
+
 /** Kebab-case pattern: lowercase letters, digits, hyphens; no leading/trailing hyphen. */
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -408,6 +423,20 @@ function checkL02(wikiRelPath, fm) {
         break;
     }
   }
+
+  // Legacy renamed fields — warn if the old key is still present, so upgrade
+  // banners can surface a migration hint. The old key is ignored at runtime;
+  // the new key (if present) is what counts.
+  const legacy = LEGACY_RENAMED_FIELDS[type];
+  if (legacy) {
+    for (const [oldKey, info] of Object.entries(legacy)) {
+      if (oldKey in fm) {
+        findings.push(finding('L02-frontmatter-types', 'warning', false, wikiRelPath, null,
+          `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`));
+      }
+    }
+  }
+
   return findings;
 }
 

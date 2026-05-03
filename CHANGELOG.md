@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-03
+
+### Fixed
+- L02 now warns when a source page still carries the legacy `url:` (string) frontmatter field that was renamed to `urls:` (array) in v0.8. Without this, upgrades from v0.7 → v0.8 produced a clean lint result and the post-upgrade installer banner stayed silent — even though the wiki needed `/lumi-migrate-legacy` to convert the field. The legacy field is ignored at runtime, not invalid; the warning is purely a migration nudge.
+
 ## [0.8.0] - 2026-05-03
 
 ### Added
