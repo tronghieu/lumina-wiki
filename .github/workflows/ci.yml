@@ -37,7 +37,7 @@ jobs:
         run: npm ci
 
       - name: Install Python test dependencies
-        run: python -m pip install pytest
+        run: python -m pip install -r src/tools/requirements.txt
 
       - name: Installer tests
         run: npm run test:installer
