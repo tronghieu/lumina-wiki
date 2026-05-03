@@ -21,7 +21,8 @@ writeFileSync(npmUserConfig, `cache=${npmCache}\n`, 'utf8');
 const cleanEnv = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !/^npm_config_/i.test(key)),
 );
-const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const isWindows = process.platform === 'win32';
+const npmExecutable = isWindows ? 'npm.cmd' : 'npm';
 const result = spawnSync(npmExecutable, [
   'pack',
   '--dry-run',
@@ -33,6 +34,7 @@ const result = spawnSync(npmExecutable, [
 ], {
   encoding: 'utf8',
   timeout: 60000,
+  shell: isWindows,
   env: {
     ...cleanEnv,
     HOME: npmHome,
@@ -46,6 +48,7 @@ const result = spawnSync(npmExecutable, [
 if (result.status !== 0) {
   throw new Error([
     `npm pack --dry-run failed (${result.status})`,
+    result.error?.message,
     result.stdout?.trim(),
     result.stderr?.trim(),
   ].filter(Boolean).join('\n'));
