@@ -133,7 +133,8 @@ def _save_checkpoint(state_dir: Path, phase: int, data: dict[str, Any]) -> None:
 
 def _save_source(discovered_dir: Path, slug: str, source: dict[str, Any]) -> Path:
     """Save a single source dict to raw/discovered/<slug>/<id>.json atomically."""
-    source_id = (source.get("id") or source.get("paperId") or "unknown").replace("/", "_")
+    raw_id = source.get("id") or source.get("paperId") or "unknown"
+    source_id = re.sub(r'[<>:"/\\|?*]', "_", raw_id)
     filename = f"{source_id}.json"
     out_path = _safe_path(discovered_dir / slug, filename)
     _atomic_write_json(out_path, source)
