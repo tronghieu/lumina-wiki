@@ -56,13 +56,38 @@ Proceed to the lint check regardless.
 
 **Step 1.2 — Run lint (read-only pass).**
 
+First, get aggregate counts (tiny output, always safe):
+
 ```bash
-node _lumina/scripts/lint.mjs --json
+node _lumina/scripts/lint.mjs --summary
 ```
 
-Parse the JSON output. Collect:
-- All `L01-frontmatter-required` findings (severity: error) — these are entries
-  with missing required fields.
+If `errors === 0` and `by_check.L11` is `0` or absent, skip to the clean-exit
+branch below. Otherwise, you need the per-entry findings.
+
+**Important — do NOT pipe `--json` straight into a heredoc.** On a large wiki
+the full findings JSON can exceed the shell tool's ~30KB stdout buffer and get
+truncated mid-string, breaking JSON.parse. Instead, write it to a temp file
+and read filtered slices:
+
+```bash
+node _lumina/scripts/lint.mjs --json > /tmp/lumi-lint.json
+node -e "
+const j=JSON.parse(require('fs').readFileSync('/tmp/lumi-lint.json','utf8'));
+const want=new Set(['L01-frontmatter-required','L11-confidence-missing']);
+const hits=j.findings.filter(f=>want.has(f.id))
+  .map(f=>({id:f.id,file:f.file,message:f.message}));
+console.log(JSON.stringify(hits,null,2));
+"
+```
+
+The projected output (id + file + message only) is bounded and parseable. If
+even that exceeds buffer (very large wikis), read `/tmp/lumi-lint.json` with
+the Read tool instead — Read paginates, Bash stdout does not.
+
+Collect:
+- All `L01-frontmatter-required` findings (severity: error) — entries with
+  missing required fields.
 - All `L11-confidence-missing` findings (severity: warning) — entries missing
   the optional-but-recommended `confidence` field.
 
@@ -107,9 +132,21 @@ Field: confidence (optional, sources + concepts)
   - concepts/softmax-temperature
 ```
 
-Report this plan to the user before proceeding. Ask for confirmation if the
-work list is large (more than 10 entries). For 10 or fewer, proceed without
-asking.
+Always report this plan to the user before proceeding. For work lists of **30
+or fewer entries**, continue without waiting for confirmation — small batches
+are routine and the operation is safe to re-run. For **more than 30 entries**,
+stop and ask the user to confirm before any writes. A large batch usually
+means a long-dormant wiki or a major schema bump, and the user should have a
+chance to spot-check the inference table before bulk changes land.
+
+The safety net beneath this threshold:
+
+- `set-meta` is atomic and idempotent — rerunning with a corrected value is
+  a single command, no rollback needed.
+- The inference rubric falls back to `unverified` when evidence is ambiguous,
+  so wrong values err toward "honest about uncertainty," not overconfidence.
+- Phase 4 re-runs lint and surfaces any remaining issues before clearing the
+  manifest flag.
 
 ### Phase 2 — Plan
 
@@ -216,10 +253,12 @@ After backfilling all entries, proceed immediately to Phase 4.
 **Step 4.1 — Re-run lint.**
 
 ```bash
-node _lumina/scripts/lint.mjs --json
+node _lumina/scripts/lint.mjs --summary
 ```
 
-Confirm that all L01 errors from Phase 1 are resolved. L11 warnings for
+Confirm `errors === 0`. If you need to inspect remaining findings, re-run with
+`--json > /tmp/lumi-lint.json` and project as in Step 1.2 — never parse full
+`--json` from inline stdout on a large wiki. L11 warnings for
 entries you set `confidence` on should also be gone.
 
 If any L01 errors remain:

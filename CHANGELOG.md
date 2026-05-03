@@ -5,6 +5,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `/lumi-migrate-legacy`: Step 1.2 and Step 4.1 now use `lint.mjs --summary` for counts and write `--json` to `/tmp/lumi-lint.json` before projecting findings. Avoids the Bash-tool ~30KB stdout cap which truncated full `--json` mid-string on wikis with many findings, breaking inline `JSON.parse`.
+
+### Changed
+- `/lumi-migrate-legacy`: raised the work-list confirmation gate from 10 to 30 entries. Real wikis commonly have dozens of entries, and the original threshold made every migration a multi-turn chore. Lists ≤30 now proceed after the plan is reported; lists >30 still pause for explicit confirmation, since a large batch usually signals a long-dormant wiki or major schema bump worth spot-checking.
+
+## [0.7.0] - 2026-05-03
+
 ### Added
 - `/lumi-migrate-legacy` core skill — LLM-driven backfill of provenance/confidence
 - `CHANGELOG.md` shipped to `_lumina/CHANGELOG.md` for skill consumption
