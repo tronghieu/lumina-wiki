@@ -9,16 +9,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const RESET_SCRIPT = resolve('/Users/luutronghieu/Projects/lumina-wiki/src/scripts/reset.mjs');
+const RESET_SCRIPT = fileURLToPath(new URL('reset.mjs', import.meta.url));
 
 /** Create a unique temp directory for a test workspace. */
 async function makeTempWs() {
