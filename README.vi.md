@@ -134,6 +134,27 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 
 > Thư mục `wiki/graph/` chứa `edges.jsonl` và `citations.jsonl` (dữ liệu máy đọc, không phải markdown). Exclude thư mục này giúp graph view không bị nhiễu.
 
+### **Tìm kiếm cục bộ với qmd (Tùy chọn)**
+
+Khi wiki của bạn lớn dần, bạn có thể muốn tìm kiếm full-text nhanh hơn so với `index.md` + `grep`. Chúng tôi gợi ý [qmd](https://github.com/tobi/qmd) — một search engine chạy hoàn toàn local trên file markdown, kết hợp BM25, vector search và LLM re-ranking. qmd phối hợp rất hợp với Lumina-Wiki và AI Agent của bạn.
+
+**Cách tích hợp với AI Agent:**
+
+1. Cài qmd theo hướng dẫn trong repo của nó, sau đó index thư mục gốc của project để qmd thấy cả `wiki/` lẫn `raw/`.
+2. **Qua CLI** — agent có thể gọi `qmd <query>` bằng `Bash`. Chỉ cần nhắc trong prompt rằng câu lệnh này đã sẵn sàng.
+3. **Qua MCP (rất tiện cho Claude Code, Codex, Cursor)** — đăng ký MCP server của qmd vào file cấu hình MCP của IDE. Agent sẽ nhận nó như một tool gốc và có thể gọi từ `/lumi-ask` hay câu hỏi tiếp theo.
+4. Re-index sau mỗi lần `/lumi-ingest` (thủ công hoặc qua hook) để các trang mới có thể tìm được.
+
+qmd đứng song song với `index.md` và wiki graph — một lớp truy xuất nhanh giúp agent có candidate tốt hơn trước khi đọc đầy đủ từng trang.
+
+**Tuỳ chọn thêm — skill chính thức của tobi cho qmd.** tobi cũng phát hành một skill chuyên dụng, dạy agent cách dùng qmd hiệu quả (khi nào chọn `lex` vs `vec` vs `hyde`, cách viết `intent` để khử nhập nhằng, cú pháp lex cho phrase và exclude). Nếu IDE của bạn hỗ trợ định dạng skill, bạn có thể cài bằng:
+
+```bash
+npx skills add https://github.com/tobi/qmd --skill qmd
+```
+
+Khuyến khích đọc [trang skill trên skills.sh](https://skills.sh/tobi/qmd/qmd) trước để xem chính xác skill này bổ sung những gì.
+
 ---
 
 ## 5. Các Kỹ năng và Công cụ có sẵn (v0.1)

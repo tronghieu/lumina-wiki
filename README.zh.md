@@ -134,6 +134,27 @@ Lumina 创建的工作区为每个目录都设定了明确的用途。
 
 > `wiki/graph/` 文件夹包含 `edges.jsonl` 和 `citations.jsonl`（机器可读数据文件，非 Markdown）。排除该文件夹可保持图谱视图整洁。
 
+### **使用 qmd 进行本地搜索（可选）**
+
+随着您的 Wiki 不断增长，您可能希望获得比 `index.md` + `grep` 更快的全文搜索体验。我们推荐 [qmd](https://github.com/tobi/qmd) —— 一个完全本地、设备上的 Markdown 搜索引擎，结合 BM25、向量搜索和 LLM 重排序。qmd 与 Lumina-Wiki 和您的 AI Agent 配合得非常顺畅。
+
+**如何与 AI Agent 集成：**
+
+1. 按照 qmd 仓库中的说明安装，然后对项目根目录建立索引，使 qmd 能同时看到 `wiki/` 和 `raw/`。
+2. **CLI 方式** — Agent 可以通过 `Bash` 调用 `qmd <query>`。只需在提示中提及该命令已可用。
+3. **MCP 方式（在 Claude Code、Codex、Cursor 中很方便）** — 在 IDE 的 MCP 配置中注册 qmd 的 MCP 服务器。Agent 会将其识别为原生工具，可以从 `/lumi-ask` 或后续提问中调用。
+4. 在每次 `/lumi-ingest` 后重新索引（手动或通过 hook），让新页面可被搜索到。
+
+qmd 与 `index.md` 和 wiki 图谱并行工作 —— 作为一个快速检索层，在 Agent 完整阅读页面之前为它提供更好的候选结果。
+
+**额外推荐 —— tobi 的官方 qmd skill。** tobi 还发布了一个专用 skill，教您的 Agent 如何高效使用 qmd（何时选择 `lex` vs `vec` vs `hyde`、如何编写 `intent` 进行消歧、lex 短语与排除项语法）。如果您的 IDE 支持 skill 格式，可以通过以下命令安装：
+
+```bash
+npx skills add https://github.com/tobi/qmd --skill qmd
+```
+
+建议先阅读 [skills.sh 上的 skill 页面](https://skills.sh/tobi/qmd/qmd)，了解它具体添加了什么。
+
 ---
 
 ## 5. 可用技能与工具 (v0.1)

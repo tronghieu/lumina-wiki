@@ -136,6 +136,27 @@ Lumina creates a workspace with a clear purpose for each directory.
 
 > The `wiki/graph/` folder contains `edges.jsonl` and `citations.jsonl` (machine-readable data files, not markdown). Excluding it keeps the graph view clean.
 
+### **Local Search with qmd (Optional)**
+
+As your wiki grows, you may want faster full-text search than `index.md` plus `grep` can offer. We recommend [qmd](https://github.com/tobi/qmd) — a local, on-device search engine for markdown files with hybrid BM25/vector search and LLM re-ranking. It pairs nicely with Lumina-Wiki and your AI agent.
+
+**How to wire it into your agent:**
+
+1. Install qmd following the instructions in its repo, then index the project root so it sees both `wiki/` and `raw/`.
+2. **CLI route** — your agent can call `qmd <query>` via `Bash`. Just mention in your prompts that the command is available.
+3. **MCP route (handy for Claude Code, Codex, Cursor)** — register qmd's MCP server in your IDE's MCP config. The agent picks it up as a native tool and can call it from `/lumi-ask` or any follow-up.
+4. Re-index after `/lumi-ingest` (manually or via a hook) so new pages become searchable.
+
+qmd sits alongside `index.md` and the wiki graph — a fast retrieval layer that feeds your agent better candidates before it reads pages in full.
+
+**Bonus — tobi's official qmd skill.** tobi also publishes a dedicated skill that teaches your agent how to use qmd effectively (when to pick `lex` vs `vec` vs `hyde`, how to write `intent` to disambiguate, lex syntax for phrases and exclusions). If your IDE supports the skill format, you can install it with:
+
+```bash
+npx skills add https://github.com/tobi/qmd --skill qmd
+```
+
+We recommend reading [the skill page on skills.sh](https://skills.sh/tobi/qmd/qmd) first to see exactly what it adds.
+
 ---
 
 ## 5. Available Skills and Tools (v0.1)
