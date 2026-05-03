@@ -379,4 +379,50 @@ describe('migrateManifest', () => {
     assert.equal(result.schemaVersion, 2);
     assert.equal(result.legacyMigrationNeeded, false);
   });
+
+  test('2->3 migration bumps schemaVersion and preserves all fields (no shape change)', () => {
+    const manifest = {
+      schemaVersion: 2,
+      packageVersion: '0.7.0',
+      legacyMigrationNeeded: true,
+      packs: { core: { version: '0.7.0', source: 'built-in' } },
+      ideTargets: ['claude_code'],
+      symlinkStrategies: { 'lumi-init': 'symlink' },
+    };
+    const result = migrateManifest(manifest, 3);
+    assert.equal(result.schemaVersion, 3);
+    // All original fields must be preserved.
+    assert.equal(result.packageVersion, '0.7.0');
+    assert.equal(result.legacyMigrationNeeded, true);
+    assert.deepEqual(result.packs, { core: { version: '0.7.0', source: 'built-in' } });
+    assert.deepEqual(result.ideTargets, ['claude_code']);
+    assert.deepEqual(result.symlinkStrategies, { 'lumi-init': 'symlink' });
+  });
+
+  test('migrating from version 3 to 3 is no-op (idempotent)', () => {
+    const manifest = {
+      schemaVersion: 3,
+      packageVersion: '0.8.0',
+      legacyMigrationNeeded: false,
+      packs: { core: { version: '0.8.0', source: 'built-in' } },
+    };
+    const result = migrateManifest(manifest, 3);
+    assert.strictEqual(result, manifest);
+    assert.equal(result.schemaVersion, 3);
+  });
+
+  test('chains 1->2->3: all migrations applied, all original fields preserved', () => {
+    const manifest = {
+      schemaVersion: 1,
+      packageVersion: '0.6.0',
+      packs: { core: { version: '0.6.0', source: 'built-in' } },
+      ideTargets: ['cursor'],
+    };
+    const result = migrateManifest(manifest, 3);
+    assert.equal(result.schemaVersion, 3);
+    // 1->2 sets legacyMigrationNeeded: true
+    assert.equal(result.legacyMigrationNeeded, true);
+    assert.equal(result.packageVersion, '0.6.0');
+    assert.deepEqual(result.ideTargets, ['cursor']);
+  });
 });

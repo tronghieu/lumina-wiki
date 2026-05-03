@@ -19,7 +19,7 @@ import { atomicWrite, ensureDir } from './fs.js';
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MANIFEST_SCHEMA_VERSION = 2;
+export const MANIFEST_SCHEMA_VERSION = 3;
 
 export const SKILLS_CSV_HEADER = 'canonical_id,display_name,pack,source,relative_path,target_link_path,version';
 export const FILES_CSV_HEADER = 'relative_path,sha256,source_pack,installed_version';
@@ -293,6 +293,9 @@ export async function writeFilesManifest(projectRoot, rows) {
  */
 const MIGRATIONS = {
   '1->2': (m) => ({ ...m, legacyMigrationNeeded: true }),
+  // 2->3: workspace schema additions (raw_paths field, raw/download/ dir, lint L12) are
+  // additive and backward-compatible. No manifest field shape change — bump only.
+  '2->3': (m) => ({ ...m }),
 };
 
 /**

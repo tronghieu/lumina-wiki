@@ -22,7 +22,7 @@ import {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11,
+  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
@@ -1196,6 +1196,63 @@ describe('L11 confidence-missing', () => {
     const fm = { id: 'alice', title: 'Alice', type: 'person', created: '2026-01-01', updated: '2026-01-01' };
     const result = checkL11('people/alice.md', fm);
     assert.equal(result.length, 0, 'L11 must not fire for entity types other than sources and concepts');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L12: raw_paths validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L12 raw_paths validation', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  // a. Pass case: raw_paths entry exists on disk, not in raw/tmp/ — 0 findings.
+  test('pass: raw_paths entry exists and is not transient', async () => {
+    const rawDir = join(tmpDir, 'raw', 'sources');
+    await mkdir(rawDir, { recursive: true });
+    await writeFile(join(rawDir, 'foo.pdf'), 'fake pdf content');
+    const fm = validSourceFm({ raw_paths: ['raw/sources/foo.pdf'] });
+    const result = await checkL12('sources/test-source.md', fm, tmpDir);
+    assert.equal(result.length, 0, 'No findings expected when file exists and is not transient');
+  });
+
+  // b. Transient case: entry points into raw/tmp/ — 1 L12-raw-paths-transient warning.
+  test('transient: raw/tmp/ entry emits L12-raw-paths-transient warning', async () => {
+    const tmpRawDir = join(tmpDir, 'raw', 'tmp');
+    await mkdir(tmpRawDir, { recursive: true });
+    await writeFile(join(tmpRawDir, 'foo.pdf'), 'fake pdf content');
+    const fm = validSourceFm({ raw_paths: ['raw/tmp/foo.pdf'] });
+    const result = await checkL12('sources/test-source.md', fm, tmpDir);
+    assert.equal(result.length, 1, 'Expected exactly 1 finding');
+    assert.equal(result[0].id, 'L12-raw-paths-transient');
+    assert.equal(result[0].severity, 'warning');
+    assert.equal(result[0].fixable, false);
+  });
+
+  // c. Missing case: file does not exist on disk — 1 L12-raw-paths-missing warning.
+  test('missing: nonexistent file emits L12-raw-paths-missing warning', async () => {
+    const fm = validSourceFm({ raw_paths: ['raw/sources/nonexistent.pdf'] });
+    const result = await checkL12('sources/test-source.md', fm, tmpDir);
+    assert.equal(result.length, 1, 'Expected exactly 1 finding');
+    assert.equal(result[0].id, 'L12-raw-paths-missing');
+    assert.equal(result[0].severity, 'warning');
+    assert.equal(result[0].fixable, false);
+  });
+
+  // d. Empty / no field case — 0 findings.
+  test('empty raw_paths array: 0 findings', async () => {
+    const fm = validSourceFm({ raw_paths: [] });
+    const result = await checkL12('sources/test-source.md', fm, tmpDir);
+    assert.equal(result.length, 0, 'No findings expected for empty raw_paths');
+  });
+
+  test('no raw_paths field: 0 findings', async () => {
+    const fm = validSourceFm();
+    delete fm.raw_paths;
+    const result = await checkL12('sources/test-source.md', fm, tmpDir);
+    assert.equal(result.length, 0, 'No findings expected when raw_paths is absent');
   });
 });
 

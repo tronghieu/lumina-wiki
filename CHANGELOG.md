@@ -5,11 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Schema: `raw_paths` field (array, optional) on `sources` — relative paths to permanent raw artifacts backing the source page (`raw/sources/*`, `raw/notes/*`, `raw/download/<resource>/*`, `raw/discovered/<topic>/*.json`). Replaces implicit "URL is the anchor" semantic with an explicit pointer set; verify Stage A (planned v1.0) reads this directly instead of re-deriving from heuristics.
+- `raw/download/<resource>/` — permanent agent-writable zone for auto-fetched full-text artifacts, partitioned by source (`arxiv`, `doi`, `s2`, `web`). Distinct from `raw/tmp/` (transient) and `raw/sources/` (human-curated).
+- `_lumina/tools/fetch_pdf.py` — CLI tool: download URL to `raw/download/<resource>/<filename>`, idempotent (skip on existing, `--force` to overwrite). Resource detection from URL pattern (arxiv/doi/s2/web). Atomic write (tempfile + fsync + rename). Used by `/lumi-ingest` Mode B.
+- Lint check L12: warning when `raw_paths` entries point to a missing file, escape the project root, or live in `raw/tmp/*` (transient — should be moved to `raw/sources/` or `raw/download/`).
+- `/lumi-ingest` Mode B: input may be a URL, arxiv ID, DOI, or paper title from discover shortlist. Skill resolves to URL, calls `fetch_pdf.py`, ingests from the resulting `raw/download/` path. Mode A (local file path) unchanged.
+
+### Changed
+- Provenance semantic reframed raw-centric (enum unchanged, 3 values):
+  - `replayable` now requires `raw_paths` non-empty with at least one entry resolving to disk (URL is no longer a precondition — file-only sources qualify).
+  - `partial` requires `url` present and no resolvable `raw_paths`.
+  - `missing` unchanged.
+  Rubric updated in `/lumi-ingest`, `/lumi-research-discover`, `/lumi-migrate-legacy`.
+- `/lumi-migrate-legacy` rubric: tier 1 reads ingest checkpoint (`_lumina/_state/ingest-<slug>.json`) for authoritative `source_path`; tier 2 falls back to slug-prefix and URL-derived-ID heuristics across `raw/sources/`, `raw/notes/`, `raw/download/**`, `raw/discovered/**`. Pages whose checkpoint points into `raw/tmp/*` are flagged for the user to relocate before backfill — skill does not auto-move human files.
+- Manifest schema: `MANIFEST_SCHEMA_VERSION` 2 → 3. Migration is metadata-only (no manifest field shape change); workspace schema additions (`raw_paths`, `raw/download/`) are additive and backward-compatible — old wikis continue to lint clean (L12 warnings advisory only).
+- `/lumi-migrate-legacy`: raised the work-list confirmation gate from 10 to 30 entries. Real wikis commonly have dozens of entries, and the original threshold made every migration a multi-turn chore. Lists ≤30 now proceed after the plan is reported; lists >30 still pause for explicit confirmation, since a large batch usually signals a long-dormant wiki or major schema bump worth spot-checking.
+
 ### Fixed
 - `/lumi-migrate-legacy`: Step 1.2 and Step 4.1 now use `lint.mjs --summary` for counts and write `--json` to `/tmp/lumi-lint.json` before projecting findings. Avoids the Bash-tool ~30KB stdout cap which truncated full `--json` mid-string on wikis with many findings, breaking inline `JSON.parse`.
 
-### Changed
-- `/lumi-migrate-legacy`: raised the work-list confirmation gate from 10 to 30 entries. Real wikis commonly have dozens of entries, and the original threshold made every migration a multi-turn chore. Lists ≤30 now proceed after the plan is reported; lists >30 still pause for explicit confirmation, since a large batch usually signals a long-dormant wiki or major schema bump worth spot-checking.
+### Migration
+- Existing source pages without `raw_paths`: no immediate action required. Lint stays green (`raw_paths` is optional, L12 only fires when present-but-broken).
+- To backfill `raw_paths` on legacy entries, run `/lumi-migrate-legacy` after upgrading. The skill reads ingest checkpoints and applies the new tier-1/tier-2 rubric.
+- If you have wiki sources currently pointing at `raw/tmp/arxiv-ingest/` or similar transient locations (a known artefact of pre-v0.8 agent improvisation): move those PDFs to `raw/download/arxiv/` (matching arxiv ID) or `raw/sources/` (custom-named), then re-run `/lumi-migrate-legacy`. Lint L12 will identify the affected pages.
+- Custom tooling reading manifest: bump expected `schemaVersion` to 3 (or accept 2|3 transitionally — the manifest shape is unchanged).
 
 ## [0.7.0] - 2026-05-03
 

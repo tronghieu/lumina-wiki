@@ -67,7 +67,7 @@ const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
 /** All check IDs in run order. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12'];
 
 /** Kebab-case pattern: lowercase letters, digits, hyphens; no leading/trailing hyphen. */
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -668,6 +668,62 @@ function checkL10(foundationEntries) {
 }
 
 /**
+ * L12: `raw_paths` entries on a `sources` page point to a missing file, or to
+ * `raw/tmp/*` (transient location — canonical sources should not live there).
+ * Severity: warning. Not auto-fixable. Catches drift when the user moves or
+ * renames a backing file, and flags the common mistake of pinning a wiki page
+ * to a temp-zone artifact that may be cleaned at any time.
+ *
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @param {string} projectRoot  Absolute path; used to resolve raw_paths entries.
+ * @returns {Promise<Finding[]>}
+ */
+async function checkL12(wikiRelPath, fm, projectRoot) {
+  const type = entityTypeForPath(wikiRelPath);
+  if (type !== 'sources') return [];
+
+  const rawPaths = fm.raw_paths;
+  if (!Array.isArray(rawPaths) || rawPaths.length === 0) return [];
+
+  const findings = [];
+  for (const entry of rawPaths) {
+    if (typeof entry !== 'string' || entry === '') continue;
+
+    // Reject paths inside raw/tmp/ — transient zone, not for canonical sources.
+    if (entry.startsWith('raw/tmp/') || entry.startsWith('./raw/tmp/')) {
+      findings.push(finding(
+        'L12-raw-paths-transient', 'warning', false,
+        wikiRelPath, null,
+        `raw_paths entry "${entry}" lives in raw/tmp/ — transient. Move the file to raw/sources/ (human) or raw/download/<resource>/ (agent) and update raw_paths.`
+      ));
+      continue;
+    }
+
+    // Verify file exists on disk (relative to project root).
+    const abs = resolve(projectRoot, entry);
+    if (!abs.startsWith(resolve(projectRoot))) {
+      findings.push(finding(
+        'L12-raw-paths-unsafe', 'warning', false,
+        wikiRelPath, null,
+        `raw_paths entry "${entry}" escapes the project root`
+      ));
+      continue;
+    }
+    try {
+      await access(abs, fsConstants.F_OK);
+    } catch {
+      findings.push(finding(
+        'L12-raw-paths-missing', 'warning', false,
+        wikiRelPath, null,
+        `raw_paths entry "${entry}" does not exist on disk`
+      ));
+    }
+  }
+  return findings;
+}
+
+/**
  * L11: `confidence` field missing on a `sources` or `concepts` entity.
  * Severity: warning. Not auto-fixable. Sets an explicit trust signal that
  * downstream verification (Stage A/B/C of /lumi-verify, planned for v1.0)
@@ -943,6 +999,7 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL04(wikiRelPath, outboundMap.get(wikiRelPath) || new Set(), inboundSet));
     allFindings.push(...checkL05(wikiRelPath, content, knownSlugs));
     allFindings.push(...checkL11(wikiRelPath, fm));
+    allFindings.push(...await checkL12(wikiRelPath, fm, projectRoot));
   }
 
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
@@ -1243,7 +1300,7 @@ export {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11,
+  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
   fixL01, fixL03, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,

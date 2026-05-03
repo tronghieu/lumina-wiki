@@ -69,12 +69,21 @@ python3 _lumina/tools/discover.py --help
 8. Present a checkpointed shortlist with title, authors/year, URL or identifier,
    `_score`, rationale, duplicate status, and recommended next action.
 
-   For each candidate, include a suggested `provenance` value based on what you
-   actually fetched. This helps the user (or `/lumi-ingest`) decide immediately
-   rather than guessing later — downstream verification depends on it:
-   - `replayable` — URL fetched and raw snapshot saved to `raw/discovered/`.
-   - `partial` — only a summary or abstract was retrieved; no full-text snapshot.
-   - `missing` — no URL available; metadata only (e.g. a manually entered title).
+   Discover writes JSON metadata to `raw/discovered/<topic>/<id>.json`. It does
+   NOT fetch PDFs — full-text download happens at ingest time via `/lumi-ingest`
+   Mode B, which calls `fetch_pdf.py` and places the PDF at
+   `raw/download/<resource>/<id>.<ext>`.
+
+   For each candidate, include a suggested `provenance` value (advisory — the
+   actual value is set by `/lumi-ingest` once the PDF is fetched). This helps
+   the user plan which sources are immediately accessible:
+   - `replayable` — abstract + full text both fetchable; `/lumi-ingest` will
+     download the PDF to `raw/download/` and resolve `raw_paths` at ingest time.
+   - `partial` — only abstract or metadata available (closed-access paper); no
+     full-text PDF reachable. `/lumi-ingest` will set `raw_paths` from the
+     metadata JSON only.
+   - `missing` — no URL; metadata only (e.g. a manually entered title). Nothing
+     to fetch; ingest will result in `provenance: missing`.
 
 9. Ask the user which candidates should be ingested. Do not create source pages
    or graph edges in this skill.
@@ -88,6 +97,8 @@ python3 _lumina/tools/discover.py --help
   `init_discovery.py`.
 - Do not include any non-FR35 workflows such as ideation, LaTeX writing, or
   orchestrator mode.
+- Do not download PDFs. Discover writes metadata JSON to `raw/discovered/` only.
+  PDF fetching is `/lumi-ingest`'s job (Mode B, via `_lumina/tools/fetch_pdf.py`).
 
 ## Definition of Done
 

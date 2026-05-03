@@ -164,13 +164,7 @@ existing fields (url, authors, year, type, etc.).
 
 **For `sources` entries also check:**
 
-1. Whether a raw snapshot exists:
-   ```bash
-   ls raw/sources/<slug>* 2>/dev/null || echo "no snapshot"
-   ls raw/discovered/<slug>* 2>/dev/null || echo "no snapshot"
-   ```
-
-2. Inbound citation/edge count (how many other entries link to this one):
+1. Inbound citation/edge count (how many other entries link to this one):
    ```bash
    grep -c '"target":"sources/<slug>"' wiki/graph/edges.jsonl 2>/dev/null || echo 0
    grep -c '"target":"sources/<slug>"' wiki/graph/citations.jsonl 2>/dev/null || echo 0
@@ -178,16 +172,42 @@ existing fields (url, authors, year, type, etc.).
 
 **Inference rubrics — apply these to decide values:**
 
-#### provenance (required on `sources`)
+#### provenance + raw_paths (required on `sources`)
 
-Pick the one that matches what you can verify:
+Use the following inference order. Stop at the first tier that yields a result.
 
-- `replayable` — A `url` field is present AND a raw snapshot exists under
-  `raw/sources/` or `raw/discovered/`. The source can be re-verified end-to-end.
-- `partial` — A `url` field is present but no raw snapshot was saved. Drift
-  detection works against the URL, but the full text cannot be re-grounded.
-- `missing` — No `url` field and no raw snapshot. Manual entry; verification
-  has nothing to grip on.
+**Tier 1 (authoritative): read the ingest checkpoint.**
+
+```bash
+node _lumina/scripts/wiki.mjs checkpoint-read ingest <slug>
+```
+
+If a checkpoint exists with a `source_path` field:
+- If `source_path` is under `raw/tmp/*`: do NOT write `raw_paths`. Tell the user:
+  "`<slug>` was ingested from a transient location (`<source_path>`). Move the
+  file to `raw/sources/` or `raw/download/<resource>/` and re-run
+  `/lumi-migrate-legacy` to backfill `raw_paths` properly."
+  Set `provenance` to `partial` (if `url` exists) or `missing` (no `url`).
+- Otherwise: set `raw_paths` to `[source_path]` and `provenance` to `replayable`.
+  Skip Tiers 2 and 3.
+
+**Tier 2 (heuristic): scan raw/ for matching files.**
+
+- Slug-prefix match: `raw/sources/<slug>*`, `raw/notes/<slug>*`, or
+  `raw/download/<resource>/<slug>*`
+- URL-derived ID match: extract arxiv ID, DOI, or URL basename from the page's
+  `url` frontmatter; scan `raw/sources/`, `raw/notes/`, `raw/download/**` for
+  filenames containing that ID.
+- Research-pack flow: also scan `raw/discovered/<topic>/<id>.json` for a JSON
+  whose `id` or `url` matches the page's `url` frontmatter.
+
+All non-`raw/tmp/` matches go into `raw_paths`. Set `provenance` to `replayable`
+if any match was found.
+
+**Tier 3 (fall back to url heuristic): no checkpoint, no file match.**
+
+- Has `url`, no raw match → `partial` (leave `raw_paths` unset or `[]`)
+- Neither → `missing`
 
 #### confidence (optional-but-recommended on `sources` and `concepts`)
 
@@ -215,11 +235,13 @@ After the read phase, produce an inference table:
 
 ```
 sources/attention-is-all-you-need:
-  provenance: replayable  (url present, raw/sources/attention-is-all-you-need.pdf found)
+  raw_paths: ["raw/sources/attention-is-all-you-need.pdf"]  (Tier 1: checkpoint source_path)
+  provenance: replayable  (raw_paths non-empty, file exists)
   confidence: high        (7 inbound citations)
 
 sources/lora-2021:
-  provenance: partial     (url present, no raw snapshot)
+  raw_paths: []           (Tier 3: url present, no file match)
+  provenance: partial     (url present, no resolvable raw_paths)
   confidence: unverified  (0 inbound edges, no cross-checks)
 
 concepts/softmax-temperature:
@@ -234,8 +256,15 @@ For each entry in the inference table, set each missing field:
 node _lumina/scripts/wiki.mjs set-meta <slug> <key> "<value>"
 ```
 
+For `raw_paths` (an array field), pass a JSON array with `--json-value`:
+
+```bash
+node _lumina/scripts/wiki.mjs set-meta sources/<slug> raw_paths '["raw/sources/foo.pdf"]' --json-value
+```
+
 Examples:
 ```bash
+node _lumina/scripts/wiki.mjs set-meta sources/attention-is-all-you-need raw_paths '["raw/sources/attention-is-all-you-need.pdf"]' --json-value
 node _lumina/scripts/wiki.mjs set-meta sources/attention-is-all-you-need provenance replayable
 node _lumina/scripts/wiki.mjs set-meta sources/attention-is-all-you-need confidence high
 node _lumina/scripts/wiki.mjs set-meta sources/lora-2021 provenance partial
@@ -260,6 +289,23 @@ Confirm `errors === 0`. If you need to inspect remaining findings, re-run with
 `--json > /tmp/lumi-lint.json` and project as in Step 1.2 — never parse full
 `--json` from inline stdout on a large wiki. L11 warnings for
 entries you set `confidence` on should also be gone.
+
+Check for L12 warnings explicitly and surface them to the user:
+
+```bash
+node -e "
+const j=JSON.parse(require('fs').readFileSync('/tmp/lumi-lint.json','utf8'));
+const l12=j.findings.filter(f=>f.id==='L12-raw-paths-drift')
+  .map(f=>({file:f.file,message:f.message}));
+if(l12.length) console.log('L12 raw_paths drift:\n'+JSON.stringify(l12,null,2));
+else console.log('No L12 warnings.');
+"
+```
+
+L12 warnings mean one or more `raw_paths` entries point to files that do not
+exist or are under `raw/tmp/`. Treat these as follow-up action items for the
+user — the migration is not blocked, but the `raw_paths` value is inaccurate
+until the referenced file is located or the entry is corrected.
 
 If any L01 errors remain:
 - Read the finding message — it names the exact field still missing.

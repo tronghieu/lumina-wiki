@@ -118,6 +118,7 @@ export const RAW_DIRS = {
   notes:      'core',
   assets:     'core',
   tmp:        'core',
+  download:   'core',
 
   // research pack
   discovered: 'research',
@@ -258,6 +259,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'year',       type: 'number',   required: true  },
     { key: 'importance', type: 'enum',     required: true,  values: [1, 2, 3, 4, 5] },
     { key: 'url',        type: 'string',   required: false },
+    { key: 'raw_paths',  type: 'array',    required: false },
     { key: 'provenance', type: 'enum',     required: true,  values: ['replayable', 'partial', 'missing'] },
     { key: 'confidence', type: 'enum',     required: false, values: ['high', 'medium', 'low', 'unverified'] },
   ],

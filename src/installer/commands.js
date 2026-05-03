@@ -110,7 +110,7 @@ const CORE_WIKI_DIRS = [
 const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
 const READING_WIKI_DIRS  = ['wiki/chapters', 'wiki/characters', 'wiki/themes', 'wiki/plot'];
 
-const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp'];
+const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download'];
 const RESEARCH_RAW_DIRS = ['raw/discovered'];
 
 const LUMINA_DIRS = [

@@ -51,6 +51,7 @@
     "src/tools/init_discovery.py",
     "src/tools/prepare_source.py",
     "src/tools/fetch_arxiv.py",
+    "src/tools/fetch_pdf.py",
     "src/tools/fetch_wikipedia.py",
     "src/tools/fetch_s2.py",
     "src/tools/fetch_deepxiv.py",

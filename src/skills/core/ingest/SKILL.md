@@ -8,8 +8,13 @@ description: >
   into the wiki", "create a wiki page for", or drops a filename from raw/sources/.
   Also fires for: "I added a PDF to raw/sources/", "add this paper to the wiki",
   "parse this article", "what should I do with raw/sources/X?", or any request
-  to bring a new source into the wiki graph. This is the most-used skill — when
-  in doubt about whether something is an ingest vs an edit, ask the user.
+  to bring a new source into the wiki graph.
+  Also accepts Mode B input — paper title, arxiv ID, or URL, without a local
+  file path. Examples: "ingest paper 2604.03501v2", "ingest arxiv:2604.03501",
+  "ingest https://arxiv.org/abs/2604.03501". The skill fetches the PDF
+  automatically in that case.
+  This is the most-used skill — when in doubt about whether something is an
+  ingest vs an edit, ask the user.
 allowed-tools:
   - Bash
   - Read
@@ -34,6 +39,7 @@ depends on bidirectional-link discipline.
 
 Key workspace paths:
 - `raw/sources/` — immutable user-provided sources; you read but never modify
+- `raw/download/<resource>/` — agent-writable, permanent; auto-fetched PDFs land here (resource = `arxiv | doi | s2 | web`)
 - `wiki/sources/` — one page per ingested source (you write this)
 - `wiki/concepts/`, `wiki/people/` — you create or update stubs here
 - `wiki/index.md` — updated on every ingest
@@ -78,6 +84,41 @@ node _lumina/scripts/wiki.mjs checkpoint-read ingest <file-basename>
 If a checkpoint exists and `phase` is not `"done"`, ask the user whether to resume
 or restart. Resuming skips completed phases. Restarting deletes the checkpoint and
 starts from Phase 1.
+
+### Phase 0.5 — Resolve input
+
+Three input modes:
+
+**Mode A — Local file path** (e.g. `raw/sources/foo.pdf`, `raw/notes/bar.md`)
+
+Use directly as `source_path`. Proceed to Phase 1 to detect type from this file.
+
+**Mode B — URL or identifier** (arxiv ID like `2604.03501v2`, arxiv URL, DOI, S2 paper ID, generic URL)
+
+```bash
+python3 _lumina/tools/fetch_pdf.py "<url-or-id>"
+```
+
+- For bare arxiv ID: pass `https://arxiv.org/abs/<id>`
+- For DOI: pass `https://doi.org/<doi>`
+
+On exit 0: read JSON output. Use the returned `path` as `source_path`. Proceed to Phase 1.
+
+On exit 2 (HTML response): the URL likely points to a paywall or non-PDF page.
+Report to user and ask for a direct PDF URL or manual download. Do not proceed
+with ingest until a valid file path is available.
+
+On exit 3 (network error): retry once. If the second attempt also fails, surface
+the error to the user with the exact message from the tool output.
+
+**Mode C — Title only** (e.g. from a `/lumi-research-discover` shortlist)
+
+```bash
+node _lumina/scripts/wiki.mjs checkpoint-read research-discover shortlist
+```
+
+Match the title to a shortlist entry and extract the URL from that entry.
+Fall through to Mode B with that URL.
 
 ### Phase 1 — Detect type
 
@@ -129,20 +170,32 @@ verification (Stage A/B/C of `/lumi-verify`, planned for v1.0). An explicit deci
 is more useful than a silently-defaulted value because verification needs to know
 whether it can re-check the material end-to-end.
 
-Provenance rubric — pick the one that matches what you actually did:
-- `replayable` — you fetched the URL and saved the raw snapshot under `raw/`. The
-  source can be re-verified end-to-end against the original.
-- `partial` — you kept only a summary; no raw text snapshot was saved. Drift
-  detection works against the URL, but grounding cannot be re-checked.
-- `missing` — manual entry: no URL, no raw snapshot. Verification has nothing to
-  grip on.
+Provenance rubric — raw-centric; pick the one that fits:
+- `replayable` — `raw_paths` is non-empty AND every entry resolves to an existing file.
+  Source can be re-grounded end-to-end against these files.
+- `partial` — has `url` but `raw_paths` is empty or every listed entry is missing.
+  Drift detection works against the URL, but grounding cannot be re-checked.
+- `missing` — no `url`, no `raw_paths`. Manual entry; verification has nothing to grip on.
+
+Set `raw_paths` to the list of permanent raw artifacts backing this page:
+- The primary file passed to ingest (`raw/sources/*`, `raw/notes/*`, or
+  `raw/download/<resource>/*` from Mode B).
+- Any matching metadata JSON in `raw/discovered/<topic>/<id>.json` (research pack).
+  Match by paper ID (arxiv ID, DOI) extracted from the source's URL or filename.
+
+Do NOT include `raw/tmp/*` entries — that zone is transient (lint L12 warns).
+Do NOT include files outside `raw/`.
 
 Also set `confidence:` (optional but encouraged). Use `high | medium | low | unverified`.
 Default to `unverified` for fresh ingests; bump up only after you have cross-checked
 the claims or the user has confirmed them.
 
-Example frontmatter with both fields:
+Example frontmatter:
 ```yaml
+url: https://arxiv.org/abs/2604.03501v2
+raw_paths:
+  - raw/download/arxiv/2604.03501v2.pdf
+  - raw/discovered/ai-economics/2604.03501v2.json
 provenance: replayable
 confidence: unverified
 ```
@@ -303,6 +356,7 @@ Link added to `## Concepts` in `wiki/sources/rlhf-overview.md`:
 - Keep a checkpoint after every phase — an interrupted ingest must be resumable.
 - If the source is too large to fully read, read in sections and checkpoint between them.
 - `raw/tmp/` accepts additions only; never overwrite a file there.
+- `raw_paths` must list permanent artifacts only. Reject `raw/tmp/*` entries.
 
 ## Definition of Done
 
