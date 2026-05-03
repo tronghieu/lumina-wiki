@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { installCommand } from './commands.js';
+import { installCommand, printPostUpgradeBanner } from './commands.js';
 import { writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
@@ -111,6 +111,118 @@ describe('installCommand', () => {
       assert.ok(readme.includes('Keep this content.'));
       assert.ok(readme.includes('<!-- lumina:schema -->'));
       assert.ok(readme.includes('<!-- /lumina:schema -->'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('post-upgrade banner: prints to stderr when lint finds errors/warnings', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      // Create a minimal project with lint.mjs stub that reports findings
+      await mkdir(join(tmp, '_lumina', 'scripts'), { recursive: true });
+      const lintStub = `process.stdout.write(JSON.stringify({"errors":3,"warnings":7,"by_check":{},"fixable":0}) + '\\n');\nprocess.exit(1);\n`;
+      await writeFile(join(tmp, '_lumina', 'scripts', 'lint.mjs'), lintStub, 'utf8');
+
+      // Capture stderr by intercepting process.stderr.write
+      const captured = [];
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+
+      try {
+        await printPostUpgradeBanner({
+          projectRoot: tmp,
+          fromVersion: '0.5.0',
+          toVersion: PKG.version,
+          colors: { yellow: (s) => s },
+        });
+      } finally {
+        process.stderr.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.match(output, /\[warn\]/);
+      assert.match(output, /0\.5\.0/);
+      assert.match(output, /3 error/);
+      assert.match(output, /7 warning/);
+      assert.match(output, /\/lumi-migrate-legacy/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('post-upgrade banner: silent when lint reports no findings', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'scripts'), { recursive: true });
+      const lintStub = `process.stdout.write(JSON.stringify({"errors":0,"warnings":0,"by_check":{},"fixable":0}) + '\\n');\nprocess.exit(0);\n`;
+      await writeFile(join(tmp, '_lumina', 'scripts', 'lint.mjs'), lintStub, 'utf8');
+
+      const captured = [];
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+
+      try {
+        await printPostUpgradeBanner({
+          projectRoot: tmp,
+          fromVersion: '0.5.0',
+          toVersion: PKG.version,
+          colors: { yellow: (s) => s },
+        });
+      } finally {
+        process.stderr.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.ok(!output.includes('[warn] Lumina upgraded'), 'stderr should not contain upgrade banner on clean lint');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('same-version re-install does not print banner', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'same-ver-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      await mkdir(join(workspace, '_lumina', 'config'), { recursive: true });
+      await mkdir(join(workspace, '_lumina', '_state'), { recursive: true });
+      await writeFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: same-ver-wiki',
+        'communication_language: English',
+        'document_output_language: English',
+        'ide_targets:',
+        '  claude_code: true',
+        '  codex: false',
+        '  cursor: false',
+        '  gemini_cli: false',
+        '  generic: false',
+        'packs:',
+        '  core: true',
+        '  research: false',
+        '  reading: false',
+        '',
+      ].join('\n'), 'utf8');
+      // Manifest with CURRENT version (same as PKG.version) — banner should NOT fire
+      await writeManifest(workspace, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: PKG.version,
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: { core: { version: PKG.version, source: 'built-in' } },
+        ideTargets: ['claude_code'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: workspace },
+      });
+
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.ok(!result.stderr.includes('[warn] Lumina upgraded'), 'same-version re-install must not print banner');
     } finally {
       await cleanTmp(tmp);
     }

@@ -17,6 +17,7 @@
 import { readFile, writeFile, rename, unlink, rm, access, copyFile } from 'node:fs/promises';
 import { join, resolve, relative, dirname, basename } from 'node:path';
 import { constants as fsConstants } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +32,7 @@ import {
 import {
   readManifest,
   writeManifest,
+  migrateManifest,
   readSkillsManifest,
   writeSkillsManifest,
   readFilesManifest,
@@ -223,6 +225,9 @@ export async function installCommand(opts = {}) {
   // 8. Copy scripts
   await copyScripts(projectRoot);
 
+  // 8.5. Copy CHANGELOG.md so /lumi-migrate-legacy can read it offline
+  await copyChangelog(projectRoot);
+
   // 9. Copy skills
   const skillRows = await copySkills(projectRoot, packs);
 
@@ -259,7 +264,13 @@ export async function installCommand(opts = {}) {
 
   // 17. Write three state files atomically
   const now = new Date().toISOString();
+  // Run schema migrations on the existing manifest first so flags like
+  // legacyMigrationNeeded are preserved into the final write.
+  const migrated = existingManifest
+    ? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION)
+    : {};
   const manifest = {
+    ...migrated,
     schemaVersion:    MANIFEST_SCHEMA_VERSION,
     packageVersion:   PKG.version,
     installedAt:      existingManifest?.installedAt ?? now,
@@ -279,6 +290,16 @@ export async function installCommand(opts = {}) {
   await writeManifest(projectRoot, manifest);
   await writeSkillsManifest(projectRoot, skillRows);
   await writeFilesManifest(projectRoot, fileRows);
+
+  // 17.5. Post-upgrade: spawn lint --summary, print banner if findings exist
+  if (isUpgrade && existingManifest.packageVersion !== PKG.version) {
+    await printPostUpgradeBanner({
+      projectRoot,
+      fromVersion: existingManifest.packageVersion,
+      toVersion: PKG.version,
+      colors,
+    });
+  }
 
   // 18. Print summary
   console.log('');
@@ -394,6 +415,76 @@ export async function versionCommand(opts = {}) {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Run lint --summary in the project root and, if findings exist, print a
+ * post-upgrade banner to stderr.
+ *
+ * @param {object} opts
+ * @param {string}  opts.projectRoot
+ * @param {string}  opts.fromVersion
+ * @param {string}  opts.toVersion
+ * @param {object}  opts.colors
+ */
+export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersion, colors }) {
+  let summary;
+  try {
+    const lintScript = join(projectRoot, '_lumina', 'scripts', 'lint.mjs');
+    const result = spawnSync(
+      process.execPath,
+      [lintScript, '--summary'],
+      { cwd: projectRoot, encoding: 'utf8', timeout: 30000 },
+    );
+
+    // Exit codes: 0 = clean, 1 = findings. Anything else (crash / ENOENT) → skip.
+    if (result.error || (result.status !== 0 && result.status !== 1)) {
+      return;
+    }
+
+    try {
+      summary = JSON.parse(result.stdout.trim());
+    } catch {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  const { errors = 0, warnings = 0 } = summary;
+  if (errors === 0 && warnings === 0) {
+    return;
+  }
+
+  const banner = [
+    '',
+    colors.yellow(`[warn] Lumina upgraded v${fromVersion} -> v${toVersion} — schema gap detected:`),
+    colors.yellow(`       ${errors} error(s), ${warnings} warning(s) across legacy entries.`),
+    '',
+    '     Quick fix (deterministic):',
+    '       node _lumina/scripts/wiki.mjs migrate --add-defaults',
+    '',
+    '     Smart fix (LLM-driven, recommended):',
+    '       /lumi-migrate-legacy',
+    '',
+    '     Both are idempotent. See _lumina/CHANGELOG.md for details.',
+    '',
+  ].join('\n');
+
+  process.stderr.write(banner + '\n');
+
+  // Spawn-and-forget: append upgrade log entry (ignore failures, e.g., wiki/ missing)
+  try {
+    const wikiScript = join(projectRoot, '_lumina', 'scripts', 'wiki.mjs');
+    const logMsg = `upgrade v${fromVersion}->v${toVersion}: ${errors} errors, ${warnings} warnings — run /lumi-migrate-legacy`;
+    spawnSync(
+      process.execPath,
+      [wikiScript, 'log', 'installer', logMsg],
+      { cwd: projectRoot, encoding: 'utf8', timeout: 10000 },
+    );
+  } catch {
+    // Ignore: wiki/ may not exist for incomplete installs
+  }
+}
 
 async function readAnswersFromConfig(projectRoot, existingManifest) {
   // Try reading lumina.config.yaml for stored answers
@@ -690,6 +781,16 @@ async function copyScripts(projectRoot) {
   }
 }
 
+async function copyChangelog(projectRoot) {
+  const src = join(PACKAGE_ROOT, 'CHANGELOG.md');
+  const dest = join(projectRoot, '_lumina', 'CHANGELOG.md');
+  try {
+    await copyFile(src, dest);
+  } catch (_) {
+    // CHANGELOG may not exist in older snapshots; skip gracefully
+  }
+}
+
 async function copySkills(projectRoot, packs) {
   const skillRows = [];
   const skillDefs = getSkillDefs(packs);
@@ -735,12 +836,13 @@ function getSkillDefs(packs) {
 
   if (packs.includes('core')) {
     const coreSkills = [
-      { name: 'init',    canonicalId: 'lumi-init',    displayName: '/lumi-init' },
-      { name: 'ingest',  canonicalId: 'lumi-ingest',  displayName: '/lumi-ingest' },
-      { name: 'ask',     canonicalId: 'lumi-ask',     displayName: '/lumi-ask' },
-      { name: 'edit',    canonicalId: 'lumi-edit',    displayName: '/lumi-edit' },
-      { name: 'check',   canonicalId: 'lumi-check',   displayName: '/lumi-check' },
-      { name: 'reset',   canonicalId: 'lumi-reset',   displayName: '/lumi-reset' },
+      { name: 'init',            canonicalId: 'lumi-init',            displayName: '/lumi-init' },
+      { name: 'ingest',          canonicalId: 'lumi-ingest',          displayName: '/lumi-ingest' },
+      { name: 'ask',             canonicalId: 'lumi-ask',             displayName: '/lumi-ask' },
+      { name: 'edit',            canonicalId: 'lumi-edit',            displayName: '/lumi-edit' },
+      { name: 'check',           canonicalId: 'lumi-check',           displayName: '/lumi-check' },
+      { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
+      { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
     ];
     for (const s of coreSkills) {
       defs.push({ ...s, pack: 'core', srcPackPath: 'core' });

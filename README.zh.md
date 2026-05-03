@@ -64,6 +64,37 @@ npx lumina-wiki install
 
 Agent 将引导您通过交互式设置将密钥保存到本地 `.env` 文件中。
 
+### **第三步（升级时）：迁移旧版 Wiki 条目**
+
+如果您**在已经有 `wiki/` 的旧项目上重新安装 Lumina-Wiki**，照常运行安装器：
+
+```bash
+npx lumina-wiki install
+```
+
+安装器检测到版本升级后会原子性地更新 scripts、schemas 和 skills。**您的 wiki 内容（`wiki/`、`raw/`、`log.md`）不会被安装器修改。** 当安装器发现新版本添加的 frontmatter 字段在旧条目中缺失时，会打印 `[warn]` 横幅，显示数量和下一步操作。
+
+您有两种方式进行回填：
+
+**方案 A — LLM 驱动（推荐）：** 打开 AI 聊天并运行：
+
+> **您：**
+> `/lumi-migrate-legacy`
+
+该技能读取 `_lumina/CHANGELOG.md` 了解每个版本添加了哪些字段，运行 `lint --json` 找出受影响的条目，并基于 `raw/` 快照、引用边和条目元数据为每个条目推断合适的值（例如 `provenance: replayable | partial | missing`，`confidence: high | medium | low | unverified`）。幂等 — 多次运行也是安全的。
+
+**方案 B — 快速确定性回填：** 从终端运行：
+
+```bash
+node _lumina/scripts/wiki.mjs migrate --add-defaults
+```
+
+此命令为所有缺失字段的条目设置保守的默认值（`provenance: missing`，`confidence: unverified`）。lint 立即变绿，但值只是占位符 — 您可以稍后通过方案 A 或手动编辑来优化。
+
+您可以组合使用：先运行方案 B 让 lint 变绿，需要更准确的值时再运行方案 A。两种方式都是原子写入并在 `wiki/log.md` 留下记录。
+
+完整的版本 schema 变更列表请见 [`CHANGELOG.md`](CHANGELOG.md) 或安装后的本地副本 `_lumina/CHANGELOG.md`。
+
 ## 3. 常用指令（核心技能 Core Skills）
 
 在您的 AI 聊天界面（Gemini CLI, Claude 等）中使用这些指令与维基进行交互。

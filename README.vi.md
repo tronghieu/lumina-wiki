@@ -64,6 +64,37 @@ Nếu bạn đã cài đặt gói `research`, một số kỹ năng sẽ cần A
 
 Agent sẽ hướng dẫn bạn qua một quy trình cài đặt tương tác để lưu các key của bạn vào file `.env` cục bộ.
 
+### **Bước 3 (Khi nâng cấp): Migrate các entry wiki cũ**
+
+Nếu bạn **cài lại Lumina-Wiki trên một dự án đã có sẵn `wiki/` từ phiên bản trước**, chạy installer như bình thường:
+
+```bash
+npx lumina-wiki install
+```
+
+Installer phát hiện version mới và cập nhật scripts, schemas, skills atomically. **Nội dung wiki của bạn (`wiki/`, `raw/`, `log.md`) không bị installer chỉnh sửa.** Khi installer thấy các trường frontmatter mới được thêm bởi version mới nhưng thiếu trên các entry cũ, nó sẽ in banner `[warn]` kèm số lượng và bước tiếp theo.
+
+Bạn có hai cách để backfill:
+
+**Cách A — LLM-driven (khuyến nghị):** Mở chat AI và chạy:
+
+> **Bạn:**
+> `/lumi-migrate-legacy`
+
+Skill đọc `_lumina/CHANGELOG.md` để biết phiên bản nào thêm trường gì, chạy `lint --json` để tìm entry bị ảnh hưởng, và infer giá trị cho từng entry (ví dụ: `provenance: replayable | partial | missing`, `confidence: high | medium | low | unverified`) dựa trên snapshot trong `raw/`, citation edges, và metadata. Idempotent — chạy lại nhiều lần vẫn an toàn.
+
+**Cách B — Backfill nhanh, deterministic:** Từ terminal:
+
+```bash
+node _lumina/scripts/wiki.mjs migrate --add-defaults
+```
+
+Lệnh này gán default bảo thủ (`provenance: missing`, `confidence: unverified`) cho mọi entry còn thiếu. Lint xanh ngay, nhưng giá trị chỉ là placeholder — bạn có thể tinh chỉnh sau bằng Cách A hoặc sửa tay.
+
+Có thể kết hợp: chạy Cách B trước để lint xanh, sau đó Cách A khi muốn giá trị chính xác hơn. Cả hai đều atomic và để lại trail trong `wiki/log.md`.
+
+Xem [`CHANGELOG.md`](CHANGELOG.md) hoặc bản local `_lumina/CHANGELOG.md` sau khi cài để biết toàn bộ thay đổi schema theo version.
+
 ## 3. Các lệnh đầu tiên của bạn (Kỹ năng cốt lõi)
 
 Tương tác với wiki của bạn bằng cách sử dụng các lệnh này trong giao diện trò chuyện với AI Agent (ví dụ: Gemini CLI, Claude, v.v.).

@@ -1308,6 +1308,149 @@ describe('verify-frontmatter', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: migrate --add-defaults
+// ---------------------------------------------------------------------------
+
+describe('migrate --add-defaults', () => {
+  async function writeSource(tmp, slug, fm) {
+    const dir = join(tmp, 'wiki', 'sources');
+    await mkdir(dir, { recursive: true });
+    const lines = ['---'];
+    for (const [k, v] of Object.entries(fm)) lines.push(`${k}: ${v}`);
+    lines.push('---', '', 'Body.', '');
+    await writeFile(join(dir, `${slug}.md`), lines.join('\n'), 'utf8');
+  }
+
+  async function writeConcept(tmp, slug, fm) {
+    const dir = join(tmp, 'wiki', 'concepts');
+    await mkdir(dir, { recursive: true });
+    const lines = ['---'];
+    for (const [k, v] of Object.entries(fm)) lines.push(`${k}: ${v}`);
+    lines.push('---', '', 'Body.', '');
+    await writeFile(join(dir, `${slug}.md`), lines.join('\n'), 'utf8');
+  }
+
+  test('exits 2 without --add-defaults flag', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['migrate'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally { await cleanTmp(tmp); }
+  });
+
+  test('backfills provenance + confidence on legacy source', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeSource(tmp, 'legacy-src', {
+        id: 'legacy-src', title: 'Legacy', type: 'source',
+        created: '2024-01-01', updated: '2024-01-01',
+        authors: '[Alice]', year: 2024, importance: 3,
+      });
+
+      const r = runWiki(['migrate', '--add-defaults'], { cwd: tmp });
+      assert.equal(r.status, 0, r.stderr);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, false);
+      assert.equal(json.updated.length, 1);
+      assert.equal(json.updated[0].slug, 'legacy-src');
+      assert.deepEqual(json.updated[0].added, {
+        provenance: 'missing',
+        confidence: 'unverified',
+      });
+
+      const meta = parseJson(runWiki(['read-meta', 'legacy-src'], { cwd: tmp }).stdout);
+      assert.equal(meta.frontmatter.provenance, 'missing');
+      assert.equal(meta.frontmatter.confidence, 'unverified');
+    } finally { await cleanTmp(tmp); }
+  });
+
+  test('backfills only confidence on legacy concept', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeConcept(tmp, 'legacy-cpt', {
+        id: 'legacy-cpt', title: 'Concept', type: 'concept',
+        created: '2024-01-01', updated: '2024-01-01',
+      });
+
+      const r = runWiki(['migrate', '--add-defaults'], { cwd: tmp });
+      assert.equal(r.status, 0, r.stderr);
+      const json = parseJson(r.stdout);
+      assert.equal(json.updated.length, 1);
+      assert.deepEqual(json.updated[0].added, { confidence: 'unverified' });
+
+      const meta = parseJson(runWiki(['read-meta', 'legacy-cpt'], { cwd: tmp }).stdout);
+      assert.equal(meta.frontmatter.confidence, 'unverified');
+      assert.equal(meta.frontmatter.provenance, undefined);
+    } finally { await cleanTmp(tmp); }
+  });
+
+  test('preserves existing values — does not overwrite', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeSource(tmp, 'has-prov', {
+        id: 'has-prov', title: 'Has Prov', type: 'source',
+        created: '2024-01-01', updated: '2024-01-01',
+        authors: '[A]', year: 2024, importance: 2,
+        provenance: 'replayable', confidence: 'high',
+      });
+
+      const r = runWiki(['migrate', '--add-defaults'], { cwd: tmp });
+      assert.equal(r.status, 0);
+      const json = parseJson(r.stdout);
+      assert.equal(json.updated.length, 0);
+
+      const meta = parseJson(runWiki(['read-meta', 'has-prov'], { cwd: tmp }).stdout);
+      assert.equal(meta.frontmatter.provenance, 'replayable');
+      assert.equal(meta.frontmatter.confidence, 'high');
+    } finally { await cleanTmp(tmp); }
+  });
+
+  test('idempotent: second run reports zero updates', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeSource(tmp, 'src-a', {
+        id: 'src-a', title: 'A', type: 'source',
+        created: '2024-01-01', updated: '2024-01-01',
+        authors: '[A]', year: 2024, importance: 1,
+      });
+
+      const first = parseJson(runWiki(['migrate', '--add-defaults'], { cwd: tmp }).stdout);
+      assert.equal(first.updated.length, 1);
+
+      const second = parseJson(runWiki(['migrate', '--add-defaults'], { cwd: tmp }).stdout);
+      assert.equal(second.updated.length, 0);
+    } finally { await cleanTmp(tmp); }
+  });
+
+  test('--dry-run reports updates but does not write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeSource(tmp, 'dry-src', {
+        id: 'dry-src', title: 'Dry', type: 'source',
+        created: '2024-01-01', updated: '2024-01-01',
+        authors: '[A]', year: 2024, importance: 1,
+      });
+
+      const r = runWiki(['migrate', '--add-defaults', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.updated.length, 1);
+
+      const meta = parseJson(runWiki(['read-meta', 'dry-src'], { cwd: tmp }).stdout);
+      assert.equal(meta.frontmatter.provenance, undefined);
+      assert.equal(meta.frontmatter.confidence, undefined);
+    } finally { await cleanTmp(tmp); }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: unknown subcommand
 // ---------------------------------------------------------------------------
 

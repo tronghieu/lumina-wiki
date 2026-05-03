@@ -19,7 +19,7 @@ import { atomicWrite, ensureDir } from './fs.js';
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MANIFEST_SCHEMA_VERSION = 1;
+export const MANIFEST_SCHEMA_VERSION = 2;
 
 export const SKILLS_CSV_HEADER = 'canonical_id,display_name,pack,source,relative_path,target_link_path,version';
 export const FILES_CSV_HEADER = 'relative_path,sha256,source_pack,installed_version';
@@ -291,7 +291,9 @@ export async function writeFilesManifest(projectRoot, rows) {
  *   2. Add `'N->N+1': (m) => { ...transform... }` to MIGRATIONS.
  *   3. The loop below will apply it automatically.
  */
-const MIGRATIONS = {};
+const MIGRATIONS = {
+  '1->2': (m) => ({ ...m, legacyMigrationNeeded: true }),
+};
 
 /**
  * Migrate a manifest object to the target schema version.
@@ -339,7 +341,7 @@ export function migrateManifest(manifest, targetVersion) {
       err.code = 3;
       throw err;
     }
-    m = migrate(m);
+    m = { ...migrate(m), schemaVersion: v + 1 };
   }
   return m;
 }

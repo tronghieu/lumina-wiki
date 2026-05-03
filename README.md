@@ -66,6 +66,37 @@ If you installed the `research` pack, some skills need API keys to search online
 
 The agent will guide you through an interactive setup to save your keys to a local `.env` file.
 
+### **Step 3 (Upgrades): Migrate Legacy Wiki Entries**
+
+If you are **re-installing Lumina-Wiki on a project that already has a `wiki/` from an earlier version**, run the installer the same way:
+
+```bash
+npx lumina-wiki install
+```
+
+The installer detects the version bump and updates scripts, schemas, and skills atomically. **Your wiki content (`wiki/`, `raw/`, `log.md`) is never modified by the installer.** When the installer finds frontmatter fields added by newer versions but missing on older entries, it prints a `[warn]` banner with the count and the next step.
+
+You then have two ways to backfill:
+
+**Option A — LLM-driven (recommended):** Open your AI chat and run:
+
+> **You:**
+> `/lumi-migrate-legacy`
+
+The skill reads `_lumina/CHANGELOG.md` to learn which fields each version added, runs `lint --json` to find affected entries, and infers per-entry values (e.g. `provenance: replayable | partial | missing`, `confidence: high | medium | low | unverified`) from `raw/` snapshots, citation edges, and entry metadata. Idempotent — safe to run multiple times.
+
+**Option B — Quick deterministic backfill:** From your terminal:
+
+```bash
+node _lumina/scripts/wiki.mjs migrate --add-defaults
+```
+
+This applies conservative defaults (`provenance: missing`, `confidence: unverified`) to every entry that lacks them. Lint goes green immediately, but values are placeholders — you can refine later with Option A or by editing entries by hand.
+
+You can combine: run Option B first for a clean lint, then Option A when you want higher-quality values. Both write atomically and leave a trail in `wiki/log.md`.
+
+For the full list of schema changes per version, see [`CHANGELOG.md`](CHANGELOG.md) or the local copy at `_lumina/CHANGELOG.md` after install.
+
 ## 3. Your First Commands (Core Skills)
 
 Interact with your wiki using these commands in your AI chat interface (Gemini CLI, Claude, etc.).

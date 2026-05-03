@@ -499,6 +499,60 @@ async function setMeta(projectRoot, slug, key, value) {
 }
 
 /**
+ * Defaults applied by `migrate --add-defaults` to legacy entries
+ * created before v0.6 introduced provenance/confidence fields.
+ *
+ * Values are conservative: `missing` provenance and `unverified` confidence
+ * make legacy state explicit so verify/lint can flag what still needs review,
+ * rather than silently asserting trust.
+ */
+const LEGACY_DEFAULTS = {
+  sources:  { provenance: 'missing', confidence: 'unverified' },
+  concepts: { confidence: 'unverified' },
+};
+
+/**
+ * Backfill missing frontmatter fields on legacy entities (sources/concepts).
+ * Only writes a field when absent — present values, including empty strings,
+ * are preserved. Idempotent: running twice produces no new changes.
+ *
+ * @param {string}  projectRoot
+ * @param {boolean} dryRun
+ * @returns {Promise<{updated: Array, skipped: number, dryRun: boolean}>}
+ */
+async function migrateLegacyDefaults(projectRoot, dryRun) {
+  const entities = await listEntities(projectRoot);
+  const updated = [];
+  let skipped = 0;
+
+  for (const entity of entities) {
+    const defaults = LEGACY_DEFAULTS[entity.type];
+    if (!defaults) { skipped++; continue; }
+
+    const content = await readFile(entity.filePath, 'utf8');
+    const { frontmatter, body, hasFrontmatter } = parseFrontmatter(content);
+
+    const added = {};
+    for (const [key, value] of Object.entries(defaults)) {
+      if (!(key in frontmatter)) {
+        frontmatter[key] = value;
+        added[key] = value;
+      }
+    }
+
+    if (Object.keys(added).length === 0) { skipped++; continue; }
+
+    if (!dryRun) {
+      const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
+      await atomicWrite(entity.filePath, newContent);
+    }
+    updated.push({ slug: entity.slug, type: entity.type, added });
+  }
+
+  return { updated, skipped, dryRun };
+}
+
+/**
  * List all entity files in all entity directories.
  * @param {string} projectRoot
  * @returns {Promise<Array<{slug: string, dir: string, type: string, filePath: string}>>}
@@ -1263,6 +1317,7 @@ async function main(argv) {
       '  read-edges <slug>|--from <slug> [--type <type>] [--direction outbound|inbound|both]',
       '  read-citations <slug>           Read all citations for a slug',
       '  verify-frontmatter <slug>       Validate frontmatter fields',
+      '  migrate --add-defaults [--dry-run]  Backfill provenance/confidence on legacy entries',
       '  checkpoint-read <skill> <phase>',
       '  checkpoint-write <skill> <phase> <json-file|-|stdin>',
       '',
@@ -1612,6 +1667,19 @@ async function main(argv) {
           errors,
           filePath: relative(projectRoot, filePath),
         });
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'migrate': {
+        if (!flags['add-defaults']) {
+          emitError('migrate requires --add-defaults (no other migration modes are defined)', 2);
+          process.exit(2);
+        }
+        const projectRoot = await requireProjectRoot();
+        const dryRun = Boolean(flags['dry-run']);
+        const result = await migrateLegacyDefaults(projectRoot, dryRun);
+        emitJson(result);
         break;
       }
 

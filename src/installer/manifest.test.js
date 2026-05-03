@@ -336,4 +336,47 @@ describe('migrateManifest', () => {
     assert.equal(caught.code, 3, 'Error code must be 3');
     assert.match(caught.message, /[Dd]owngrade/);
   });
+
+  test('1->2 migration adds legacyMigrationNeeded: true and preserves other fields', () => {
+    const manifest = {
+      schemaVersion: 1,
+      packageVersion: '0.5.0',
+      packs: { core: { version: '0.5.0', source: 'built-in' } },
+      ideTargets: ['claude_code'],
+    };
+    const result = migrateManifest(manifest, 2);
+    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.legacyMigrationNeeded, true);
+    assert.equal(result.packageVersion, '0.5.0');
+    assert.deepEqual(result.packs, { core: { version: '0.5.0', source: 'built-in' } });
+    assert.deepEqual(result.ideTargets, ['claude_code']);
+  });
+
+  test('migrating from version 0/missing to 2 chains: legacy -> 1 -> 2 (sets schemaVersion: 2 + legacyMigrationNeeded: true)', () => {
+    const manifest = {
+      packageVersion: '0.4.0',
+      packs: { core: { version: '0.4.0', source: 'built-in' } },
+    };
+    // First, legacy (no schemaVersion) -> 1
+    const step1 = migrateManifest(manifest, 1);
+    assert.equal(step1.schemaVersion, 1);
+    // Then, 1 -> 2
+    const result = migrateManifest(step1, 2);
+    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.legacyMigrationNeeded, true);
+    assert.equal(result.packageVersion, '0.4.0');
+  });
+
+  test('migrating from current 2 to 2 is no-op', () => {
+    const manifest = {
+      schemaVersion: 2,
+      packageVersion: '0.7.0',
+      legacyMigrationNeeded: false,
+      packs: { core: { version: '0.7.0', source: 'built-in' } },
+    };
+    const result = migrateManifest(manifest, 2);
+    assert.strictEqual(result, manifest);
+    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.legacyMigrationNeeded, false);
+  });
 });
