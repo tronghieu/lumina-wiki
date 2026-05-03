@@ -8,16 +8,17 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm, access, open } from 'node:fs/promises';
 import { tmpdir, platform } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Helper: run wiki.mjs as a child process
 // ---------------------------------------------------------------------------
 
-const WIKI_MJS = resolve(new URL('.', import.meta.url).pathname, 'wiki.mjs');
+const WIKI_MJS = fileURLToPath(new URL('wiki.mjs', import.meta.url));
 
 /**
  * Invoke wiki.mjs synchronously, return { stdout, stderr, status }.
