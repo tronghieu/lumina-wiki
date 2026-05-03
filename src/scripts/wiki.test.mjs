@@ -341,6 +341,76 @@ describe('log', () => {
       await cleanTmp(tmp);
     }
   });
+
+  test('uses LUMINA_SESSION_ID env var when valid', async () => {
+    const tmp = await makeTmp();
+    const savedEnv = process.env.LUMINA_SESSION_ID;
+    try {
+      initWorkspace(tmp);
+      process.env.LUMINA_SESSION_ID = 'deadbeef';
+
+      runWiki(['log', 'lumi-ingest', 'entry alpha'], { cwd: tmp });
+      runWiki(['log', 'lumi-ask', 'entry beta'], { cwd: tmp });
+
+      const logContent = await readFile(join(tmp, 'wiki', 'log.md'), 'utf8');
+      const lines = logContent.split('\n').filter(l => l.startsWith('## '));
+      assert.equal(lines.length, 2, 'two log entries');
+      assert.ok(lines[0].includes('session:deadbeef'), 'first entry uses env session id');
+      assert.ok(lines[1].includes('session:deadbeef'), 'second entry uses env session id');
+    } finally {
+      if (savedEnv === undefined) {
+        delete process.env.LUMINA_SESSION_ID;
+      } else {
+        process.env.LUMINA_SESSION_ID = savedEnv;
+      }
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('generates a session id when LUMINA_SESSION_ID is not set', async () => {
+    const tmp = await makeTmp();
+    const savedEnv = process.env.LUMINA_SESSION_ID;
+    try {
+      initWorkspace(tmp);
+      delete process.env.LUMINA_SESSION_ID;
+
+      runWiki(['log', 'lumi-ingest', 'entry gamma'], { cwd: tmp });
+
+      const logContent = await readFile(join(tmp, 'wiki', 'log.md'), 'utf8');
+      assert.match(logContent, /session:[0-9a-f]{8}/, 'log entry contains session:<8hex>');
+    } finally {
+      if (savedEnv === undefined) {
+        delete process.env.LUMINA_SESSION_ID;
+      } else {
+        process.env.LUMINA_SESSION_ID = savedEnv;
+      }
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('generates different session ids for separate calls without env var', async () => {
+    const tmp = await makeTmp();
+    const savedEnv = process.env.LUMINA_SESSION_ID;
+    try {
+      initWorkspace(tmp);
+      delete process.env.LUMINA_SESSION_ID;
+
+      runWiki(['log', 'lumi-ingest', 'entry one'], { cwd: tmp });
+      runWiki(['log', 'lumi-ask', 'entry two'], { cwd: tmp });
+
+      const logContent = await readFile(join(tmp, 'wiki', 'log.md'), 'utf8');
+      const matches = [...logContent.matchAll(/session:([0-9a-f]{8})/g)];
+      assert.equal(matches.length, 2, 'two session id occurrences');
+      assert.notEqual(matches[0][1], matches[1][1], 'session ids differ between calls');
+    } finally {
+      if (savedEnv === undefined) {
+        delete process.env.LUMINA_SESSION_ID;
+      } else {
+        process.env.LUMINA_SESSION_ID = savedEnv;
+      }
+      await cleanTmp(tmp);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1205,7 +1275,7 @@ describe('verify-frontmatter', () => {
       initWorkspace(tmp);
       const sourceDir = join(tmp, 'wiki', 'sources');
       await mkdir(sourceDir, { recursive: true });
-      await writeFile(join(sourceDir, 'valid-src.md'), `---\nid: valid-src\ntitle: Valid Source\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors:\n  - Auth\nyear: 2024\nimportance: 3\n---\n`, 'utf8');
+      await writeFile(join(sourceDir, 'valid-src.md'), `---\nid: valid-src\ntitle: Valid Source\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors:\n  - Auth\nyear: 2024\nimportance: 3\nprovenance: replayable\n---\n`, 'utf8');
 
       const r = runWiki(['verify-frontmatter', 'valid-src'], { cwd: tmp });
       assert.equal(r.status, 0);

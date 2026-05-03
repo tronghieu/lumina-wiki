@@ -20,7 +20,7 @@
 // 1. Imports + schemas import
 // ---------------------------------------------------------------------------
 
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { open, readFile, writeFile, rename, unlink, mkdir, access, stat, readdir } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { dirname, join, resolve, relative, normalize, sep } from 'node:path';
@@ -908,10 +908,21 @@ async function checkpointWrite(projectRoot, skill, phase, data) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve the session ID for a log entry.
+ * Uses LUMINA_SESSION_ID env var if set and valid (8 lowercase hex chars),
+ * otherwise generates a fresh random ID via crypto.randomUUID().slice(0, 8).
+ * @returns {string} 8-char hex session ID
+ */
+function resolveSessionId() {
+  const env = process.env.LUMINA_SESSION_ID;
+  if (env && /^[0-9a-f]{8}$/.test(env)) return env;
+  return randomUUID().replace(/-/g, '').slice(0, 8);
+}
+
+/**
  * Append a log entry to wiki/log.md.
- * Format: `## [YYYY-MM-DD] <skill> | <details>`
+ * Format: `## [YYYY-MM-DD] <skill> | session:<8hex> | <details>`
  * Uses atomic read-append-write pattern.
- * Note: Same skill+details on the same day produces the same line.
  * @param {string} projectRoot
  * @param {string} skill
  * @param {string} details
@@ -925,7 +936,8 @@ async function appendLog(projectRoot, skill, details) {
     if (err.code !== 'ENOENT') throw err;
   }
 
-  const entry = `## [${today()}] ${skill} | ${details}`;
+  const sessionId = resolveSessionId();
+  const entry = `## [${today()}] ${skill} | session:${sessionId} | ${details}`;
   const newContent = existing
     ? (existing.endsWith('\n') ? existing + entry + '\n' : existing + '\n' + entry + '\n')
     : entry + '\n';

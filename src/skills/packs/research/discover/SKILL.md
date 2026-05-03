@@ -68,6 +68,14 @@ python3 _lumina/tools/discover.py --help
    this step and note "no project purpose set" in the response.
 8. Present a checkpointed shortlist with title, authors/year, URL or identifier,
    `_score`, rationale, duplicate status, and recommended next action.
+
+   For each candidate, include a suggested `provenance` value based on what you
+   actually fetched. This helps the user (or `/lumi-ingest`) decide immediately
+   rather than guessing later — downstream verification depends on it:
+   - `replayable` — URL fetched and raw snapshot saved to `raw/discovered/`.
+   - `partial` — only a summary or abstract was retrieved; no full-text snapshot.
+   - `missing` — no URL available; metadata only (e.g. a manually entered title).
+
 9. Ask the user which candidates should be ingested. Do not create source pages
    or graph edges in this skill.
 

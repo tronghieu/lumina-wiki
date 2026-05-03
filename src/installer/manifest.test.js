@@ -22,6 +22,7 @@ import {
   SKILLS_CSV_HEADER,
   FILES_CSV_HEADER,
   statePaths,
+  migrateManifest,
 } from './manifest.js';
 
 async function makeTmpDir() {
@@ -281,5 +282,58 @@ describe('statePaths', () => {
     assert.equal(paths.manifestJson, join(root, '_lumina', 'manifest.json'));
     assert.equal(paths.skillsCsv, join(root, '_lumina', '_state', 'skills-manifest.csv'));
     assert.equal(paths.filesCsv, join(root, '_lumina', '_state', 'files-manifest.csv'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// migrateManifest
+// ---------------------------------------------------------------------------
+
+describe('migrateManifest', () => {
+  test('no-op when schemaVersion already matches targetVersion', () => {
+    const manifest = {
+      schemaVersion: 1,
+      packageVersion: '0.5.0',
+      packs: { core: { version: '0.5.0', source: 'built-in' } },
+    };
+    const result = migrateManifest(manifest, 1);
+    // Must be the same reference — no copy, no mutation.
+    assert.strictEqual(result, manifest);
+    assert.equal(result.schemaVersion, 1);
+    assert.equal(result.packageVersion, '0.5.0');
+  });
+
+  test('adds schemaVersion: 1 to a legacy manifest that has no schemaVersion', () => {
+    const manifest = {
+      packageVersion: '0.4.0',
+      packs: { core: { version: '0.4.0', source: 'built-in' } },
+      ideTargets: ['claude_code'],
+    };
+    const result = migrateManifest(manifest, 1);
+    assert.equal(result.schemaVersion, 1);
+    // Other fields must be preserved.
+    assert.equal(result.packageVersion, '0.4.0');
+    assert.deepEqual(result.packs, { core: { version: '0.4.0', source: 'built-in' } });
+    assert.deepEqual(result.ideTargets, ['claude_code']);
+  });
+
+  test('treats explicit null schemaVersion as legacy (upgrades to 1)', () => {
+    const manifest = { schemaVersion: null, packs: {} };
+    const result = migrateManifest(manifest, 1);
+    assert.equal(result.schemaVersion, 1);
+    assert.deepEqual(result.packs, {});
+  });
+
+  test('throws with code 3 when schemaVersion > targetVersion (downgrade refused)', () => {
+    const manifest = { schemaVersion: 99 };
+    let caught;
+    try {
+      migrateManifest(manifest, 1);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught instanceof Error, 'Should throw an Error');
+    assert.equal(caught.code, 3, 'Error code must be 3');
+    assert.match(caught.message, /[Dd]owngrade/);
   });
 });

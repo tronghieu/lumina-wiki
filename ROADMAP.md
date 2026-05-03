@@ -23,6 +23,23 @@ A scheduled paper-discovery loop. The user defines watchlist queries; a runner e
 - **New skill `/lumi-daily`:** invoked manually, it (a) shows what landed since last run, (b) helps the agent triage `raw/discovered/` into wiki entries via the existing `/lumi-ingest` flow, (c) optionally edits `watchlist.yml` based on user intent.
 - **Existing fetcher reuse:** `fetch_arxiv.py daily <category>` already exists; no Python changes required for the arXiv path. S2 path uses `fetch_s2.py search` with a date filter.
 
+#### Verify pass — independent hallucination-reduction skill
+
+A standalone semantic-verification step, deliberately **separate from `/lumi-check`**. `/lumi-check` stays structural/deterministic and fast; verification is a different tier with external I/O and prompt nondeterminism, and it should not be conflated with linting.
+
+- **New skill `/lumi-verify`:** opt-in, invoked manually per entity or per-batch. Produces an advisory report; never edits wiki content directly — only flags findings and suggests `confidence:` / `provenance:` updates the user can accept.
+- **Three stages, all in v1.0.0** — distinct because each catches a different failure mode and sits at a different I/O cost tier. Run independently or via `--all`.
+
+  - **Stage A — Grounding check (`wiki/` ↔ `raw/`, offline).** For each `wiki/*.md` entity, read the files listed in its `sources:` frontmatter, extract 3–5 material claims from the wiki body, ask the LLM (in a fresh subagent context to break anchoring) whether each claim is supported by the cited raw text. Verdict per claim: `grounded | partially_grounded | unsupported | contradicted`. **No network I/O.** This is the cheapest, most deterministic stage — and the one that catches the failure mode users fear most: the agent inventing claims at compile time that aren't in the source it cites.
+
+  - **Stage B — Drift check (`raw/` ↔ upstream URL, network).** For each `raw/*.md` source with a `url:` or `doi:` field, `WebFetch` the upstream and compare against the stored snapshot. Verdict per source: `unchanged | updated | contradicted | unreachable`. Catches link rot and silent upstream rewrites. Independent of Stage A — a source can drift without invalidating the wiki entries derived from the original snapshot, and that distinction matters when triaging.
+
+  - **Stage C — External truth check (`wiki/` ↔ open web, adversarial).** For each material claim in `wiki/`, run a confirmatory `WebSearch` query and an adversarial query (`<claim> debunked|criticism|alternative`) in parallel, then merge into a 4-tier verdict: `supported | weakened | contradicted | unresolved`. Structural anti-confirmation-bias device — the adversarial query is a hard requirement, not an optional flag. Highest token cost and most non-deterministic; gate behind `--external` so users opt in explicitly.
+
+- **Independence rationale:** verification spans offline-deterministic (A), network-flaky (B), and prompt-non-deterministic (C). Folding any of them into `/lumi-check` would slow the default lint path, complicate CI (which must stay offline), and entangle three different failure modes that are easier to diagnose separately. Keeping `/lumi-verify` as one skill with three stage flags (`--grounding | --drift | --external | --all`) gives users one mental model with clear cost tiers.
+- **Output contract:** `_lumina/_state/verify-report-<timestamp>.json` plus a human summary appended to `wiki/log.md`. The state file is runtime-only — excluded from `ci-idempotency`. No automatic edits to the wiki; suggestions only.
+- **Honest sizing:** Stage A is the workhorse and the smallest scope. Stage B needs careful timeout / rate-limit / 404 handling. Stage C is the biggest — material-claim selection prompt, token budgeting, and graceful degradation on paywalls or captchas. All three must ship in v1.0.0; if any single stage proves too large during build-out, narrow that stage's scope (e.g. cap claims-per-entity, cap URLs-per-run) rather than deferring it past v1.0.0.
+
 #### Other v1.0.0 work
 
 - **Stability lock for v0.1 surface:** freeze CLI flags, exit codes, schema field names, skill names. Anything renamed after v1.0.0 needs a deprecation cycle.
@@ -43,6 +60,10 @@ A scheduled paper-discovery loop. The user defines watchlist queries; a runner e
 - Re-running the same command on the same day with no new upstream papers writes nothing.
 - `npm run ci:idempotency` still green; `_lumina/_state/seen-papers.csv` does not appear in the watched-paths diff.
 - `/lumi-daily` skill prompt works end-to-end on a sandbox install.
+- `/lumi-verify --grounding` runs fully offline against a fixture wiki containing both grounded and fabricated claims, and the report classifies them correctly.
+- `/lumi-verify --drift` produces a deterministic-shape report on a fixture wiki with known-good and known-stale URLs; rate-limit and 404 paths degrade to `unreachable` cleanly.
+- `/lumi-verify --external` returns a 4-tier verdict for a fixture set of claims and exits non-zero only on infrastructure failure (not on `contradicted`, which is a successful finding).
+- `/lumi-verify --all` chains all three stages with a single combined report; `npm run ci:idempotency` stays green (no `_state/` files in the watched-paths diff).
 
 ---
 

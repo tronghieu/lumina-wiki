@@ -275,6 +275,76 @@ export async function writeFilesManifest(projectRoot, rows) {
 }
 
 // ---------------------------------------------------------------------------
+// Manifest migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Migration registry shape (for future entries):
+ *
+ * const MIGRATIONS = {
+ *   '1->2': (m) => ({ ...m, newField: 'default' }),
+ *   '2->3': (m) => { ... return updatedManifest; },
+ * };
+ *
+ * To add a migration from version N to N+1:
+ *   1. Bump MANIFEST_SCHEMA_VERSION to N+1.
+ *   2. Add `'N->N+1': (m) => { ...transform... }` to MIGRATIONS.
+ *   3. The loop below will apply it automatically.
+ */
+const MIGRATIONS = {};
+
+/**
+ * Migrate a manifest object to the target schema version.
+ *
+ * - If `manifest.schemaVersion === targetVersion` — no-op, returns manifest unchanged.
+ * - If `manifest.schemaVersion` is missing (legacy install) — sets it to 1 and returns.
+ * - If `manifest.schemaVersion > targetVersion` — throws (downgrade not supported, code 3).
+ * - If `manifest.schemaVersion < targetVersion` — applies registered migrations in order.
+ *
+ * @param {object} manifest      - Parsed manifest object (may lack schemaVersion).
+ * @param {number} targetVersion - The schema version to migrate to.
+ * @returns {object}             - The migrated manifest (new object if changed).
+ */
+export function migrateManifest(manifest, targetVersion) {
+  // Legacy install: schemaVersion was not recorded before this constant existed.
+  if (manifest.schemaVersion === undefined || manifest.schemaVersion === null) {
+    return { ...manifest, schemaVersion: 1 };
+  }
+
+  const current = manifest.schemaVersion;
+
+  if (current === targetVersion) {
+    return manifest;
+  }
+
+  if (current > targetVersion) {
+    const err = new Error(
+      `Manifest schemaVersion ${current} is newer than installer target ${targetVersion}. ` +
+      'Downgrade is not supported. Update lumina-wiki to the latest version.',
+    );
+    err.code = 3;
+    throw err;
+  }
+
+  // Apply migrations step-by-step (current → current+1 → … → targetVersion).
+  let m = manifest;
+  for (let v = current; v < targetVersion; v++) {
+    const key = `${v}->${v + 1}`;
+    const migrate = MIGRATIONS[key];
+    if (!migrate) {
+      const err = new Error(
+        `No migration found for schemaVersion ${key}. ` +
+        'This is an internal error — please file an issue.',
+      );
+      err.code = 3;
+      throw err;
+    }
+    m = migrate(m);
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------------
 // State file paths helper
 // ---------------------------------------------------------------------------
 

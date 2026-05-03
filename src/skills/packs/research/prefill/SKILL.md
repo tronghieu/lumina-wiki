@@ -90,6 +90,16 @@ python3 _lumina/tools/fetch_wikipedia.py page "<title>"
    Propose a list of 2–5 plausible aliases, then ask the user to confirm or edit
    before writing. An empty array `[]` is fine if nothing obvious applies. Aliases
    must be unique across all foundations — `lint.mjs` L10 will error on collisions.
+
+   Foundation pages do not carry `provenance` or `confidence` frontmatter fields
+   (those belong on source pages). When the user later ingests a source that
+   references this foundation material, `/lumi-ingest` will set those fields on the
+   source page. To help that decision, note in the log entry whether the fetch was
+   `replayable` (Wikipedia snapshot saved to `raw/`), `partial` (summary only), or
+   `missing` (no fetch — manual entry). This keeps the audit trail clear without
+   polluting foundation frontmatter.
+
+   Example log note: `prefilled foundation reinforcement-learning (provenance: replayable — Wikipedia snapshot saved)`
 5. Keep the body concise: definition, scope notes, and external references.
 6. Log the addition:
 

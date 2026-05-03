@@ -258,6 +258,8 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'year',       type: 'number',   required: true  },
     { key: 'importance', type: 'enum',     required: true,  values: [1, 2, 3, 4, 5] },
     { key: 'url',        type: 'string',   required: false },
+    { key: 'provenance', type: 'enum',     required: true,  values: ['replayable', 'partial', 'missing'] },
+    { key: 'confidence', type: 'enum',     required: false, values: ['high', 'medium', 'low', 'unverified'] },
   ],
 
   // Concept page
@@ -269,6 +271,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'updated',          type: 'iso-date', required: true  },
     { key: 'key_sources',      type: 'array',    required: true  },
     { key: 'related_concepts', type: 'array',    required: true  },
+    { key: 'confidence', type: 'enum',     required: false, values: ['high', 'medium', 'low', 'unverified'] },
   ],
 
   // Person page

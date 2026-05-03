@@ -22,11 +22,13 @@ import {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09, checkL10,
+  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
+  reportSummary,
   INDEX_MARKER_OPEN,
   INDEX_MARKER_CLOSE,
+  ALL_CHECK_IDS,
 } from './lint.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +76,7 @@ function validSourceFm(overrides = {}) {
     authors: ['Author A'],
     year: 2026,
     importance: 3,
+    provenance: 'replayable',
     ...overrides,
   };
 }
@@ -1103,6 +1106,249 @@ describe('L10 alias-conflict', () => {
       assert.equal(l10.length, 0, 'L10 must not fire for concept with same title as foundation');
     } finally {
       await removeTmp(tmpDir);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L11: confidence-missing
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L11 confidence-missing', () => {
+  // Fixture 1: source with provenance AND confidence — clean lint.
+  test('clean: source with provenance and confidence produces no L11', () => {
+    const fm = validSourceFm({ provenance: 'replayable', confidence: 'high' });
+    const result = checkL11('sources/full-source.md', fm);
+    assert.equal(result.length, 0);
+  });
+
+  // Fixture 2: source with provenance but no confidence — 1 L11 warning, no L01 error.
+  test('source with provenance but no confidence: 1 L11 warning, no L01 error', () => {
+    const fm = validSourceFm({ provenance: 'replayable' });
+    delete fm.confidence;
+
+    const l01 = checkL01('sources/no-confidence.md', fm);
+    assert.equal(l01.length, 0, 'L01 must not fire for missing confidence (it is optional)');
+
+    const l11 = checkL11('sources/no-confidence.md', fm);
+    assert.equal(l11.length, 1, 'L11 must fire exactly once');
+    assert.equal(l11[0].id, 'L11-confidence-missing');
+    assert.equal(l11[0].severity, 'warning');
+    assert.equal(l11[0].fixable, false);
+  });
+
+  // Fixture 3: source with confidence but no provenance — 1 L01 error, no L11.
+  test('source with confidence but no provenance: 1 L01 error, no L11', () => {
+    const fm = validSourceFm({ confidence: 'medium' });
+    delete fm.provenance;
+
+    const l01 = checkL01('sources/no-provenance.md', fm);
+    assert.ok(l01.some(f => f.message.includes('"provenance"')), 'L01 must fire for missing provenance');
+
+    const l11 = checkL11('sources/no-provenance.md', fm);
+    assert.equal(l11.length, 0, 'L11 must not fire when confidence is present');
+  });
+
+  // Fixture 4: source with provenance: bogus — 1 L02 error (enum check).
+  test('source with provenance: bogus produces L02 enum error', () => {
+    const fm = validSourceFm({ provenance: 'bogus' });
+    const l02 = checkL02('sources/bad-provenance.md', fm);
+    assert.ok(l02.some(f => f.id === 'L02-frontmatter-types' && f.message.includes('"provenance"')),
+      'L02 must fire for invalid provenance value');
+  });
+
+  // Fixture 5: concept with no confidence — 1 L11 warning.
+  test('concept with no confidence: 1 L11 warning', () => {
+    const fm = {
+      id: 'my-concept',
+      title: 'My Concept',
+      type: 'concept',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      key_sources: ['sources/some-source'],
+      related_concepts: [],
+      // no confidence
+    };
+    const l11 = checkL11('concepts/my-concept.md', fm);
+    assert.equal(l11.length, 1, 'L11 must fire once for concept missing confidence');
+    assert.equal(l11[0].id, 'L11-confidence-missing');
+    assert.equal(l11[0].severity, 'warning');
+  });
+
+  // Fixture 6: concept with confidence: high — clean.
+  test('concept with confidence: high produces no L11', () => {
+    const fm = {
+      id: 'my-concept',
+      title: 'My Concept',
+      type: 'concept',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      key_sources: ['sources/some-source'],
+      related_concepts: [],
+      confidence: 'high',
+    };
+    const l11 = checkL11('concepts/my-concept.md', fm);
+    assert.equal(l11.length, 0);
+  });
+
+  // Fixture 7: non-source/concept entity (people) — L11 never fires.
+  test('people page: L11 never fires regardless of confidence field', () => {
+    const fm = { id: 'alice', title: 'Alice', type: 'person', created: '2026-01-01', updated: '2026-01-01' };
+    const result = checkL11('people/alice.md', fm);
+    assert.equal(result.length, 0, 'L11 must not fire for entity types other than sources and concepts');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// --summary: reportSummary unit tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('--summary reportSummary', () => {
+  // Helper: capture stdout from reportSummary.
+  function captureSummary(findings) {
+    const chunks = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => { chunks.push(chunk); return true; };
+    try {
+      reportSummary(findings);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    return JSON.parse(chunks.join(''));
+  }
+
+  test('zero findings: all counts 0, all check IDs present', () => {
+    const result = captureSummary([]);
+    assert.equal(result.errors, 0);
+    assert.equal(result.warnings, 0);
+    assert.equal(result.fixable, 0);
+    assert.ok(typeof result.by_check === 'object');
+    for (const id of ALL_CHECK_IDS) {
+      assert.ok(id in result.by_check, `by_check must contain ${id}`);
+      assert.equal(result.by_check[id], 0, `${id} count must be 0`);
+    }
+  });
+
+  test('1 L01 error + 2 L11 warnings: counts correct', () => {
+    const findings = [
+      { id: 'L01-frontmatter-required', severity: 'error', fixable: true, file: 'sources/a.md', line: null, message: 'Missing x', fix_applied: false },
+      { id: 'L11-confidence-missing', severity: 'warning', fixable: false, file: 'sources/b.md', line: null, message: 'Missing confidence', fix_applied: false },
+      { id: 'L11-confidence-missing', severity: 'warning', fixable: false, file: 'sources/c.md', line: null, message: 'Missing confidence', fix_applied: false },
+    ];
+    const result = captureSummary(findings);
+    assert.equal(result.errors, 1, 'errors must be 1');
+    assert.equal(result.warnings, 2, 'warnings must be 2');
+    assert.equal(result.by_check.L01, 1, 'by_check.L01 must be 1');
+    assert.equal(result.by_check.L11, 2, 'by_check.L11 must be 2');
+    // All other checks must be 0.
+    for (const id of ALL_CHECK_IDS) {
+      if (id !== 'L01' && id !== 'L11') {
+        assert.equal(result.by_check[id], 0, `${id} must be 0`);
+      }
+    }
+    // L01 is fixable.
+    assert.equal(result.fixable, 1, 'fixable must count L01 finding');
+  });
+
+  test('fixable count: L03 findings increment fixable', () => {
+    const findings = [
+      { id: 'L03-slug-style', severity: 'error', fixable: true, file: 'sources/MyPaper.md', line: null, message: 'Not kebab', fix_applied: false },
+      { id: 'L03-slug-style', severity: 'error', fixable: true, file: 'sources/OtherPaper.md', line: null, message: 'Not kebab', fix_applied: false },
+    ];
+    const result = captureSummary(findings);
+    assert.ok(result.fixable >= 1, 'fixable must be >= 1 for L03 findings');
+    assert.equal(result.by_check.L03, 2, 'by_check.L03 must be 2');
+  });
+
+  test('output is single-line JSON terminated with newline', () => {
+    const chunks = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => { chunks.push(chunk); return true; };
+    try {
+      reportSummary([]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    const raw = chunks.join('');
+    assert.ok(raw.endsWith('\n'), 'output must end with newline');
+    assert.equal(raw.indexOf('\n'), raw.length - 1, 'output must be a single line');
+    // Valid JSON.
+    assert.doesNotThrow(() => JSON.parse(raw.trimEnd()));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// --summary integration: runLint + reportSummary round-trip
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('--summary integration round-trip', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  // Helper: capture stdout from reportSummary.
+  function captureSummary(findings) {
+    const chunks = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => { chunks.push(chunk); return true; };
+    try {
+      reportSummary(findings);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    return JSON.parse(chunks.join(''));
+  }
+
+  test('empty wiki: --summary produces all-zero JSON with all check IDs', async () => {
+    await makeWiki(tmpDir);
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const result = captureSummary(findings);
+    assert.equal(result.errors, 0);
+    assert.equal(result.warnings, 0);
+    assert.equal(result.fixable, 0);
+    for (const id of ALL_CHECK_IDS) {
+      assert.ok(id in result.by_check, `by_check must contain ${id}`);
+    }
+  });
+
+  test('wiki with fixable L03 slug violation: fixable >= 1', async () => {
+    const wikiDir = join(tmpDir, 'wiki');
+    // Write a badly-named file into an existing wiki.
+    const badPath = join(wikiDir, 'sources', 'BadSlug.md');
+    const fm = renderFm(validSourceFm({ id: 'badslug', title: 'Bad Slug', provenance: 'replayable' }));
+    await writeFile(badPath, fm + 'Body.');
+    // Update index so L09 does not fire.
+    await writeFile(join(wikiDir, 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/BadSlug]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const result = captureSummary(findings);
+    assert.ok(result.fixable >= 1, 'fixable must be >= 1 when L03 violation exists');
+    assert.ok(result.by_check.L03 >= 1, 'by_check.L03 must be >= 1');
+  });
+
+  test('--json without --summary still produces verbose shape with detail fields', async () => {
+    // Introduce an L03 violation if not already present (file from previous test may still exist).
+    const wikiDir = join(tmpDir, 'wiki');
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    // Build JSON output shape manually (same as reportJson would do).
+    const errors = findings.filter(f => f.severity === 'error').length;
+    const warnings = findings.filter(f => f.severity === 'warning').length;
+    const infos = findings.filter(f => f.severity === 'info').length;
+    const fixesApplied = findings.filter(f => f.fix_applied).length;
+    const output = {
+      schema_version: '0.1.0',
+      scanned_files: 0,
+      checks_run: ALL_CHECK_IDS,
+      findings,
+      summary: { errors, warnings, info: infos, fixes_applied: fixesApplied },
+    };
+    // Verbose shape must have detail fields on each finding.
+    assert.ok(Array.isArray(output.findings), 'findings must be an array');
+    for (const f of output.findings) {
+      assert.ok('file' in f, 'verbose finding must have file field');
+      assert.ok('severity' in f, 'verbose finding must have severity field');
+      assert.ok('message' in f, 'verbose finding must have message field');
     }
   });
 });

@@ -1,9 +1,9 @@
 /**
  * @module lint
- * @description LuminaWiki v0.1 wiki linter — 10 schema checks, optional --fix.
+ * @description LuminaWiki v0.1 wiki linter — 11 schema checks, optional --fix.
  *
  * CLI usage:
- *   node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]
+ *   node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json] [--summary]
  *
  * Exit codes:
  *   0  clean (no violations, or all violations fixed)
@@ -11,6 +11,11 @@
  *   2  user error (bad args, no wiki/ dir found)
  *   3  internal error (unexpected exception)
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Summary output schema (--summary flag):
+ * {"errors":N,"warnings":N,"by_check":{"L01":n,...,"L11":n},"fixable":N}
+ * Single-line JSON. Exit code follows default lint rules.
+ * Compatible with --json --summary (--summary takes precedence over verbose shape).
  * ─────────────────────────────────────────────────────────────────────────────
  * JSON output schema (--json flag):
  * {
@@ -62,7 +67,7 @@ const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
 /** All check IDs in run order. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11'];
 
 /** Kebab-case pattern: lowercase letters, digits, hyphens; no leading/trailing hyphen. */
 const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -662,6 +667,29 @@ function checkL10(foundationEntries) {
   return findings;
 }
 
+/**
+ * L11: `confidence` field missing on a `sources` or `concepts` entity.
+ * Severity: warning. Not auto-fixable. Sets an explicit trust signal that
+ * downstream verification (Stage A/B/C of /lumi-verify, planned for v1.0)
+ * relies on. Better to surface the absence now than silently defer it.
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @returns {Finding[]}
+ */
+function checkL11(wikiRelPath, fm) {
+  const type = entityTypeForPath(wikiRelPath);
+  if (type !== 'sources' && type !== 'concepts') return [];
+
+  if (!('confidence' in fm) || fm.confidence === null || fm.confidence === undefined) {
+    return [finding(
+      'L11-confidence-missing', 'warning', false,
+      wikiRelPath, null,
+      `Missing optional-but-recommended frontmatter field "confidence" (sources and concepts); expected one of: high, medium, low, unverified`
+    )];
+  }
+  return [];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -914,6 +942,7 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL03(wikiRelPath));
     allFindings.push(...checkL04(wikiRelPath, outboundMap.get(wikiRelPath) || new Set(), inboundSet));
     allFindings.push(...checkL05(wikiRelPath, content, knownSlugs));
+    allFindings.push(...checkL11(wikiRelPath, fm));
   }
 
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
@@ -1073,6 +1102,33 @@ function reportHuman(findings, scannedFiles) {
 }
 
 /**
+ * Build and print the compact --summary JSON line.
+ * @param {Finding[]} findings
+ */
+function reportSummary(findings) {
+  const FIXABLE_IDS = new Set(['L01', 'L03', 'L06', 'L07', 'L09']);
+
+  let errors = 0;
+  let warnings = 0;
+  let fixable = 0;
+  const by_check = {};
+  for (const id of ALL_CHECK_IDS) by_check[id] = 0;
+
+  for (const f of findings) {
+    if (f.severity === 'error') errors++;
+    else if (f.severity === 'warning') warnings++;
+
+    // Extract the check prefix (e.g. "L01" from "L01-frontmatter-required").
+    const prefix = f.id.match(/^(L\d+)/)?.[1];
+    if (prefix && prefix in by_check) by_check[prefix]++;
+
+    if (FIXABLE_IDS.has(prefix)) fixable++;
+  }
+
+  process.stdout.write(JSON.stringify({ errors, warnings, by_check, fixable }) + '\n');
+}
+
+/**
  * Format and print findings in JSON mode.
  * @param {Finding[]} findings
  * @param {number} scannedFiles
@@ -1104,12 +1160,14 @@ function parseArgs(argv) {
   let dryRun = false;
   let suggest = false;
   let json = false;
+  let summary = false;
 
   for (const arg of args) {
     if (arg === '--fix') fix = true;
     else if (arg === '--dry-run') dryRun = true;
     else if (arg === '--suggest') suggest = true;
     else if (arg === '--json') json = true;
+    else if (arg === '--summary') summary = true;
     else if (arg.startsWith('--')) {
       console.error(`Unknown flag: ${arg}`);
       process.exit(2);
@@ -1123,7 +1181,7 @@ function parseArgs(argv) {
     fix = true;
   }
 
-  return { path, fix, dryRun, suggest, json };
+  return { path, fix, dryRun, suggest, json, summary };
 }
 
 async function main() {
@@ -1160,7 +1218,9 @@ async function main() {
     process.exit(3);
   }
 
-  if (opts.json) {
+  if (opts.summary) {
+    reportSummary(findings);
+  } else if (opts.json) {
     reportJson(findings, scannedFiles);
   } else {
     reportHuman(findings, scannedFiles);
@@ -1183,11 +1243,13 @@ export {
   isExempt,
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
-  checkL06, checkL07, checkL08, checkL09, checkL10,
+  checkL06, checkL07, checkL08, checkL09, checkL10, checkL11,
   fixL01, fixL03, fixL06, fixL07, fixL09,
   runLint,
+  reportSummary,
   INDEX_MARKER_OPEN,
   INDEX_MARKER_CLOSE,
+  ALL_CHECK_IDS,
 };
 
 // Run main only when invoked directly.

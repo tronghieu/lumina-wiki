@@ -124,6 +124,29 @@ with confidence level), `## Concepts` (all `[[concept-slug]]` links), `## People
 Low-confidence claims get an explicit note: "(confidence: low — link the source
 rather than asserting)".
 
+Set `provenance:` on every source page. This field is a trust signal for downstream
+verification (Stage A/B/C of `/lumi-verify`, planned for v1.0). An explicit decision
+is more useful than a silently-defaulted value because verification needs to know
+whether it can re-check the material end-to-end.
+
+Provenance rubric — pick the one that matches what you actually did:
+- `replayable` — you fetched the URL and saved the raw snapshot under `raw/`. The
+  source can be re-verified end-to-end against the original.
+- `partial` — you kept only a summary; no raw text snapshot was saved. Drift
+  detection works against the URL, but grounding cannot be re-checked.
+- `missing` — manual entry: no URL, no raw snapshot. Verification has nothing to
+  grip on.
+
+Also set `confidence:` (optional but encouraged). Use `high | medium | low | unverified`.
+Default to `unverified` for fresh ingests; bump up only after you have cross-checked
+the claims or the user has confirmed them.
+
+Example frontmatter with both fields:
+```yaml
+provenance: replayable
+confidence: unverified
+```
+
 Write checkpoint: `phase: "source-page"`.
 
 ### Phase 4 — Write concept and person stubs
