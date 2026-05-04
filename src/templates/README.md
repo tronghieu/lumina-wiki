@@ -170,12 +170,13 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 | Skill         | Trigger        | What it does                                          |
 |---------------|---------------|-------------------------------------------------------|
-| `/lumi-init`  | manual, first  | Bootstrap wiki from existing `raw/` content          |
-| `/lumi-ingest`| manual         | Read a source, write page, update affected pages, log |
-| `/lumi-ask`   | manual         | Query wiki, synthesize answer, optionally file page   |
-| `/lumi-edit`  | manual         | Add/remove/revise wiki content per user request       |
-| `/lumi-check` | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
-| `/lumi-reset` | manual         | Scoped destructive cleanup                            |
+| `/lumi-init`   | manual, first  | Bootstrap wiki from existing `raw/` content          |
+| `/lumi-ingest` | manual         | Read a source, write page, update affected pages, log |
+| `/lumi-ask`    | manual         | Query wiki, synthesize answer, optionally file page   |
+| `/lumi-edit`   | manual         | Add/remove/revise wiki content per user request       |
+| `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
+| `/lumi-reset`  | manual         | Scoped destructive cleanup                            |
+| `/lumi-verify` | manual         | Check that wiki pages match the sources they cite; reports suspicious statements for the user to review; never auto-edits                            |
 
 {{#if pack_research}}### Pack: research
 

@@ -1723,3 +1723,248 @@ describe('atomicWrite tmp cleanup on success', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: v0.9 verify schema — verify_status and findings fields
+// ---------------------------------------------------------------------------
+
+/** Helper: write a minimal valid source file to wiki/sources/<slug>.md */
+async function writeVerifySource(tmp, slug, extra = '') {
+  const dir = join(tmp, 'wiki', 'sources');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, `${slug}.md`),
+    `---\nid: ${slug}\ntitle: Verify Source\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors:\n  - Tester\nyear: 2024\nimportance: 3\nprovenance: replayable\n${extra}---\n`,
+    'utf8',
+  );
+}
+
+describe('v0.9 verify_status and findings schema', () => {
+  test('set-meta verify_status passed succeeds and is readable', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-status-test');
+
+      const set = runWiki(['set-meta', 'sources/vs-status-test', 'verify_status', 'passed'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta verify_status failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/vs-status-test'], { cwd: tmp });
+      assert.equal(read.status, 0);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.verify_status, 'passed');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta findings with valid item succeeds and verify-frontmatter accepts', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-findings-ok');
+
+      const validFindings = JSON.stringify([
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
+      ]);
+      const set = runWiki(
+        ['set-meta', 'sources/vs-findings-ok', 'findings', validFindings, '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta findings failed: ${set.stderr}`);
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-findings-ok'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected valid findings: ${vf.stderr}`);
+      const json = parseJson(vf.stdout);
+      assert.ok(json.valid, `Expected valid:true, got errors: ${JSON.stringify(json.errors)}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('verify-frontmatter rejects findings item missing evidence', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-bad-evidence');
+      // Write malformed findings via set-meta (missing 'evidence' field)
+      const malformed = JSON.stringify([
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', action: 'Z' },
+      ]);
+      const set = runWiki(
+        ['set-meta', 'sources/vs-bad-evidence', 'findings', malformed, '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-bad-evidence'], { cwd: tmp });
+      assert.notEqual(vf.status, 0, 'Expected non-zero exit for malformed findings');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('verify-frontmatter rejects findings item with invalid reviewer enum', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-bad-reviewer');
+
+      const badFindings = JSON.stringify([
+        { id: 1, reviewer: 'robot', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
+      ]);
+      const set = runWiki(
+        ['set-meta', 'sources/vs-bad-reviewer', 'findings', badFindings, '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-bad-reviewer'], { cwd: tmp });
+      assert.notEqual(vf.status, 0, 'Expected non-zero exit for invalid reviewer');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('verify-frontmatter passes for source without verify_status or findings', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-no-verify-fields');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-no-verify-fields'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter failed: ${vf.stderr}`);
+      const json = parseJson(vf.stdout);
+      assert.ok(json.valid, `Expected valid:true without optional fields, errors: ${JSON.stringify(json.errors)}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('round-trip: finding with colon in value (URL)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-colon-in-value');
+
+      const original = [
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'URL https://x:8080', evidence: 'ratio 2:1', action: 'accept' },
+      ];
+      const set = runWiki(
+        ['set-meta', 'sources/vs-colon-in-value', 'findings', JSON.stringify(original), '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/vs-colon-in-value'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.deepEqual(json.frontmatter.findings, original, 'findings round-trip mismatch');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-colon-in-value'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected valid colon-in-value findings: ${vf.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('round-trip: finding with escaped quote in string value', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-escaped-quote');
+
+      const original = [
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'He said \\"hi\\"', evidence: 'quoted evidence', action: 'accept' },
+      ];
+      const set = runWiki(
+        ['set-meta', 'sources/vs-escaped-quote', 'findings', JSON.stringify(original), '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/vs-escaped-quote'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.deepEqual(json.frontmatter.findings, original, 'findings round-trip mismatch for escaped quotes');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-escaped-quote'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected valid escaped-quote findings: ${vf.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('round-trip: finding with numeric id round-trips and verify-frontmatter accepts', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-numeric-id');
+
+      const original = [
+        { id: 42, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'some evidence', action: 'accept' },
+      ];
+      const set = runWiki(
+        ['set-meta', 'sources/vs-numeric-id', 'findings', JSON.stringify(original), '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/vs-numeric-id'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.deepEqual(json.frontmatter.findings, original, 'findings round-trip mismatch for numeric id');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-numeric-id'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected valid numeric-id findings: ${vf.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('negative: findings set to non-array scalar causes verify-frontmatter to exit non-zero', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      // Write a file with findings as a bare string scalar (simulates hand-edit corruption)
+      const dir = join(tmp, 'wiki', 'sources');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, 'vs-nonarray.md'),
+        `---\nid: vs-nonarray\ntitle: Verify Source\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors:\n  - Tester\nyear: 2024\nimportance: 3\nprovenance: replayable\nfindings: not-an-array\n---\n`,
+        'utf8',
+      );
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-nonarray'], { cwd: tmp });
+      assert.notEqual(vf.status, 0, 'Expected non-zero exit when findings is a non-array scalar');
+      assert.ok(
+        vf.stderr.includes('findings must be an array') || vf.stdout.includes('findings must be an array'),
+        `Expected informative error message, got stderr: ${vf.stderr} stdout: ${vf.stdout}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('positive: findings with colon in evidence value passes verify-frontmatter', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'vs-colon-evidence');
+
+      const findings = [
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'contains: colon', action: 'accept' },
+      ];
+      const set = runWiki(
+        ['set-meta', 'sources/vs-colon-evidence', 'findings', JSON.stringify(findings), '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const vf = runWiki(['verify-frontmatter', 'sources/vs-colon-evidence'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected colon-in-evidence findings: ${vf.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});

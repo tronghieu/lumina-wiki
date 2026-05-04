@@ -166,6 +166,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-edit` | 要求手动编辑 wiki 页面。 |
 | | `/lumi-check` | 检查 wiki 中的问题（断链等）。 |
 | | `/lumi-reset` | 安全地删除 wiki 的部分内容。 |
+| | `/lumi-verify` | 核查 wiki 里的笔记是否与引用的来源相符。把可疑之处报告给你审阅；不会替你修改笔记。 |
 | **Research**| `/lumi-research-discover` | 发现并排序相关研究论文。 |
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |

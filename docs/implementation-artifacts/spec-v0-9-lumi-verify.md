@@ -2,7 +2,7 @@
 title: 'v0.9 — /lumi-verify: independent hallucination-reduction skill'
 type: 'feature'
 created: '2026-05-04'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '81e58e7e6b628f32ff58b81a500ec4b8c5ad8c99'
 context:
   - '{project-root}/docs/project-context.md'
@@ -71,16 +71,16 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/scripts/schemas.mjs` -- Add `{ key: 'verify_status', type: 'enum', required: false, values: ['passed','findings_pending','drift_detected','skipped','not_applicable'] }` and `{ key: 'findings', type: 'array', required: false }` to `sources` entry -- extends schema for verify writeback without breaking existing entries
-- [ ] `src/scripts/wiki.mjs` -- Extend `verify-frontmatter` to validate `findings[]` item shape when array is non-empty (`id: number, reviewer: blind|grounding|external, class: decision_needed|patch|defer|dismiss, claim: string, evidence: string, action: string`) -- locks the finding contract so malformed writebacks fail lint
-- [ ] `src/scripts/wiki.test.mjs` -- Add tests for `set-meta verify_status passed`, `set-meta findings '[...]' --json-value`, and rejection of malformed findings -- guards the contract
-- [ ] `src/skills/core/verify/SKILL.md` -- Author the skill prompt: `# /lumi-verify`, sections Role, Context, Instructions (3-reviewer pipeline + fallback), Output Format, Examples, Guardrails, Definition of Done -- main deliverable
-- [ ] `src/installer/commands.js` -- Add `lumi-verify` entry to `getSkillDefs()` under core pack with leaf `verify` -- registers skill for install
-- [ ] `src/installer/commands.test.js` -- Update core-skill list assertion -- keeps installer tests green
-- [ ] `src/templates/README.md` -- Add `/lumi-verify` to skill list inside `<!-- lumina:schema -->` region (single template; vi/zh template variants do not exist yet) -- updates the README rendered into user projects on install
-- [ ] `README.md`, `README.vi.md`, `README.zh.md` (project root) -- Add `/lumi-verify` to the skill section in all three lumina-wiki package READMEs -- multi-language sync rule §17–18
-- [ ] `docs/user-guide/en.md`, `docs/user-guide/vi.md`, `docs/user-guide/zh.md` -- Add `/lumi-verify` usage section with worked example (single-slug retro mode + `--all` + key flags) per language -- multi-language sync rule §17–18
-- [ ] `ROADMAP.md` -- Update v0.9 entry to reflect shipped scope (verify only; ingest workflow deferred to v0.10) -- keep roadmap accurate
+- [x] `src/scripts/schemas.mjs` -- Add `{ key: 'verify_status', type: 'enum', required: false, values: ['passed','findings_pending','drift_detected','skipped','not_applicable'] }` and `{ key: 'findings', type: 'array', required: false }` to `sources` entry -- extends schema for verify writeback without breaking existing entries
+- [x] `src/scripts/wiki.mjs` -- Extend `verify-frontmatter` to validate `findings[]` item shape when array is non-empty (`id: number, reviewer: blind|grounding|external, class: decision_needed|patch|defer|dismiss, claim: string, evidence: string, action: string`) -- locks the finding contract so malformed writebacks fail lint
+- [x] `src/scripts/wiki.test.mjs` -- Add tests for `set-meta verify_status passed`, `set-meta findings '[...]' --json-value`, and rejection of malformed findings -- guards the contract
+- [x] `src/skills/core/verify/SKILL.md` -- Author the skill prompt: `# /lumi-verify`, sections Role, Context, Instructions (3-reviewer pipeline + fallback), Output Format, Examples, Guardrails, Definition of Done -- main deliverable
+- [x] `src/installer/commands.js` -- Add `lumi-verify` entry to `getSkillDefs()` under core pack with leaf `verify` -- registers skill for install
+- [x] `src/installer/commands.test.js` -- Update core-skill list assertion -- keeps installer tests green
+- [x] `src/templates/README.md` -- Add `/lumi-verify` to skill list inside `<!-- lumina:schema -->` region (single template; vi/zh template variants do not exist yet) -- updates the README rendered into user projects on install
+- [x] `README.md`, `README.vi.md`, `README.zh.md` (project root) -- Add `/lumi-verify` to the skill section in all three lumina-wiki package READMEs -- multi-language sync rule §17–18
+- [x] `docs/user-guide/en.md`, `docs/user-guide/vi.md`, `docs/user-guide/zh.md` -- Add `/lumi-verify` usage section with worked example (single-slug retro mode + `--all` + key flags) per language -- multi-language sync rule §17–18
+- [x] `ROADMAP.md` -- Update v0.9 entry to reflect shipped scope (verify only; ingest workflow deferred to v0.10) -- keep roadmap accurate
 
 **Acceptance Criteria:**
 - Given a fixture wiki with one grounded source and one fabricated-claim source, when running `/lumi-verify --all`, then the grounded entry gets `verify_status: passed` and the fabricated entry gets `verify_status: findings_pending` with at least one finding of `reviewer: grounding`.
@@ -89,6 +89,27 @@ context:
 - Given a host runtime without Agent tool support, when running `/lumi-verify <slug>`, then 3 prompt files are written to `_lumina/_state/verify-prompts/<slug>/{blind,grounding,external}.md` and the skill HALTs with paste-back instructions.
 - Given a fresh install with the new skill, when running `npm run ci:idempotency`, then the gate stays green (no `_lumina/_state/` files in the watched-paths diff).
 - Given the new schema fields are optional, when running `npm run test:scripts` against existing entries lacking these fields, then no L01/L02 lint errors are emitted.
+
+## Spec Change Log
+
+### 2026-05-04 — review-driven amendments (iteration 1)
+
+Triggering findings (from 3-reviewer adversarial review of the in-progress diff):
+
+- **User-guide tone too technical** (user feedback during review). Spec didn't constrain user-facing language style. Amended `docs/project-context.md` §3 rule 21: user-facing docs target non-technical readers; banned-word list; four-part skill-section structure. Rewrote all user-guide /lumi-verify sections, README skill rows, SKILL.md frontmatter description.
+- **`--stage` flag had three different semantics** across SKILL.md, ROADMAP, and user-guide. Removed from user-guide entirely; replaced in SKILL.md with `--external` (single boolean flag for the open-web reviewer). v0.9 ships with three flags: `<slug>`, `--all`, `--since <date>`, plus `--external`.
+- **`dismiss`-only verdict contradicted between SKILL.md Step 5 and `references/triage.md`.** Picked triage.md's rule (`dismiss → passed`, dismissals are noise and don't block). SKILL.md Step 5 amended to match.
+- **SKILL.md Step 6 used `fs.writeFileSync`** — direct violation of project-context.md §3 rule 1 (atomic write). Rewrote Step 6 to use Write tool for tmp file + `wiki.mjs checkpoint-write` for atomic landing in `_lumina/_state/`. Also closes the shell-injection vector that interpolated finding text into a `node -e` string.
+- **Triage-merge could produce structurally contradictory findings** (e.g. `reviewer: blind, class: decision_needed` despite Blind being forbidden from `decision_needed`). Amended Step 5 triage rule: when a class is upgraded by a later reviewer, attribute the upgraded finding to the upgrading reviewer.
+- **Flow-mapping parser correctness bugs** in `wiki.mjs` (escape detection, colon-in-value, scalar round-trip, non-array bypass). Patched in place; format unchanged. Added 5 round-trip + negative tests to `wiki.test.mjs`.
+- **ROADMAP heading "(in progress)"** was directly contradicted by spec task ("move to shipped"). Amended to "(implementing — branch feat/v0.9-lumi-verify)" since shipped status comes only on merge + tag, not on branch landing.
+
+KEEP instructions (preserve through any future loop):
+- `findings:` array replaces previous on each run; full audit trail lives in timestamped report file. Don't append-merge findings.
+- Drift preflight gates Grounding (don't run Grounding on missing raw_paths). Don't crash on drift.
+- Adversarial query in External reviewer is mandatory when `--external` is set. Don't make it skippable.
+- Sources-only scope for v0.9. Don't extend to other entity types in this iteration.
+- 4-part user-guide structure (purpose / when / how / what you get). Don't re-introduce reviewer tables, status enums, or stage-flag matrices in user-guide prose.
 
 ## Design Notes
 

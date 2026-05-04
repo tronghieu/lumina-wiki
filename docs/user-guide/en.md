@@ -301,6 +301,34 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | `/lumi-edit <wiki page>` | Ask AI to edit or update a specific wiki page. |
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
+| `/lumi-verify` | Ask AI to check that your wiki notes actually match the sources you cited. |
+
+## Checking your notes with /lumi-verify
+
+When AI summarizes a document into a wiki page, it can sometimes add things that are not in the original source. `/lumi-verify` reads each note in your wiki and tells you which statements do not match the sources you cited.
+
+### When to use it
+
+- After AI adds new pages to your wiki, before you rely on them.
+- Before you share or export part of the wiki.
+- Once in a while, as a health check on older pages.
+
+### How to use it
+
+```text
+/lumi-verify <page-name>     # check one page
+/lumi-verify --all            # check all pages
+```
+
+### What you get back
+
+A short report listing any statement in your notes that does not match the cited source. For each one, the report tells you:
+
+- Which statement looks suspicious.
+- Why (for example: "this number does not appear in the cited paper").
+- A suggestion (rewrite, remove, or keep with a note).
+
+`/lumi-verify` never edits your notes for you. You decide what to do with each finding.
 
 ## Using Codex App, Claude Code, and Gemini CLI
 

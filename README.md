@@ -166,6 +166,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-edit` | Request a manual edit to a wiki page. |
 | | `/lumi-check` | Check the wiki for errors, such as broken links. |
 | | `/lumi-reset` | Safely reset parts of the wiki. |
+| | `/lumi-verify` | Check that wiki notes match the sources they cite. Reports anything suspicious for your review; never edits notes for you. |
 | **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
 | | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |

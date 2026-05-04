@@ -166,6 +166,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-edit` | Yêu cầu chỉnh sửa thủ công một trang wiki. |
 | | `/lumi-check` | Kiểm tra lỗi trong wiki (liên kết hỏng, v.v.). |
 | | `/lumi-reset` | Xóa các phần của wiki một cách an toàn. |
+| | `/lumi-verify` | Kiểm tra xem các trang wiki có khớp với nguồn đã trích dẫn không. Báo cáo những điểm đáng ngờ để bạn xem xét; không tự sửa ghi chú giúp bạn. |
 | **Research**| `/lumi-research-discover` | Khám phá và xếp hạng các bài báo nghiên cứu liên quan. |
 | | `/lumi-research-survey` | Tạo một bài tổng quan/khảo sát từ kiến thức hiện có. |
 | | `/lumi-research-prefill` | Tạo trước các khái niệm nền tảng để tránh trùng lặp. |

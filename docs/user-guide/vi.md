@@ -301,6 +301,34 @@ Các ví dụ dưới đây dùng cú pháp `/lumi-*`, phù hợp với các mô
 | `/lumi-edit <trang wiki>` | Nhờ AI sửa hoặc cập nhật một trang wiki cụ thể. |
 | `/lumi-check` | Nhờ AI kiểm tra sức khỏe wiki: lỗi cấu trúc, liên kết hỏng, hoặc trang chưa được cập nhật đúng. |
 | `/lumi-reset` | Xóa hoặc đặt lại một phần wiki theo cách có kiểm soát. |
+| `/lumi-verify` | Yêu cầu AI kiểm tra xem các trang wiki có thực sự khớp với nguồn bạn đã trích dẫn không. |
+
+## Kiểm tra ghi chú với /lumi-verify
+
+Khi AI tóm tắt một tài liệu thành trang wiki, đôi khi nó thêm vào những thông tin không có trong tài liệu gốc. `/lumi-verify` đọc từng trang trong wiki và chỉ cho bạn biết câu nào không khớp với nguồn bạn đã trích dẫn.
+
+### Khi nào nên dùng
+
+- Sau khi AI thêm trang mới vào wiki, trước khi bạn sử dụng các trang đó.
+- Trước khi chia sẻ hoặc xuất một phần wiki.
+- Định kỳ, để kiểm tra sức khỏe các trang cũ.
+
+### Cách dùng
+
+```text
+/lumi-verify <tên-trang>     # kiểm tra một trang
+/lumi-verify --all            # kiểm tra toàn bộ
+```
+
+### Bạn nhận được gì
+
+Một bản báo cáo ngắn liệt kê những câu trong ghi chú không khớp với nguồn được trích dẫn. Với mỗi câu, báo cáo cho bạn biết:
+
+- Câu nào đáng ngờ.
+- Vì sao (ví dụ: "con số này không xuất hiện trong bài báo được trích dẫn").
+- Gợi ý xử lý (sửa lại, xóa đi, hoặc giữ lại kèm chú thích).
+
+`/lumi-verify` không bao giờ tự sửa ghi chú giúp bạn. Bạn quyết định xử lý từng phát hiện.
 
 ## Dùng Với Codex App, Claude Code, Gemini CLI
 
