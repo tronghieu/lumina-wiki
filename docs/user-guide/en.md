@@ -6,6 +6,22 @@ You can think of Lumina-Wiki as a "second brain" for reading and research. The d
 
 Your role is to choose sources, ask questions, check the direction of the analysis, and decide what matters. The AI's role is to take care of the knowledge area in `wiki/`: writing new pages, updating old pages, keeping links, updating the index, writing the log, and helping the wiki stay consistent as it grows.
 
+## Contents
+
+- [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)
+- [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
+- [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
+- [Installation](#installation)
+- [How to Call Commands in an AI Agent](#how-to-call-commands-in-an-ai-agent)
+- [Quick Start](#quick-start)
+- [Research Pack for Research Work](#research-pack-for-research-work)
+- [Common Commands](#common-commands)
+- [Using Codex App, Claude Code, and Gemini CLI](#using-codex-app-claude-code-and-gemini-cli)
+- [Using Obsidian to Read the Wiki](#using-obsidian-to-read-the-wiki)
+- [Upgrading Lumina-Wiki](#upgrading-lumina-wiki)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
+
 ## Problems With the Old Way of Managing Knowledge
 
 When you only have a few documents, you can save them in a folder, bookmark them in a browser, or write a few lines in a note-taking app. But when the number of documents grows, this usually creates many problems:
