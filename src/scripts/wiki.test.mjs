@@ -2035,6 +2035,33 @@ describe('v0.9 ingest_status schema', () => {
     }
   });
 
+  test('findings with commas and scalar-like values round-trip through flow mapping', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'flow-rt');
+      const findings = JSON.stringify([
+        { id: 1, reviewer: 'grounding', class: 'patch', claim: 'alpha, beta, gamma', evidence: 'page 3, table 2', action: 'revise claim' },
+        { id: 2, reviewer: 'blind', class: 'dismiss', claim: '2024', evidence: 'true', action: 'null' },
+      ]);
+      const set = runWiki(['set-meta', 'sources/flow-rt', 'findings', findings, '--json-value'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta findings failed: ${set.stderr}`);
+      const read = runWiki(['read-meta', 'sources/flow-rt'], { cwd: tmp });
+      assert.equal(read.status, 0);
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.equal(fm.findings[0].claim, 'alpha, beta, gamma', 'comma in claim truncated');
+      assert.equal(fm.findings[0].evidence, 'page 3, table 2', 'comma in evidence truncated');
+      assert.equal(fm.findings[1].claim, '2024', 'numeric-like claim coerced');
+      assert.equal(typeof fm.findings[1].claim, 'string', 'claim type should stay string');
+      assert.equal(fm.findings[1].evidence, 'true', 'boolean-like evidence coerced');
+      assert.equal(typeof fm.findings[1].evidence, 'string', 'evidence type should stay string');
+      assert.equal(fm.findings[1].action, 'null', 'null-like action coerced');
+      assert.equal(typeof fm.findings[1].action, 'string', 'action type should stay string');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('all four ingest_status enum values round-trip cleanly', async () => {
     const tmp = await makeTmp();
     try {

@@ -324,7 +324,10 @@ function stringifyFrontmatter(fm) {
                 // Quote if needed for flow context (contains special chars).
                 const needsQuote = v.includes('"') || v.includes("'") || v.includes(':')
                   || v.includes('#') || v.includes('\n') || v.includes('\t') || v.includes('\r')
-                  || v.trim() === '';
+                  || v.includes(',') || v.includes('{') || v.includes('}')
+                  || v.includes('[') || v.includes(']')
+                  || v.trim() === ''
+                  || /^(true|false|null|~|\d[\d.eE+-]*)$/i.test(v);
                 return needsQuote
                   ? `${k}: "${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
                   : `${k}: ${v}`;
