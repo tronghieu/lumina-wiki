@@ -187,6 +187,50 @@ A second axis of v2.0.0 work: enable `/lumi-survey` and a new `/lumi-rank` skill
 
 ---
 
+## v3.0.0 — KG Consistency & Contradiction Audit
+
+**Theme:** wiki-wide structural and semantic audit of the knowledge graph itself, deliberately **separate from `/lumi-verify`**. Scheduled for v3.0.0 because the audit's value scales with graph density — cross-entry contradiction detection and topology sanity only become meaningful failure modes once the wiki holds enough entries that no single human can hold the whole graph in their head. Shipping it earlier would optimise for a problem users do not yet have.
+
+### Scope and rationale
+
+`/lumi-verify` gates **ingest** — it checks that a single entry's claims are grounded in the sources that entry cites. It is per-entity, source-anchored, and runs at write time.
+
+This audit is a different axis: it inspects the **whole wiki as a graph** and asks questions that no per-entry check can answer:
+
+- Do two entries make claims that directly contradict each other, even when each is individually grounded in its own source?
+- Are edges in `graph/edges.jsonl` semantically appropriate (e.g. `contradicts` vs `extends` vs `refutes_on_subset`), or has the agent picked a label that is structurally valid but semantically wrong?
+- Do citation triples narrated in body text match the recorded edges in `graph/`, or has the agent described a relation that was never written to the graph?
+- Are there orphan entities, dangling reverse edges, or citation cycles that escaped `/lumi-check`'s structural lint?
+
+Folding this into `/lumi-verify` would conflate two operations with different cadences (per-ingest vs periodic full-graph), different inputs (one entry + its cited raw vs the whole wiki), and different failure modes. They share techniques (triple extraction, NLI) but not lifecycle.
+
+### Planned shape
+
+- **New skill `/lumi-audit`** — opt-in, manually invoked, runs across the entire wiki. Produces an advisory report; never edits content directly. Distinct from `/lumi-check` (structural lint, fast, deterministic) and `/lumi-verify` (per-entry source grounding).
+- **Triple extraction pass over `wiki/`** — one LLM pass per entry to extract `(subject, predicate, object)` triples from body prose, normalised against the 28 edge types declared in `schemas.mjs`.
+- **Three audit passes, all offline:**
+  - **Pass 1 — Edge-graph reconciliation.** For every triple extracted from body text, check that a corresponding edge exists in `graph/edges.jsonl` and that its type is semantically consistent. Flags narrated-but-unrecorded relations and edge-type misuse (e.g. `contradicts` written as `extends`).
+  - **Pass 2 — Cross-entry contradiction.** Index all triples across the wiki; flag pairs `(s, p, o)` and `(s, ¬p, o)` — or semantically opposed predicates — appearing in different entries. Catches the "wiki disagrees with itself" failure mode that per-entry verify cannot see.
+  - **Pass 3 — Graph topology sanity.** Orphan entities (no inbound edges from a non-foundation entry), citation cycles, asymmetric edges where symmetry is required by `schemas.mjs`. Fully deterministic, no LLM needed.
+- **Output contract:** `_lumina/_state/audit-report-<timestamp>.json` plus a human summary appended to `wiki/log.md`. Runtime-only state, excluded from `ci-idempotency`. No automatic edits — suggestions only.
+
+### Explicitly out of scope
+
+- Source-level fact-checking (claim ↔ raw) — belongs to `/lumi-verify`.
+- Upstream drift (raw ↔ web) — belongs to `/lumi-verify`.
+- World-truth checking (claim ↔ open web) — belongs to `/lumi-verify`.
+- Structural lint (kebab slugs, missing reverse edges, dedupe symmetric edges) — stays in `/lumi-check`.
+
+### Acceptance criteria
+
+- `/lumi-audit` runs fully offline against a fixture wiki containing both consistent and contradictory entry pairs; the report classifies them correctly with no false positives on entries that discuss the same entity from different angles without actually contradicting.
+- Edge-graph reconciliation correctly flags a body triple that has no matching edge in `graph/edges.jsonl`, and correctly flags an edge whose type is semantically inappropriate for the narrated relation.
+- Topology pass detects an injected orphan entity and an injected citation cycle on a fixture wiki, deterministically.
+- `npm run ci:idempotency` stays green — no audit-report files in the watched-paths diff.
+- Skill name `/lumi-audit` is reserved in `src/skills/`; no overlap, aliasing, or behaviour collision with `/lumi-check` or `/lumi-verify`.
+
+---
+
 ## Future (unscheduled)
 
 Ideas captured but not yet committed to a milestone:
