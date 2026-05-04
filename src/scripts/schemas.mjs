@@ -260,8 +260,11 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'importance', type: 'enum',     required: true,  values: [1, 2, 3, 4, 5] },
     { key: 'urls',       type: 'array',    required: false },
     { key: 'raw_paths',  type: 'array',    required: false },
-    { key: 'provenance', type: 'enum',     required: true,  values: ['replayable', 'partial', 'missing'] },
-    { key: 'confidence', type: 'enum',     required: false, values: ['high', 'medium', 'low', 'unverified'] },
+    { key: 'provenance',    type: 'enum',  required: true,  values: ['replayable', 'partial', 'missing'] },
+    { key: 'confidence',   type: 'enum',  required: false, values: ['high', 'medium', 'low', 'unverified'] },
+    { key: 'ingest_status', type: 'enum', required: false, values: ['drafted', 'linted', 'verified', 'finalized'] },
+    { key: 'verify_status', type: 'enum', required: false, values: ['passed', 'findings_pending', 'drift_detected', 'skipped', 'not_applicable'] },
+    { key: 'findings',     type: 'array', required: false },
   ],
 
   // Concept page

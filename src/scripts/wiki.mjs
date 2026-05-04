@@ -146,8 +146,14 @@ function parseFrontmatter(content) {
     // Detect indented list item
     const listMatch = FM_LIST_ITEM_RE.exec(line);
     if (listMatch && currentListKey !== null) {
-      const val = unquoteValue(listMatch[2].trim());
-      frontmatter[currentListKey].push(val);
+      const rawItem = listMatch[2].trim();
+      // Flow-style object item: {key: val, key2: val2, ...}
+      if (rawItem.startsWith('{') && rawItem.endsWith('}')) {
+        frontmatter[currentListKey].push(_parseFlowMapping(rawItem));
+      } else {
+        const val = unquoteValue(rawItem);
+        frontmatter[currentListKey].push(val);
+      }
       continue;
     }
 
@@ -183,12 +189,82 @@ function parseFrontmatter(content) {
 
     // Indented list item without matching pattern (fallback)
     if (line.match(/^\s+-\s/) && currentListKey !== null) {
-      const val = unquoteValue(line.replace(/^\s+-\s+/, '').trim());
-      frontmatter[currentListKey].push(val);
+      const rawFallback = line.replace(/^\s+-\s+/, '').trim();
+      if (rawFallback.startsWith('{') && rawFallback.endsWith('}')) {
+        frontmatter[currentListKey].push(_parseFlowMapping(rawFallback));
+      } else {
+        frontmatter[currentListKey].push(unquoteValue(rawFallback));
+      }
     }
   }
 
   return { frontmatter, body, hasFrontmatter: true };
+}
+
+/**
+ * Parse a YAML flow-style mapping string like `{id: 1, reviewer: grounding, class: patch}`.
+ * Supports simple scalar values (strings, numbers). Nested maps are not supported.
+ * String values may be double-quoted.
+ * @param {string} raw - The raw `{...}` string (braces included).
+ * @returns {Record<string, any>}
+ */
+function _parseFlowMapping(raw) {
+  const inner = raw.slice(1, -1).trim();
+  const result = {};
+  if (!inner) return result;
+
+  /**
+   * Count consecutive backslashes immediately before position i.
+   * Used to determine whether a quote is escaped (odd count) or not (even).
+   * @param {string} s
+   * @param {number} i
+   * @returns {number}
+   */
+  function countPrecedingBackslashes(s, i) {
+    let n = 0;
+    let pos = i - 1;
+    while (pos >= 0 && s[pos] === '\\') { n++; pos--; }
+    return n;
+  }
+
+  // Split on ',' boundaries, respecting quoted values.
+  const parts = [];
+  let depth = 0;
+  let inDQ = false;
+  let inSQ = false;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === '"' && !inSQ && countPrecedingBackslashes(inner, i) % 2 === 0) inDQ = !inDQ;
+    if (ch === "'" && !inDQ && countPrecedingBackslashes(inner, i) % 2 === 0) inSQ = !inSQ;
+    if (!inDQ && !inSQ) {
+      if (ch === '{' || ch === '[') depth++;
+      else if (ch === '}' || ch === ']') depth--;
+      else if (ch === ',' && depth === 0) {
+        parts.push(inner.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+  }
+  parts.push(inner.slice(start).trim());
+
+  for (const part of parts) {
+    // Find the first colon NOT inside a quoted segment.
+    let pInDQ = false;
+    let pInSQ = false;
+    let colonIdx = -1;
+    for (let i = 0; i < part.length; i++) {
+      const ch = part[i];
+      if (ch === '"' && !pInSQ && countPrecedingBackslashes(part, i) % 2 === 0) pInDQ = !pInDQ;
+      if (ch === "'" && !pInDQ && countPrecedingBackslashes(part, i) % 2 === 0) pInSQ = !pInSQ;
+      if (ch === ':' && !pInDQ && !pInSQ) { colonIdx = i; break; }
+    }
+    if (colonIdx === -1) continue;
+    const k = part.slice(0, colonIdx).trim();
+    const v = part.slice(colonIdx + 1).trim();
+    result[k] = parseScalar(v);
+  }
+  return result;
 }
 
 /**
@@ -197,10 +273,11 @@ function parseFrontmatter(content) {
  * @returns {string}
  */
 function unquoteValue(v) {
-  if (
-    (v.startsWith('"') && v.endsWith('"')) ||
-    (v.startsWith("'") && v.endsWith("'"))
-  ) {
+  if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) {
+    // Decode double-quoted string: unescape \\ → \ and \" → "
+    return v.slice(1, -1).replace(/\\(["\\])/g, '$1');
+  }
+  if (v.startsWith("'") && v.endsWith("'") && v.length >= 2) {
     return v.slice(1, -1);
   }
   return v;
@@ -237,7 +314,31 @@ function stringifyFrontmatter(fm) {
       } else {
         lines.push(`${key}:`);
         for (const item of val) {
-          lines.push(`  - ${quoteIfNeeded(item)}`);
+          if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+            // Serialize nested object as YAML flow mapping.
+            const pairs = Object.entries(item).map(([k, v]) => {
+              if (v === null || v === undefined) {
+                return `${k}: null`;
+              }
+              if (typeof v === 'string') {
+                // Quote if needed for flow context (contains special chars).
+                const needsQuote = v.includes('"') || v.includes("'") || v.includes(':')
+                  || v.includes('#') || v.includes('\n') || v.includes('\t') || v.includes('\r')
+                  || v.includes(',') || v.includes('{') || v.includes('}')
+                  || v.includes('[') || v.includes(']')
+                  || v.trim() === ''
+                  || /^(true|false|null|~|\d[\d.eE+-]*)$/i.test(v);
+                return needsQuote
+                  ? `${k}: "${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+                  : `${k}: ${v}`;
+              }
+              // boolean, finite number — these round-trip through parseScalar fine
+              return `${k}: ${v}`;
+            });
+            lines.push(`  - {${pairs.join(', ')}}`);
+          } else {
+            lines.push(`  - ${quoteIfNeeded(item)}`);
+          }
         }
       }
     } else if (val === null) {
@@ -1177,6 +1278,45 @@ function _validateFrontmatter(frontmatter, entityType) {
 }
 
 /**
+ * Validate the shape of each item in a findings array.
+ * Returns an array of error strings; empty array means valid.
+ * Called by verify-frontmatter when findings is present and non-empty.
+ * @param {unknown[]} findings
+ * @returns {string[]}
+ */
+function _validateFindingsItems(findings) {
+  const VALID_REVIEWER = ['blind', 'grounding', 'external'];
+  const VALID_CLASS = ['decision_needed', 'patch', 'defer', 'dismiss'];
+  const errors = [];
+  findings.forEach((item, idx) => {
+    const prefix = `findings[${idx}]`;
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      errors.push(`${prefix}: must be an object`);
+      return;
+    }
+    if (typeof item.id !== 'number') {
+      errors.push(`${prefix}.id: must be a number, got ${typeof item.id}`);
+    }
+    if (!VALID_REVIEWER.includes(item.reviewer)) {
+      errors.push(`${prefix}.reviewer: must be one of [${VALID_REVIEWER.join(', ')}], got ${item.reviewer}`);
+    }
+    if (!VALID_CLASS.includes(item.class)) {
+      errors.push(`${prefix}.class: must be one of [${VALID_CLASS.join(', ')}], got ${item.class}`);
+    }
+    if (typeof item.claim !== 'string') {
+      errors.push(`${prefix}.claim: must be a string, got ${typeof item.claim}`);
+    }
+    if (typeof item.evidence !== 'string') {
+      errors.push(`${prefix}.evidence: must be a string, got ${typeof item.evidence}`);
+    }
+    if (typeof item.action !== 'string') {
+      errors.push(`${prefix}.action: must be a string, got ${typeof item.action}`);
+    }
+  });
+  return errors;
+}
+
+/**
  * Lookup required frontmatter fields for an entity type.
  * Merges _base fields with type-specific fields.
  * @param {string} entityType
@@ -1660,6 +1800,30 @@ async function main(argv) {
         }
 
         const errors = _validateFrontmatter(frontmatter, entityType);
+
+        // Validate findings item shapes when present and non-empty.
+        // Malformed items are a hard error (code 2) per the exit-code contract.
+        const findingsVal = frontmatter.findings;
+        if (findingsVal !== undefined && findingsVal !== null) {
+          if (!Array.isArray(findingsVal)) {
+            emitError(
+              `findings must be an array, got ${typeof findingsVal}`,
+              2,
+            );
+            process.exit(2);
+          }
+          if (findingsVal.length > 0) {
+            const findingsErrors = _validateFindingsItems(findingsVal);
+            if (findingsErrors.length > 0) {
+              emitError(
+                `findings items malformed: ${findingsErrors.join('; ')}`,
+                2,
+              );
+              process.exit(2);
+            }
+          }
+        }
+
         emitJson({
           slug,
           entityType,

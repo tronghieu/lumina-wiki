@@ -6,6 +6,22 @@ You can think of Lumina-Wiki as a "second brain" for reading and research. The d
 
 Your role is to choose sources, ask questions, check the direction of the analysis, and decide what matters. The AI's role is to take care of the knowledge area in `wiki/`: writing new pages, updating old pages, keeping links, updating the index, writing the log, and helping the wiki stay consistent as it grows.
 
+## Contents
+
+- [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)
+- [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
+- [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
+- [Installation](#installation)
+- [How to Call Commands in an AI Agent](#how-to-call-commands-in-an-ai-agent)
+- [Quick Start](#quick-start)
+- [Research Pack for Research Work](#research-pack-for-research-work)
+- [Common Commands](#common-commands)
+- [Using Codex App, Claude Code, and Gemini CLI](#using-codex-app-claude-code-and-gemini-cli)
+- [Using Obsidian to Read the Wiki](#using-obsidian-to-read-the-wiki)
+- [Upgrading Lumina-Wiki](#upgrading-lumina-wiki)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
+
 ## Problems With the Old Way of Managing Knowledge
 
 When you only have a few documents, you can save them in a folder, bookmark them in a browser, or write a few lines in a note-taking app. But when the number of documents grows, this usually creates many problems:
@@ -285,6 +301,62 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | `/lumi-edit <wiki page>` | Ask AI to edit or update a specific wiki page. |
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
+| `/lumi-verify` | Ask AI to check that your wiki notes actually match the sources you cited. |
+
+## Checking your notes with /lumi-verify
+
+When AI summarizes a document into a wiki page, it can sometimes add things that are not in the original source. `/lumi-verify` reads each note in your wiki and tells you which statements do not match the sources you cited.
+
+### When to use it
+
+- After AI adds new pages to your wiki, before you rely on them.
+- Before you share or export part of the wiki.
+- Once in a while, as a health check on older pages.
+
+### How to use it
+
+```text
+/lumi-verify <page-name>     # check one page
+/lumi-verify --all            # check all pages
+```
+
+### What you get back
+
+A short report listing any statement in your notes that does not match the cited source. For each one, the report tells you:
+
+- Which statement looks suspicious.
+- Why (for example: "this number does not appear in the cited paper").
+- A suggestion (rewrite, remove, or keep with a note).
+
+`/lumi-verify` never edits your notes for you. You decide what to do with each finding.
+
+## Adding a document with /lumi-ingest
+
+`/lumi-ingest` reads a document and adds it to your wiki. Unlike a one-shot process, it now pauses at four points so you can review the work before anything is saved.
+
+### When to use it
+
+- You have a new PDF, article, or report ready in `raw/sources/` and want to add it to the wiki.
+- You want to check a summary before it becomes a permanent wiki page.
+- You are building a research wiki and need each source to be reliable before you cite it in writing.
+
+### How to use it
+
+```text
+/lumi-ingest raw/sources/your-document.pdf
+```
+
+After you run the command, the process moves through four checkpoints. First, the AI reads the source and writes a draft wiki page — then pauses so you can read it. Second, the AI checks the draft for structure issues such as broken links or missing connections — then pauses again. Third, the AI reads the original source a second time and checks whether the claims in the draft actually appear there — then pauses with its findings. At the end of each pause you choose: accept and continue, make edits and check again, or quit and come back later. If you accept the verify findings with reservations, the page is saved with a low-confidence mark so you know to revisit it. The final step saves the page and writes a record to the log — no pause needed there.
+
+If you quit at any point, progress is preserved. Running `/lumi-ingest` again on the same document picks up where you left off.
+
+### What you get back
+
+- A new wiki page in `wiki/sources/` summarizing the document.
+- Links from the new page to related concept and person pages already in the wiki.
+- New concept or person pages created automatically if the document introduces ones that do not exist yet.
+- A record in the wiki log showing when the document was added.
+- A low-confidence mark on the page if you accepted the verify step with reservations, so you know to return to it.
 
 ## Using Codex App, Claude Code, and Gemini CLI
 

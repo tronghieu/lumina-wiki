@@ -106,7 +106,7 @@ Interact with your wiki using these commands in your AI chat interface, such as 
 
 **Phase 1: Ingest and Build Knowledge**
 -   `/lumi-init`: Scan the `raw/` directory and perform the first wiki build.
--   `/lumi-ingest [path/to/file]`: Process a new document and integrate it into the knowledge base.
+-   `/lumi-ingest [path/to/file]`: Process a new document into the knowledge base, pausing at four checkpoints (write the draft, check structure, cross-check claims, save) for review.
 
 **Phase 2: Query and Maintain**
 -   `/lumi-ask [your question]`: Ask a question against the full knowledge base in `wiki/`.
@@ -161,11 +161,12 @@ These are the commands you can use when chatting with your AI agent.
 | Pack | Skill | Purpose |
 | :--- | :--- | :--- |
 | **Core** | `/lumi-init` | Initialize the wiki from all files in `raw/`. |
-| | `/lumi-ingest` | Process a new document into the wiki. |
+| | `/lumi-ingest` | Read a document and write a wiki page. Pauses at four checkpoints — write the draft, check structure, cross-check claims, save — so you can review before each step commits. Resumable across sessions. |
 | | `/lumi-ask` | Ask a question against the full knowledge base. |
 | | `/lumi-edit` | Request a manual edit to a wiki page. |
 | | `/lumi-check` | Check the wiki for errors, such as broken links. |
 | | `/lumi-reset` | Safely reset parts of the wiki. |
+| | `/lumi-verify` | Check that wiki notes match the sources they cite. Reports anything suspicious for your review; never edits notes for you. |
 | **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
 | | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |

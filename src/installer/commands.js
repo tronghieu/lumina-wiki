@@ -842,6 +842,7 @@ function getSkillDefs(packs) {
       { name: 'edit',            canonicalId: 'lumi-edit',            displayName: '/lumi-edit' },
       { name: 'check',           canonicalId: 'lumi-check',           displayName: '/lumi-check' },
       { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
+      { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
       { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
     ];
     for (const s of coreSkills) {
