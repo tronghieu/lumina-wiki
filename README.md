@@ -6,9 +6,7 @@
 
 > **Where Knowledge Starts to Glow.**
 >
-> The LLM-maintained Knowledge Artifact for Technical Research.
-
-Lumina-Wiki is a ready-to-use implementation of the **[LLM-Wiki vision](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)** articulated by **Andrej Karpathy, founding member of OpenAI and former Director of AI at Tesla.**
+> Turn AI into your personal knowledge assistant and second brain.
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
@@ -23,14 +21,30 @@ Lumina-Wiki is a ready-to-use implementation of the **[LLM-Wiki vision](https://
 </p>
 
 <p align="center">
-  English • <a href="README.vi.md" lang="vi">Tiếng Việt</a> • <a href="README.zh.md" lang="zh">简体中文</a>
+  English • <a href="README.vi.md" lang="vi">Tiếng Việt</a> • <a href="README.zh.md" lang="zh-Hans">简体中文</a>
 </p>
+
+<p align="center">
+  <a href="docs/user-guide/en.md">User Guide</a>
+</p>
+
+## Menu
+
+- [Getting Started & Install](#2-getting-started)
+- [User Guide](docs/user-guide/en.md)
+- [The Core Workflow](#1-the-core-workflow)
+- [Your First Commands](#3-your-first-commands-core-skills)
+- [Workspace Directory Guide](#4-workspace-directory-guide)
+- [Available Skills](#5-available-skills-v01)
+- [What's Coming Next](#6-whats-coming-next)
+- [Contributing & License](#7-contributing--license)
+- [Other Languages](#8-other-languages)
 
 ---
 
 ## 1. The Core Workflow
 
-Lumina-Wiki operates on a simple principle: separate your raw materials from the AI's structured knowledge.
+Lumina-Wiki works from one simple principle: keep your raw materials separate from the AI's structured knowledge.
 
 ```text
 +-------------------------+      /lumi-ingest      +---------------------------+
@@ -42,222 +56,160 @@ Lumina-Wiki operates on a simple principle: separate your raw materials from the
 +-------------------------+                        +---------------------------+
 ```
 
-1.  **You Provide:** Place your documents (PDFs, notes) into the `raw/` directory.
-2.  **The Agent Builds:** Use commands in your AI chat (like `/lumi-ingest`) to make the agent read from `raw/` and build a structured, interlinked wiki in the `wiki/` directory.
-3.  **You Query:** Ask questions (using `/lumi-ask`) against the agent's "brain" in `wiki/`, receiving faster and more context-aware answers.
+1.  **You Provide:** Place your documents (PDFs, notes) in the `raw/` directory.
+2.  **The Agent Builds:** Use commands in your AI chat, such as `/lumi-ingest`, to make the agent read from `raw/` and build a structured, interlinked wiki in `wiki/`.
+3.  **You Query:** Ask questions with `/lumi-ask` against the agent's "brain" in `wiki/` for faster, more context-aware answers.
 
 ## 2. Getting Started
 
 ### **Step 1: Install**
+
 Install the wiki workspace into your current project with one command:
+
+Before running this command, your machine needs **Node.js**. If you do not have it yet, download and install the recommended version from the official site: [nodejs.org/en/download](https://nodejs.org/en/download).
 
 ```bash
 npx lumina-wiki install
 ```
-> **Note for Windows Users:** For the best experience, it is recommended to [enable Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development) to allow the installer to use symlinks correctly. If Developer Mode is off, the installer will fall back to copying skill files, which is functional but less ideal for updates.
 
-The installer will guide you through a quick setup, including selecting optional **Packs** like `research` and `reading`.
+> **Note for Windows users:** For the best experience, enable [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development) so the installer can use symlinks correctly. If Developer Mode is off, the installer falls back to copying skill files; everything still works, but updates are less ideal.
+
+The installer will guide you through a quick setup, including optional **Packs** such as `research` and `reading`.
 
 ### **Step 2 (Optional): Configure the Research Pack**
-If you installed the `research` pack, some skills need API keys to search online. Run the setup skill to configure them. In your AI chat window:
+
+If you installed the `research` pack, some skills can use API keys for better online search. In your AI chat, run:
 
 > **You:**
 > `/lumi-research-setup`
 
-The agent will guide you through an interactive setup to save your keys to a local `.env` file.
+The agent will help you check the research tools and save keys to a local `.env` file when needed.
 
 ### **Step 3 (Upgrades): Migrate Legacy Wiki Entries**
 
-If you are **re-installing Lumina-Wiki on a project that already has a `wiki/` from an earlier version**, run the installer the same way:
+If you reinstall Lumina-Wiki on a project that already has a `wiki/` from an earlier version, just run `npx lumina-wiki install` again. The installer updates scripts, schemas, and skills; **your content in `wiki/`, `raw/`, and `log.md` is not modified**.
 
-```bash
-npx lumina-wiki install
-```
+If the installer warns that older entries are missing newer frontmatter fields, you have two ways to backfill them:
 
-The installer detects the version bump and updates scripts, schemas, and skills atomically. **Your wiki content (`wiki/`, `raw/`, `log.md`) is never modified by the installer.** When the installer finds frontmatter fields added by newer versions but missing on older entries, it prints a `[warn]` banner with the count and the next step.
-
-You then have two ways to backfill:
-
-**Option A — LLM-driven (recommended):** Open your AI chat and run:
-
-> **You:**
-> `/lumi-migrate-legacy`
-
-The skill reads `_lumina/CHANGELOG.md` to learn which fields each version added, runs `lint --json` to find affected entries, and infers per-entry values (e.g. `provenance: replayable | partial | missing`, `confidence: high | medium | low | unverified`) from `raw/` snapshots, citation edges, and entry metadata. Idempotent — safe to run multiple times.
-
-**Option B — Quick deterministic backfill:** From your terminal:
+- **Recommended:** open your AI chat and run `/lumi-migrate-legacy`.
+- **Faster:** run this terminal command:
 
 ```bash
 node _lumina/scripts/wiki.mjs migrate --add-defaults
 ```
 
-This applies conservative defaults (`provenance: missing`, `confidence: unverified`) to every entry that lacks them. Lint goes green immediately, but values are placeholders — you can refine later with Option A or by editing entries by hand.
-
-You can combine: run Option B first for a clean lint, then Option A when you want higher-quality values. Both write atomically and leave a trail in `wiki/log.md`.
-
-For the full list of schema changes per version, see [`CHANGELOG.md`](CHANGELOG.md) or the local copy at `_lumina/CHANGELOG.md` after install.
+See [`CHANGELOG.md`](CHANGELOG.md) or the local `_lumina/CHANGELOG.md` after install for version-by-version schema changes.
 
 ## 3. Your First Commands (Core Skills)
 
-Interact with your wiki using these commands in your AI chat interface (Gemini CLI, Claude, etc.).
+Interact with your wiki using these commands in your AI chat interface, such as Gemini CLI, Claude, or Codex.
 
-**Phase 1: Ingestion & Building**
--   `/lumi-init`: Scans the `raw/` directory and performs an initial build of the wiki.
--   `/lumi-ingest [path/to/file]`: Processes a single new document and integrates it into the knowledge base.
+**Phase 1: Ingest and Build Knowledge**
+-   `/lumi-init`: Scan the `raw/` directory and perform the first wiki build.
+-   `/lumi-ingest [path/to/file]`: Process a new document and integrate it into the knowledge base.
 
-**Phase 2: Query & Maintenance**
--   `/lumi-ask [your question]`: Asks a question against the entire knowledge base in `wiki/`.
--   `/lumi-edit [path/to/wiki/page]`: Requests a change or correction to a specific wiki page.
--   `/lumi-check`: Lints the wiki for errors (broken links, etc.).
+**Phase 2: Query and Maintain**
+-   `/lumi-ask [your question]`: Ask a question against the full knowledge base in `wiki/`.
+-   `/lumi-edit [path/to/wiki/page]`: Request a change or correction to a specific wiki page.
+-   `/lumi-check`: Check the whole wiki for errors, such as broken links or orphan pages.
 
-*Additional skills may be available if you installed optional packs like `research` or `reading`.*
+*Additional skills may be available if you installed optional packs such as `research` or `reading`.*
 
 ---
 
-## 4. The Workspace Directory Guide
+## 4. Workspace Directory Guide
 
-Lumina creates a workspace with a clear purpose for each directory.
-
-### **Primary Folders (Your Daily Workspace)**
+Lumina creates a workspace where each folder has a clear purpose.
 
 | Path | Purpose | Managed By |
 | :--- | :--- | :--- |
-| **`raw/`** | **Your Immutable Input Library.** The agent **only reads** from here. | **You** |
-| `raw/sources/` | Place your primary documents (PDFs, articles) here. | You |
+| **`raw/`** | **Your immutable input library.** The agent **only reads** from here. | **You** |
+| `raw/sources/` | Place your primary documents, such as PDFs and articles, here. | You |
 | `raw/notes/` | Your personal, unstructured notes and ideas. | You |
 | `raw/assets/` | Images or other assets for your notes. | You |
-| `raw/discovered/`| *(Research Pack)* Papers found by `/lumi-research-discover` are saved here. | Agent |
-| **`wiki/`** | **The Agent's Brain.** The agent **writes** structured knowledge here. | **Agent** |
+| `raw/discovered/` | *(Research Pack)* Papers found by `/lumi-research-discover` are saved here. | Agent |
+| **`wiki/`** | **The agent's brain.** The agent **writes** structured knowledge here. | **Agent** |
 | `wiki/sources/` | AI-generated summaries for each document in `raw/sources`. | Agent |
-| `wiki/concepts/` | Core ideas and definitions are extracted into individual pages. | Agent |
-| `wiki/people/` | Profiles of authors, researchers, etc. | Agent |
-| `wiki/outputs/` | Detailed answers from `/lumi-ask` are saved here for reference. | Agent |
+| `wiki/concepts/` | Core ideas and definitions extracted into individual pages. | Agent |
+| `wiki/people/` | Profiles of authors, researchers, and other people. | Agent |
+| `wiki/outputs/` | Detailed answers from `/lumi-ask` saved for reference. | Agent |
 | `wiki/index.md` | The main table of contents for your wiki. | Agent |
-| `...` | *(Other entity folders like `foundations/`, `characters/` appear with packs)* | Agent |
+| `...` | *(Other entity folders such as `foundations/` and `characters/` appear with packs.)* | Agent |
+| **`_lumina/`** | Lumina-managed engine, scripts, and configuration. | **System** |
+| **`.agents/`** | Skills the agent can use. | **System** |
 
+You usually work with `raw/` and read results in `wiki/`; you do not need to edit system folders.
 
-### **System Folders (Managed by Lumina)**
+### **Browse Your Wiki with Obsidian (Optional)**
 
-| Path | Purpose | Managed By |
-| :--- | :--- | :--- |
-| **`_lumina/`** | The core engine, scripts, and configuration for the wiki. | **System** |
-| **`.agents/`** | Contains all the `skills` that the agent can use. | **System** |
-| `...` | *(Other dotfiles like `.claude/`, `.gitignore`)* | **System** |
+[Obsidian](https://obsidian.md) is a local Markdown note-taking app that helps you browse linked notes. Because Lumina-Wiki also creates Markdown files, you can open the **project root folder** in Obsidian to read and browse your wiki more easily. See the [user guide](docs/user-guide/en.md#using-obsidian-to-read-the-wiki) for details.
 
-**Note:** You generally do not need to modify the System Folders.
+### **Local Search with qmd (Advanced, Optional)**
 
-### **Browsing Your Wiki with Obsidian (Optional)**
-
-[Obsidian](https://obsidian.md) is the recommended visual companion for Lumina-Wiki. Because the wiki uses native Obsidian `[[wikilinks]]`, you get a full graph view, backlinks panel, and property queries out of the box.
-
-**Point your vault at the project root** — not just the `wiki/` subfolder. The root contains `index.md`, `log.md`, and cross-links between `wiki/` pages and `raw/` source files that only resolve when Obsidian can see both directories.
-
-**Recommended setup after `npx lumina-wiki install`:**
-
-1. Obsidian → **Open folder as vault** → select the project root.
-2. **Settings → Files & links → Excluded files** — add:
-   - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
-   - Agent entry-point stubs: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md` — they only redirect to `README.md` and would otherwise add empty nodes to the graph view. Keep `README.md` itself visible: it is the canonical schema reference.
-3. **Settings → Files & links**:
-   - Use `[[Wikilinks]]`: **on**
-   - New link format: **Shortest path when possible**
-   - Default attachment location: `In the folder specified below` → `raw/assets/`
-4. **Core plugins to enable:** Graph view, Backlinks, Outgoing links, Tags, Properties, Outline.
-5. *(Optional)* Community plugin **Dataview** — lets you query pages by frontmatter fields like `type`, `importance`, `confidence`, and `date_added`.
-
-> The `wiki/graph/` folder contains `edges.jsonl` and `citations.jsonl` (machine-readable data files, not markdown). Excluding it keeps the graph view clean.
-
-### **Local Search with qmd (Optional)**
-
-As your wiki grows, you may want faster full-text search than `index.md` plus `grep` can offer. We recommend [qmd](https://github.com/tobi/qmd) — a local, on-device search engine for markdown files with hybrid BM25/vector search and LLM re-ranking. It pairs nicely with Lumina-Wiki and your AI agent.
-
-**How to wire it into your agent:**
-
-1. Install qmd following the instructions in its repo, then index the project root so it sees both `wiki/` and `raw/`.
-2. **CLI route** — your agent can call `qmd <query>` via `Bash`. Just mention in your prompts that the command is available.
-3. **MCP route (handy for Claude Code, Codex, Cursor)** — register qmd's MCP server in your IDE's MCP config. The agent picks it up as a native tool and can call it from `/lumi-ask` or any follow-up.
-4. Re-index after `/lumi-ingest` (manually or via a hook) so new pages become searchable.
-
-qmd sits alongside `index.md` and the wiki graph — a fast retrieval layer that feeds your agent better candidates before it reads pages in full.
-
-**Bonus — tobi's official qmd skill.** tobi also publishes a dedicated skill that teaches your agent how to use qmd effectively (when to pick `lex` vs `vec` vs `hyde`, how to write `intent` to disambiguate, lex syntax for phrases and exclusions). If your IDE supports the skill format, you can install it with:
+As your wiki grows, you can use [qmd](https://github.com/tobi/qmd) for faster local Markdown search. If your IDE supports the skill format, install the official qmd skill with:
 
 ```bash
 npx skills add https://github.com/tobi/qmd --skill qmd
 ```
 
-We recommend reading [the skill page on skills.sh](https://skills.sh/tobi/qmd/qmd) first to see exactly what it adds.
-
 ---
 
-## 5. Available Skills and Tools (v0.1)
+## 5. Available Skills (v0.1)
 
-### Skills (User Commands)
-
-These are the commands you can use in your chat with the AI.
+These are the commands you can use when chatting with your AI agent.
 
 | Pack | Skill | Purpose |
 | :--- | :--- | :--- |
-| **Core** | `/lumi-init` | Initializes the wiki from all files in `raw/`. |
-| | `/lumi-ingest` | Processes a single new document into the wiki. |
-| | `/lumi-ask` | Asks a question against the entire knowledge base. |
-| | `/lumi-edit` | Requests a manual edit to a wiki page. |
-| | `/lumi-check` | Lints the wiki for errors (broken links, etc.). |
-| | `/lumi-reset` | Safely resets parts of the wiki. |
-| **Research**| `/lumi-research-discover` | Discovers and ranks relevant research papers. |
-| | `/lumi-research-survey` | Creates a survey/summary from existing knowledge. |
-| | `/lumi-research-prefill` | Seeds the wiki with foundational concepts to avoid duplicates. |
-| | `/lumi-research-setup` | Helps configure API keys for research tools. |
-| **Reading** | `/lumi-reading-chapter-ingest`| Ingests a book chapter by chapter. |
-| | `/lumi-reading-character-track`| Tracks characters and their relationships in a story. |
-| | `/lumi-reading-theme-map` | Identifies and maps out themes in a narrative. |
-| | `/lumi-reading-plot-recap` | Provides a progressive recap of the plot. |
+| **Core** | `/lumi-init` | Initialize the wiki from all files in `raw/`. |
+| | `/lumi-ingest` | Process a new document into the wiki. |
+| | `/lumi-ask` | Ask a question against the full knowledge base. |
+| | `/lumi-edit` | Request a manual edit to a wiki page. |
+| | `/lumi-check` | Check the wiki for errors, such as broken links. |
+| | `/lumi-reset` | Safely reset parts of the wiki. |
+| **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
+| | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
+| | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |
+| | `/lumi-research-setup` | Help configure API keys for research tools. |
+| **Reading** | `/lumi-reading-chapter-ingest` | Ingest a book chapter by chapter. |
+| | `/lumi-reading-character-track` | Track characters and their relationships in a story. |
+| | `/lumi-reading-theme-map` | Identify and map themes in a narrative. |
+| | `/lumi-reading-plot-recap` | Provide a progressive plot recap. |
 
-### Tools (The Engine Under the Hood)
-
-These are the scripts that the agent's skills use to perform actions.
-
-| Location | Tool | Role |
-| :--- | :--- | :--- |
-| **`_lumina/scripts/`** | `wiki.mjs` | **The Core Engine.** Handles all write/edit/link operations in `wiki/`. |
-| | `lint.mjs` | Linter used by `/lumi-check` to find errors. |
-| | `reset.mjs` | The script for safely deleting content. |
-| | `schemas.mjs` | The single source of truth for all wiki structures and rules. |
-| **`_lumina/tools/`** | `discover.py` | *(Research Pack)* Powers the `/lumi-research-discover` skill. |
-| | `fetch_*.py` | *(Research Pack)* A set of tools to fetch data from APIs like ArXiv, Wikipedia, etc. |
+The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`; you usually do not need to call them directly.
 
 ---
 
 ## 6. What's Coming Next
 
-The current release is **v0.2** (preview). The full plan lives in [`ROADMAP.md`](./ROADMAP.md). Headline items:
+The current release is **v0.2** (preview). The full plan is in [`ROADMAP.md`](./ROADMAP.md). Headline items:
 
-**v1.0.0 — First Stable**
-- **Daily search & fetch** — watchlist queries (`_lumina/config/watchlist.yml`) run on a cadence; new arXiv / Semantic Scholar hits land in `raw/discovered/<date>/` automatically.
-- New `/lumi-daily` skill to triage what landed since last run.
-- Stability lock for the v0.1 surface (CLI flags, exit codes, schema field names).
-- Cross-platform CI matrix (macOS + Linux + Windows, Node 20 + 22).
+**v1.0.0 - First Stable**
+- **Daily search and fetch** - watchlist queries (`_lumina/config/watchlist.yml`) run on a schedule; new arXiv / Semantic Scholar papers land automatically in `raw/discovered/<date>/`.
+- New `/lumi-daily` skill to triage newly collected papers.
+- Stability lock for the v0.1 surface: CLI flags, exit codes, and schema field names.
+- Cross-platform CI matrix: macOS, Linux, and Windows on Node 20 and 22.
 
-**v2.0.0 — Research Pack Source Expansion**
-- **New paper sources:** OpenAlex, Unpaywall, CORE (Priority 1) → OpenReview, Hugging Face Papers, Papers With Code (Priority 2) → Crossref, DOAJ, research-blog RSS (Priority 3).
-- **Paper ranking:** new `/lumi-rank` skill surfacing influential-citation count, field-normalized citation rank, Scite support/contrast tally, and Altmetric attention — all into a `ranking:` block on the paper's frontmatter.
+**v2.0.0 - Research Pack Source Expansion**
+- **New paper sources:** OpenAlex, Unpaywall, CORE (Priority 1) -> OpenReview, Hugging Face Papers, Papers With Code (Priority 2) -> Crossref, DOAJ, research lab RSS feeds (Priority 3).
+- **Paper ranking:** new `/lumi-rank` skill adding influential-citation count, field-normalized citation rank, Scite support/contrast signals, and Altmetric attention to a `ranking:` frontmatter block.
 
-**Want to help?** Pick any unchecked item in `ROADMAP.md`, open an issue to claim it, then send a PR. Source fetchers all follow the same pattern in `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`) so they're a friendly first contribution. See the local-dev steps below.
+**Want to contribute?** Pick any unchecked item in `ROADMAP.md`, open an issue to claim it, then send a PR. Source fetchers follow the same pattern in `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`), so they are a good first contribution. See the local development steps below.
 
 ---
 
 ## 7. Contributing & License
 
-### 🛠️ Local Development (for contributors)
+### Local Development (for contributors)
 
-If you want to contribute to the `lumina-wiki` installer itself:
+If you want to contribute to the `lumina-wiki` installer:
+
 ```bash
-# 1. Clone & Install Dependencies
+# 1. Clone and install dependencies
 git clone https://github.com/tronghieu/lumina-wiki.git
 cd lumina-wiki
 npm ci
 
-# 2. Run Tests
+# 2. Run tests
 npm run test:all
 ```
 

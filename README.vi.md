@@ -6,7 +6,7 @@
 
 > **Where Knowledge Starts to Glow.**
 >
-> Khối Tri thức được duy trì bởi LLM dành cho nghiên cứu kỹ thuật.
+> Biến AI thành trợ lý tri thức cá nhân và bộ não thứ hai của bạn.
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
@@ -21,8 +21,24 @@
 </p>
 
 <p align="center">
-  <a href="README.md" lang="en">English</a> • Tiếng Việt • <a href="README.zh.md" lang="zh">简体中文</a>
+  <a href="README.md" lang="en">English</a> • Tiếng Việt • <a href="README.zh.md" lang="zh-Hans">简体中文</a>
 </p>
+
+<p align="center">
+  <a href="docs/user-guide/vi.md">Hướng dẫn sử dụng</a>
+</p>
+
+## Menu
+
+- [Bắt đầu & Cài đặt](#2-bắt-đầu)
+- [Hướng dẫn sử dụng](docs/user-guide/vi.md)
+- [Luồng làm việc cốt lõi](#1-luồng-làm-việc-cốt-lõi)
+- [Các lệnh đầu tiên](#3-các-lệnh-đầu-tiên-của-bạn-kỹ-năng-cốt-lõi)
+- [Cấu trúc thư mục](#4-hướng-dẫn-cấu-trúc-thư-mục)
+- [Các kỹ năng có sẵn](#5-các-kỹ-năng-có-sẵn-v01)
+- [Lộ trình sắp tới](#6-lộ-trình-sắp-tới)
+- [Đóng góp & Giấy phép](#7-đóng-góp--giấy-phép)
+- [Ngôn ngữ khác](#8-ngôn-ngữ-khác)
 
 ---
 
@@ -47,53 +63,42 @@ Lumina-Wiki hoạt động dựa trên một nguyên tắc đơn giản: tách b
 ## 2. Bắt đầu
 
 ### **Bước 1: Cài đặt**
+
 Cài đặt không gian làm việc wiki vào dự án hiện tại của bạn bằng một lệnh duy nhất:
+
+Trước khi chạy lệnh này, máy tính của bạn cần có **Node.js**. Nếu chưa có, hãy tải và cài bản khuyến nghị từ trang chính thức: [nodejs.org/en/download](https://nodejs.org/en/download).
 
 ```bash
 npx lumina-wiki install
 ```
+
 > **Lưu ý cho người dùng Windows:** Để có trải nghiệm tốt nhất, bạn nên [bật Chế độ nhà phát triển (Developer Mode)](https://learn.microsoft.com/vi-vn/windows/apps/get-started/enable-your-device-for-development) để trình cài đặt có thể sử dụng symlink một cách chính xác. Nếu Developer Mode bị tắt, trình cài đặt sẽ chuyển sang sao chép các file skill; chức năng vẫn hoạt động nhưng sẽ không lý tưởng bằng cho việc cập nhật.
 
 Trình cài đặt sẽ hướng dẫn bạn qua một vài bước thiết lập nhanh, bao gồm cả việc lựa chọn các **Gói (Packs)** tùy chọn như `research` (nghiên cứu) và `reading` (đọc hiểu).
 
 ### **Bước 2 (Tùy chọn): Cấu hình Gói Research**
-Nếu bạn đã cài đặt gói `research`, một số kỹ năng sẽ cần API key để tìm kiếm trực tuyến. Hãy chạy kỹ năng setup để cấu hình chúng. Trong cuộc trò chuyện với AI:
+
+Nếu bạn đã cài đặt gói `research`, một số kỹ năng có thể dùng API key để tìm kiếm trực tuyến tốt hơn. Trong cuộc trò chuyện với AI, chạy:
 
 > **Bạn:**
 > `/lumi-research-setup`
 
-Agent sẽ hướng dẫn bạn qua một quy trình cài đặt tương tác để lưu các key của bạn vào file `.env` cục bộ.
+Agent sẽ hướng dẫn bạn kiểm tra công cụ nghiên cứu và lưu key vào file `.env` cục bộ khi cần.
 
 ### **Bước 3 (Khi nâng cấp): Migrate các entry wiki cũ**
 
-Nếu bạn **cài lại Lumina-Wiki trên một dự án đã có sẵn `wiki/` từ phiên bản trước**, chạy installer như bình thường:
+Nếu bạn cài lại Lumina-Wiki trên một dự án đã có `wiki/` từ phiên bản trước, cứ chạy lại `npx lumina-wiki install`. Installer cập nhật scripts, schemas và skills; **nội dung của bạn trong `wiki/`, `raw/`, `log.md` không bị chỉnh sửa**.
 
-```bash
-npx lumina-wiki install
-```
+Nếu installer cảnh báo entry cũ thiếu frontmatter mới, có hai cách backfill:
 
-Installer phát hiện version mới và cập nhật scripts, schemas, skills atomically. **Nội dung wiki của bạn (`wiki/`, `raw/`, `log.md`) không bị installer chỉnh sửa.** Khi installer thấy các trường frontmatter mới được thêm bởi version mới nhưng thiếu trên các entry cũ, nó sẽ in banner `[warn]` kèm số lượng và bước tiếp theo.
-
-Bạn có hai cách để backfill:
-
-**Cách A — LLM-driven (khuyến nghị):** Mở chat AI và chạy:
-
-> **Bạn:**
-> `/lumi-migrate-legacy`
-
-Skill đọc `_lumina/CHANGELOG.md` để biết phiên bản nào thêm trường gì, chạy `lint --json` để tìm entry bị ảnh hưởng, và infer giá trị cho từng entry (ví dụ: `provenance: replayable | partial | missing`, `confidence: high | medium | low | unverified`) dựa trên snapshot trong `raw/`, citation edges, và metadata. Idempotent — chạy lại nhiều lần vẫn an toàn.
-
-**Cách B — Backfill nhanh, deterministic:** Từ terminal:
+- **Khuyến nghị:** mở chat AI và chạy `/lumi-migrate-legacy`.
+- **Nhanh hơn:** chạy terminal command:
 
 ```bash
 node _lumina/scripts/wiki.mjs migrate --add-defaults
 ```
 
-Lệnh này gán default bảo thủ (`provenance: missing`, `confidence: unverified`) cho mọi entry còn thiếu. Lint xanh ngay, nhưng giá trị chỉ là placeholder — bạn có thể tinh chỉnh sau bằng Cách A hoặc sửa tay.
-
-Có thể kết hợp: chạy Cách B trước để lint xanh, sau đó Cách A khi muốn giá trị chính xác hơn. Cả hai đều atomic và để lại trail trong `wiki/log.md`.
-
-Xem [`CHANGELOG.md`](CHANGELOG.md) hoặc bản local `_lumina/CHANGELOG.md` sau khi cài để biết toàn bộ thay đổi schema theo version.
+Xem [`CHANGELOG.md`](CHANGELOG.md) hoặc bản local `_lumina/CHANGELOG.md` sau khi cài để biết chi tiết thay đổi schema theo phiên bản.
 
 ## 3. Các lệnh đầu tiên của bạn (Kỹ năng cốt lõi)
 
@@ -116,8 +121,6 @@ Tương tác với wiki của bạn bằng cách sử dụng các lệnh này tr
 
 Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho từng thư mục.
 
-### **Thư mục chính (Không gian làm việc hàng ngày của bạn)**
-
 | Đường dẫn | Mục đích | Quản lý bởi |
 | :--- | :--- | :--- |
 | **`raw/`** | **Thư viện đầu vào bất biến của bạn.** Agent **chỉ đọc** từ đây. | **Bạn** |
@@ -132,65 +135,26 @@ Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho t
 | `wiki/outputs/` | Các câu trả lời chi tiết từ `/lumi-ask` được lưu lại để tham khảo. | Agent |
 | `wiki/index.md` | Bảng mục lục chính cho toàn bộ wiki của bạn. | Agent |
 | `...` | *(Các thư mục thực thể khác như `foundations/`, `characters/` xuất hiện cùng các gói)* | Agent |
+| **`_lumina/`** | Engine, script và cấu hình do Lumina quản lý. | **Hệ thống** |
+| **`.agents/`** | Các skill mà agent có thể dùng. | **Hệ thống** |
 
-
-### **Thư mục hệ thống (Do Lumina quản lý)**
-
-| Đường dẫn | Mục đích | Quản lý bởi |
-| :--- | :--- | :--- |
-| **`_lumina/`** | Engine cốt lõi, script và cấu hình cho wiki. | **Hệ thống** |
-| **`.agents/`** | Chứa tất cả các `skills` (kỹ năng) mà agent có thể sử dụng. | **Hệ thống** |
-| `...` | *(Các file ẩn khác như `.claude/`, `.gitignore`)* | **Hệ thống** |
-
-**Lưu ý:** Bạn thường không cần phải sửa đổi các Thư mục hệ thống.
+Bạn thường chỉ làm việc với `raw/` và đọc kết quả trong `wiki/`; không cần sửa thư mục hệ thống.
 
 ### **Duyệt Wiki với Obsidian (Tùy chọn)**
 
-[Obsidian](https://obsidian.md) là ứng dụng đọc wiki được khuyến nghị dùng cùng Lumina-Wiki. Vì wiki dùng cú pháp `[[wikilink]]` gốc của Obsidian, bạn có ngay graph view, backlinks panel và query theo frontmatter mà không cần cấu hình thêm.
+[Obsidian](https://obsidian.md) là ứng dụng ghi chú lưu ghi chú dưới dạng file Markdown trên máy và giúp bạn liên kết các ghi chú với nhau. Vì Lumina-Wiki cũng tạo file Markdown, bạn có thể mở **thư mục gốc của project** bằng Obsidian để đọc và duyệt wiki dễ hơn. Xem thêm trong [hướng dẫn sử dụng](docs/user-guide/vi.md#dùng-obsidian-để-đọc-wiki).
 
-**Trỏ vault vào thư mục gốc của project** — không phải chỉ vào `wiki/`. Thư mục gốc chứa `index.md`, `log.md`, và các cross-link giữa trang `wiki/` với file gốc trong `raw/` — những link này chỉ resolve được khi Obsidian nhìn thấy cả hai thư mục.
+### **Tìm kiếm cục bộ với qmd (Nâng cao, tùy chọn)**
 
-**Cấu hình gợi ý sau khi chạy `npx lumina-wiki install`:**
-
-1. Obsidian → **Open folder as vault** → chọn thư mục gốc của project.
-2. **Settings → Files & links → Excluded files** — thêm:
-   - `_lumina/`, `.claude/`, `.cursor/`, `.agents/`, `.git/`, `wiki/graph/`
-   - Các file stub redirect sang README.md: `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md` — chỉ trỏ về `README.md` và sẽ tạo node rỗng trong graph view nếu để lại. Giữ `README.md` lại trong vault: đây là tài liệu schema chính.
-3. **Settings → Files & links**:
-   - Use `[[Wikilinks]]`: **bật**
-   - New link format: **Shortest path when possible**
-   - Default attachment location: `In the folder specified below` → `raw/assets/`
-4. **Core plugins nên bật:** Graph view, Backlinks, Outgoing links, Tags, Properties, Outline.
-5. *(Tùy chọn)* Community plugin **Dataview** — cho phép query các trang theo frontmatter như `type`, `importance`, `confidence`, `date_added`.
-
-> Thư mục `wiki/graph/` chứa `edges.jsonl` và `citations.jsonl` (dữ liệu máy đọc, không phải markdown). Exclude thư mục này giúp graph view không bị nhiễu.
-
-### **Tìm kiếm cục bộ với qmd (Tùy chọn)**
-
-Khi wiki của bạn lớn dần, bạn có thể muốn tìm kiếm full-text nhanh hơn so với `index.md` + `grep`. Chúng tôi gợi ý [qmd](https://github.com/tobi/qmd) — một search engine chạy hoàn toàn local trên file markdown, kết hợp BM25, vector search và LLM re-ranking. qmd phối hợp rất hợp với Lumina-Wiki và AI Agent của bạn.
-
-**Cách tích hợp với AI Agent:**
-
-1. Cài qmd theo hướng dẫn trong repo của nó, sau đó index thư mục gốc của project để qmd thấy cả `wiki/` lẫn `raw/`.
-2. **Qua CLI** — agent có thể gọi `qmd <query>` bằng `Bash`. Chỉ cần nhắc trong prompt rằng câu lệnh này đã sẵn sàng.
-3. **Qua MCP (rất tiện cho Claude Code, Codex, Cursor)** — đăng ký MCP server của qmd vào file cấu hình MCP của IDE. Agent sẽ nhận nó như một tool gốc và có thể gọi từ `/lumi-ask` hay câu hỏi tiếp theo.
-4. Re-index sau mỗi lần `/lumi-ingest` (thủ công hoặc qua hook) để các trang mới có thể tìm được.
-
-qmd đứng song song với `index.md` và wiki graph — một lớp truy xuất nhanh giúp agent có candidate tốt hơn trước khi đọc đầy đủ từng trang.
-
-**Tuỳ chọn thêm — skill chính thức của tobi cho qmd.** tobi cũng phát hành một skill chuyên dụng, dạy agent cách dùng qmd hiệu quả (khi nào chọn `lex` vs `vec` vs `hyde`, cách viết `intent` để khử nhập nhằng, cú pháp lex cho phrase và exclude). Nếu IDE của bạn hỗ trợ định dạng skill, bạn có thể cài bằng:
+Khi wiki lớn dần, bạn có thể dùng [qmd](https://github.com/tobi/qmd) để tìm kiếm Markdown cục bộ nhanh hơn. Nếu IDE của bạn hỗ trợ skill format, có thể cài skill qmd chính thức bằng:
 
 ```bash
 npx skills add https://github.com/tobi/qmd --skill qmd
 ```
 
-Khuyến khích đọc [trang skill trên skills.sh](https://skills.sh/tobi/qmd/qmd) trước để xem chính xác skill này bổ sung những gì.
-
 ---
 
-## 5. Các Kỹ năng và Công cụ có sẵn (v0.1)
-
-### Skills (Lệnh người dùng)
+## 5. Các kỹ năng có sẵn (v0.1)
 
 Đây là những lệnh bạn có thể sử dụng khi trò chuyện với AI.
 
@@ -211,18 +175,7 @@ Khuyến khích đọc [trang skill trên skills.sh](https://skills.sh/tobi/qmd/
 | | `/lumi-reading-theme-map` | Xác định và lập bản đồ các chủ đề trong một câu chuyện. |
 | | `/lumi-reading-plot-recap` | Cung cấp một bản tóm tắt tuần tự của cốt truyện. |
 
-### Tools (Engine chạy nền)
-
-Đây là các script mà kỹ năng của agent sử dụng để thực hiện hành động.
-
-| Vị trí | Tool | Vai trò |
-| :--- | :--- | :--- |
-| **`_lumina/scripts/`** | `wiki.mjs` | **Engine cốt lõi.** Xử lý tất cả các hoạt động ghi/sửa/liên kết trong `wiki/`. |
-| | `lint.mjs` | Trình kiểm tra lỗi được `/lumi-check` sử dụng. |
-| | `reset.mjs` | Script để xóa nội dung một cách an toàn. |
-| | `schemas.mjs` | Nguồn chân lý duy nhất cho tất cả các cấu trúc và quy tắc của wiki. |
-| **`_lumina/tools/`** | `discover.py` | *(Gói Research)* Cung cấp sức mạnh cho kỹ năng `/lumi-research-discover`. |
-| | `fetch_*.py` | *(Gói Research)* Một bộ công cụ để lấy dữ liệu từ các API như ArXiv, Wikipedia, v.v. |
+Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; thông thường bạn không cần gọi trực tiếp.
 
 ---
 
