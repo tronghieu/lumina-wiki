@@ -106,7 +106,7 @@ Tương tác với wiki của bạn bằng cách sử dụng các lệnh này tr
 
 **Giai đoạn 1: Nạp và Xây dựng kiến thức**
 -   `/lumi-init`: Quét thư mục `raw/` và thực hiện xây dựng wiki lần đầu.
--   `/lumi-ingest [đường/dẫn/tới/file]`: Xử lý một tài liệu mới và tích hợp nó vào cơ sở kiến thức.
+-   `/lumi-ingest [đường/dẫn/tới/file]`: Xử lý một tài liệu mới vào cơ sở kiến thức, dừng tại bốn điểm kiểm tra (viết bản nháp, kiểm cấu trúc, đối chiếu nguồn, lưu) để bạn xem lại.
 
 **Giai đoạn 2: Khai thác và Bảo trì**
 -   `/lumi-ask [câu hỏi của bạn]`: Đặt câu hỏi dựa trên toàn bộ cơ sở kiến thức trong `wiki/`.
@@ -161,7 +161,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | Gói | Skill | Mục đích |
 | :--- | :--- | :--- |
 | **Core** | `/lumi-init` | Khởi tạo wiki từ tất cả các file trong `raw/`. |
-| | `/lumi-ingest` | Xử lý một tài liệu mới và đưa vào wiki. |
+| | `/lumi-ingest` | Đọc một tài liệu và viết trang wiki. Dừng tại bốn điểm kiểm tra — viết bản nháp, kiểm cấu trúc, đối chiếu nguồn, lưu — để bạn xem lại trước mỗi bước. Có thể tiếp tục giữa các phiên. |
 | | `/lumi-ask` | Đặt câu hỏi dựa trên toàn bộ cơ sở kiến thức. |
 | | `/lumi-edit` | Yêu cầu chỉnh sửa thủ công một trang wiki. |
 | | `/lumi-check` | Kiểm tra lỗi trong wiki (liên kết hỏng, v.v.). |

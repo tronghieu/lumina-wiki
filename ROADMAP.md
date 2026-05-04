@@ -6,11 +6,11 @@ This document tracks planned upgrades. Scope is non-binding — items move betwe
 
 ---
 
-## v0.9.0 — `/lumi-verify` (implementing — branch `feat/v0.9-lumi-verify`)
+## v0.9.0 — `/lumi-verify` + `/lumi-ingest` workflow (implementing — branch `feat/v0.9-lumi-verify`)
 
-**Theme:** ship a check that wiki notes match the sources they cite, ahead of the broader v1.0 stability lock. Pulled forward from v1.0 because hallucinations introduced at ingest time are the highest-impact failure mode users have reported, and the skill ships value on its own without waiting for the rest of v1.0 work.
+**Theme:** ship a check that wiki notes match the sources they cite, plus a multi-step ingest workflow with human-in-the-loop checkpoints, ahead of the broader v1.0 stability lock. Pulled forward from v1.0 because hallucinations introduced at ingest time are the highest-impact failure mode users have reported, and the two skills are most useful when shipped together — verify becomes the conscience inside ingest, ingest becomes the workflow that exercises verify on every new page.
 
-### Shipped surface
+### Shipped surface — `/lumi-verify`
 
 - **New core skill `/lumi-verify`** — opt-in, invoked manually. Three-reviewer adversarial pattern (Blind / Grounding / External) adapted from BMAD's code-review structure. Anti-anchoring is structural: each reviewer is given a deliberately different context slice. Advisory only — never auto-edits wiki body text. Works retroactively on any existing entry (`/lumi-verify <slug>`, `/lumi-verify --all`, `/lumi-verify --since <date>`).
 - **Stage flags** — `--grounding | --drift | --external | --all`. Drift collapses into Grounding's preflight (raw-artifact integrity gate); External is gated behind `--external` (token-cost tier). Default offline.
@@ -19,11 +19,20 @@ This document tracks planned upgrades. Scope is non-binding — items move betwe
 - **Output contract** — frontmatter writeback via `wiki.mjs set-meta --json-value` (atomic) + timestamped run report at `_lumina/_state/lumi-verify-<ts>.json`. Runtime state, excluded from `ci-idempotency`.
 - **Fallback ladder** — Agent tool (Claude Code) → prompt-files + paste-back (Bash-only IDEs) → `--single` opt-in (single-pass, weakest tier, no anti-anchoring).
 
+### Shipped surface — `/lumi-ingest` multi-step workflow
+
+- **Step-file architecture** — `/lumi-ingest` SKILL.md becomes a thin router (≤80 body lines). Stage prompts live as separate files under `references/step-NN-<name>.md` (draft, lint, verify, finalize). Pattern adapted from BMAD's `bmad-quick-dev` step-file discipline.
+- **Four human-in-the-loop gates** — between every stage, the skill HALTs and offers `[A] Accept | [E] Edit | [Q] Quit` (verify gate adds `[W] Accept-with-warning` which downgrades `confidence` to `low`). Gates are the only path to advance state — accept is never silent.
+- **Durable gate state** — `ingest_status` enum (`drafted | linted | verified | finalized`) added to `sources` entity. Survives session restart; re-running `/lumi-ingest <slug>` resumes at the right stage. The fine-grained nine-phase checkpoint at `_lumina/_state/ingest-<slug>.json` is unchanged for within-stage resume.
+- **Verify gate reuses `/lumi-verify --grounding`** — single source of truth for grounding logic. Ingest stays cheap (one reviewer, no `--external`); users opt into deeper verification post-finalize.
+- **Drift is a hard halt** — at the verify gate, `verify_status: drift_detected` forces the user to repair `raw_paths` or explicitly mark `provenance: missing` before advancing.
+- **Legacy entries** — pre-v0.9 entries without `ingest_status` are offered a "lint+verify only" path that skips draft.
+
 ### Out of scope for v0.9 (parked)
 
-- **`/lumi-ingest` workflow rewrite (multi-step + HITL gates)** — deferred to v0.10. Tracked in `docs/implementation-artifacts/deferred-work.md`. Verify ships standalone first; ingest workflow consumes verify in a later release.
 - MCP `llm-review` / second-provider plumbing — still v0.1-scope rule (out of scope, not forbidden).
 - Verify on non-`sources` entity types — v0.9 covers `sources` only.
+- `--since <date>` batch read-meta path optimization — deferred to v0.10 (see `deferred-work.md` Goal C).
 
 ---
 

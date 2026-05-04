@@ -106,7 +106,7 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 
 **阶段一：导入与构建知识**
 -   `/lumi-init`: 扫描 `raw/` 目录并执行首次 wiki 构建。
--   `/lumi-ingest [path/to/file]`: 处理一个新文档并将其集成到知识库中。
+-   `/lumi-ingest [path/to/file]`: 把一份新文档导入知识库，在四个检查点（撰写草稿、检查结构、核对来源、保存）暂停以供审阅。
 
 **阶段二：查询与维护**
 -   `/lumi-ask [您的问题]`: 基于 `wiki/` 中的完整知识库提问。
@@ -161,7 +161,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | Pack | Skill | 用途 |
 | :--- | :--- | :--- |
 | **Core** | `/lumi-init` | 从 `raw/` 中的所有文件初始化 wiki。 |
-| | `/lumi-ingest` | 处理一个新文档并写入 wiki。 |
+| | `/lumi-ingest` | 阅读一份文档并撰写 wiki 页面。在四个检查点（撰写草稿、检查结构、核对来源、保存）暂停，让你在每一步落地前审阅。可跨会话续接。 |
 | | `/lumi-ask` | 基于整个知识库提问。 |
 | | `/lumi-edit` | 要求手动编辑 wiki 页面。 |
 | | `/lumi-check` | 检查 wiki 中的问题（断链等）。 |

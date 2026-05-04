@@ -1968,3 +1968,89 @@ describe('v0.9 verify_status and findings schema', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: v0.9 ingest_status field — gate-state for /lumi-ingest workflow
+// ---------------------------------------------------------------------------
+
+describe('v0.9 ingest_status schema', () => {
+  test('set-meta ingest_status drafted round-trips and verify-frontmatter accepts', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'is-drafted');
+
+      const set = runWiki(['set-meta', 'sources/is-drafted', 'ingest_status', 'drafted'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta ingest_status failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/is-drafted'], { cwd: tmp });
+      assert.equal(read.status, 0);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.ingest_status, 'drafted');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/is-drafted'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter rejected valid ingest_status: ${vf.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('verify-frontmatter passes for source without ingest_status (optional field)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'is-absent');
+
+      const vf = runWiki(['verify-frontmatter', 'sources/is-absent'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter failed without ingest_status: ${vf.stderr}`);
+      const json = parseJson(vf.stdout);
+      assert.ok(json.valid, `Expected valid:true without ingest_status, errors: ${JSON.stringify(json.errors)}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('verify-frontmatter rejects invalid ingest_status enum value', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const dir = join(tmp, 'wiki', 'sources');
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, 'is-bad-enum.md'),
+        `---\nid: is-bad-enum\ntitle: Verify Source\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors:\n  - Tester\nyear: 2024\nimportance: 3\nprovenance: replayable\ningest_status: half-baked\n---\n`,
+        'utf8',
+      );
+
+      const vf = runWiki(['verify-frontmatter', 'sources/is-bad-enum'], { cwd: tmp });
+      assert.equal(vf.status, 0, `verify-frontmatter unexpected exit: ${vf.stderr}`);
+      const json = parseJson(vf.stdout);
+      assert.equal(json.valid, false, 'Expected valid:false for invalid ingest_status enum');
+      assert.ok(
+        json.errors.some((e) => e.includes('ingest_status')),
+        `Expected ingest_status error, got: ${JSON.stringify(json.errors)}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('all four ingest_status enum values round-trip cleanly', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const stages = ['drafted', 'linted', 'verified', 'finalized'];
+      for (const stage of stages) {
+        const slug = `is-stage-${stage}`;
+        await writeVerifySource(tmp, slug);
+        const set = runWiki(['set-meta', `sources/${slug}`, 'ingest_status', stage], { cwd: tmp });
+        assert.equal(set.status, 0, `set-meta ${stage} failed: ${set.stderr}`);
+        const read = runWiki(['read-meta', `sources/${slug}`], { cwd: tmp });
+        const json = parseJson(read.stdout);
+        assert.equal(json.frontmatter.ingest_status, stage, `round-trip mismatch for ${stage}`);
+      }
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});

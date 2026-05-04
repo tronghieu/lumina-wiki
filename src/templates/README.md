@@ -171,7 +171,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 | Skill         | Trigger        | What it does                                          |
 |---------------|---------------|-------------------------------------------------------|
 | `/lumi-init`   | manual, first  | Bootstrap wiki from existing `raw/` content          |
-| `/lumi-ingest` | manual         | Read a source, write page, update affected pages, log |
+| `/lumi-ingest` | manual         | Read a source and write a wiki page; pauses at four checkpoints — write the draft, check structure, cross-check claims, save — so you can review before each step commits |
 | `/lumi-ask`    | manual         | Query wiki, synthesize answer, optionally file page   |
 | `/lumi-edit`   | manual         | Add/remove/revise wiki content per user request       |
 | `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |

@@ -262,6 +262,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'raw_paths',  type: 'array',    required: false },
     { key: 'provenance',    type: 'enum',  required: true,  values: ['replayable', 'partial', 'missing'] },
     { key: 'confidence',   type: 'enum',  required: false, values: ['high', 'medium', 'low', 'unverified'] },
+    { key: 'ingest_status', type: 'enum', required: false, values: ['drafted', 'linted', 'verified', 'finalized'] },
     { key: 'verify_status', type: 'enum', required: false, values: ['passed', 'findings_pending', 'drift_detected', 'skipped', 'not_applicable'] },
     { key: 'findings',     type: 'array', required: false },
   ],

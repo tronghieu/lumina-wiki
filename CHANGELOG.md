@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-05
+
+### Added
+
+- `/lumi-verify` — new core skill that cross-checks wiki notes against the raw sources they cite. Runs three independent reviewers (Blind structural, Grounding raw↔wiki, External web confirmation) over a single source entry or the whole wiki. Findings are written back to entry frontmatter (`verify_status`, `findings:`) and to a timestamped run report in `_lumina/_state/`. Advisory only — never edits body text. Works retroactively on any existing entry. Degrades cleanly on Bash-only runtimes (Codex, Gemini, Cursor) by writing per-reviewer prompt files and HALTing for user paste-back.
+- `/lumi-ingest` rewritten as a **multi-step workflow** with four human-in-the-loop checkpoints — write the draft, check structure, cross-check claims, save. Each checkpoint pauses for review before the next phase begins. Cross-session resume: the skill reads `ingest_status` from the entry's frontmatter on entry and routes directly to the interrupted step, so a session restart never loses progress.
+- Schema: `ingest_status` field (optional enum: `drafted|linted|verified|finalized`) on `sources` — coarse gate-level checkpoint state for cross-session resume. Written by `/lumi-ingest` at each gate; read on entry to route back to the interrupted step.
+- Schema: `verify_status` field (optional enum: `passed|findings_pending|drift_detected|skipped|not_applicable`) on `sources` — written by `/lumi-verify` (and by `/lumi-ingest` step 3 which reuses the verify pipeline).
+- Schema: `findings` field (optional array) on `sources` — structured finding records with fields `id`, `reviewer`, `class`, `claim`, `evidence`, `action`. Shape validated by `verify-frontmatter`; malformed items fail lint.
+- Step files `src/skills/core/ingest/references/step-0{1-4}-*.md` — each gate lives in its own file loaded on demand; main `SKILL.md` is a thin router (≤80 lines) that reads `ingest_status` and loads the right step file.
+
+### Changed
+
+- `/lumi-ingest` description updated across all READMEs and user guides (EN, VI, ZH) to reflect the four-checkpoint workflow in plain language.
+- `ROADMAP.md`: v0.9 section marked shipping-complete; "deferred to v0.10" placeholder removed.
+- Skills table count updated to 15 (was 14) in installer and README badges to reflect the new `/lumi-verify` addition.
+
+### Migration
+
+- Existing source pages without `ingest_status` or `verify_status`: no action required. Both fields are optional; lint stays green.
+- Entries currently mid-ingest (session interrupted before v0.9): treated as legacy on next `/lumi-ingest` call — offered lint+verify-only pass or full re-ingest.
+- Custom tooling reading `schemas.mjs`: three new fields added (`ingest_status`, `verify_status`, `findings`). All additive; no removals or renames.
+
 ## [0.8.1] - 2026-05-03
 
 ### Fixed
@@ -166,7 +189,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.3.0...v0.4.0
