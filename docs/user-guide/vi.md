@@ -332,7 +332,7 @@ Một bản báo cáo ngắn liệt kê những câu trong ghi chú không khớ
 
 ## Thêm tài liệu với /lumi-ingest
 
-`/lumi-ingest` đọc một tài liệu bạn chỉ định rồi viết trang wiki tương ứng. Điểm mới so với trước là thao tác này dừng tại bốn điểm kiểm tra để bạn xem lại trước khi lưu, thay vì chạy một mạch từ đầu đến cuối.
+`/lumi-ingest` đọc một tài liệu bạn chỉ định rồi viết trang wiki tương ứng. AI cho bạn xem bản nháp trước, sau đó chỉ hỏi lại khi thật sự cần quyết định của bạn.
 
 ### Khi nào nên dùng
 
@@ -346,19 +346,15 @@ Một bản báo cáo ngắn liệt kê những câu trong ghi chú không khớ
 /lumi-ingest <file hoặc URL>
 ```
 
-Sau khi bạn gọi lệnh, AI sẽ đọc tài liệu và soạn một bản nháp trang wiki — rồi dừng lại để bạn xem. Đây là điểm kiểm tra đầu tiên: bạn có thể đồng ý tiếp tục, yêu cầu chỉnh sửa, hoặc dừng lại để quay lại sau.
+Sau khi bạn gọi lệnh, AI sẽ đọc tài liệu và soạn một bản nháp trang wiki, rồi dừng lại để bạn xem. Bạn có thể đồng ý tiếp tục, yêu cầu chỉnh sửa, hoặc dừng lại để quay lại sau.
 
-Nếu bạn đồng ý, AI chuyển sang kiểm tra cấu trúc: xem liên kết có hỏng không, có thiếu liên kết ngược không. Sau đó dừng lại một lần nữa để bạn xem kết quả.
+Nếu bạn đồng ý, AI tự kiểm tra các liên kết trong wiki và đối chiếu nội dung bản nháp với tài liệu gốc. Khi mọi thứ ổn, AI lưu trang và ghi lại vào nhật ký mà không bắt bạn duyệt từng bước bên trong. AI chỉ hỏi lại nếu phát hiện điểm đáng nghi, không thể tự sửa an toàn, không tìm thấy file nguồn, hoặc cần bạn đồng ý lưu trang với ghi chú độ tin cậy thấp.
 
-Bước tiếp theo, AI đối chiếu các thông tin trong bản nháp với file nguồn được trích dẫn và chỉ ra những chỗ đáng xem lại. Tại đây bạn có thêm lựa chọn "Chấp nhận có cảnh báo" nếu muốn lưu trang nhưng ghi chú rõ là cần xác nhận lại.
-
-Sau khi bạn đồng ý xong, AI ghi log và lưu trang wiki — không cần dừng thêm.
-
-Ở mỗi điểm kiểm tra bạn luôn có ba lựa chọn: tiếp tục, yêu cầu chỉnh và kiểm tra lại, hoặc dừng. Nếu dừng giữa chừng, tiến độ được giữ lại; chạy lại `/lumi-ingest` cho cùng tài liệu sẽ tiếp tục từ đúng chỗ bạn đã dừng.
+Nếu dừng giữa chừng, tiến độ được giữ lại; chạy lại `/lumi-ingest` cho cùng tài liệu sẽ tiếp tục từ đúng chỗ bạn đã dừng.
 
 ### Bạn nhận được gì
 
-- Một trang wiki mới nằm trong `wiki/sources/`, tóm tắt tài liệu bạn vừa ingest.
+- Một trang wiki mới nằm trong `wiki/sources/`, tóm tắt tài liệu bạn vừa đưa vào wiki.
 - Các trang khái niệm, người, hoặc tổ chức liên quan được tạo hoặc cập nhật tự động.
 - Liên kết hai chiều giữa trang mới và các trang đã có trong wiki.
 - Một ghi nhận trong log, để bạn biết tài liệu đó đã được đưa vào wiki khi nào và kết quả ra sao.

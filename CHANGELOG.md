@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-05
+
+### Changed
+
+- `/lumi-ingest` now uses selective human review: after the user accepts the draft, link cleanup and source checking continue automatically when clean. The skill asks again only when user judgment is needed, such as unresolved page issues, source-check findings, missing source files, overwrite/restart decisions, or saving with lower confidence.
+- Installed agent context now emphasizes plain, everyday communication for non-technical users. Agents should sound like helpful knowledge assistants, use the configured communication language consistently, translate workflow terms, and avoid coding-agent language in user-facing replies.
+- README-generated IDE stubs now explicitly point agents to the README's user communication rules while staying thin and regenerated.
+- `/lumi-research-prefill` prompts now follow the same language rule and avoid exposing internal tool terms in user-facing choices.
+- README and user guide docs in English, Vietnamese, and Simplified Chinese now describe the quieter ingest flow instead of four mandatory checkpoints.
+
+### Fixed
+
+- `package-lock.json` root package version is now aligned with `package.json`.
+
 ## [0.9.0] - 2026-05-05
 
 ### Added
@@ -189,7 +203,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.7.0...v0.8.0

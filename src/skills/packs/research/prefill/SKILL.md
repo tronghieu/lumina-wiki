@@ -27,6 +27,10 @@ python3 _lumina/tools/fetch_wikipedia.py --help
 node _lumina/scripts/wiki.mjs read-meta foundations/<slug>
 ```
 
+When speaking with the user, follow the README language rule exactly. Use the
+configured communication language, translate workflow terms, and avoid technical
+tool words unless the user asks for them.
+
 ## Instructions
 
 1. Turn the requested topic into a slug with:
@@ -44,7 +48,10 @@ node _lumina/scripts/wiki.mjs read-meta foundations/<slug>
    - **exit 2 (not found)** — continue to step 3.
    - **exit 0 (exists)** — read the file, then show the user the `title`, `created`
      date, and the most recent line in `wiki/log.md` that references this slug.
-     Ask exactly one question with three options (no other action until answered):
+     Ask exactly one question with three options in the user's language (no other
+     action until answered). Do not expose internal terms; explain the choice as
+     "leave it unchanged", "refresh the public background text", or "stop and log
+     the decision":
 
      ```
      Foundation "<title>" already exists.
@@ -69,7 +76,8 @@ python3 _lumina/tools/fetch_wikipedia.py page "<title>"
      python3 _lumina/tools/fetch_wikipedia.py search "<title>" --limit 5
      ```
 
-     Present the numbered results (title + snippet) and let the user:
+     Present the numbered results (title + snippet) in the user's language and let
+     the user:
      - pick a candidate number,
      - type a more specific title, or
      - type `manual` to paste content directly.
@@ -87,9 +95,10 @@ python3 _lumina/tools/fetch_wikipedia.py page "<title>"
    alternative names users or sources might write for this concept (abbreviations,
    expansions, common misspellings). Example: for a foundation titled "Reinforcement
    Learning from Human Feedback", use `aliases: ["RLHF", "human feedback RL"]`.
-   Propose a list of 2–5 plausible aliases, then ask the user to confirm or edit
-   before writing. An empty array `[]` is fine if nothing obvious applies. Aliases
-   must be unique across all foundations — `lint.mjs` L10 will error on collisions.
+   Propose a list of 2–5 plausible alternate names, then ask the user to confirm
+   or edit before writing. An empty list is fine if nothing obvious applies.
+   Alternate names must be unique across all foundations — `lint.mjs` L10 will
+   error on collisions.
 
    Foundation pages do not carry `provenance` or `confidence` frontmatter fields
    (those belong on source pages). When the user later ingests a source that

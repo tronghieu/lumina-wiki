@@ -8,9 +8,9 @@
 
 ## Why this step exists
 
-Finalize is where the entry transitions from "in-progress workspace artifact" to "part of the wiki". A separate step (rather than auto-running after verify accepts) gives the user one last off-ramp without losing the verify decision they already made — and it keeps the log entry timestamp aligned with the moment the user actually committed the entry to the wiki.
+Finalize is where the entry transitions from "in-progress workspace artifact" to "part of the wiki". This step runs automatically after the draft has been accepted and any source-check issues have been handled. It keeps the log entry timestamp aligned with the moment the entry actually becomes part of the wiki.
 
-There is no human gate here — the verify-gate accept already constituted the human commitment. This step just records it.
+There is no human gate here. This step just records completion.
 
 ## INSTRUCTIONS
 
@@ -47,13 +47,13 @@ node _lumina/scripts/wiki.mjs set-meta sources/<slug> ingest_status finalized
 ### Phase 10 — Report
 
 Tell the user:
-1. Source slug + type
+1. The new page name and source type
 2. Pages written or updated (counts)
-3. Edges written
-4. Lint result (errors === 0)
-5. Verify verdict (`passed` / `findings_pending` / `skipped`)
+3. Connections added between pages
+4. Whether page links are clean
+5. Whether the page matched the source, had review notes, or was saved without a source check
 6. Log entry written
-7. Suggest next step: `/lumi-check` in a fresh session for an independent structural review, or `/lumi-verify --external <slug>` for adversarial open-web verification.
+7. Optional next step in plain language: run `/lumi-check` later to check wiki health, or `/lumi-verify --external <slug>` if the user wants a deeper outside-source comparison.
 
 ## Definition of Done
 

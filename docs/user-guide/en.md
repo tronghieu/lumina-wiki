@@ -332,12 +332,12 @@ A short report listing any statement in your notes that does not match the cited
 
 ## Adding a document with /lumi-ingest
 
-`/lumi-ingest` reads a document and adds it to your wiki. Unlike a one-shot process, it now pauses at four points so you can review the work before anything is saved.
+`/lumi-ingest` reads a document and adds it to your wiki. It asks you to review the draft before continuing, then only comes back to you when your judgment is needed.
 
 ### When to use it
 
 - You have a new PDF, article, or report ready in `raw/sources/` and want to add it to the wiki.
-- You want to check a summary before it becomes a permanent wiki page.
+- You want to check a summary before it becomes a wiki page.
 - You are building a research wiki and need each source to be reliable before you cite it in writing.
 
 ### How to use it
@@ -346,7 +346,9 @@ A short report listing any statement in your notes that does not match the cited
 /lumi-ingest raw/sources/your-document.pdf
 ```
 
-After you run the command, the process moves through four checkpoints. First, the AI reads the source and writes a draft wiki page — then pauses so you can read it. Second, the AI checks the draft for structure issues such as broken links or missing connections — then pauses again. Third, the AI reads the original source a second time and checks whether the claims in the draft actually appear there — then pauses with its findings. At the end of each pause you choose: accept and continue, make edits and check again, or quit and come back later. If you accept the verify findings with reservations, the page is saved with a low-confidence mark so you know to revisit it. The final step saves the page and writes a record to the log — no pause needed there.
+After you run the command, the AI reads the source and writes a draft wiki page, then pauses so you can read it. You can accept the draft, ask for changes, or quit and come back later.
+
+If you accept, the AI checks the page connections and compares the draft against the source. When everything looks clean, it saves the page and writes a record to the log without asking you to approve each internal step. It asks again only when it finds something suspicious, cannot safely clean up the page, cannot find the source file, or needs your approval to save the page with a low-confidence note.
 
 If you quit at any point, progress is preserved. Running `/lumi-ingest` again on the same document picks up where you left off.
 
@@ -356,7 +358,7 @@ If you quit at any point, progress is preserved. Running `/lumi-ingest` again on
 - Links from the new page to related concept and person pages already in the wiki.
 - New concept or person pages created automatically if the document introduces ones that do not exist yet.
 - A record in the wiki log showing when the document was added.
-- A low-confidence mark on the page if you accepted the verify step with reservations, so you know to return to it.
+- A low-confidence mark on the page if you chose to save it with reservations, so you know to return to it.
 
 ## Using Codex App, Claude Code, and Gemini CLI
 

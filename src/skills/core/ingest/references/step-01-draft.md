@@ -11,6 +11,7 @@
 - `raw_paths` must list permanent artifacts only. Reject `raw/tmp/*` entries.
 - Keep a phase-level checkpoint after every phase — an interrupted run must resume cleanly.
 - Do NOT advance `ingest_status` until the user accepts at the gate at the end of this step.
+- This is the only required user pause in the happy path. After the user accepts the draft, later steps continue automatically unless they find something that needs judgment.
 
 ## INSTRUCTIONS
 
@@ -151,6 +152,8 @@ Present a draft summary to the user:
 - Citations added
 - Index updated: yes/no
 - A 3–5 line excerpt of `## Summary` and `## Key Claims` so the user can sanity-check the draft
+
+Use the user's configured communication language. Explain "provenance", "edges", "citations", and "index" in plain language, or hide the labels and show the outcome instead.
 
 **HALT and ask human:** `[A] Accept` | `[E] Edit (revise draft)` | `[Q] Quit (preserve work, exit)`
 

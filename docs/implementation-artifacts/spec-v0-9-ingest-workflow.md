@@ -1,5 +1,5 @@
 ---
-title: 'v0.9 — /lumi-ingest: multi-step workflow with HITL gates'
+title: 'v0.9 — /lumi-ingest: multi-step workflow with selective HITL gates'
 type: 'refactor'
 created: '2026-05-04'
 status: 'done'
@@ -102,6 +102,18 @@ context:
 - Given the SKILL.md rewrite, when measuring body line count, then it is ≤ 80 lines (router-only). Phase content lives in step files.
 
 ## Spec Change Log
+
+### 2026-05-05 — selective-HITL and communication amendments (iteration 2)
+
+Triggering findings from real usage:
+
+- **Happy-path ingest asked for approval too often.** Four mandatory user pauses made ingest feel like a coding workflow, not a reading workflow. The revised behavior keeps the draft review as the only required happy-path pause. After draft acceptance, structural cleanup runs automatically when clean, source checking continues automatically when it passes, and finalize logs/saves without another prompt.
+- **Human questions are now reserved for judgment points.** `/lumi-ingest` should HALT only when the user must approve content, resolve ambiguous source/title selection, allow overwrite/restart, handle source-check findings, accept a low-confidence save, repair missing source files, or decide how to fix an issue the tools cannot safely fix.
+- **Step 2 no longer has a success gate.** `step-02-lint.md` writes `ingest_status: linted` and proceeds when `summary.errors === 0`; it asks only on unresolved issues.
+- **Step 3 no longer has a success gate.** `step-03-verify.md` writes `ingest_status: verified` and proceeds when `verify_status: passed`; it asks only for findings, missing source files, or confidence downgrade. If the user explicitly chose to skip source checking, that choice is treated as the decision and no extra accept prompt is shown.
+- **User-facing language rules moved into canonical README context.** The installed `README.md` is the single source of truth because all agent entry stubs tell Claude, Codex/AGENTS-compatible tools, Gemini, Cursor, Qwen, and iFlow to read it first. Do not duplicate long policy text into `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md`; those stubs are regenerated and should stay thin.
+- **Communication language is strict.** Agents must speak entirely in the configured `communication_language`, translate workflow/tool terms into that language, and keep source/domain terms in parentheses on first use when useful. Commands, file names, proper nouns, and direct source quotes are the main exceptions.
+- **Skill prompts must avoid coding-agent voice in user messages.** Internal terms such as lint, schema, frontmatter, JSON, checkpoint, verify, reviewer, and status fields may remain inside skill instructions where needed, but messages shown to non-technical users should say what is happening in plain language: checking links, checking against the source, saving the page, or finding something to review.
 
 ### 2026-05-04 — review-driven amendments (iteration 1)
 

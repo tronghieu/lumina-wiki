@@ -106,7 +106,7 @@ Interact with your wiki using these commands in your AI chat interface, such as 
 
 **Phase 1: Ingest and Build Knowledge**
 -   `/lumi-init`: Scan the `raw/` directory and perform the first wiki build.
--   `/lumi-ingest [path/to/file]`: Process a new document into the knowledge base, pausing at four checkpoints (write the draft, check structure, cross-check claims, save) for review.
+-   `/lumi-ingest [path/to/file]`: Process a new document into the knowledge base. It asks you to review the draft, then keeps going unless something needs your judgment.
 
 **Phase 2: Query and Maintain**
 -   `/lumi-ask [your question]`: Ask a question against the full knowledge base in `wiki/`.
@@ -161,7 +161,7 @@ These are the commands you can use when chatting with your AI agent.
 | Pack | Skill | Purpose |
 | :--- | :--- | :--- |
 | **Core** | `/lumi-init` | Initialize the wiki from all files in `raw/`. |
-| | `/lumi-ingest` | Read a document and write a wiki page. Pauses at four checkpoints — write the draft, check structure, cross-check claims, save — so you can review before each step commits. Resumable across sessions. |
+| | `/lumi-ingest` | Read a document and write a wiki page. It asks you to review the draft, then continues on its own unless something needs your judgment. Resumable across sessions. |
 | | `/lumi-ask` | Ask a question against the full knowledge base. |
 | | `/lumi-edit` | Request a manual edit to a wiki page. |
 | | `/lumi-check` | Check the wiki for errors, such as broken links. |
