@@ -26,6 +26,8 @@ from urllib.parse import quote_plus
 
 import requests
 
+from _cache import wrap_session
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -116,7 +118,7 @@ def _parse_rss_item(item: ET.Element) -> dict[str, Any]:
 def _make_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "lumina-wiki/0.1 (research-pack fetcher)"})
-    return session
+    return wrap_session(session, namespace="arxiv")
 
 
 # ---------------------------------------------------------------------------
