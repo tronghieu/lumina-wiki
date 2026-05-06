@@ -21,6 +21,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [Upgrading Lumina-Wiki](#upgrading-lumina-wiki)
 - [Frequently Asked Questions](#frequently-asked-questions)
 - [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
+- [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
 
 ## Problems With the Old Way of Managing Knowledge
 
@@ -193,12 +194,13 @@ Example in Codex App: AI answers based on the knowledge base that Lumina-Wiki ha
 
 Research Pack is very useful if you use Lumina-Wiki for research, especially when you need to find related documents, filter sources, build a conceptual foundation, or write an overview from what you have read.
 
-Research Pack has four main commands:
+Research Pack has five main commands:
 
 | Command | What it is for |
 | --- | --- |
 | `/lumi-research-setup` | Prepare the research environment, check Python tools, and help configure API keys if needed. |
 | `/lumi-research-discover` | Find and rank research sources related to the topic you provide. |
+| `/lumi-research-watchlist` | Choose research topics for Lumina-Wiki to check regularly. |
 | `/lumi-research-prefill` | Pre-create foundation pages for common concepts, so later reading links more consistently. |
 | `/lumi-research-survey` | Create a research overview from the sources and concepts already in the wiki. |
 
@@ -209,7 +211,7 @@ Use Research Pack when you are doing things like:
 - finding new documents for a topic,
 - choosing which documents are worth reading first,
 - building background knowledge for a field,
-- pre-creating basic concepts so later reading does not drift in meaning or naming,
+- pre-creating basic concepts so later reading stays consistent in meaning and naming,
 - summarizing the documents you have read into an overview,
 - finding gaps or disagreements between sources.
 
@@ -241,11 +243,17 @@ Then ask Lumina-Wiki to find sources:
 /lumi-research-discover impact of phone use in the classroom
 ```
 
-This command creates a list of candidates for you to review. It does not automatically turn every result into a wiki page. You choose which documents are worth reading, then ingest each source:
+This command creates a list of papers or research material for you to review. It does not automatically turn every result into a wiki page. You choose which documents are worth reading, then add each source to the wiki:
 
 ![Example of Research Pack discovering new documents in Codex App](../../assets/lumi-discover-new-paper.png)
 
 Example in Codex App: Research Pack suggests new research sources for you to review before adding them to the wiki.
+
+If you want Lumina-Wiki to check saved research topics regularly,
+use `/lumi-research-watchlist` to set up the topics first. The schedule itself
+is run by your computer or by GitHub Actions, not by the assistant waking up on
+its own. See [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
+for GitHub Actions, cron, launchd, and Windows Task Scheduler examples.
 
 ```text
 /lumi-ingest <document or source you choose>

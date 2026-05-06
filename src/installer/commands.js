@@ -240,6 +240,7 @@ export async function installCommand(opts = {}) {
   // 12. Render .env.example (research pack only)
   if (hasResearch) {
     await renderEnvExample(projectRoot);
+    await writeWatchlistTemplate(projectRoot);
   }
 
   // 13. Write .gitignore (only if not exists)
@@ -769,7 +770,7 @@ function buildIdeStub(target, vars) {
 
 async function copyScripts(projectRoot) {
   const destDir = join(projectRoot, '_lumina', 'scripts');
-  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs'];
+  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs'];
   for (const file of scriptFiles) {
     const src = join(SCRIPTS_DIR, file);
     const dest = join(destDir, file);
@@ -777,6 +778,17 @@ async function copyScripts(projectRoot) {
       await copyFile(src, dest);
     } catch (_) {
       // Scripts may not exist yet (P4+ work); skip gracefully
+    }
+  }
+  const libFiles = ['watchlist-config.mjs', 'discovery-state.mjs'];
+  for (const file of libFiles) {
+    const src = join(SCRIPTS_DIR, 'lib', file);
+    const dest = join(destDir, 'lib', file);
+    try {
+      await ensureDir(dirname(dest));
+      await copyFile(src, dest);
+    } catch (_) {
+      // Script libs may not exist yet; skip gracefully
     }
   }
 }
@@ -856,6 +868,7 @@ function getSkillDefs(packs) {
       { name: 'survey',   canonicalId: 'lumi-research-survey',   displayName: '/lumi-research-survey' },
       { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
+      { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
     ];
     for (const s of researchSkills) {
       defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
@@ -933,6 +946,34 @@ async function renderEnvExample(projectRoot) {
       `# DeepXiv token (optional; enables full-text PDF access)\n` +
       `DEEPXIV_TOKEN=\n\n` +
       `# arXiv does not require an API key in v0.1\n`;
+  }
+  await atomicWrite(destPath, content);
+}
+
+async function writeWatchlistTemplate(projectRoot) {
+  const destPath = join(projectRoot, '_lumina', 'config', 'watchlist.yml');
+  let exists = false;
+  try {
+    await access(destPath, fsConstants.F_OK);
+    exists = true;
+  } catch (_) {}
+  if (exists) return;
+
+  const templatePath = join(TEMPLATES_DIR, '_lumina', 'config', 'watchlist.yml');
+  let content;
+  try {
+    content = await readFile(templatePath, 'utf8');
+  } catch (_) {
+    content = [
+      'version: 1',
+      'defaults:',
+      '  sources: [arxiv]',
+      '  schedule: weekly',
+      '  limit: 20',
+      '  max_new: 5',
+      'items: []',
+      '',
+    ].join('\n');
   }
   await atomicWrite(destPath, content);
 }

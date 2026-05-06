@@ -44,6 +44,8 @@
     "src/scripts/lint.mjs",
     "src/scripts/reset.mjs",
     "src/scripts/schemas.mjs",
+    "src/scripts/discover-runner.mjs",
+    "src/scripts/lib/*.mjs",
     "src/skills/**/*.md",
     "src/tools/_env.py",
     "src/tools/extract_pdf.py",
@@ -74,7 +76,7 @@
   "scripts": {
     "test": "npm run test:installer",
     "test:installer": "node --test src/installer/commands.test.js src/installer/fs.test.js src/installer/manifest.test.js src/installer/template-engine.test.js src/installer/update-check.test.js",
-    "test:scripts": "node --test src/scripts/lint.test.mjs src/scripts/reset.test.mjs src/scripts/wiki.test.mjs",
+    "test:scripts": "node --test src/scripts/lint.test.mjs src/scripts/reset.test.mjs src/scripts/wiki.test.mjs src/scripts/discover-runner.test.mjs",
     "test:python": "python3 -m pytest src/tools/tests -q",
     "test:all": "npm run test:installer && npm run test:scripts && npm run test:python",
     "test:fs": "node --test src/installer/fs.test.js",

@@ -168,6 +168,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-reset` | 安全地删除 wiki 的部分内容。 |
 | | `/lumi-verify` | 核查 wiki 里的笔记是否与引用的来源相符。把可疑之处报告给你审阅；不会替你修改笔记。 |
 | **Research**| `/lumi-research-discover` | 发现并排序相关研究论文。 |
+| | `/lumi-research-watchlist` | 帮你选择要定期查找的研究主题。 |
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
 | | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
@@ -185,8 +186,8 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 当前版本是 **v0.2**（预览版）。完整计划见 [`ROADMAP.md`](./ROADMAP.md)。主要项目：
 
 **v1.0.0 — 首个稳定版**
-- **每日搜索与获取** — watchlist (`_lumina/config/watchlist.yml`) 按计划运行；来自 arXiv / Semantic Scholar 的新论文自动进入 `raw/discovered/<日期>/`。
-- 新技能 `/lumi-daily`，用于整理上次运行以来刚收集到的内容。
+- **定期查找新资料** — 已保存的研究主题可以按你选择的频率再次检查。
+- 新技能 `/lumi-research-watchlist`，帮助你选择和更新要跟踪的研究主题。
 - 锁定 v0.1 的稳定接口（CLI flags、退出码、schema 字段名）。
 - 跨平台 CI 矩阵（macOS + Linux + Windows，Node 20 + 22）。
 

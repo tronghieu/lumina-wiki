@@ -71,11 +71,15 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-ingest', 'references', 'pdf-preprocessing.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(workspace, '_lumina', 'scripts', 'discover-runner.mjs'));
+      await access(join(workspace, '_lumina', 'scripts', 'lib', 'watchlist-config.mjs'));
+      await access(join(workspace, '_lumina', 'config', 'watchlist.yml'));
       await access(join(workspace, 'AGENTS.md'));
       await access(join(workspace, 'GEMINI.md'));
       await access(join(workspace, '.cursor', 'rules', 'lumina.mdc'));
@@ -276,11 +280,54 @@ describe('installCommand', () => {
       await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'SKILL.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-ingest', 'references', 'dedup-policy.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(tmp, '_lumina', 'config', 'watchlist.yml'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade preserves existing research watchlist', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await mkdir(join(tmp, '_lumina', '_state'), { recursive: true });
+      await writeManifest(tmp, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: '0.1.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: {
+          core: { version: '0.1.0', source: 'built-in' },
+          research: { version: '0.1.0', source: 'built-in' },
+        },
+        ideTargets: ['codex'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: tmp },
+      });
+      await writeFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: Existing Wiki',
+        'communication_language: Vietnamese',
+        'document_output_language: English',
+        'ide_targets:',
+        '  codex: true',
+        'packs:',
+        '  core: true',
+        '  research: true',
+        '',
+      ].join('\n'), 'utf8');
+      const customWatchlist = 'version: 1\nitems:\n  - id: keep-me\n    enabled: true\n    query: "keep this"\n';
+      await writeFile(join(tmp, '_lumina', 'config', 'watchlist.yml'), customWatchlist, 'utf8');
+
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+
+      const after = await readFile(join(tmp, '_lumina', 'config', 'watchlist.yml'), 'utf8');
+      assert.equal(after, customWatchlist);
     } finally {
       await cleanTmp(tmp);
     }

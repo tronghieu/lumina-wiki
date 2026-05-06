@@ -168,6 +168,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-reset` | Xóa các phần của wiki một cách an toàn. |
 | | `/lumi-verify` | Kiểm tra xem các trang wiki có khớp với nguồn đã trích dẫn không. Báo cáo những điểm đáng ngờ để bạn xem xét; không tự sửa ghi chú giúp bạn. |
 | **Research**| `/lumi-research-discover` | Khám phá và xếp hạng các bài báo nghiên cứu liên quan. |
+| | `/lumi-research-watchlist` | Giúp bạn chọn các chủ đề nghiên cứu để AI tìm định kỳ. |
 | | `/lumi-research-survey` | Tạo một bài tổng quan/khảo sát từ kiến thức hiện có. |
 | | `/lumi-research-prefill` | Tạo trước các khái niệm nền tảng để tránh trùng lặp. |
 | | `/lumi-research-setup` | Giúp cấu hình API key cho các công cụ nghiên cứu. |
@@ -185,16 +186,16 @@ Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; th
 Phiên bản hiện tại là **v0.2** (preview). Kế hoạch đầy đủ ở [`ROADMAP.md`](./ROADMAP.md). Những hạng mục chính:
 
 **v1.0.0 — Bản ổn định đầu tiên**
-- **Daily search & fetch** — watchlist (`_lumina/config/watchlist.yml`) chạy theo lịch; paper mới từ arXiv / Semantic Scholar tự động đáp xuống `raw/discovered/<ngày>/`.
-- Skill mới `/lumi-daily` để triage những gì vừa thu thập kể từ lần chạy trước.
+- **Tìm tài liệu định kỳ** — các chủ đề nghiên cứu đã lưu có thể được kiểm tra lại theo lịch bạn chọn.
+- Skill mới `/lumi-research-watchlist` để giúp bạn chọn và cập nhật các chủ đề muốn theo dõi.
 - Khoá ổn định bề mặt v0.1 (CLI flags, exit codes, tên trường schema).
 - CI matrix đa nền tảng (macOS + Linux + Windows, Node 20 + 22).
 
-**v2.0.0 — Mở rộng nguồn paper cho Research Pack**
-- **Nguồn paper mới:** OpenAlex, Unpaywall, CORE (Ưu tiên 1) → OpenReview, Hugging Face Papers, Papers With Code (Ưu tiên 2) → Crossref, DOAJ, RSS từ các blog research lab (Ưu tiên 3).
-- **Đánh giá paper:** skill mới `/lumi-rank` đưa các chỉ số influential-citation count, xếp hạng theo lĩnh vực, Scite support/contrast, và Altmetric vào block `ranking:` trong frontmatter.
+**v2.0.0 — Mở rộng nguồn bài báo nghiên cứu cho Research Pack**
+- **Nguồn bài báo mới:** OpenAlex, Unpaywall, CORE (Ưu tiên 1) → OpenReview, Hugging Face Papers, Papers With Code (Ưu tiên 2) → Crossref, DOAJ, RSS từ các blog research lab (Ưu tiên 3).
+- **Đánh giá bài báo:** skill mới `/lumi-rank` đưa các chỉ số influential-citation count, xếp hạng theo lĩnh vực, Scite support/contrast, và Altmetric vào block `ranking:` trong frontmatter.
 
-**Muốn đóng góp?** Chọn bất kỳ hạng mục chưa tick trong `ROADMAP.md`, mở issue để nhận, rồi gửi PR. Các fetcher nguồn paper đều tuân theo cùng pattern trong `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`) nên rất phù hợp cho lần contribute đầu tiên. Xem hướng dẫn dev cục bộ bên dưới.
+**Muốn đóng góp?** Chọn bất kỳ hạng mục chưa tick trong `ROADMAP.md`, mở issue để nhận, rồi gửi PR. Các fetcher nguồn bài báo đều tuân theo cùng pattern trong `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`) nên rất phù hợp cho lần contribute đầu tiên. Xem hướng dẫn dev cục bộ bên dưới.
 
 ---
 
