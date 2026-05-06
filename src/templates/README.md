@@ -190,7 +190,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 {{#if pack_research}}### Pack: research
 
-Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-setup` (interactive API key configuration).
+Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-setup` (interactive API key configuration).
 {{/if}}
 {{#if pack_reading}}### Pack: reading
 
@@ -204,6 +204,8 @@ Adds `/lumi-reading-chapter-ingest` (file a chapter, update characters/themes/pl
 - **`_lumina/scripts/lint.mjs`** — pure-Node markdown linter, runs offline.
 - **`_lumina/scripts/wiki.mjs`** — wiki engine (frontmatter, graph mutation, slug, log).
 - **`_lumina/scripts/reset.mjs`** — scoped destructive reset.
+{{#if pack_research}}- **`_lumina/scripts/discover-runner.mjs`** — one-shot scheduled discovery runner; collects scored candidates but does not ingest or download papers.
+{{/if}}
 - **`_lumina/tools/extract_pdf.py`** — PDF text extractor (pypdf-based); used by `/lumi-ingest` and `/lumi-reading-chapter-ingest` when the host IDE cannot read PDFs natively.
 - **`_lumina/tools/fetch_pdf.py`** — URL → `raw/download/<resource>/` PDF downloader (streaming, atomic, idempotent); used by `/lumi-ingest` Mode B when the input is a URL or paper identifier.
 - **`_lumina/tools/requirements.txt`** — Python dependencies for bundled tools. Run `pip install -r _lumina/tools/requirements.txt` when a tool reports a missing package.

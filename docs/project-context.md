@@ -91,7 +91,7 @@ These are absolutes. Every one corresponds to a real failure mode.
 18. **Multi-language Synchronization.** Lumina-Wiki supports multiple languages across README and user guide docs (English: `README.md`, `docs/user-guide/en.md`; Vietnamese: `README.vi.md`, `docs/user-guide/vi.md`; Simplified Chinese: `README.zh.md`, `docs/user-guide/zh.md`). Any change that affects the user experience — such as adding/removing skills, changing command names, modifying core workflows, changing pack behavior, or changing setup/upgrade steps — MUST be updated across ALL language versions to maintain technical consistency. All files must follow BCP 47 language tags (`zh-Hans` for Simplified Chinese).
 19. **Python tools never write to `wiki/`.** That is exclusively for skills calling `wiki.mjs`. `extract_pdf.py` writes only to stdout; research-pack tools (`init_discovery.py`, etc.) document this explicitly: "Never writes to `wiki/`. Skills own `wiki/`."
 20. **`reset --scope wiki` (and `all`) never touch `raw/`.** `raw/` is destroyed only by `--scope raw` with `--yes`. Conversely, do not write entity files into `raw/`; they will not be indexed.
-21. **User-facing docs target non-technical readers.** READMEs and `docs/user-guide/*.md` are written for end users without a technical or AI background. Apply these rules whenever editing those files (and any other user-facing surface — installer output, skill descriptions in skill tables, error messages a user sees):
+21. **User-facing docs target non-technical readers.** READMEs and `docs/user-guide/*.md` are written for end users without a technical or AI background. Lumina-Wiki's default audience is a person who wants a useful knowledge assistant, not someone who wants to learn the implementation. Product decisions, feature names, skills, guides, and visible messages should optimize for that audience first; technical details belong in advanced guides, development docs, or hidden implementation notes. Apply these rules whenever editing those files (and any other user-facing surface — installer output, skill descriptions in skill tables, error messages a user sees):
     - **Lead with what the user gets**, not what the system does internally. Describe outcomes, not architecture.
     - **Tell the user when to use a feature**, not just what it does. "Use it after X / before Y" beats abstract definitions.
     - **Default to everyday language for the majority of users.** Installed agents should sound like helpful knowledge assistants, not coding agents. Use short, natural sentences that explain what changed, what needs attention, or what decision is needed.
@@ -269,12 +269,13 @@ All tools follow these contracts:
 | check | `/lumi-check` | Run `lint.mjs`, auto-fix safe checks (L01/L03/L06/L07/L09), surface advisory issues |
 | reset | `/lumi-reset` | Dry-run-first destructive reset across 5 scopes |
 
-**Research pack (4) — opt-in, adds Python tools + `topics/`, `foundations/` page types:**
+**Research pack (5) — opt-in, adds Python tools + `topics/`, `foundations/` page types:**
 
 | Skill | Purpose |
 |---|---|
 | `/lumi-research-setup` | Check Python deps, populate API-key env files |
 | `/lumi-research-discover` | Find + rank candidate sources; stops at shortlist |
+| `/lumi-research-watchlist` | Help users configure topics for scheduled discovery |
 | `/lumi-research-prefill` | Seed `wiki/foundations/` terminal pages |
 | `/lumi-research-survey` | Narrative synthesis from existing wiki |
 

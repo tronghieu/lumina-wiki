@@ -6,6 +6,7 @@
  * Commands:
  *   lumina install      — scaffold or upgrade a Lumina Wiki workspace
  *   lumina uninstall    — remove Lumina-managed files (preserve wiki/ and raw/)
+ *   lumina discover run — run scheduled discovery once
  *   lumina --version    — print version + optional update check
  *   lumina --help       — print usage
  *
@@ -101,6 +102,7 @@ Examples:
   lumina install --yes
   lumina install --yes --packs core,research,reading --ide-targets claude_code,codex
   lumina install --directory /path/to/project
+  lumina discover run --dry-run
   lumina uninstall
   lumina --version
 `);
@@ -193,6 +195,41 @@ program
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
       process.exit(2);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// discover subcommand
+// ---------------------------------------------------------------------------
+const discover = program
+  .command('discover')
+  .description('scheduled discovery commands');
+
+discover
+  .command('run')
+  .description('run scheduled discovery once')
+  .option('--config <path>', 'watchlist config path')
+  .option('--schedule <value>', 'filter by schedule: manual,daily,weekly,monthly')
+  .option('--source <value>', 'filter by source: arxiv,s2')
+  .option('--limit <number>', 'override per-source fetch limit')
+  .option('--dry-run', 'show what would be written without changing files')
+  .option('--json', 'print machine-readable summary')
+  .action(async (cmdOpts) => {
+    try {
+      const { main } = await import('../src/scripts/discover-runner.mjs');
+      const args = [];
+      if (cmdOpts.config) args.push('--config', cmdOpts.config);
+      if (cmdOpts.schedule) args.push('--schedule', cmdOpts.schedule);
+      if (cmdOpts.source) args.push('--source', cmdOpts.source);
+      if (cmdOpts.limit) args.push('--limit', String(cmdOpts.limit));
+      if (cmdOpts.dryRun) args.push('--dry-run');
+      if (cmdOpts.json) args.push('--json');
+      const code = await main(args);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(err.code === 2 ? 2 : 3);
     }
   });
 

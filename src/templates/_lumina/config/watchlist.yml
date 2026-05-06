@@ -1,0 +1,23 @@
+# Lumina-Wiki scheduled discovery watchlist.
+# Use /lumi-research-watchlist to edit this with AI help.
+#
+# The runner does not install a scheduler by itself. Run it manually, from
+# GitHub Actions, cron, launchd, or Windows Task Scheduler.
+
+version: 1
+
+defaults:
+  sources: [arxiv]
+  schedule: weekly
+  limit: 20
+  max_new: 5
+
+items:
+  # Example. Change enabled to true when you want scheduled discovery to use it.
+  - id: example-ai-agents
+    enabled: false
+    query: "AI agent evaluation frameworks"
+    sources: [arxiv]
+    schedule: weekly
+    limit: 20
+    max_new: 5

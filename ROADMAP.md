@@ -42,16 +42,17 @@ This document tracks planned upgrades. Scope is non-binding — items move betwe
 
 ### Planned features
 
-#### Daily search and fetch
+#### Scheduled discovery
 
-A scheduled paper-discovery loop. The user defines watchlist queries; a runner executes them on a cadence and lands new hits in `raw/discovered/`.
+A scheduled paper-discovery loop. The user defines research topics to follow; an external scheduler calls a one-shot runner, and new scored candidates land in `raw/discovered/`.
 
-- **Storage:** watchlist queries live in `_lumina/config/watchlist.yml`. Each entry has a slug, a source (`arxiv` | `s2`), a query (category, free-text, or author), and an optional schedule hint (`daily`, `weekly`).
-- **Runner:** new script `src/scripts/daily-fetch.mjs`. Reads `watchlist.yml`, calls the existing Python fetchers via subprocess, writes new records as markdown stubs into `raw/discovered/<YYYY-MM-DD>/<slug>/`. Atomic writes only — `raw/discovered/` is the one place under `raw/` that already accepts additions.
-- **Dedup:** `_lumina/_state/seen-papers.csv` records every external ID (`arxiv_id`, `doi`, `s2_paper_id`) the runner has ever touched, so re-runs only emit new entries. Treated as runtime state — ignored by `ci-idempotency`.
-- **Scheduling:** Lumina does not own the scheduler. Document two options in `docs/DEVELOPMENT.md`: a user-installed `cron` / `launchd` entry, or running `node src/scripts/daily-fetch.mjs` manually / from CI.  No daemon, no background process inside the installer.
-- **New skill `/lumi-daily`:** invoked manually, it (a) shows what landed since last run, (b) helps the agent triage `raw/discovered/` into wiki entries via the existing `/lumi-ingest` flow, (c) optionally edits `watchlist.yml` based on user intent.
-- **Existing fetcher reuse:** `fetch_arxiv.py daily <category>` already exists; no Python changes required for the arXiv path. S2 path uses `fetch_s2.py search` with a date filter.
+- **Storage:** watchlist topics live in `_lumina/config/watchlist.yml`. Each entry has a stable id, source list (`arxiv` | `s2`), query, schedule (`manual` | `daily` | `weekly` | `monthly`), fetch limit, and max-new limit. Research-pack installs create a disabled starter file and preserve user edits on upgrade.
+- **Runner:** new script `src/scripts/discover-runner.mjs` and public command `lumina discover run`. Reads `watchlist.yml`, calls existing Python fetchers via subprocess, scores candidates, and writes metadata JSON records into `raw/discovered/<YYYY-MM-DD>/<slug>/`. Atomic writes only — `raw/discovered/` is the one place under `raw/` that already accepts additions.
+- **Scoring:** each candidate carries a deterministic discovery relevance score based on metadata such as topic match, recency, citation signal, metadata completeness, and duplicate penalty. This is a review priority signal, not a source-quality verdict.
+- **Dedup:** `_lumina/_state/discovery-runner.json` records seen external IDs and last run data so re-runs only emit new entries. Treated as runtime state — ignored by `ci-idempotency`.
+- **Scheduling:** Lumina does not own the scheduler. Advanced user guide documents GitHub Actions, cron, launchd, and Windows Task Scheduler. No daemon, no background process inside the installer.
+- **New skill `/lumi-research-watchlist`:** invoked manually, it helps users choose topics to follow and updates `watchlist.yml` in plain language. It does not run discovery unless the user asks.
+- **Existing fetcher reuse:** runner reuses `fetch_arxiv.py`, `fetch_s2.py`, and `discover.py` for metadata and ranking. Paper download stays in `/lumi-ingest`.
 
 #### Verify pass — shipped in v0.9
 
@@ -67,16 +68,16 @@ A scheduled paper-discovery loop. The user defines watchlist queries; a runner e
 ### Out of scope for v1.0.0
 
 - New paper sources — defer entirely to v2.0.0.
-- Paper ranking / scoring — v2.0.0.
+- Full paper quality scoring — v2.0.0. v1.0 only scores discovery candidates for review priority.
 - Multi-machine sync of `_lumina/_state/` — users handle this via git or whatever they prefer.
 - A hosted Lumina daemon / SaaS layer — not on any roadmap.
 
 ### Acceptance criteria
 
-- Running `node src/scripts/daily-fetch.mjs` against a sample `watchlist.yml` produces deterministic new entries in `raw/discovered/<date>/`.
+- Running `lumina discover run` against a sample `watchlist.yml` produces deterministic scored candidates in `raw/discovered/<date>/`.
 - Re-running the same command on the same day with no new upstream papers writes nothing.
-- `npm run ci:idempotency` still green; `_lumina/_state/seen-papers.csv` does not appear in the watched-paths diff.
-- `/lumi-daily` skill prompt works end-to-end on a sandbox install.
+- `npm run ci:idempotency` still green; `_lumina/_state/discovery-runner.json` does not appear in the watched-paths diff.
+- `/lumi-research-watchlist` skill prompt works end-to-end on a sandbox install.
 
 ---
 

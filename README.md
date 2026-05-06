@@ -168,6 +168,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-reset` | Safely reset parts of the wiki. |
 | | `/lumi-verify` | Check that wiki notes match the sources they cite. Reports anything suspicious for your review; never edits notes for you. |
 | **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
+| | `/lumi-research-watchlist` | Choose research topics for scheduled discovery with AI help. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
 | | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |
 | | `/lumi-research-setup` | Help configure API keys for research tools. |
@@ -185,8 +186,8 @@ The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`;
 The current release is **v0.2** (preview). The full plan is in [`ROADMAP.md`](./ROADMAP.md). Headline items:
 
 **v1.0.0 - First Stable**
-- **Daily search and fetch** - watchlist queries (`_lumina/config/watchlist.yml`) run on a schedule; new arXiv / Semantic Scholar papers land automatically in `raw/discovered/<date>/`.
-- New `/lumi-daily` skill to triage newly collected papers.
+- **Scheduled discovery** - saved research topics can be checked on a schedule you choose.
+- New `/lumi-research-watchlist` skill to help you choose and update the topics to follow.
 - Stability lock for the v0.1 surface: CLI flags, exit codes, and schema field names.
 - Cross-platform CI matrix: macOS, Linux, and Windows on Node 20 and 22.
 
