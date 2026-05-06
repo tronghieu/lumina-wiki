@@ -218,11 +218,35 @@ function extractSourceId(source, candidate) {
 }
 
 function buildDedupKey({ source, sourceId, candidate, title, url, year }) {
-  const doi = candidate.doi ?? candidate.externalIds?.DOI;
-  if (sourceId) return `${source}:${String(sourceId).toLowerCase()}`;
-  if (doi) return `doi:${String(doi).toLowerCase()}`;
+  const doi = String(candidate.doi ?? candidate.externalIds?.DOI ?? '').trim();
+  const arxivId = extractArxivId({ source, sourceId, candidate, url });
+  const titleKey = buildTitleDedupKey({ candidate, title, year });
+  if (doi) return `doi:${doi.toLowerCase()}`;
+  if (arxivId) return `arxiv:${arxivId}`;
+  if (titleKey) return titleKey;
   if (url) return `url:${sha256(canonicalUrl(url))}`;
+  if (sourceId) return `${source}:${String(sourceId).toLowerCase()}`;
   return `title:${sha256([title.toLowerCase(), normalizeAuthors(candidate.authors).join('|').toLowerCase(), year ?? ''].join('|'))}`;
+}
+
+function extractArxivId({ source, sourceId, candidate, url }) {
+  const candidates = [
+    candidate.arxivId,
+    candidate.externalIds?.ArXiv,
+    source === 'arxiv' ? sourceId : null,
+    url,
+  ];
+  for (const value of candidates) {
+    const id = normalizeArxivId(value);
+    if (id) return id;
+  }
+  return null;
+}
+
+function buildTitleDedupKey({ candidate, title, year }) {
+  const authors = normalizeAuthors(candidate.authors);
+  if (!title || (authors.length === 0 && !year)) return '';
+  return `title:${sha256([title.toLowerCase(), authors.join('|').toLowerCase(), year ?? ''].join('|'))}`;
 }
 
 async function collectExistingDedupKeys(discoveredDir) {
@@ -343,6 +367,13 @@ function canonicalUrl(value) {
   return String(value).trim().replace(/\/$/, '');
 }
 
+function normalizeArxivId(value) {
+  if (!value) return '';
+  const text = String(value).trim();
+  const match = text.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arXiv:)?([a-z.-]+\/\d{7}|\d{4}\.\d{4,5})(?:v\d+)?/i);
+  return (match?.[1] ?? '').toLowerCase();
+}
+
 function safeFilePart(value) {
   return basename(String(value || 'unknown').replace(/[<>:"/\\|?*\s]+/g, '-')).slice(0, 80) || 'unknown';
 }
@@ -398,7 +429,7 @@ export async function main(argv = process.argv.slice(2)) {
     }
     const summary = await runDiscover(opts);
     if (opts.json) console.log(JSON.stringify(summary, null, 2));
-    return summary.errors.length > 0 && summary.new > 0 ? 3 : 0;
+    return summary.errors.length > 0 ? 3 : 0;
   } catch (err) {
     const code = err.code === 2 || err instanceof WatchlistConfigError ? 2 : 3;
     console.error(`[error] ${err.message}`);

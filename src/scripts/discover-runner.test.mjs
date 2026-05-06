@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
-import { runDiscover } from './discover-runner.mjs';
+import { main, runDiscover } from './discover-runner.mjs';
 import {
   normalizeWatchlistConfig,
   parseSimpleWatchlistYaml,
@@ -22,8 +22,8 @@ async function makeWorkspace() {
   return ws;
 }
 
-async function writeFakeTools(ws) {
-  await writeFile(join(ws, '_lumina', 'tools', 'fetch_arxiv.py'), [
+async function writeFakeTools(ws, options = {}) {
+  const arxivScript = options.arxivScript ?? [
     'import json, sys',
     'query = sys.argv[2]',
     'print(json.dumps([',
@@ -31,14 +31,17 @@ async function writeFakeTools(ws) {
     '  {"id":"2401.00002","title":"Unrelated Widgets","summary":"widgets","published":"2020-01-01T00:00:00Z","authors":["B"],"url":"https://arxiv.org/abs/2401.00002","citationCount":1}',
     ']))',
     '',
-  ].join('\n'), 'utf8');
+  ].join('\n');
 
-  await writeFile(join(ws, '_lumina', 'tools', 'fetch_s2.py'), [
+  const s2Script = options.s2Script ?? [
     'import sys',
     'print("Error: SEMANTIC_SCHOLAR_API_KEY is not set.", file=sys.stderr)',
     'sys.exit(2)',
     '',
-  ].join('\n'), 'utf8');
+  ].join('\n');
+
+  await writeFile(join(ws, '_lumina', 'tools', 'fetch_arxiv.py'), arxivScript, 'utf8');
+  await writeFile(join(ws, '_lumina', 'tools', 'fetch_s2.py'), s2Script, 'utf8');
 
   await writeFile(join(ws, '_lumina', 'tools', 'discover.py'), [
     'import json, sys',
@@ -166,6 +169,56 @@ test('immediate rerun does not write duplicate records', async () => {
   assert.equal(summary.duplicates, 2);
   assert.deepEqual(after, before);
   assert.deepEqual(afterStats.map(s => s.mtimeMs), beforeStats.map(s => s.mtimeMs));
+});
+
+test('deduplicates the same paper returned by arxiv and s2 in one run', async () => {
+  const ws = await makeWorkspace();
+  await writeFakeTools(ws, {
+    s2Script: [
+      'import json',
+      'print(json.dumps([',
+      '  {"paperId":"s2-abc","externalIds":{"ArXiv":"2401.00001"},"title":"Agent Evaluation Frameworks","abstract":"same paper","publicationDate":"2026-05-01","authors":[{"name":"A"}],"url":"https://www.semanticscholar.org/paper/s2-abc","citationCount":4}',
+      ']))',
+      '',
+    ].join('\n'),
+  });
+  await writeWatchlist(ws, enabledWatchlistWithS2());
+
+  const summary = await runDiscover({
+    projectRoot: ws,
+    json: true,
+    now: new Date('2026-05-05T03:00:00.000Z'),
+  });
+
+  assert.equal(summary.fetched, 3);
+  assert.equal(summary.new, 2);
+  assert.equal(summary.duplicates, 1);
+  assert.equal((await listJsonFiles(join(ws, 'raw', 'discovered'))).length, 2);
+});
+
+test('main exits non-zero when a source fetch fails without new candidates', async () => {
+  const ws = await makeWorkspace();
+  await writeFakeTools(ws, {
+    arxivScript: [
+      'import sys',
+      'print("arxiv unavailable", file=sys.stderr)',
+      'sys.exit(3)',
+      '',
+    ].join('\n'),
+  });
+  await writeWatchlist(ws, enabledWatchlist());
+
+  const previousCwd = process.cwd();
+  const previousLog = console.log;
+  process.chdir(ws);
+  console.log = () => {};
+  try {
+    const code = await main(['--json']);
+    assert.equal(code, 3);
+  } finally {
+    console.log = previousLog;
+    process.chdir(previousCwd);
+  }
 });
 
 test('source filter handles optional missing S2 key without writes', async () => {
