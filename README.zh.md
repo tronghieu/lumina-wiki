@@ -184,19 +184,29 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 
 ## 6. 未来规划
 
-当前版本是 **v0.2**（预览版）。完整计划见 [`ROADMAP.md`](./ROADMAP.md)。主要项目：
+Lumina-Wiki 正在快速演进。这是我们的用户路线图：
 
-**v1.0.0 — 首个稳定版**
-- **定期查找新资料** — 已保存的研究主题可以按你选择的频率再次检查。
-- 新技能 `/lumi-research-watchlist`，帮助你选择和更新要跟踪的研究主题。
-- 锁定 v0.1 的稳定接口（CLI flags、退出码、schema 字段名）。
-- 跨平台 CI 矩阵（macOS + Linux + Windows，Node 20 + 22）。
+**近期计划（稳定性与新导入支持）**
+- [ ] **`/lumi-help` 技能：** 智能助手，帮您即时学习和使用 Lumina-Wiki。
+- [ ] **多语言安装：** 安装时可选英文、越南文或中文作为主语言。
+- [ ] **原生 DOCX 与图片 OCR：** 直接将 Word 文件和截图导入您的维基。
+- [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。
+- [ ] **改进的 CI/CD：** 正式支持 Bun 和 Node 22 环境。
 
-**v2.0.0 — 扩展 Research Pack 的论文来源**
-- **新论文来源：** OpenAlex、Unpaywall、CORE（优先级 1）→ OpenReview、Hugging Face Papers、Papers With Code（优先级 2）→ Crossref、DOAJ、研究实验室博客 RSS（优先级 3）。
-- **论文评估：** 新技能 `/lumi-rank`，将 influential-citation count、领域归一化排名、Scite support/contrast 和 Altmetric 添加到 frontmatter 的 `ranking:` 区块。
+**长期计划（深度研究与集成）**
+- [ ] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall。
+- [ ] **RSS 与博客监控：** 自动从您喜爱的实验室博客中发现新论文。
+- [ ] **Google Workspace：** 直接将 Google Docs 和 Sheets 导入知识图谱。
+- [ ] **多媒体支持：** 通过转录处理 YouTube 视频和音频录音。
+- [ ] **知识图谱审计：** 自动检测矛盾和结构偏移。
 
-**想贡献？** 选择 `ROADMAP.md` 中任何未勾选的项目，开 issue 认领，然后提交 PR。所有论文来源 fetcher 都遵循 `src/tools/` 中相同模式（CLI + JSON、no async、退出码 `0/2/3`），很适合作为第一次贡献。请参考下面的本地开发步骤。
+**计划中**
+- [ ] **桌面端应用：** 专用的图形界面环境，方便管理维基。
+- [ ] **专业科学包：** 为生物医学和物理研究人员提供深度集成。
+
+---
+*完整的技术细节请见 [`ROADMAP.md`](./ROADMAP.md)。想要贡献？欢迎在 GitHub 上加入我们！*
+
 
 ---
 

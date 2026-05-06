@@ -184,19 +184,28 @@ Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; th
 
 ## 6. Lộ trình sắp tới
 
-Phiên bản hiện tại là **v0.2** (preview). Kế hoạch đầy đủ ở [`ROADMAP.md`](./ROADMAP.md). Những hạng mục chính:
+Lumina-Wiki đang phát triển nhanh chóng. Dưới đây là lộ trình hướng tới người dùng của chúng tôi:
 
-**v1.0.0 — Bản ổn định đầu tiên**
-- **Tìm tài liệu định kỳ** — các chủ đề nghiên cứu đã lưu có thể được kiểm tra lại theo lịch bạn chọn.
-- Skill mới `/lumi-research-watchlist` để giúp bạn chọn và cập nhật các chủ đề muốn theo dõi.
-- Khoá ổn định bề mặt v0.1 (CLI flags, exit codes, tên trường schema).
-- CI matrix đa nền tảng (macOS + Linux + Windows, Node 20 + 22).
+**Sắp tới (Ổn định & Mở rộng nạp tài liệu)**
+- [ ] **Kỹ năng `/lumi-help`:** Trợ lý thông minh giúp bạn học và sử dụng Lumina-Wiki tức thì.
+- [ ] **Cài đặt đa ngôn ngữ:** Chọn Tiếng Anh, Tiếng Việt hoặc Tiếng Trung làm ngôn ngữ chính khi cài đặt.
+- [ ] **Ingest DOCX & OCR Ảnh:** Nạp trực tiếp file Word và ảnh chụp màn hình vào wiki.
+- [ ] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn.
+- [ ] **Cải thiện CI/CD:** Hỗ trợ chính thức cho môi trường Bun và Node 22.
 
-**v2.0.0 — Mở rộng nguồn bài báo nghiên cứu cho Research Pack**
-- **Nguồn bài báo mới:** OpenAlex, Unpaywall, CORE (Ưu tiên 1) → OpenReview, Hugging Face Papers, Papers With Code (Ưu tiên 2) → Crossref, DOAJ, RSS từ các blog research lab (Ưu tiên 3).
-- **Đánh giá bài báo:** skill mới `/lumi-rank` đưa các chỉ số influential-citation count, xếp hạng theo lĩnh vực, Scite support/contrast, và Altmetric vào block `ranking:` trong frontmatter.
+**Dài hạn (Nghiên cứu sâu & Tích hợp)**
+- [ ] **Mở rộng nguồn dữ liệu toàn cầu:** Tích hợp trực tiếp với OpenAlex, CORE và Unpaywall.
+- [ ] **Theo dõi RSS & Blog:** Tự động tìm bài báo mới từ các blog phòng thí nghiệm yêu thích.
+- [ ] **Google Workspace:** Nạp trực tiếp Google Docs và Sheets vào đồ thị tri thức.
+- [ ] **Hỗ trợ đa phương tiện:** Xử lý video YouTube và ghi âm Audio thông qua transcript.
+- [ ] **Kiểm định đồ thị tri thức:** Tự động phát hiện mâu thuẫn và sai lệch cấu trúc.
 
-**Muốn đóng góp?** Chọn bất kỳ hạng mục chưa tick trong `ROADMAP.md`, mở issue để nhận, rồi gửi PR. Các fetcher nguồn bài báo đều tuân theo cùng pattern trong `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`) nên rất phù hợp cho lần contribute đầu tiên. Xem hướng dẫn dev cục bộ bên dưới.
+**Dự kiến**
+- [ ] **Ứng dụng Desktop:** Môi trường giao diện chuyên dụng để quản lý wiki dễ dàng hơn.
+- [ ] **Gói Khoa học Chuyên dụng:** Tích hợp sâu cho các nhà nghiên cứu sinh học, y tế và vật lý.
+
+---
+*Chi tiết kỹ thuật đầy đủ có tại [`ROADMAP.md`](./ROADMAP.md). Bạn muốn đóng góp? Hãy tham gia cùng chúng tôi trên GitHub!*
 
 ---
 

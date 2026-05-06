@@ -184,19 +184,28 @@ The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`;
 
 ## 6. What's Coming Next
 
-The current release is **v0.2** (preview). The full plan is in [`ROADMAP.md`](./ROADMAP.md). Headline items:
+Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 
-**v1.0.0 - First Stable**
-- **Scheduled discovery** - saved research topics can be checked on a schedule you choose.
-- New `/lumi-research-watchlist` skill to help you choose and update the topics to follow.
-- Stability lock for the v0.1 surface: CLI flags, exit codes, and schema field names.
-- Cross-platform CI matrix: macOS, Linux, and Windows on Node 20 and 22.
+**Near-term (Stability & New Ingestion)**
+- [ ] **`/lumi-help` Skill:** A smart assistant to help you learn and use Lumina-Wiki instantly.
+- [ ] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install.
+- [ ] **Native DOCX & Image OCR:** Ingest Word files and screenshots directly into your wiki.
+- [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
+- [ ] **Improved CI/CD:** Native support for Bun and Node 22 environments.
 
-**v2.0.0 - Research Pack Source Expansion**
-- **New paper sources:** OpenAlex, Unpaywall, CORE (Priority 1) -> OpenReview, Hugging Face Papers, Papers With Code (Priority 2) -> Crossref, DOAJ, research lab RSS feeds (Priority 3).
-- **Paper ranking:** new `/lumi-rank` skill adding influential-citation count, field-normalized citation rank, Scite support/contrast signals, and Altmetric attention to a `ranking:` frontmatter block.
+**Long-term (Deep Research & Integration)**
+- [ ] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall.
+- [ ] **RSS & Blog Monitoring:** Automatically identify new papers from your favorite lab blogs.
+- [ ] **Google Workspace:** Ingest Google Docs and Sheets directly into your graph.
+- [ ] **Multimedia Support:** Process YouTube videos and Audio recordings via transcripts.
+- [ ] **Knowledge Graph Auditing:** Automated checks for contradictions and structural drift.
 
-**Want to contribute?** Pick any unchecked item in `ROADMAP.md`, open an issue to claim it, then send a PR. Source fetchers follow the same pattern in `src/tools/` (CLI + JSON, no async, exit codes `0/2/3`), so they are a good first contribution. See the local development steps below.
+**Proposed**
+- [ ] **Desktop Application:** A dedicated visual environment for easier wiki management.
+- [ ] **Specialized Science Packs:** Deep integration for bio-medical and physics researchers.
+
+---
+*Full technical details are available in [`ROADMAP.md`](./ROADMAP.md). Want to contribute? Join us on GitHub!*
 
 ---
 
