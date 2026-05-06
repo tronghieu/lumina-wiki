@@ -111,6 +111,10 @@ You do not need to remember the full internal structure. In everyday use, you on
 - processed knowledge lives in `wiki/`,
 - you work with Lumina-Wiki through commands named `lumi-*`. Depending on the AI tool, you may call them with `/` or `$`.
 
+<p align="center">
+  <img src="../../assets/lumina-architecture-en.png" alt="Lumina-Wiki Architecture" width="720">
+</p>
+
 ## Installation
 
 Installing Lumina-Wiki is simple, like setting up a new "office" for your AI assistant. Just follow these steps:

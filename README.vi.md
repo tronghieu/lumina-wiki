@@ -56,6 +56,10 @@ Lumina-Wiki hoạt động dựa trên một nguyên tắc đơn giản: tách b
 +-------------------------+                        +---------------------------+
 ```
 
+<p align="center">
+  <img src="assets/lumina-architecture-vi.png" alt="Kiến trúc Lumina-Wiki" width="720">
+</p>
+
 1.  **Bạn Cung cấp:** Đặt các tài liệu (PDF, ghi chú) của bạn vào thư mục `raw/`.
 2.  **Agent Xây dựng:** Sử dụng các lệnh trong cuộc hội thoại với AI (như `/lumi-ingest`) để yêu cầu agent đọc từ `raw/` và xây dựng một wiki có cấu trúc, liên kết chặt chẽ trong thư mục `wiki/`.
 3.  **Bạn Khai thác:** Đặt câu hỏi (sử dụng `/lumi-ask`) trực tiếp vào "bộ não" của agent trong `wiki/` để nhận được câu trả lời nhanh và phù hợp với ngữ cảnh hơn.
@@ -120,6 +124,10 @@ Tương tác với wiki của bạn bằng cách sử dụng các lệnh này tr
 ## 4. Hướng dẫn cấu trúc thư mục
 
 Lumina tạo ra một không gian làm việc với mục đích rõ ràng cho từng thư mục.
+
+<p align="center">
+  <img src="assets/lumina-env-vi.png" alt="Môi trường làm việc Lumina-Wiki" width="720">
+</p>
 
 | Đường dẫn | Mục đích | Quản lý bởi |
 | :--- | :--- | :--- |

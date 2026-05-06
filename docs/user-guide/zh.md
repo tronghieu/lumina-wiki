@@ -111,6 +111,10 @@ AI 更新概念、相关人物、链接、目录和日志
 - 已处理的知识放在 `wiki/`，
 - 你通过名为 `lumi-*` 的命令使用 Lumina-Wiki。根据不同 AI 工具，你可以用 `/` 或 `$` 调用它们。
 
+<p align="center">
+  <img src="../../assets/lumina-architecture-en.png" alt="Lumina-Wiki 架构" width="720">
+</p>
+
 ## 安装
 
 安装 Lumina-Wiki 非常简单，就像为你的 AI 助手布置一个全新的“办公室”。只需按照以下步骤操作：

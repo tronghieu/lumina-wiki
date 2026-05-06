@@ -56,6 +56,10 @@ Lumina-Wiki works from one simple principle: keep your raw materials separate fr
 +-------------------------+                        +---------------------------+
 ```
 
+<p align="center">
+  <img src="assets/lumina-architecture-en.png" alt="Lumina-Wiki Architecture" width="720">
+</p>
+
 1.  **You Provide:** Place your documents (PDFs, notes) in the `raw/` directory.
 2.  **The Agent Builds:** Use commands in your AI chat, such as `/lumi-ingest`, to make the agent read from `raw/` and build a structured, interlinked wiki in `wiki/`.
 3.  **You Query:** Ask questions with `/lumi-ask` against the agent's "brain" in `wiki/` for faster, more context-aware answers.
@@ -120,6 +124,10 @@ Interact with your wiki using these commands in your AI chat interface, such as 
 ## 4. Workspace Directory Guide
 
 Lumina creates a workspace where each folder has a clear purpose.
+
+<p align="center">
+  <img src="assets/lumina-env-en.png" alt="Lumina-Wiki Workspace Environment" width="720">
+</p>
 
 | Path | Purpose | Managed By |
 | :--- | :--- | :--- |
