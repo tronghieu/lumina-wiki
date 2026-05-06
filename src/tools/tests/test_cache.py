@@ -81,6 +81,24 @@ def test_canonical_url_drops_none_params():
     assert "b=" not in out
 
 
+def test_canonical_url_preserves_existing_percent_encoding():
+    """Pre-encoded URLs must not be double-encoded.
+
+    Regression test for the cache-poisoning bug where DOI-style URLs
+    (id=DOI%3A10.x/y) would have their %3A re-encoded to %253A.
+    """
+    out = _canonical_url("https://api.example.com/x?id=DOI%3A10.1/abc", None)
+    assert "DOI%3A10.1" in out
+    assert "%2503" not in out and "%253A" not in out
+
+
+def test_canonical_url_dict_and_url_query_match():
+    """Same logical request via params= or via URL query must canonicalize equal."""
+    a = _canonical_url("https://api.example.com/x", {"q": "hello world"})
+    b = _canonical_url("https://api.example.com/x?q=hello+world", None)
+    assert a == b
+
+
 # ---------------------------------------------------------------------------
 # _cache_key
 # ---------------------------------------------------------------------------
@@ -268,14 +286,64 @@ def test_namespaces_isolated(tmp_project: Path, monkeypatch):
     assert len(log) == 2, "different namespaces must not share cache"
 
 
-def test_wrap_session_copies_headers(tmp_project: Path, monkeypatch):
+def test_wrap_session_proxies_inner_headers(tmp_project: Path, monkeypatch):
+    """Wrapped session reads/writes inner.headers via delegation, not copy."""
     monkeypatch.chdir(tmp_project)
     base = requests.Session()
     base.headers["User-Agent"] = "lumina-test/1.0"
-    base.headers["X-Custom"] = "value"
     wrapped = wrap_session(base, namespace="test")
     assert wrapped.headers["User-Agent"] == "lumina-test/1.0"
-    assert wrapped.headers["X-Custom"] == "value"
+    # Mutations on the wrapped session must propagate to the inner session.
+    wrapped.headers["X-After-Wrap"] = "value"
+    assert base.headers["X-After-Wrap"] == "value"
+
+
+def test_non_get_methods_proxy_to_inner(tmp_project: Path, monkeypatch):
+    """post/put/etc must pass straight through __getattr__ to inner session."""
+    monkeypatch.chdir(tmp_project)
+    sess = wrap_session(requests.Session(), namespace="test")
+    called = {}
+
+    def fake_post(url, **kwargs):
+        called["url"] = url
+        called["kwargs"] = kwargs
+        return "post-response"
+
+    sess._inner.post = fake_post  # type: ignore[assignment]
+    result = sess.post("https://api.example.com/x", json={"k": "v"})
+    assert result == "post-response"
+    assert called["url"] == "https://api.example.com/x"
+
+
+def test_ttl_zero_does_not_write_cache(tmp_project: Path, monkeypatch):
+    """LUMINA_CACHE_TTL=0 must not fill disk with never-served entries."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.delenv("LUMINA_NO_CACHE", raising=False)
+    sess = wrap_session(requests.Session(), namespace="test", ttl_seconds=0)
+    log: list = []
+    fake = _FakeResponse()
+    _stub_get(sess, fake, log)
+    sess.get("https://api.example.com/x")
+    sess.get("https://api.example.com/x")
+    assert len(log) == 2, "TTL=0 must always refetch"
+    assert not any(sess._lumina_cache_root.glob("*.json")), "TTL=0 must not write to disk"
+
+
+def test_wrap_session_falls_back_when_cache_dir_unwritable(tmp_path: Path, monkeypatch):
+    """Read-only filesystem must not break fetchers — return inner session unchanged."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path / "no-home"))
+    base = requests.Session()
+    # Force cache_root to point at a path where mkdir would fail.
+    bad_path = tmp_path / "blocked"
+    bad_path.write_text("not a directory")  # file at the path → mkdir fails
+
+    def boom(*_a, **_kw):
+        raise OSError("read-only filesystem (test)")
+    monkeypatch.setattr("_cache._cache_root_for", boom)
+
+    result = wrap_session(base, namespace="test")
+    assert result is base, "fallback must return original session unchanged"
 
 
 def test_ttl_env_override(tmp_project: Path, monkeypatch):

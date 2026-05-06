@@ -46,7 +46,7 @@ import time
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
@@ -90,24 +90,22 @@ def _cache_root_for(namespace: str, start: Optional[Path] = None) -> Path:
 def _canonical_url(url: str, params: Optional[dict[str, Any]] = None) -> str:
     """Build a deterministic URL string from base URL + params dict.
 
-    Params are sorted alphabetically so {a:1,b:2} and {b:2,a:1} hash the
-    same. Existing query strings on the URL are preserved and merged.
+    Delegates URL construction to `requests.PreparedRequest.prepare_url()`
+    so percent-encoding semantics match what `requests` actually sends to
+    the server, then sorts the final query string alphabetically. This
+    avoids the double-encoding bug that plagues naive `split('=') +
+    urlencode()` round-trips on already-encoded URLs (e.g. DOI strings
+    like `id=DOI%3A10.x/y`).
     """
-    parts = urlsplit(url)
-    existing_pairs: list[tuple[str, str]] = []
+    pr = requests.PreparedRequest()
+    pr.prepare_url(url, params)  # type: ignore[arg-type]
+    parts = urlsplit(pr.url or url)
     if parts.query:
-        for pair in parts.query.split("&"):
-            if "=" in pair:
-                k, v = pair.split("=", 1)
-                existing_pairs.append((k, v))
-    if params:
-        for k, v in params.items():
-            if v is None:
-                continue
-            existing_pairs.append((str(k), str(v)))
-    existing_pairs.sort()
-    new_query = urlencode(existing_pairs)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+        pairs = sorted(parts.query.split("&"))
+        sorted_query = "&".join(pairs)
+    else:
+        sorted_query = ""
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, sorted_query, parts.fragment))
 
 
 def _cache_key(method: str, canonical_url: str) -> str:
@@ -182,19 +180,11 @@ class CachedSession:
 
     def __getattr__(self, name: str) -> Any:
         # Called only when attribute not found on self — proxy to inner.
+        # Guard against recursion if the instance is partially constructed
+        # (e.g. unpickled or __init__ failed before _inner was set).
+        if name == "_inner":
+            raise AttributeError(name)
         return getattr(self._inner, name)
-
-    @property
-    def headers(self):
-        return self._inner.headers
-
-    @property
-    def auth(self):
-        return self._inner.auth
-
-    @auth.setter
-    def auth(self, value):
-        self._inner.auth = value
 
     def get(self, url, **kwargs):
         params = kwargs.get("params")
@@ -209,7 +199,7 @@ class CachedSession:
 
         resp = self._inner.get(url, **kwargs)
 
-        if self._lumina_disabled:
+        if self._lumina_disabled or self._lumina_ttl <= 0:
             return resp
 
         if getattr(resp, "status_code", None) == 200 and self._cacheable(resp):
@@ -271,12 +261,15 @@ def wrap_session(
     *,
     ttl_seconds: Optional[int] = None,
     cache_root: Optional[Path] = None,
-) -> CachedSession:
-    """Return a CachedSession that copies headers/auth from the given session.
+):
+    """Return a session-like object that caches GETs to disk.
 
-    The original session is left untouched. If LUMINA_NO_CACHE=1, the
-    returned session still subclasses CachedSession but skips disk reads
-    and writes (so callers don't need to special-case the bypass).
+    If the cache directory cannot be created (read-only filesystem,
+    permission denied, etc.), returns the input session unchanged so the
+    fetcher continues to work without caching. Callers must rely on duck
+    typing — the returned object always has `.get`, `.post`, `.headers`,
+    etc., but its concrete type is either `requests.Session` (no-cache
+    fallback) or `CachedSession` (delegating wrapper).
     """
     if ttl_seconds is None:
         env_ttl = os.environ.get("LUMINA_CACHE_TTL")
@@ -284,5 +277,8 @@ def wrap_session(
             ttl_seconds = int(env_ttl)
         else:
             ttl_seconds = DEFAULT_TTL_SECONDS
-    root = cache_root if cache_root is not None else _cache_root_for(namespace)
+    try:
+        root = cache_root if cache_root is not None else _cache_root_for(namespace)
+    except OSError:
+        return session
     return CachedSession(inner=session, namespace=namespace, ttl_seconds=ttl_seconds, cache_root=root)
