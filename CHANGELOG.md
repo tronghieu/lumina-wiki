@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-06
+
+### Added
+
+- `lumina discover run` command for one-shot scheduled discovery runs from a workspace watchlist.
+- Research-pack watchlist configuration template at install time, with upgrade behavior that preserves user edits.
+- Scheduled discovery runner output under `raw/discovered/`, including scoring metadata, duplicate tracking, and run summaries.
+- `/lumi-research-watchlist` skill to help users configure research watchlists with an agent.
+- Advanced scheduled discovery guides in English, Vietnamese, and Simplified Chinese, covering GitHub Actions, macOS/Linux cron, and Windows Task Scheduler.
+
+### Changed
+
+- User guides now link to the advanced scheduled discovery guide from their guide menu.
+- Scheduled discovery documentation now explains what to do after new research is found, including reviewing candidates and ingesting useful sources.
+- GitHub Actions guidance now includes auto-commit behavior for discovered research output when a run finds changes.
+
+### Fixed
+
+- Scheduled discovery now exits non-zero when hard source fetch errors occur, so CI and cron jobs do not silently pass failed runs.
+- Scheduled discovery now deduplicates the same paper across arXiv and Semantic Scholar before falling back to source-specific IDs.
+
+### Migration
+
+- Existing workspaces can re-run `npx lumina-wiki@latest install --yes` to receive the scheduled discovery runner, watchlist template, and watchlist skill. Existing `wiki/`, `raw/`, and user-edited watchlists are preserved.
+
 ## [0.9.1] - 2026-05-05
 
 ### Changed
@@ -203,7 +228,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.0...v0.8.1
