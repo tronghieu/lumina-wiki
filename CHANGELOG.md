@@ -3,7 +3,16 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.1.0] - 2026-05-06
+
+### Added
+
+- `/lumi-research-topic` skill (research pack) — cluster existing concepts and sources into a thematic topic page under `wiki/topics/`. AI proposes the cluster from the graph; you confirm before anything is written.
+
+### Changed
+
+- READMEs (en/vi/zh) and section titles drop the `(v0.1)` qualifier; skill count badge is now `Skills-Many` so it does not need bumping per release.
+- User guides (en/vi/zh) align the `/lumi-ingest` "What you get back" section across languages.
 
 ## [1.0.0] - 2026-05-06
 

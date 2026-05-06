@@ -104,6 +104,8 @@ tags: []
 
 ## Topic page — `wiki/topics/<slug>.md` (research pack)
 
+Created via `/lumi-research-topic`.
+
 ```yaml
 ---
 type: topic

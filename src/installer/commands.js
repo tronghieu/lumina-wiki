@@ -868,6 +868,7 @@ function getSkillDefs(packs) {
       { name: 'survey',   canonicalId: 'lumi-research-survey',   displayName: '/lumi-research-survey' },
       { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
+      { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
       { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
     ];
     for (const s of researchSkills) {

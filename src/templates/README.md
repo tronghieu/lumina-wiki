@@ -90,7 +90,7 @@ Every wiki page has a defined type, frontmatter, and section structure. **Open `
 | Concept    | `concepts/`   | Cross-source idea or technique with variants and comparisons         |
 | Person     | `people/`     | Profile of a referenced person with key sources and relationships    |
 | Summary    | `summary/`    | Area-level synthesis spanning multiple sources and concepts          |
-{{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources (research)    |
+{{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources; created via `/lumi-research-topic` (research) |
 | Foundation | `foundations/`| Prerequisite/background knowledge; terminal page (research)          |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Per-chapter notes for a book or long-form work (reading)             |
 | Character  | `characters/` | Character profile with arcs, relationships, key chapters (reading)   |
@@ -190,7 +190,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 {{#if pack_research}}### Pack: research
 
-Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-setup` (interactive API key configuration).
+Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-topic` (cluster existing concepts and sources into a thematic topic page; AI proposes the cluster from the graph, you confirm before anything is written), `/lumi-research-setup` (interactive API key configuration).
 {{/if}}
 {{#if pack_reading}}### Pack: reading
 

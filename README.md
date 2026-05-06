@@ -12,7 +12,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg"/>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg"/>
-  <img alt="Skills" src="https://img.shields.io/badge/Skills-14-purple.svg"/>
+  <img alt="Skills" src="https://img.shields.io/badge/Skills-Many-purple.svg"/>
   <br>
   <img alt="Powered by" src="https://img.shields.io/badge/Powered%20by-grey?style=flat"/>
   <img alt="Claude" src="https://img.shields.io/badge/-Claude%20Code-orange?style=flat"/>
@@ -154,7 +154,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 
 ---
 
-## 5. Available Skills (v0.1)
+## 5. Available Skills
 
 These are the commands you can use when chatting with your AI agent.
 
@@ -171,6 +171,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-research-watchlist` | Choose research topics for scheduled discovery with AI help. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
 | | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |
+| | `/lumi-research-topic` | Create a topic page at `wiki/topics/<slug>.md` by gathering related concepts and sources already in your wiki. The AI proposes what to include and you confirm before anything is written. Use this after several `/lumi-ingest` runs when you want to give a theme its own page. |
 | | `/lumi-research-setup` | Help configure API keys for research tools. |
 | **Reading** | `/lumi-reading-chapter-ingest` | Ingest a book chapter by chapter. |
 | | `/lumi-reading-character-track` | Track characters and their relationships in a story. |

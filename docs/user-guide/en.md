@@ -194,7 +194,7 @@ Example in Codex App: AI answers based on the knowledge base that Lumina-Wiki ha
 
 Research Pack is very useful if you use Lumina-Wiki for research, especially when you need to find related documents, filter sources, build a conceptual foundation, or write an overview from what you have read.
 
-Research Pack has five main commands:
+Research Pack has six main commands:
 
 | Command | What it is for |
 | --- | --- |
@@ -203,6 +203,7 @@ Research Pack has five main commands:
 | `/lumi-research-watchlist` | Choose research topics for Lumina-Wiki to check regularly. |
 | `/lumi-research-prefill` | Pre-create foundation pages for common concepts, so later reading links more consistently. |
 | `/lumi-research-survey` | Create a research overview from the sources and concepts already in the wiki. |
+| `/lumi-research-topic` | Gather related concepts and sources already in the wiki into a dedicated topic page at `wiki/topics/`. |
 
 ### When should you use Research Pack?
 
@@ -213,7 +214,8 @@ Use Research Pack when you are doing things like:
 - building background knowledge for a field,
 - pre-creating basic concepts so later reading stays consistent in meaning and naming,
 - summarizing the documents you have read into an overview,
-- finding gaps or disagreements between sources.
+- finding gaps or disagreements between sources,
+- collecting a recurring theme into its own dedicated page after you have ingested several sources.
 
 ### Example research workflow
 
@@ -270,6 +272,16 @@ Or create an overview:
 ```text
 /lumi-research-survey phone use in the classroom
 ```
+
+Once you have read several sources and a theme keeps coming up, you can give it its own page:
+
+```text
+/lumi-research-topic phone use in the classroom
+```
+
+The AI looks at what is already in the wiki, proposes which concepts and sources belong in the cluster, and waits for you to confirm or edit the list. Once you confirm, the page is written to `wiki/topics/` and reverse links from each listed concept and source back to the topic are added automatically. If a concept or source has not been ingested yet, run `/lumi-ingest` first.
+
+For example: suppose you have read eight papers and want to pull together everything about RLHF. You run `/lumi-research-topic rlhf`. The AI proposes six sources and four concepts. You remove two sources that are only loosely related, then confirm. The topic page is written, the wiki linter runs, and a log entry is appended.
 
 The important point: Research Pack helps you expand and organize the research process. Adding a specific source to the wiki still goes through `/lumi-ingest`, so the wiki keeps clear structure, links, and logs.
 
@@ -363,9 +375,10 @@ If you quit at any point, progress is preserved. Running `/lumi-ingest` again on
 ### What you get back
 
 - A new wiki page in `wiki/sources/` summarizing the document.
-- Links from the new page to related concept and person pages already in the wiki.
-- New concept or person pages created automatically if the document introduces ones that do not exist yet.
-- A record in the wiki log showing when the document was added.
+- New concept, person, or organization pages created automatically if the document introduces ones that do not exist yet.
+- Two-way links between the new page and the related pages already in the wiki.
+- The wiki index updated to include the new page.
+- A record in the wiki log showing when the document was added and how the check went.
 - A low-confidence mark on the page if you chose to save it with reservations, so you know to return to it.
 
 ## Using Codex App, Claude Code, and Gemini CLI
@@ -486,7 +499,8 @@ No. Obsidian is a note-taking app. Lumina-Wiki is a system that helps AI read do
 6. Use `/lumi-research-discover` to find more related sources.
 7. Choose sources worth reading and ingest them.
 8. Use `/lumi-ask` to ask questions, compare sources, and find gaps.
-9. Use `/lumi-research-survey` to create an overview from what the wiki already knows.
-10. Open the project with Obsidian if you want to read and browse Markdown notes more conveniently.
+9. Use `/lumi-research-topic` to give recurring themes their own dedicated pages once you have enough sources on them.
+10. Use `/lumi-research-survey` to create an overview from what the wiki already knows.
+11. Open the project with Obsidian if you want to read and browse Markdown notes more conveniently.
 
 Lumina-Wiki becomes more useful when you use it regularly. Each well-ingested document makes your knowledge brain clearer, more connected, and easier to ask again. You do not only get one more summary; you get one more piece of knowledge that AI maintains inside a shared system.

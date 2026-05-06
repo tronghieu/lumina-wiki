@@ -12,7 +12,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg"/>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg"/>
-  <img alt="Skills" src="https://img.shields.io/badge/Skills-14-purple.svg"/>
+  <img alt="Skills" src="https://img.shields.io/badge/Skills-Many-purple.svg"/>
   <br>
   <img alt="Powered by" src="https://img.shields.io/badge/Powered%20by-grey?style=flat"/>
   <img alt="Claude" src="https://img.shields.io/badge/-Claude%20Code-orange?style=flat"/>
@@ -154,7 +154,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 
 ---
 
-## 5. 可用技能（v0.1）
+## 5. 可用技能
 
 这些是您在与 AI 对话时可以使用的指令。
 
@@ -171,6 +171,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-research-watchlist` | 帮你选择要定期查找的研究主题。 |
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
+| | `/lumi-research-topic` | 把 wiki 中已有的相关概念和来源汇聚成一个主题页，保存在 `wiki/topics/<slug>.md`。AI 会提议收录哪些内容，由你确认后再生成页面。多次 `/lumi-ingest` 之后，用它把一组相关想法整理成独立的主题页。 |
 | | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
 | **Reading** | `/lumi-reading-chapter-ingest`| 按章节导入书籍知识。 |
 | | `/lumi-reading-character-track`| 追踪故事中的角色及其关系。 |

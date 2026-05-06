@@ -12,7 +12,7 @@
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
   <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg"/>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg"/>
-  <img alt="Skills" src="https://img.shields.io/badge/Skills-14-purple.svg"/>
+  <img alt="Skills" src="https://img.shields.io/badge/Skills-Many-purple.svg"/>
   <br>
   <img alt="Powered by" src="https://img.shields.io/badge/Powered%20by-grey?style=flat"/>
   <img alt="Claude" src="https://img.shields.io/badge/-Claude%20Code-orange?style=flat"/>
@@ -154,7 +154,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 
 ---
 
-## 5. Các kỹ năng có sẵn (v0.1)
+## 5. Các kỹ năng có sẵn
 
 Đây là những lệnh bạn có thể sử dụng khi trò chuyện với AI.
 
@@ -171,6 +171,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-research-watchlist` | Giúp bạn chọn các chủ đề nghiên cứu để AI tìm định kỳ. |
 | | `/lumi-research-survey` | Tạo một bài tổng quan/khảo sát từ kiến thức hiện có. |
 | | `/lumi-research-prefill` | Tạo trước các khái niệm nền tảng để tránh trùng lặp. |
+| | `/lumi-research-topic` | Gom các khái niệm và nguồn liên quan trong wiki thành một trang chủ đề tại `wiki/topics/<slug>.md`. AI đề xuất danh sách để bạn xem và xác nhận trước khi trang được tạo. Dùng sau khi đã nạp nhiều tài liệu và muốn tổng hợp một nhóm ý tưởng thành trang riêng. |
 | | `/lumi-research-setup` | Giúp cấu hình API key cho các công cụ nghiên cứu. |
 | **Reading** | `/lumi-reading-chapter-ingest`| Nạp kiến thức sách theo từng chương. |
 | | `/lumi-reading-character-track`| Theo dõi các nhân vật và mối quan hệ của họ trong truyện. |
@@ -201,7 +202,7 @@ Phiên bản hiện tại là **v0.2** (preview). Kế hoạch đầy đủ ở 
 
 ## 7. Đóng góp & Giấy phép
 
-### 🛠️ Phát triển cục bộ (dành cho người đóng góp)
+### Phát triển cục bộ (dành cho người đóng góp)
 
 Nếu bạn muốn đóng góp cho trình cài đặt `lumina-wiki`:
 ```bash
