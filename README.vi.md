@@ -152,6 +152,8 @@ Khi wiki lớn dần, bạn có thể dùng [qmd](https://github.com/tobi/qmd) �
 npx skills add https://github.com/tobi/qmd --skill qmd
 ```
 
+Xem [Hướng dẫn Nâng cao](docs/user-guide/advanced-qmd.vi.md) để biết chi tiết cài đặt và cấu hình.
+
 ---
 
 ## 5. Các kỹ năng có sẵn

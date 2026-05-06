@@ -146,11 +146,14 @@ Lumina 会创建一个工作区，每个目录都有明确用途。
 
 ### **使用 qmd 进行本地搜索（高级，可选）**
 
-当 wiki 逐渐变大时，您可以使用 [qmd](https://github.com/tobi/qmd) 获得更快的本地 Markdown 搜索。如果您的 IDE 支持 skill 格式，可以通过以下命令安装官方 qmd skill：
+随着 Wiki 的增长，您可以使用 [qmd](https://github.com/tobi/qmd) 实现更快的本地 Markdown 搜索。如果您的 IDE 支持 Skill 格式，请安装官方 qmd skill：
 
 ```bash
 npx skills add https://github.com/tobi/qmd --skill qmd
 ```
+
+有关详细的安装和配置，请参阅[高级指南](docs/user-guide/advanced-qmd.zh.md)。
+
 
 ---
 

@@ -152,6 +152,8 @@ As your wiki grows, you can use [qmd](https://github.com/tobi/qmd) for faster lo
 npx skills add https://github.com/tobi/qmd --skill qmd
 ```
 
+See the [Advanced Guide](docs/user-guide/advanced-qmd.en.md) for detailed installation and configuration.
+
 ---
 
 ## 5. Available Skills

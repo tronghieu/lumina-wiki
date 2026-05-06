@@ -22,6 +22,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [Frequently Asked Questions](#frequently-asked-questions)
 - [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
 - [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
+- [Advanced: Accelerate Queries with QMD](advanced-qmd.en.md)
 
 ## Problems With the Old Way of Managing Knowledge
 

@@ -22,6 +22,7 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 - [Câu Hỏi Thường Gặp](#câu-hỏi-thường-gặp)
 - [Một Workflow Gợi Ý Cho Người Làm Nghiên Cứu](#một-workflow-gợi-ý-cho-người-làm-nghiên-cứu)
 - [Nâng cao: Tìm tài liệu định kỳ](advanced-scheduled-discovery.vi.md)
+- [Nâng cao: Tăng tốc tìm kiếm với QMD](advanced-qmd.vi.md)
 
 ## Những Vấn Đề Khi Quản Lý Tri Thức Theo Cách Cũ
 
