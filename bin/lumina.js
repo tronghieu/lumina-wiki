@@ -95,7 +95,7 @@ Flags applicable to all commands:
   --packs <list>      install packs: core,research,reading
   --ide-targets <list>  target CLIs: claude_code,codex,gemini_cli,qwen,iflow,cursor,generic
                           codex covers all AGENTS.md-compatible CLIs
-                          (Codex, Amp, Crush, Goose, Auggie, OpenCode, etc.)
+                          (OpenAI CodexApp (ChatGPT), Amp, Crush, Goose, Auggie, OpenCode, etc.)
 
 Examples:
   npx lumina-wiki install

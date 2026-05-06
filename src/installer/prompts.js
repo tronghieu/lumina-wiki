@@ -139,7 +139,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     message: 'IDE targets (space to toggle, enter to confirm)',
     options: [
       { value: 'claude_code', label: 'Claude Code',                 hint: 'CLAUDE.md + .claude/skills/ symlinks' },
-      { value: 'codex',       label: 'AGENTS.md CLIs',               hint: 'Codex, Amp, Crush, Goose, Auggie, OpenCode, Kimi, Mistral Vibe — writes AGENTS.md' },
+      { value: 'codex',       label: 'OpenAI CodexApp (ChatGPT)',    hint: 'CodexApp, Amp, Crush, Goose, Auggie, OpenCode, Kimi, Mistral Vibe — writes AGENTS.md' },
       { value: 'gemini_cli',  label: 'Gemini CLI',                   hint: 'GEMINI.md stub' },
       { value: 'qwen',        label: 'Qwen Code',                    hint: 'QWEN.md stub' },
       { value: 'iflow',       label: 'iFlow CLI',                    hint: 'IFLOW.md stub' },

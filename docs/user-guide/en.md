@@ -16,7 +16,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [Quick Start](#quick-start)
 - [Research Pack for Research Work](#research-pack-for-research-work)
 - [Common Commands](#common-commands)
-- [Using Codex App, Claude Code, and Gemini CLI](#using-codex-app-claude-code-and-gemini-cli)
+- [Using OpenAI CodexApp (ChatGPT), Claude Code, and Gemini CLI](#using-openai-codexapp-chatgpt-claude-code-and-gemini-cli)
 - [Using Obsidian to Read the Wiki](#using-obsidian-to-read-the-wiki)
 - [Upgrading Lumina-Wiki](#upgrading-lumina-wiki)
 - [Frequently Asked Questions](#frequently-asked-questions)
@@ -113,83 +113,83 @@ You do not need to remember the full internal structure. In everyday use, you on
 
 ## Installation
 
-Open a terminal in the project you want to use as a wiki, then run:
+Installing Lumina-Wiki is simple, like setting up a new "office" for your AI assistant. Just follow these steps:
 
-```bash
-npx lumina-wiki install
-```
+### 1. What do you need?
 
-The installer will ask you a few questions, such as whether you want to install extra packs like `research` or `reading`.
+*   **Node.js**: This is the "engine" that lets Lumina-Wiki run on your computer.
+    *   **How to**: Download the **LTS** version (most stable) from [nodejs.org](https://nodejs.org) and install it like any other software.
+*   **Working Directory**: Create an empty folder where you want to keep your wiki (e.g., in your `Documents` folder and name it `MyWiki`).
+*   **(Optional for Windows)**: If you use Windows, turn on **Developer Mode** in your system settings to help wiki shortcuts work more smoothly. If you don't, that's fine too; the software will automatically choose a suitable installation method.
 
-If you use Windows, the README recommends enabling Developer Mode so the installer can use symlinks better. If you do not enable it, Lumina-Wiki can still use file copying as a fallback.
+### 2. Installation Steps
+
+1.  **Open your terminal**:
+    *   **Windows**: Press the Windows key, type `cmd` or `PowerShell`, and press Enter.
+    *   **Mac**: Press `Cmd + Space`, type `Terminal`, and press Enter.
+2.  **Go to your folder**:
+    *   Type the command `cd` followed by a space.
+    *   Drag the `MyWiki` folder you just created into the terminal window and press Enter.
+3.  **Run the install command**:
+    *   Paste this and press Enter:
+    ```bash
+    npx lumina-wiki install
+    ```
+    *(This command will automatically download what is needed and start the setup for you).*
+
+### 3. What will the installer ask?
+
+You will see a series of questions. Use the **Arrow keys** to select and **Enter** to confirm:
+
+*   **Installation directory**: Just press **Enter** to choose the current directory. This is recommended.
+*   **Research purpose**: Type a few words about what you want the AI to help with (e.g., "Language learning", "Market research"). This helps the AI understand your context.
+*   **AI tools (IDE targets)**: This is the most important step. Choose the tool you will use to chat with the AI:
+    *   **OpenAI CodexApp (ChatGPT)**: A popular choice for beginners. It is a dedicated app with a visual interface.
+    *   **Claude Code**: If you use Anthropic's tool.
+    *   **Gemini CLI**: If you use Google's tool.
+    *   *Tip: You can select multiple items using the Space bar.*
+*   **Packs**: Select `research` if you are doing research, or `reading` if you want AI to help with books/stories. Core features are always included.
+*   **Languages**: Type `English` (or your preferred language) for the AI to talk to you and write notes.
+
+When you see the **[done]** message in green, congratulations! Your "office" is ready.
+
+### Upgrading and Uninstallation
+
+*   **To change settings or upgrade**: Just run the `npx lumina-wiki install` command again. Your existing data **will not be lost**.
+*   **To uninstall**: Run the command `npx lumina-wiki uninstall`. This only removes system files; **your documents and notes will always stay safe**.
 
 ## How to Call Commands in an AI Agent
 
-Lumina-Wiki commands are named `lumi-*`, for example `lumi-ingest`, `lumi-ask`, and `lumi-research-discover`.
+When you chat with your AI assistant (for example, in the OpenAI CodexApp), you control it using commands starting with `/` or `$`.
 
-The command syntax depends on the AI tool you use:
+| Tool | Command Syntax | Example |
+| --- | --- | --- |
+| **OpenAI CodexApp** | Use the `$` prefix | `$lumi-ingest raw/sources/file.pdf` |
+| **Claude / Gemini** | Use the `/` prefix | `/lumi-ingest raw/sources/file.pdf` |
 
-| Tool | Example syntax |
-| --- | --- |
-| Codex App | `$lumi-ingest raw/sources/tai-lieu.pdf` |
-| Claude Code | `/lumi-ingest raw/sources/tai-lieu.pdf` |
-| Gemini CLI | `/lumi-ingest raw/sources/tai-lieu.pdf` |
-
-Most examples below use `/lumi-*` syntax. If you use Codex App, change `/` to `$`.
+---
 
 ## Quick Start
 
-### 1. Put a document in `raw/sources/`
+After installation, you only need 3 steps to start "feeding" your AI brain:
 
-For example, suppose you have a file:
+### 1. Add your documents
+Copy your PDF files or notes into the `raw/sources/` folder.
 
+### 2. Tell the AI to read
+In your chat window (e.g., CodexApp), type:
 ```text
-bao-cao-giao-duc.pdf
+$lumi-ingest raw/sources/your-file-name.pdf
+```
+The AI will read, summarize, and automatically create related knowledge pages.
+
+### 3. Ask anything
+Once the AI has read a few documents, you can ask:
+```text
+$lumi-ask Are there any interesting common points among these documents?
 ```
 
-Put it here:
-
-```text
-raw/sources/bao-cao-giao-duc.pdf
-```
-
-### 2. Ask AI to add the document to the wiki
-
-In your chat window with the AI agent, run:
-
-```text
-/lumi-ingest raw/sources/bao-cao-giao-duc.pdf
-```
-
-If you use Codex App, call the skill with `$`:
-
-```text
-$lumi-ingest raw/sources/bao-cao-giao-duc.pdf
-```
-
-AI will read the document, create a summary page in `wiki/sources/`, and create related pages if needed.
-
-### 3. Ask your knowledge base
-
-After you have a few documents in the wiki, you can ask:
-
-```text
-/lumi-ask What common problems are these documents discussing?
-```
-
-Or:
-
-```text
-/lumi-ask Compare the main ideas of the three most recent documents.
-```
-
-Lumina-Wiki helps AI answer based on the knowledge already added to `wiki/`, instead of only relying on the temporary memory of one chat.
-
-An important answer can also become a new page in the wiki. This means reading, comparison, and analysis results are not lost in chat history. They keep accumulating in the shared knowledge area.
-
-![Example of AI answering based on the wiki in Codex App](../../assets/social-impacts-of-AI-lumi-answer.png)
-
-Example in Codex App: AI answers based on the knowledge base that Lumina-Wiki has built.
+The experience with **OpenAI CodexApp** will be very smooth because it is designed to automatically understand the Lumina-Wiki structure through the `AGENTS.md` file that the installer created for you.
 
 ## Research Pack for Research Work
 
@@ -248,9 +248,9 @@ Then ask Lumina-Wiki to find sources:
 
 This command creates a list of papers or research material for you to review. It does not automatically turn every result into a wiki page. You choose which documents are worth reading, then add each source to the wiki:
 
-![Example of Research Pack discovering new documents in Codex App](../../assets/lumi-discover-new-paper.png)
+![Example of Research Pack discovering new documents in OpenAI CodexApp (ChatGPT)](../../assets/lumi-discover-new-paper.png)
 
-Example in Codex App: Research Pack suggests new research sources for you to review before adding them to the wiki.
+Example in OpenAI CodexApp (ChatGPT): Research Pack suggests new research sources for you to review before adding them to the wiki.
 
 If you want Lumina-Wiki to check saved research topics regularly,
 use `/lumi-research-watchlist` to set up the topics first. The schedule itself
@@ -312,7 +312,7 @@ For long-term research, the biggest value is accumulation: each new source is no
 
 ## Common Commands
 
-The examples below use `/lumi-*` syntax, which fits environments that use slash commands. If you use Codex App, change `/lumi-*` to `$lumi-*`, for example `/lumi-ingest` to `$lumi-ingest`.
+The examples below use `/lumi-*` syntax, which fits environments that use slash commands. If you use OpenAI CodexApp (ChatGPT), change `/lumi-*` to `$lumi-*`, for example `/lumi-ingest` to `$lumi-ingest`.
 
 | Command | Simple meaning |
 | --- | --- |
@@ -382,31 +382,32 @@ If you quit at any point, progress is preserved. Running `/lumi-ingest` again on
 - A record in the wiki log showing when the document was added and how the check went.
 - A low-confidence mark on the page if you chose to save it with reservations, so you know to return to it.
 
-## Using Codex App, Claude Code, and Gemini CLI
+## Using OpenAI CodexApp (ChatGPT), Claude Code, and Gemini CLI
 
 Lumina-Wiki is not a separate chat app. It is a folder structure, scripts, and commands that let an AI agent work inside your project.
 
-With tools like Codex App, Claude Code, or Gemini CLI, the general workflow is:
+With tools like OpenAI CodexApp (ChatGPT), Claude Code, or Gemini CLI, the general workflow is:
 
 1. Open the correct project folder where Lumina-Wiki is installed.
 2. Chat with the AI agent inside that project.
 3. Call Lumina commands using the syntax supported by that tool.
 
-### Codex App
+### OpenAI CodexApp (ChatGPT)
 
-[Codex](https://openai.com/codex) is OpenAI's coding agent. When using it with Lumina-Wiki, open the project where Lumina-Wiki is installed in Codex App, then call skills with `$`.
+**OpenAI CodexApp** is the most recommended tool for Lumina-Wiki users because it has a dedicated app with an intuitive visual interface, so you don't have to work entirely in a black command window.
+
+**How to use:**
+1. Open the CodexApp on your computer.
+2. Select "Open Project" and point to the folder where you just installed Lumina-Wiki.
+3. Once inside the project, you can chat directly with the AI. 
+4. Lumina-Wiki commands in CodexApp start with the `$` prefix.
 
 Example:
-
 ```text
-$lumi-ingest raw/sources/bao-cao-giao-duc.pdf
+$lumi-ingest raw/sources/document.pdf
 ```
 
-```text
-$lumi-ask What common problems are these documents discussing?
-```
-
-This guide does not describe every button in Codex App, because the app interface may change. The important part is that Codex needs to work in the correct project folder, where `AGENTS.md`, `README.md`, `raw/`, `wiki/`, and `_lumina/` are located.
+CodexApp will automatically recognize the `AGENTS.md` file in the folder to activate Lumina-Wiki's "skills". This is a very friendly experience for both researchers and casual users.
 
 ### Claude Code
 
