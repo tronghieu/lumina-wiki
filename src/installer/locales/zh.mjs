@@ -12,9 +12,6 @@ export default {
   'prompt.intro':                              'Lumina Wiki 安装程序',
   'prompt.cancelled':                          '已取消安装。',
 
-  // ── Locale selector ────────────────────────────────────────────────────────
-  'prompt.locale.message':                     'Installer language / Ngôn ngữ / 语言',
-
   // ── Directory ──────────────────────────────────────────────────────────────
   'prompt.directory.message':                  '安装目录',
 

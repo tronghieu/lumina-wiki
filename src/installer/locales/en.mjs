@@ -7,9 +7,6 @@ export default {
   'prompt.intro':                              'Lumina Wiki Installer',
   'prompt.cancelled':                          'Installation cancelled.',
 
-  // ── Locale selector ────────────────────────────────────────────────────────
-  'prompt.locale.message':                     'Installer language / Ngôn ngữ / 语言',
-
   // ── Directory ──────────────────────────────────────────────────────────────
   'prompt.directory.message':                  'Installation directory',
 

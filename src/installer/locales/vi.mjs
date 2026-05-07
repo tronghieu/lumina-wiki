@@ -6,9 +6,6 @@ export default {
   'prompt.intro':                              'Trình cài đặt Lumina Wiki',
   'prompt.cancelled':                          'Đã hủy cài đặt.',
 
-  // ── Locale selector ────────────────────────────────────────────────────────
-  'prompt.locale.message':                     'Installer language / Ngôn ngữ / 语言',
-
   // ── Directory ──────────────────────────────────────────────────────────────
   'prompt.directory.message':                  'Thư mục cài đặt',
 

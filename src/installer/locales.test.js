@@ -118,10 +118,7 @@ test('parity: each key has matching {var} placeholders across locales', async ()
   const en = await loadLocale('en');
   const vi = await loadLocale('vi');
   const zh = await loadLocale('zh');
-  for (const key of en.keys()) {
-    const enVal = en.t(key, {}).replace(/[^{}\w]/g, ''); // not used
-    // Use raw values — t() interpolates, so directly read from modules
-  }
+  void en; void vi; void zh;
   // Direct read via dynamic import for raw template comparison
   const enMod = (await import('./locales/en.mjs')).default;
   const viMod = (await import('./locales/vi.mjs')).default;
@@ -160,9 +157,7 @@ test('parity: non-EN locales contain >=50% non-ASCII values (catches accidental 
     const mod = (await import(`./locales/${loc}.mjs`)).default;
     let nonAscii = 0;
     let total = 0;
-    for (const [k, v] of Object.entries(mod)) {
-      // Skip keys where EN value is a known cross-locale literal (chicken-and-egg).
-      if (k === 'prompt.locale.message') continue;
+    for (const [, v] of Object.entries(mod)) {
       // Skip values that are inherently locale-agnostic (commands, file paths).
       if (/^\s*(node |npm |\/lumi-|src\/)/i.test(v)) continue;
       total++;

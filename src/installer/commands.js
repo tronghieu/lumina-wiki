@@ -179,6 +179,7 @@ export async function installCommand(opts = {}) {
       acceptDefaults: yes,
       cwd: projectRoot,
       existingManifest,
+      defaultLocale: opts.lang ?? 'en',
     });
     // Re-resolve projectRoot from the directory the user typed.
     if (answers.directory) {
