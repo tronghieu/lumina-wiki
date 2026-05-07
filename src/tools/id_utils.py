@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from types import MappingProxyType
 from typing import Any, Mapping
-from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode, unquote
 
 CANONICAL_URL_V = 1
 EXTERNAL_ID_NAMESPACES = ("doi", "arxiv", "s2", "url")
@@ -42,7 +42,6 @@ _ARXIV_URL_FULL_RE = re.compile(r"^https://arxiv\.org/(?:abs|pdf)/(.+?)(?:\.pdf)
 
 def _decode_uri_safe(s: str) -> str:
     try:
-        from urllib.parse import unquote
         return unquote(s)
     except Exception:
         return s
@@ -236,7 +235,15 @@ def build_source_entry(provider: str, url: str | None = None, fetched_at: str | 
         fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     entry: dict = {"provider": provider, "fetched_at": fetched_at}
     if isinstance(url, str) and url and len(url) <= _MAX_URL_LEN:
-        entry["url"] = url
+        # Best-effort URL parse — drop on failure so junk like "not a url" is
+        # never persisted. Canonicalization NOT applied: provenance records
+        # the URL the user/skill saw, not a normalized form.
+        try:
+            parts = urlsplit(url)
+            if parts.scheme and parts.netloc:
+                entry["url"] = url
+        except Exception:
+            pass
     return entry
 
 

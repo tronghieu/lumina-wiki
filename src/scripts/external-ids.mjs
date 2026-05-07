@@ -191,7 +191,14 @@ export function buildSourceEntry(provider, opts = {}) {
   }
   const entry = { provider, fetched_at };
   if (typeof opts.url === 'string' && opts.url && opts.url.length <= MAX_URL_LEN) {
-    entry.url = opts.url;
+    // Best-effort URL parse — drop on failure so junk like "not a url" is
+    // never persisted into provenance. Canonicalization NOT applied: provenance
+    // records the URL the user/skill saw, not a normalized form.
+    try {
+      // eslint-disable-next-line no-new
+      new URL(opts.url);
+      entry.url = opts.url;
+    } catch (_) { /* drop silently */ }
   }
   return entry;
 }

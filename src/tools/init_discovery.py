@@ -187,7 +187,7 @@ def _save_source(discovered_dir: Path, slug: str, source: dict[str, Any]) -> Pat
     filename = f"{source_id}.json"
     out_path = _safe_path(discovered_dir / slug, filename)
     enriched = dict(source)
-    enriched["external_ids"] = _compute_external_ids(source)
+    enriched["external_ids"] = expand_external_ids(_compute_external_ids(source))
     _atomic_write_json(out_path, enriched)
     return out_path
 

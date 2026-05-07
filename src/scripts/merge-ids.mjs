@@ -64,8 +64,9 @@ process.stdin.on('end', () => {
   const safeExisting = sanitizeExternalIdsObject(existing);
 
   // Expand URL-derived ids (arxiv ↔ arxiv-DOI), then non-destructive merge.
+  // expandExternalIds copies the `url` key from input, so no manual override.
   const expanded = expandExternalIds(fromUrl);
-  const mergeIn = sanitizeExternalIdsObject({ ...expanded, url: fromUrl.url });
+  const mergeIn = sanitizeExternalIdsObject(expanded);
 
   const merged = Object.create(null);
   for (const [k, v] of Object.entries(safeExisting)) merged[k] = v;

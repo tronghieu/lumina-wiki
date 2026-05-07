@@ -132,8 +132,12 @@ class TestFetchPaper:
             mock_cls.return_value = sess
             sess.get.return_value = _make_mock_response(bad)
             result = fetch_s2.fetch_paper("abc123", sess)
-        assert "doi" not in result["external_ids"]
-        assert result["external_ids"].get("arxiv") == "1706.03762"
+        # Invalid upstream DOI is dropped + warned. arxiv survives. After
+        # expand_external_ids, the synthetic arxiv-DOI form is present (this
+        # is the cross-namespace expansion contract — distinct from upstream).
+        ext = result["external_ids"]
+        assert ext.get("arxiv") == "1706.03762"
+        assert ext.get("doi") == "10.48550/arxiv.1706.03762"
         assert "[warn] fetch_s2 dropped invalid external_id doi=" in capsys.readouterr().err
 
     def test_fetch_paper_5xx_raises_runtime_error(self) -> None:

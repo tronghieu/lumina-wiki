@@ -25,10 +25,9 @@ if (!parsed.url) {
 }
 
 // Expand cross-namespace equivalents (arxiv ↔ arxiv-DOI), then sanitize.
+// expandExternalIds iterates EXTERNAL_ID_NAMESPACES which includes 'url',
+// so the url key is preserved automatically — no manual re-assignment needed.
 const expanded = expandExternalIds(parsed);
-// Preserve `url` key (sanitize keeps it; expand kept it).
-const merged = { ...expanded };
-if (parsed.url) merged.url = parsed.url;
-const safe = sanitizeExternalIdsObject(merged);
+const safe = sanitizeExternalIdsObject(expanded);
 
 process.stdout.write(JSON.stringify(safe) + '\n');

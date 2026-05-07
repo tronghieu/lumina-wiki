@@ -29,7 +29,7 @@ from typing import Any
 
 import requests
 
-from id_utils import normalize_external_id
+from id_utils import expand_external_ids, normalize_external_id
 
 # Import env loader using relative path for portability when installed
 try:
@@ -154,7 +154,7 @@ def _enrich_with_external_ids(paper: dict[str, Any]) -> dict[str, Any]:
         if kv:
             candidates.append(kv)
 
-    paper["external_ids"] = dict(candidates)
+    paper["external_ids"] = expand_external_ids(dict(candidates))
     return paper
 
 
