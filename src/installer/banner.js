@@ -7,6 +7,9 @@
  * subshells. Respects NO_COLOR by emitting plain text.
  *
  * Narrow terminals (<80 cols) get a compact fallback so lines do not wrap.
+ *
+ * Banner runs before locale selection; literal EN by design.
+ * ASCII art is locale-agnostic; only tagline+footer use hardcoded EN strings.
  */
 
 const NO_COLOR = Boolean(process.env.NO_COLOR);

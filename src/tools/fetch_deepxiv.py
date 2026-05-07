@@ -31,6 +31,8 @@ from typing import Any
 
 import requests
 
+from _cache import wrap_session
+
 try:
     from _env import load_env
 except ImportError:
@@ -86,7 +88,7 @@ def _make_session(token: str) -> requests.Session:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     })
-    return session
+    return wrap_session(session, namespace="deepxiv")
 
 
 def _handle_response_errors(resp: requests.Response, context: str) -> None:

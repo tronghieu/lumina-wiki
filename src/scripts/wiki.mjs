@@ -34,6 +34,7 @@ import {
   SCHEMA_VERSION,
   REQUIRED_FRONTMATTER,
 } from './schemas.mjs';
+import { sanitizeExternalIdsObject } from './external-ids.mjs';
 
 // ---------------------------------------------------------------------------
 // 2. Constants
@@ -139,20 +140,43 @@ function parseFrontmatter(content) {
   const frontmatter = {};
   let currentKey = null;
   let currentListKey = null;
+  let currentMapKey = null;
 
-  for (const line of fmLines) {
+  // Indented `  key: value` — used for block-mapping values.
+  const FM_INDENTED_KV_RE = /^(\s+)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/;
+
+  function peekNextSignificantLine(startIdx) {
+    for (let j = startIdx; j < fmLines.length; j++) {
+      if (fmLines[j].trimEnd() !== '') return fmLines[j];
+    }
+    return null;
+  }
+
+  for (let i = 0; i < fmLines.length; i++) {
+    const line = fmLines[i];
     if (line.trimEnd() === '') continue;
+
+    // Indented mapping value — must come BEFORE list-item detection.
+    if (currentMapKey !== null) {
+      const mMatch = FM_INDENTED_KV_RE.exec(line);
+      if (mMatch && !/^\s+-\s/.test(line)) {
+        const subKey = mMatch[2];
+        const subVal = mMatch[3].trim();
+        frontmatter[currentMapKey][subKey] = parseScalar(subVal);
+        continue;
+      }
+      // Fallthrough: a non-indented or non-kv line ends the mapping.
+      currentMapKey = null;
+    }
 
     // Detect indented list item
     const listMatch = FM_LIST_ITEM_RE.exec(line);
     if (listMatch && currentListKey !== null) {
       const rawItem = listMatch[2].trim();
-      // Flow-style object item: {key: val, key2: val2, ...}
       if (rawItem.startsWith('{') && rawItem.endsWith('}')) {
         frontmatter[currentListKey].push(_parseFlowMapping(rawItem));
       } else {
-        const val = unquoteValue(rawItem);
-        frontmatter[currentListKey].push(val);
+        frontmatter[currentListKey].push(unquoteValue(rawItem));
       }
       continue;
     }
@@ -163,26 +187,38 @@ function parseFrontmatter(content) {
       const rawVal = kvMatch[2].trim();
 
       if (rawVal === '' || rawVal === null) {
-        // Could be start of a block list
-        frontmatter[currentKey] = [];
-        currentListKey = currentKey;
+        // Look ahead: indented `key: value` => block mapping; otherwise list.
+        const next = peekNextSignificantLine(i + 1);
+        if (next && FM_INDENTED_KV_RE.test(next) && !/^\s+-\s/.test(next)) {
+          frontmatter[currentKey] = {};
+          currentMapKey = currentKey;
+          currentListKey = null;
+        } else {
+          frontmatter[currentKey] = [];
+          currentListKey = currentKey;
+          currentMapKey = null;
+        }
       } else if (rawVal === '[]') {
         frontmatter[currentKey] = [];
         currentListKey = currentKey;
-      } else {
-        // Parse inline list [a, b, c]
-        if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
-          const inner = rawVal.slice(1, -1).trim();
-          if (inner === '') {
-            frontmatter[currentKey] = [];
-          } else {
-            frontmatter[currentKey] = inner.split(',').map(v => unquoteValue(v.trim()));
-          }
-          currentListKey = null;
+        currentMapKey = null;
+      } else if (rawVal === '{}') {
+        frontmatter[currentKey] = {};
+        currentListKey = null;
+        currentMapKey = null;
+      } else if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
+        const inner = rawVal.slice(1, -1).trim();
+        if (inner === '') {
+          frontmatter[currentKey] = [];
         } else {
-          frontmatter[currentKey] = parseScalar(rawVal);
-          currentListKey = null;
+          frontmatter[currentKey] = inner.split(',').map(v => unquoteValue(v.trim()));
         }
+        currentListKey = null;
+        currentMapKey = null;
+      } else {
+        frontmatter[currentKey] = parseScalar(rawVal);
+        currentListKey = null;
+        currentMapKey = null;
       }
       continue;
     }
@@ -343,6 +379,24 @@ function stringifyFrontmatter(fm) {
       }
     } else if (val === null) {
       lines.push(`${key}: null`);
+    } else if (typeof val === 'object') {
+      // Block-mapping for plain objects. Keys sorted for deterministic round-trip.
+      const subKeys = Object.keys(val).sort();
+      if (subKeys.length === 0) {
+        lines.push(`${key}: {}`);
+      } else {
+        lines.push(`${key}:`);
+        for (const k of subKeys) {
+          const v = val[k];
+          if (v === null || v === undefined) {
+            lines.push(`  ${k}: null`);
+          } else if (typeof v === 'string') {
+            lines.push(`  ${k}: ${quoteIfNeeded(v)}`);
+          } else {
+            lines.push(`  ${k}: ${v}`);
+          }
+        }
+      }
     } else if (typeof val === 'string') {
       lines.push(`${key}: ${quoteIfNeeded(val)}`);
     } else {
@@ -593,7 +647,16 @@ async function setMeta(projectRoot, slug, key, value) {
   }
   const content = await readFile(filePath, 'utf8');
   const { frontmatter, body, hasFrontmatter } = parseFrontmatter(content);
-  frontmatter[key] = value;
+  // external_ids is the only object-typed frontmatter today; sanitize untrusted
+  // input (CLI / JSON.parse / fetcher output) against the namespace allowlist.
+  // Note: `sources` array entries are validated at write time by buildSourceEntry
+  // / build_source_entry (provider slug, URL parse, length bounds), so no
+  // sanitization gate is needed here. Other typed fields are checked by lint.
+  if (key === 'external_ids') {
+    frontmatter[key] = sanitizeExternalIdsObject(value);
+  } else {
+    frontmatter[key] = value;
+  }
   const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
   await atomicWrite(filePath, newContent);
   return { filePath };

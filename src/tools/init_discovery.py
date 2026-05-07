@@ -55,6 +55,12 @@ except ImportError:
     _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
     load_env = _mod.load_env
 
+from id_utils import (
+    expand_external_ids,
+    normalize_external_id,
+    parse_url_to_external_ids,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -131,14 +137,72 @@ def _save_checkpoint(state_dir: Path, phase: int, data: dict[str, Any]) -> None:
     _atomic_write_json(cp_path, data)
 
 
+def _compute_external_ids(paper: dict[str, Any]) -> dict[str, str]:
+    """Map fetcher fields → validated `external_ids` dict.
+
+    Reads from common shapes (arxiv `id`, S2 `paperId`, `externalIds.DOI`,
+    `externalIds.ArXiv`, `url`). Each value is run through
+    `normalize_external_id`; invalid values are dropped with a stderr warning.
+    """
+    ids: dict[str, str] = {}
+
+    def _try_set(ns: str, raw: Any) -> None:
+        if not raw or not isinstance(raw, str):
+            return
+        r = normalize_external_id(ns, raw)
+        if r["valid"] and r["id"]:
+            ids[ns] = r["id"]
+        else:
+            _err(f"[warn] dropped invalid external_id {ns}={raw!r}")
+
+    # arXiv adapter shape: top-level `id` like "1706.03762".
+    if isinstance(paper.get("id"), str) and "." in paper["id"]:
+        _try_set("arxiv", paper["id"])
+
+    # Semantic Scholar adapter shape.
+    pid = paper.get("paperId")
+    if isinstance(pid, str):
+        _try_set("s2", pid)
+    ext = paper.get("externalIds")
+    if isinstance(ext, dict):
+        if "DOI" in ext:
+            _try_set("doi", ext.get("DOI"))
+        if "ArXiv" in ext:
+            _try_set("arxiv", ext.get("ArXiv"))
+
+    # Canonical URL — derive from explicit `url` field or arxiv `id`.
+    url = paper.get("url")
+    if isinstance(url, str):
+        url_ids = parse_url_to_external_ids(url)
+        for ns, val in url_ids.items():
+            ids.setdefault(ns, val)
+
+    return ids
+
+
 def _save_source(discovered_dir: Path, slug: str, source: dict[str, Any]) -> Path:
     """Save a single source dict to raw/discovered/<slug>/<id>.json atomically."""
     raw_id = source.get("id") or source.get("paperId") or "unknown"
     source_id = re.sub(r'[<>:"/\\|?*]', "_", raw_id)
     filename = f"{source_id}.json"
     out_path = _safe_path(discovered_dir / slug, filename)
-    _atomic_write_json(out_path, source)
+    enriched = dict(source)
+    enriched["external_ids"] = expand_external_ids(_compute_external_ids(source))
+    _atomic_write_json(out_path, enriched)
     return out_path
+
+
+def _is_excluded(paper: dict[str, Any], exclude_keys: set[str]) -> bool:
+    """True if any expanded external_ids value of `paper` is in exclude_keys."""
+    if not exclude_keys:
+        return False
+    candidate = expand_external_ids(_compute_external_ids(paper))
+    for v in candidate.values():
+        if v in exclude_keys:
+            return True
+    # Back-compat: legacy callers exclude by raw paper id without external_ids.
+    pid = paper.get("id") or paper.get("paperId") or ""
+    return bool(pid) and pid in exclude_keys
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +294,7 @@ def phase1_keyword_search(
     fetchers: list[str],
     limit: int,
     env: dict[str, str],
-    exclude_ids: set[str] = set(),
+    exclude_keys: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 1: keyword search across configured fetchers."""
     results: list[dict[str, Any]] = []
@@ -251,7 +315,9 @@ def phase1_keyword_search(
 
         for paper in papers:
             pid = paper.get("id") or paper.get("paperId") or ""
-            if pid and (pid in seen_ids or pid in exclude_ids):
+            if pid and pid in seen_ids:
+                continue
+            if _is_excluded(paper, exclude_keys):
                 continue
             if pid:
                 seen_ids.add(pid)
@@ -267,7 +333,7 @@ def phase2_author_backfill(
     discovered_dir: Path,
     limit: int,
     env: dict[str, str],
-    exclude_ids: set[str] = set(),
+    exclude_keys: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 2: fetch more papers by the most prolific authors from phase 1."""
     # Count author occurrences across phase-1 results
@@ -293,7 +359,9 @@ def phase2_author_backfill(
             continue
         for paper in papers:
             pid = paper.get("id") or paper.get("paperId") or ""
-            if pid and (pid in seen_ids or pid in exclude_ids):
+            if pid and pid in seen_ids:
+                continue
+            if _is_excluded(paper, exclude_keys):
                 continue
             if pid:
                 seen_ids.add(pid)
@@ -308,7 +376,7 @@ def phase3_citation_expansion(
     slug: str,
     discovered_dir: Path,
     env: dict[str, str],
-    exclude_ids: set[str] = set(),
+    exclude_keys: set[str] = set(),
 ) -> list[dict[str, Any]]:
     """Phase 3: fetch citations of top phase-1 papers."""
     # Sort by citation count to pick the most-cited seeds
@@ -334,7 +402,9 @@ def phase3_citation_expansion(
             continue
         for paper in citations:
             cid = paper.get("id") or paper.get("paperId") or ""
-            if cid and (cid in seen_ids or cid in exclude_ids):
+            if cid and cid in seen_ids:
+                continue
+            if _is_excluded(paper, exclude_keys):
                 continue
             if cid:
                 seen_ids.add(cid)
@@ -369,9 +439,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
                         help=f"Max results per fetcher per phase (default: {DEFAULT_LIMIT}).")
     parser.add_argument(
-        "--exclude-ids", default="",
-        help="Comma-separated list of paper IDs (arXiv IDs or S2 paperIds) to "
-             "skip. Use to exclude papers already ingested into wiki/sources/.",
+        "--exclude-keys", default="",
+        help="Comma-separated list of external_ids values (DOI, arXiv ID, S2 "
+             "paperId, canonical URL) to skip. Candidates are filtered by "
+             "expanded external_ids set so a DOI excludes its arxiv form too.",
     )
 
     args = parser.parse_args(argv)
@@ -391,8 +462,8 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(2)
 
     fetchers = [f.strip() for f in args.fetchers.split(",") if f.strip()]
-    exclude_ids: set[str] = {
-        s.strip() for s in args.exclude_ids.split(",") if s.strip()
+    exclude_keys: set[str] = {
+        s.strip() for s in args.exclude_keys.split(",") if s.strip()
     }
     slug = _slugify(args.topic)
     env = load_env(project_root)
@@ -420,7 +491,7 @@ def main(argv: list[str] | None = None) -> None:
                 else:
                     _err(f"Phase 1: keyword search across {fetchers} (limit={args.limit})...")
                     phase1_results = phase1_keyword_search(
-                        args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_ids
+                        args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_keys
                     )
                     _save_checkpoint(state_dir, 1, {"results": phase1_results, "slug": slug})
                     _err(f"Phase 1 complete: {len(phase1_results)} unique candidates.")
@@ -428,7 +499,7 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 _err(f"Phase 1: keyword search across {fetchers} (limit={args.limit})...")
                 phase1_results = phase1_keyword_search(
-                    args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_ids
+                    args.topic, slug, discovered_dir, fetchers, args.limit, env, exclude_keys
                 )
                 _save_checkpoint(state_dir, 1, {"results": phase1_results, "slug": slug})
                 _err(f"Phase 1 complete: {len(phase1_results)} unique candidates.")
@@ -450,7 +521,7 @@ def main(argv: list[str] | None = None) -> None:
                 else:
                     _err(f"Phase 2: author backfill (top {MAX_AUTHORS_BACKFILL} authors, limit={args.limit})...")
                     phase2_results = phase2_author_backfill(
-                        phase1_results, slug, discovered_dir, args.limit, env, exclude_ids
+                        phase1_results, slug, discovered_dir, args.limit, env, exclude_keys
                     )
                     _save_checkpoint(state_dir, 2, {"results": phase2_results, "slug": slug})
                     _err(f"Phase 2 complete: {len(phase2_results)} unique candidates.")
@@ -458,7 +529,7 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 _err(f"Phase 2: author backfill (top {MAX_AUTHORS_BACKFILL} authors, limit={args.limit})...")
                 phase2_results = phase2_author_backfill(
-                    phase1_results, slug, discovered_dir, args.limit, env, exclude_ids
+                    phase1_results, slug, discovered_dir, args.limit, env, exclude_keys
                 )
                 _save_checkpoint(state_dir, 2, {"results": phase2_results, "slug": slug})
                 _err(f"Phase 2 complete: {len(phase2_results)} unique candidates.")
@@ -475,7 +546,7 @@ def main(argv: list[str] | None = None) -> None:
                 else:
                     _err(f"Phase 3: citation expansion (top 5 seeds × {CITATIONS_PER_SEED} citations)...")
                     phase3_results = phase3_citation_expansion(
-                        phase1_results, slug, discovered_dir, env, exclude_ids
+                        phase1_results, slug, discovered_dir, env, exclude_keys
                     )
                     _save_checkpoint(state_dir, 3, {"results": phase3_results, "slug": slug})
                     _err(f"Phase 3 complete: {len(phase3_results)} unique candidates.")
@@ -483,7 +554,7 @@ def main(argv: list[str] | None = None) -> None:
             else:
                 _err(f"Phase 3: citation expansion (top 5 seeds × {CITATIONS_PER_SEED} citations)...")
                 phase3_results = phase3_citation_expansion(
-                    phase1_results, slug, discovered_dir, env, exclude_ids
+                    phase1_results, slug, discovered_dir, env, exclude_keys
                 )
                 _save_checkpoint(state_dir, 3, {"results": phase3_results, "slug": slug})
                 _err(f"Phase 3 complete: {len(phase3_results)} unique candidates.")

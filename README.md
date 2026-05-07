@@ -199,10 +199,10 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 
 **Near-term (Stability & New Ingestion)**
 - [x] **`/lumi-help` Skill:** A smart assistant that reads your workspace state and tells you the one thing to do next; pass `skills` to see every command.
-- [ ] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install.
+- [x] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install. *(shipped in v1.2)*
 - [ ] **Native DOCX & Image OCR:** Ingest Word files and screenshots directly into your wiki.
 - [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
-- [ ] **Improved CI/CD:** Native support for Bun and Node 22 environments.
+- [x] **Improved CI/CD:** Native support for Bun and Node 22 environments. *(shipped in v1.2)*
 
 **Long-term (Deep Research & Integration)**
 - [ ] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall.

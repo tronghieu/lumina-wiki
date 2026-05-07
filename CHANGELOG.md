@@ -3,6 +3,82 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-05-07
+
+### Added
+
+- **Multilingual installer (PR #7).** Interactive installer prompts and
+  rendered banners now ship in English, Vietnamese, and Simplified Chinese.
+  Language is selected at install time and persisted; upgrades read the
+  prior choice from manifest config. Localization covers prompts, summary
+  output, and post-install banner — workspace template content is unchanged.
+- **Persistent HTTP GET cache for fetchers (PR #5).** New
+  `_lumina/tools/http_cache.py` provides a content-addressed, file-backed
+  cache layer for arxiv / DOI / Semantic Scholar / web GET requests, shared
+  across `discover` and `ingest` runs. TTL is configurable via env
+  (validated at load time) and a cache schema version pins the on-disk
+  format so future shape changes self-invalidate. List-of-tuples query
+  params bypass caching by design.
+- **Bun smoke job in CI (PR #3).** GitHub Actions now runs a Bun
+  compatibility job alongside Node, catching runtime divergences early
+  (path resolution, module loading, child-process spawn) without making
+  Bun a supported runtime contract.
+- **Claude Code GitHub Actions workflows (PR #8).** Two opt-in workflows —
+  Claude PR Assistant (mention-triggered) and Claude Code Review (auto on
+  PR open/sync) — are shipped under `.github/workflows/`. Both are
+  restricted to repository maintainers on this public repo to prevent
+  unsolicited token usage from forks.
+- Source pages gain an optional `external_ids` frontmatter object holding
+  validated cross-source identifiers across four namespaces: `doi`, `arxiv`,
+  `s2`, and `url` (canonical form). The namespace registry is locked to
+  these four — `openalex`, `isbn`, and `s2_corpus` are reserved but not yet
+  implemented.
+- New module `_lumina/scripts/external-ids.mjs` and its Python mirror
+  `_lumina/tools/id_utils.py` provide pure helpers (`normalizeExternalId`,
+  `parseUrlToExternalIds`, `canonicalizeUrl`, `externalIdMatchKey`,
+  `expandExternalIds`, `safeIdToken`, `sanitizeExternalIdsObject`). Parity is
+  gated by a shared JSON fixture.
+- New CLI wrapper `_lumina/scripts/parse-ids.mjs` reads a URL from `argv` and
+  emits a validated `external_ids` JSON map. Skill prompts call this instead
+  of inline `node -e` interpolation, eliminating shell-injection risk.
+- Producers (`/lumi-ingest`, `/lumi-discover`, all fetchers) populate
+  `external_ids` automatically. `init_discovery.py --exclude-keys` filters
+  candidates by expanded external_ids set so a DOI excludes its arxiv form.
+- Three new lint checks on source pages: **L13** (warn — namespace coverage
+  derivable from `urls[]`), **L14** (error — invalid identifier value),
+  **L16** (warn — `urls[]` ↔ `external_ids` mismatch). L13's remediation
+  message points users at `/lumi-migrate-legacy --backfill-ids`.
+- Opt-in `/lumi-migrate-legacy --backfill-ids` flag populates `external_ids`
+  on legacy source pages from existing `urls[]`. Non-destructive (existing
+  keys win) and idempotent. No `--dry-run` — review with `git diff`.
+- Source pages gain an optional `sources` frontmatter array recording fetch
+  provenance: `[{provider, fetched_at, url?}]`. Each ingest run appends one
+  entry — multi-fetch keeps history rather than replacing.
+- New CLI wrapper `_lumina/scripts/build-source.mjs` (and the underlying
+  `buildSourceEntry` / `build_source_entry` helpers in `external-ids.mjs` /
+  `id_utils.py`) constructs one validated entry per fetcher run. Provider
+  must be a kebab/snake slug (max 32 chars). `/lumi-ingest` Phase 3 calls
+  it after writing `external_ids`.
+
+### Changed
+
+- `init_discovery.py` flag renamed in place: `--exclude-ids` →
+  `--exclude-keys`. No deprecation alias (LLM-driven, no human contract).
+- `wiki.mjs` `parseFrontmatter` / `stringifyFrontmatter` now round-trip
+  top-level YAML object values (block-mapping form). `set-meta external_ids`
+  runs `sanitizeExternalIdsObject` automatically — `__proto__` and unknown
+  namespaces are stripped before persisting.
+- `EXTERNAL_ID_NAMESPACES` source of truth moved from `external-ids.mjs` to
+  `schemas.mjs` (where pure-data lives). `external-ids.mjs` now imports and
+  re-exports it for back-compat with downstream consumers.
+
+### Migration
+
+- Legacy wikis with no `external_ids` populated will see L13 warnings on
+  source pages whose `urls[]` contain an arxiv/doi/s2 URL. Run
+  `/lumi-migrate-legacy --backfill-ids` to populate them. The standard
+  migration flow (`/lumi-migrate-legacy` without the flag) is unchanged.
+
 ## [1.1.0] - 2026-05-06
 
 ### Added

@@ -8,6 +8,16 @@
  */
 
 // ---------------------------------------------------------------------------
+// EXTERNAL_ID_NAMESPACES
+// Locked namespace list for the `external_ids` frontmatter map on Source pages.
+// `url` is a post-spec extension (legacy from arxiv-only era; kept for back-compat).
+// `openalex`/`isbn`/`s2_corpus` reserved — add when producer/consumer ship together.
+// ---------------------------------------------------------------------------
+
+/** @type {readonly string[]} */
+export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url']);
+
+// ---------------------------------------------------------------------------
 // SCHEMA_VERSION
 // Bumped on every breaking change to the exported shapes.
 // ---------------------------------------------------------------------------
@@ -231,7 +241,7 @@ export const EDGE_TYPES = [
 /**
  * @typedef {Object} FrontmatterField
  * @property {string}   key
- * @property {'string'|'number'|'array'|'enum'|'iso-date'} type
+ * @property {'string'|'number'|'array'|'enum'|'iso-date'|'object'} type
  * @property {boolean}  required
  * @property {Array}    [values]   - Allowed values for enum type.
  * @property {Pack}     [pack]     - Pack gate; absent means always required.
@@ -265,6 +275,8 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'ingest_status', type: 'enum', required: false, values: ['drafted', 'linted', 'verified', 'finalized'] },
     { key: 'verify_status', type: 'enum', required: false, values: ['passed', 'findings_pending', 'drift_detected', 'skipped', 'not_applicable'] },
     { key: 'findings',     type: 'array', required: false },
+    { key: 'external_ids', type: 'object', required: false },
+    { key: 'sources',      type: 'array',  required: false },
   ],
 
   // Concept page

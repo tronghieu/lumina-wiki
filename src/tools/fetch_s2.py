@@ -29,6 +29,10 @@ from typing import Any
 
 import requests
 
+# Import HTTP cache helper at module load (before any test patches requests.Session)
+from _cache import wrap_session
+from id_utils import expand_external_ids, normalize_external_id
+
 # Import env loader using relative path for portability when installed
 try:
     from _env import load_env
@@ -95,7 +99,7 @@ def _make_session(api_key: str) -> requests.Session:
         "User-Agent": "lumina-wiki/0.1 (research-pack; s2 fetcher)",
         "x-api-key": api_key,
     })
-    return session
+    return wrap_session(session, namespace="s2")
 
 
 def _handle_response_errors(resp: requests.Response, context: str) -> None:
@@ -112,6 +116,49 @@ def _handle_response_errors(resp: requests.Response, context: str) -> None:
 # ---------------------------------------------------------------------------
 # Core fetch functions
 # ---------------------------------------------------------------------------
+
+def _enrich_with_external_ids(paper: dict[str, Any]) -> dict[str, Any]:
+    """Attach a validated `external_ids` block to an S2 paper dict.
+
+    Reads `paperId`, `externalIds.{DOI,ArXiv}`, and `url` from the API shape.
+    Each candidate is run through `normalize_external_id`; invalid values are
+    dropped AND a stderr warning is emitted so a compromised or buggy upstream
+    API surface is observable in the discover log.
+    """
+    if not isinstance(paper, dict):
+        return paper
+
+    def _take(ns: str, raw: Any) -> tuple[str, str] | None:
+        if not isinstance(raw, str) or not raw:
+            return None
+        r = normalize_external_id(ns, raw)
+        if r["valid"] and r["id"]:
+            return (ns, r["id"])
+        _err(f"[warn] fetch_s2 dropped invalid external_id {ns}={raw!r}")
+        return None
+
+    candidates: list[tuple[str, str]] = []
+    pid = paper.get("paperId")
+    if isinstance(pid, str) and pid:
+        kv = _take("s2", pid)
+        if kv:
+            candidates.append(kv)
+    ext = paper.get("externalIds")
+    if isinstance(ext, dict):
+        for api_key, ns in (("DOI", "doi"), ("ArXiv", "arxiv")):
+            if api_key in ext:
+                kv = _take(ns, ext.get(api_key))
+                if kv:
+                    candidates.append(kv)
+    url = paper.get("url")
+    if isinstance(url, str) and url:
+        kv = _take("url", url)
+        if kv:
+            candidates.append(kv)
+
+    paper["external_ids"] = expand_external_ids(dict(candidates))
+    return paper
+
 
 def fetch_paper(
     paper_id: str,
@@ -130,7 +177,7 @@ def fetch_paper(
     url = f"{S2_API_BASE}/paper/{paper_id}"
     resp = session.get(url, params={"fields": PAPER_FIELDS}, timeout=REQUEST_TIMEOUT)
     _handle_response_errors(resp, f"paper '{paper_id}'")
-    return resp.json()
+    return _enrich_with_external_ids(resp.json())
 
 
 def fetch_citations(
@@ -160,7 +207,7 @@ def fetch_citations(
     _handle_response_errors(resp, f"citations for '{paper_id}'")
     raw = resp.json()
     # Unwrap nested citingPaper structure
-    data = [item.get("citingPaper", item) for item in raw.get("data", [])]
+    data = [_enrich_with_external_ids(item.get("citingPaper", item)) for item in raw.get("data", [])]
     return {
         "total": raw.get("total"),
         "offset": raw.get("offset", offset),
@@ -196,7 +243,7 @@ def fetch_references(
     _handle_response_errors(resp, f"references for '{paper_id}'")
     raw = resp.json()
     # Unwrap nested citedPaper structure
-    data = [item.get("citedPaper", item) for item in raw.get("data", [])]
+    data = [_enrich_with_external_ids(item.get("citedPaper", item)) for item in raw.get("data", [])]
     return {
         "total": raw.get("total"),
         "offset": raw.get("offset", offset),
@@ -227,7 +274,8 @@ def fetch_recommendations(
     }
     resp = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
     _handle_response_errors(resp, f"recommendations for '{paper_id}'")
-    return resp.json().get("recommendedPapers", [])
+    recs = resp.json().get("recommendedPapers", [])
+    return [_enrich_with_external_ids(p) for p in recs]
 
 
 def search_papers(
@@ -256,7 +304,9 @@ def search_papers(
     }
     resp = session.get(url, params=params, timeout=REQUEST_TIMEOUT)
     _handle_response_errors(resp, f"search '{query}'")
-    return resp.json()
+    raw = resp.json()
+    raw["data"] = [_enrich_with_external_ids(p) for p in raw.get("data", [])]
+    return raw
 
 
 # ---------------------------------------------------------------------------

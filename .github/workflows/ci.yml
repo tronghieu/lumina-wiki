@@ -54,5 +54,30 @@ jobs:
       - name: Install idempotency
         run: npm run ci:idempotency
 
+      - name: Cold-start budget
+        run: npm run ci:cold-start
+
       - name: Package readiness
         run: npm run ci:package
+
+  bun-smoke:
+    name: Bun smoke (ubuntu)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node dependencies
+        run: bun install
+
+      - name: CLI version (cold-start under Bun)
+        run: bun bin/lumina.js --version --no-update
+
+      - name: End-to-end install under Bun
+        run: bun run dev:sandbox -- --yes --packs core

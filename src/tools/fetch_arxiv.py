@@ -26,6 +26,20 @@ from urllib.parse import quote_plus
 
 import requests
 
+from _cache import wrap_session
+from id_utils import build_external_ids, normalize_external_id
+
+
+def _arxiv_external_ids(arxiv_id: str, url: str) -> dict[str, str]:
+    """Validated external_ids map for an arxiv result. Strips version for DOI."""
+    base = normalize_external_id("arxiv", arxiv_id)
+    base_id = base["id"] if base["valid"] else arxiv_id
+    return build_external_ids({
+        "arxiv": arxiv_id,
+        "doi": f"10.48550/arXiv.{base_id}",
+        "url": url,
+    })
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -87,6 +101,7 @@ def _parse_entry(entry: ET.Element) -> dict[str, Any]:
         "primary_category": primary_category,
         "categories": categories,
         "url": arxiv_id_url,
+        "external_ids": _arxiv_external_ids(arxiv_id, arxiv_id_url),
     }
 
 
@@ -106,6 +121,11 @@ def _parse_rss_item(item: ET.Element) -> dict[str, Any]:
         "url": raw_link,
         "guid": _text(guid_el),
         "description": _text(desc_el),
+        "external_ids": build_external_ids({
+            "arxiv": arxiv_id,
+            "doi": f"10.48550/arXiv.{arxiv_id}",
+            "url": raw_link,
+        }),
     }
 
 
@@ -116,7 +136,7 @@ def _parse_rss_item(item: ET.Element) -> dict[str, Any]:
 def _make_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "lumina-wiki/0.1 (research-pack fetcher)"})
-    return session
+    return wrap_session(session, namespace="arxiv")
 
 
 # ---------------------------------------------------------------------------

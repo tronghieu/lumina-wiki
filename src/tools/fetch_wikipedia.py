@@ -25,6 +25,9 @@ from typing import Any
 
 import requests
 
+from _cache import wrap_session
+from id_utils import build_external_ids
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -45,7 +48,7 @@ def _err(msg: str) -> None:
 def _make_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": "lumina-wiki/0.1 (research-pack; wikipedia fetcher)"})
-    return session
+    return wrap_session(session, namespace="wikipedia")
 
 
 # ---------------------------------------------------------------------------
@@ -116,13 +119,15 @@ def fetch_page(
     raw_cats = page_info.get("categories", [])
     categories = [c.get("title", "").removeprefix("Category:") for c in raw_cats]
 
+    page_url = data.get("content_urls", {}).get("desktop", {}).get("page", "")
     return {
         "title": data.get("title", title),
         "pageid": data.get("pageid"),
         "description": data.get("description", ""),
         "extract": extract,
-        "url": data.get("content_urls", {}).get("desktop", {}).get("page", ""),
+        "url": page_url,
         "categories": categories,
+        "external_ids": build_external_ids({"url": page_url}),
     }
 
 

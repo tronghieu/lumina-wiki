@@ -49,7 +49,9 @@ import {
   runInstallPrompts,
   runUninstallConfirm,
   runReadmeMergePrompt,
+  LOCALE_LANGUAGE_NAME,
 } from './prompts.js';
+import { VALID_LOCALES, loadLocale } from './locales.js';
 import { checkForUpdate } from './update-check.js';
 
 // ---------------------------------------------------------------------------
@@ -148,23 +150,37 @@ export async function installCommand(opts = {}) {
   const colors = await getColorFns();
 
   // 1. Read existing manifest at the initial path (upgrade detection)
+  // Distinguish ENOENT (fresh install) from real I/O errors. Real errors must
+  // bail loud — silently treating them as "fresh install" would let a transient
+  // permission failure quietly nuke an existing install.
   let existingManifest = null;
   try {
     existingManifest = await readManifest(projectRoot);
   } catch (err) {
-    // Corrupted manifest → trigger --re-link semantics
-    console.warn(colors.yellow(`[warn] Could not read existing manifest: ${err.message}. Treating as fresh install.`));
+    if (err.code === 'ENOENT') {
+      existingManifest = null;
+    } else {
+      // Pre-loadLocale path — intentionally EN-only and machine-readable.
+      const e = new Error(`MANIFEST_READ_FAILED: ${err.message} (path: ${projectRoot}/_lumina/manifest.json)`);
+      e.code = 2;
+      throw e;
+    }
   }
 
   const isUpgrade = existingManifest !== null;
 
-  // 2. Collect answers
+  // 2. Collect answers (locale not yet loaded; prompts use EN fallback literals)
   let answers;
   if (isUpgrade) {
     // Upgrade/reinstall: preserve existing choices, including --yes runs.
     answers = await readAnswersFromConfig(projectRoot, existingManifest);
   } else {
-    answers = await runInstallPrompts({ acceptDefaults: yes, cwd: projectRoot });
+    answers = await runInstallPrompts({
+      acceptDefaults: yes,
+      cwd: projectRoot,
+      existingManifest,
+      defaultLocale: opts.lang ?? 'en',
+    });
     // Re-resolve projectRoot from the directory the user typed.
     if (answers.directory) {
       projectRoot = resolve(answers.directory);
@@ -172,15 +188,44 @@ export async function installCommand(opts = {}) {
   }
   answers = applyInstallOverrides(answers, opts);
 
-  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang } = answers;
+  // 2b. Load locale module ONCE after applyInstallOverrides resolves locale.
+  const localeMod = await loadLocale(answers.locale ?? 'en');
+  const t = localeMod.t;
+  // Warn if locale translations are AI-drafted (won't fire for 'en').
+  maybeWarnAiDraft(localeMod);
+
+  // Locale-switch protection on upgrade: any divergence between the installed
+  // locale and the resolved locale (from --lang, prompt, OR config drift)
+  // requires --force-locale-switch in headless mode. Interactive confirmation
+  // is handled inside runInstallPrompts; on the upgrade path we re-collect
+  // answers from config/manifest (no prompt), so the headless gate is the only
+  // line of defense. Apply migration so legacy v3 installs (no locale field)
+  // are treated as 'en' rather than bypassing the gate.
+  if (isUpgrade) {
+    const installedLocale = (
+      existingManifest.locale
+        ?? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION).locale
+        ?? 'en'
+    );
+    if (installedLocale !== answers.locale && !opts.forceLocaleSwitch) {
+      const e = new Error(
+        `LOCALE_SWITCH_REFUSED: installed locale '${installedLocale}' differs from resolved locale '${answers.locale}'. ` +
+        `Pass --force-locale-switch to confirm (this will rewrite README.md and IDE stubs in the new locale).`,
+      );
+      e.code = 2;
+      throw e;
+    }
+  }
+
+  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
 
   console.log('');
   if (isUpgrade) {
-    console.log(colors.bold(`Upgrading Lumina Wiki in: ${projectRoot}`));
+    console.log(colors.bold(t('progress.upgrading', { dir: projectRoot })));
   } else {
-    console.log(colors.bold(`Installing Lumina Wiki in: ${projectRoot}`));
+    console.log(colors.bold(t('progress.installing', { dir: projectRoot })));
   }
 
   // 3. Scaffold directories
@@ -204,6 +249,7 @@ export async function installCommand(opts = {}) {
   // 4. Template variables
   const templateVars = {
     project_name:             projectName,
+    locale:                   locale,
     communication_language:   communicationLang,
     document_output_language: documentOutputLang,
     pack_core:     true,
@@ -217,7 +263,7 @@ export async function installCommand(opts = {}) {
   await renderAndWriteConfig(projectRoot, templateVars, answers);
 
   // 6. Render + write README (with region awareness)
-  await renderAndWriteReadme(projectRoot, templateVars, researchPurpose, isUpgrade, yes);
+  await renderAndWriteReadme(projectRoot, templateVars, researchPurpose, isUpgrade, yes, t);
 
   // 7. Render IDE stubs
   await renderIdeStubs(projectRoot, ideTargets, templateVars);
@@ -255,7 +301,7 @@ export async function installCommand(opts = {}) {
   const symlinkStrategies = {};
   if (ideTargets.includes('claude_code')) {
     const { strategies } = await createSkillSymlinks(
-      projectRoot, skillRows, existingManifest, reLink, colors
+      projectRoot, skillRows, existingManifest, reLink, colors, t
     );
     Object.assign(symlinkStrategies, strategies);
   }
@@ -274,6 +320,7 @@ export async function installCommand(opts = {}) {
     ...migrated,
     schemaVersion:    MANIFEST_SCHEMA_VERSION,
     packageVersion:   PKG.version,
+    locale:           locale,
     installedAt:      existingManifest?.installedAt ?? now,
     updatedAt:        now,
     packs:            Object.fromEntries(packs.map(p => [p, { version: PKG.version, source: 'built-in' }])),
@@ -299,18 +346,19 @@ export async function installCommand(opts = {}) {
       fromVersion: existingManifest.packageVersion,
       toVersion: PKG.version,
       colors,
+      t,
     });
   }
 
   // 18. Print summary
   console.log('');
-  console.log(colors.green('[done] Lumina Wiki installed successfully.'));
-  console.log(`  Project:  ${projectName}`);
-  console.log(`  Packs:    ${packs.join(', ')}`);
-  console.log(`  IDE:      ${ideTargets.join(', ')}`);
-  console.log(`  Skills:   ${skillRows.length} installed`);
+  console.log(colors.green(t('success.installed')));
+  console.log(t('success.summary.project', { name: projectName }));
+  console.log(t('success.summary.packs', { packs: packs.join(', ') }));
+  console.log(t('success.summary.ide', { ide: ideTargets.join(', ') }));
+  console.log(t('success.summary.skills', { count: skillRows.length }));
   if (Object.values(symlinkStrategies).some(s => s === 'copy')) {
-    console.log(colors.yellow('  [warn] Some skills were copied instead of symlinked. Run "lumina install --re-link" after enabling Windows Developer Mode.'));
+    console.log(colors.yellow(t('warn.copied_skills')));
   }
 }
 
@@ -328,9 +376,18 @@ export async function uninstallCommand(opts = {}) {
   const projectRoot = resolve(cwd);
   const colors = await getColorFns();
 
-  const result = await runUninstallConfirm({ acceptDefaults: yes });
+  // Load locale from manifest; fall back to EN if manifest missing/corrupt.
+  // uninstall has no --lang flag — it always reads from the installed manifest.
+  let uninstallLocale = 'en';
+  try {
+    const mf = await readManifest(projectRoot);
+    if (mf?.locale) uninstallLocale = mf.locale;
+  } catch (_) {}
+  const { t } = await loadLocale(uninstallLocale);
+
+  const result = await runUninstallConfirm({ acceptDefaults: yes, t });
   if (!result || !result.confirmed) {
-    console.log(colors.yellow('Uninstall cancelled.'));
+    console.log(colors.yellow(t('uninstall.cancelled')));
     process.exit(0);
   }
 
@@ -344,11 +401,11 @@ export async function uninstallCommand(opts = {}) {
 
   // Remove _lumina/ (except we preserve wiki/ and raw/)
   await rm(join(projectRoot, '_lumina'), { recursive: true, force: true });
-  console.log(colors.green('[done] Removed _lumina/'));
+  console.log(colors.green(t('uninstall.removed_lumina')));
 
   // Remove .agents/
   await rm(join(projectRoot, '.agents'), { recursive: true, force: true });
-  console.log(colors.green('[done] Removed .agents/'));
+  console.log(colors.green(t('uninstall.removed_agents')));
 
   // Remove .claude/skills/lumi-* symlinks
   try {
@@ -380,12 +437,12 @@ export async function uninstallCommand(opts = {}) {
       if (start !== -1 && end !== -1) {
         const stripped = content.slice(0, start) + content.slice(end + closeMarker.length);
         await atomicWrite(readmePath, stripped);
-        console.log(colors.green('[done] Stripped schema region from README.md'));
+        console.log(colors.green(t('uninstall.stripped_readme')));
       }
     } catch (_) {}
   }
 
-  console.log(colors.green('[done] Uninstall complete. wiki/ and raw/ preserved.'));
+  console.log(colors.green(t('uninstall.complete')));
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +460,9 @@ export async function versionCommand(opts = {}) {
   // Print version immediately (cold-start < 300ms)
   process.stdout.write(PKG.version + '\n');
 
-  // Then do async update check (bounded by 2s timeout)
+  // Then do async update check (bounded by 2s timeout).
+  // versionCommand has no project directory, so locale is unknown; use EN literals.
+  // Pre-loadLocale path — intentionally EN-only and machine-readable.
   if (!noUpdate && process.env.LUMINA_NO_UPDATE_CHECK !== '1') {
     const latest = await checkForUpdate(PKG.version);
     if (latest) {
@@ -427,7 +486,7 @@ export async function versionCommand(opts = {}) {
  * @param {string}  opts.toVersion
  * @param {object}  opts.colors
  */
-export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersion, colors }) {
+export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersion, colors, t = null }) {
   let summary;
   try {
     const lintScript = join(projectRoot, '_lumina', 'scripts', 'lint.mjs');
@@ -456,18 +515,19 @@ export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersi
     return;
   }
 
+  // Use t() if available; fall back to EN literals for callers that don't pass t.
   const banner = [
     '',
-    colors.yellow(`[warn] Lumina upgraded v${fromVersion} -> v${toVersion} — schema gap detected:`),
-    colors.yellow(`       ${errors} error(s), ${warnings} warning(s) across legacy entries.`),
+    colors.yellow(t ? t('warn.upgrade_header', { from: fromVersion, to: toVersion }) : `[warn] Lumina upgraded v${fromVersion} -> v${toVersion} — schema gap detected:`),
+    colors.yellow(t ? t('warn.upgrade_errors', { errors, warnings }) : `       ${errors} error(s), ${warnings} warning(s) across legacy entries.`),
     '',
-    '     Quick fix (deterministic):',
-    '       node _lumina/scripts/wiki.mjs migrate --add-defaults',
+    t ? t('warn.upgrade_fix_quick') : '     Quick fix (deterministic):',
+    t ? t('warn.upgrade_fix_quick_cmd') : '       node _lumina/scripts/wiki.mjs migrate --add-defaults',
     '',
-    '     Smart fix (LLM-driven, recommended):',
-    '       /lumi-migrate-legacy',
+    t ? t('warn.upgrade_fix_smart') : '     Smart fix (LLM-driven, recommended):',
+    t ? t('warn.upgrade_fix_smart_cmd') : '       /lumi-migrate-legacy',
     '',
-    '     Both are idempotent. See _lumina/CHANGELOG.md for details.',
+    t ? t('warn.upgrade_idempotent') : '     Both are idempotent. See _lumina/CHANGELOG.md for details.',
     '',
   ].join('\n');
 
@@ -488,13 +548,35 @@ export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersi
 }
 
 async function readAnswersFromConfig(projectRoot, existingManifest) {
-  // Try reading lumina.config.yaml for stored answers
+  // Manifest is the source of truth for `locale` (Plan §6). Config mirrors
+  // manifest; if they disagree, manifest wins. Validate config.locale against
+  // VALID_LOCALES so a hand-edited or corrupted YAML never propagates an
+  // invalid identifier into template-path construction (defense-in-depth even
+  // though loadLocale also rejects).
+  const configPath = join(projectRoot, '_lumina', 'config', 'lumina.config.yaml');
+  let config = null;
   try {
     const yaml = await import('js-yaml');
-    const configPath = join(projectRoot, '_lumina', 'config', 'lumina.config.yaml');
     const raw = await readFile(configPath, 'utf8');
-    const config = yaml.load(raw) || {};
+    config = yaml.load(raw) || {};
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      config = null;
+    } else {
+      // Real I/O or parse error — bail loud (Phase 2: "config drift should be loud").
+      const e = new Error(`CONFIG_READ_FAILED: ${err.message} (path: ${configPath})`);
+      e.code = 2;
+      throw e;
+    }
+  }
 
+  if (config?.locale !== undefined && !VALID_LOCALES.includes(config.locale)) {
+    const e = new Error(`INVALID_CONFIG_LOCALE: ${JSON.stringify(config.locale)}. Valid: ${VALID_LOCALES.join(', ')}`);
+    e.code = 2;
+    throw e;
+  }
+
+  if (config) {
     const ideTargets = Object.entries(config.ide_targets || {})
       .filter(([_, v]) => v)
       .map(([k]) => k);
@@ -503,29 +585,36 @@ async function readAnswersFromConfig(projectRoot, existingManifest) {
       .filter(([_, v]) => v)
       .map(([k]) => k);
 
+    // Manifest wins for locale; config is a mirror.
+    const locale = existingManifest?.locale || config.locale || 'en';
+    const langName = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
     return {
       directory:          projectRoot,
       projectName:        config.project_name || basename(projectRoot),
       researchPurpose:    '',
       ideTargets:         ideTargets.length ? ideTargets : ['claude_code'],
       packs:              packs.length ? packs : ['core'],
-      communicationLang:  config.communication_language || 'English',
-      documentOutputLang: config.document_output_language || 'English',
-    };
-  } catch (_) {
-    // Fall back to manifest data
-    const ideTargets = existingManifest?.ideTargets ?? ['claude_code'];
-    const packs = Object.keys(existingManifest?.packs ?? { core: true });
-    return {
-      directory:          projectRoot,
-      projectName:        basename(projectRoot),
-      researchPurpose:    '',
-      ideTargets,
-      packs:              packs.length ? packs : ['core'],
-      communicationLang:  'English',
-      documentOutputLang: 'English',
+      communicationLang:  config.communication_language || langName,
+      documentOutputLang: config.document_output_language || langName,
+      locale,
     };
   }
+
+  // No config file — fall back to manifest data
+  const ideTargets = existingManifest?.ideTargets ?? ['claude_code'];
+  const packs = Object.keys(existingManifest?.packs ?? { core: true });
+  const locale = existingManifest?.locale ?? 'en';
+  const langName = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
+  return {
+    directory:          projectRoot,
+    projectName:        basename(projectRoot),
+    researchPurpose:    '',
+    ideTargets,
+    packs:              packs.length ? packs : ['core'],
+    communicationLang:  langName,
+    documentOutputLang: langName,
+    locale,
+  };
 }
 
 function parseListOption(value, label) {
@@ -555,8 +644,54 @@ function validateValues(values, validSet, label) {
   }
 }
 
+// Validate user-supplied free-text language values (communication / document_output).
+// Reject empty after trim and template-injection sequences. Returns trimmed value.
+// NOTE: pre-loadLocale errors are intentionally EN-only and machine-readable.
+function validateLanguageInput(value, label) {
+  const str = String(value ?? '').trim();
+  if (!str) {
+    const e = new Error(`${label} must not be empty`);
+    e.code = 2;
+    throw e;
+  }
+  if (str.includes('{{') || str.includes('}}')) {
+    const e = new Error(`${label} contains forbidden template syntax: ${JSON.stringify(value)}`);
+    e.code = 2;
+    throw e;
+  }
+  return str;
+}
+
 function applyInstallOverrides(answers, opts) {
   const next = { ...answers };
+  const priorLocale = answers.locale ?? null;
+
+  // Locale: --lang flag overrides; case-insensitive normalize.
+  // Pre-loadLocale error → EN-only string (chicken-and-egg, machine-readable).
+  if (opts.lang !== undefined && opts.lang !== null && opts.lang !== '') {
+    const normalized = String(opts.lang).toLowerCase().trim();
+    if (!VALID_LOCALES.includes(normalized)) {
+      const e = new Error(`UNKNOWN_LOCALE: ${opts.lang}. Valid: ${VALID_LOCALES.join(', ')}`);
+      e.code = 2;
+      throw e;
+    }
+    next.locale = normalized;
+  } else if (!next.locale) {
+    next.locale = 'en';
+  }
+
+  // Cascade: if --lang changed locale and user didn't explicitly pass language
+  // overrides, refresh the language defaults to match the new locale.
+  if (next.locale !== priorLocale) {
+    const cascaded = LOCALE_LANGUAGE_NAME[next.locale] ?? 'English';
+    const priorCascaded = priorLocale ? (LOCALE_LANGUAGE_NAME[priorLocale] ?? 'English') : null;
+    if (!opts.communicationLang && (next.communicationLang === priorCascaded || !next.communicationLang)) {
+      next.communicationLang = cascaded;
+    }
+    if (!opts.documentOutputLang && (next.documentOutputLang === priorCascaded || !next.documentOutputLang)) {
+      next.documentOutputLang = cascaded;
+    }
+  }
 
   const packOverride = parseListOption(opts.packs, '--packs');
   if (packOverride) {
@@ -573,10 +708,32 @@ function applyInstallOverrides(answers, opts) {
   }
 
   if (opts.projectName) next.projectName = String(opts.projectName);
-  if (opts.communicationLang) next.communicationLang = String(opts.communicationLang);
-  if (opts.documentOutputLang) next.documentOutputLang = String(opts.documentOutputLang);
+  if (opts.communicationLang !== undefined && opts.communicationLang !== null && opts.communicationLang !== '') {
+    next.communicationLang = validateLanguageInput(opts.communicationLang, '--communication-language');
+  }
+  if (opts.documentOutputLang !== undefined && opts.documentOutputLang !== null && opts.documentOutputLang !== '') {
+    next.documentOutputLang = validateLanguageInput(opts.documentOutputLang, '--document-output-language');
+  }
 
   return next;
+}
+
+export { applyInstallOverrides, validateLanguageInput };
+
+/**
+ * If the loaded locale module has `_meta.translation_status === 'ai-draft'`,
+ * write one EN notice line to stderr. Does nothing for 'en' (native strings).
+ * Non-EN locales set this flag in their named export:
+ *   export const _meta = { translation_status: 'ai-draft' }
+ *
+ * @param {{ locale: string, t: Function, keys: Function, _meta: object|null }} localeMod
+ */
+function maybeWarnAiDraft(localeMod) {
+  if (localeMod._meta?.translation_status === 'ai-draft') {
+    process.stderr.write(
+      `[notice] ${localeMod.locale} translations are AI-drafted; pull requests welcome.\n`
+    );
+  }
 }
 
 async function renderAndWriteConfig(projectRoot, templateVars, answers) {
@@ -585,6 +742,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
   // Build config object
   const config = {
     project_name: templateVars.project_name,
+    locale: templateVars.locale,
     communication_language: templateVars.communication_language,
     document_output_language: templateVars.document_output_language,
     created_at: templateVars.created_at,
@@ -650,15 +808,26 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
   await atomicWrite(configPath, configContent);
 }
 
-async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrade, acceptDefaults) {
+async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrade, acceptDefaults, t = null) {
   const readmePath = join(projectRoot, 'README.md');
-  const templatePath = join(TEMPLATES_DIR, 'README.md');
+  // Select locale-specific template; fall back to EN if locale variant is missing.
+  const locale = templateVars.locale ?? 'en';
+  const suffix = locale === 'en' ? '' : '.' + locale;
+  const templatePath = join(TEMPLATES_DIR, 'README' + suffix + '.md');
+  const fallbackTemplatePath = join(TEMPLATES_DIR, 'README.md');
 
   let templateContent;
   try {
     templateContent = await readFile(templatePath, 'utf8');
-  } catch (_) {
-    templateContent = defaultReadmeTemplate(templateVars);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    // Locale-specific template not present; fall back to EN template.
+    try {
+      templateContent = await readFile(fallbackTemplatePath, 'utf8');
+    } catch (err2) {
+      if (err2.code !== 'ENOENT') throw err2;
+      templateContent = defaultReadmeTemplate(templateVars);
+    }
   }
 
   // Check if README exists
@@ -677,9 +846,9 @@ async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrad
     }
 
     // First install with existing README: ask user
-    const action = await runReadmeMergePrompt({ acceptDefaults });
+    const action = await runReadmeMergePrompt({ acceptDefaults, t });
     if (action === 'abort') {
-      console.log('Aborted: README.md left unchanged.');
+      console.log(t ? t('readme.aborted') : 'Aborted: README.md left unchanged.');
       process.exit(0);
     }
     if (action === 'backup') {
@@ -770,7 +939,7 @@ function buildIdeStub(target, vars) {
 
 async function copyScripts(projectRoot) {
   const destDir = join(projectRoot, '_lumina', 'scripts');
-  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs'];
+  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs', 'build-source.mjs'];
   for (const file of scriptFiles) {
     const src = join(SCRIPTS_DIR, file);
     const dest = join(destDir, file);
@@ -894,7 +1063,7 @@ function getSkillDefs(packs) {
 
 async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
-  const coreTools = ['extract_pdf.py', 'fetch_pdf.py'];
+  const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
   const researchTools = [
     '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
@@ -1014,7 +1183,7 @@ async function seedWikiFiles(projectRoot) {
   }
 }
 
-async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors) {
+async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors, t = null) {
   const strategies = {};
 
   for (const skill of skillRows) {
@@ -1030,7 +1199,10 @@ async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reL
         console.log(colors.yellow(`  [warn] ${result.message}`));
       }
     } catch (err) {
-      console.log(colors.red(`  [error] Failed to link ${skill.canonical_id}: ${err.message}`));
+      const msg = t
+        ? t('error.symlink', { skill: skill.canonical_id, message: err.message })
+        : `  [error] Failed to link ${skill.canonical_id}: ${err.message}`;
+      console.log(colors.red(msg));
     }
   }
 
