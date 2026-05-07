@@ -140,6 +140,8 @@ program
   .addOption(new Option('--project-name <name>', 'override auto-derived project name').hideHelp())
   .option('--communication-language <language>', 'language agents use when talking to the user')
   .option('--document-output-language <language>', 'language used for wiki documents')
+  .option('--lang <code>', 'installer UI locale: en, vi, zh')
+  .option('--force-locale-switch', 'allow switching installer locale during upgrade')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
     const mergedDir      = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
@@ -161,8 +163,12 @@ program
         projectName: cmdOpts.projectName,
         communicationLang: cmdOpts.communicationLanguage,
         documentOutputLang: cmdOpts.documentOutputLanguage,
+        lang: cmdOpts.lang,
+        forceLocaleSwitch: Boolean(cmdOpts.forceLocaleSwitch),
       });
     } catch (err) {
+      // Top-level catch: locale may not be resolved yet (pre-loadLocale path).
+      // Error strings kept as EN literals — machine-readable, intentionally exempt.
       const isPermError  = err.code === 'EACCES' || err.code === 'EPERM';
       const isRangeError = err instanceof RangeError;
       console.error(`[error] ${err.message}`);

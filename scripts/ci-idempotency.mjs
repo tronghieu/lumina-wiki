@@ -37,6 +37,21 @@ const scenarios = [
       '--document-output-language', 'English',
     ],
   },
+  {
+    name: 'multilingual-en',
+    workspaceBasename: 'ci-multilingual-en',
+    args: ['install', '--yes', '--no-update', '--lang', 'en', '--packs', 'core,research'],
+  },
+  {
+    name: 'multilingual-vi',
+    workspaceBasename: 'ci-multilingual-vi',
+    args: ['install', '--yes', '--no-update', '--lang', 'vi', '--packs', 'core,research'],
+  },
+  {
+    name: 'multilingual-zh',
+    workspaceBasename: 'ci-multilingual-zh',
+    args: ['install', '--yes', '--no-update', '--lang', 'zh', '--packs', 'core,research'],
+  },
 ];
 
 const managedDiffPaths = [
