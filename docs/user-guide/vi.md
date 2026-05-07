@@ -374,6 +374,7 @@ Các ví dụ dưới đây dùng cú pháp `/lumi-*`, phù hợp với các mô
 | `/lumi-check` | Nhờ AI kiểm tra sức khỏe wiki: lỗi cấu trúc, liên kết hỏng, hoặc trang chưa được cập nhật đúng. |
 | `/lumi-reset` | Xóa hoặc đặt lại một phần wiki theo cách có kiểm soát. |
 | `/lumi-verify` | Yêu cầu AI kiểm tra xem các trang wiki có thực sự khớp với nguồn bạn đã trích dẫn không. |
+| `/lumi-help` | Nhờ AI gợi ý một bước kế tiếp dựa trên tình trạng wiki hiện tại. Thêm `skills` để xem toàn bộ lệnh. |
 
 ## Kiểm tra ghi chú với /lumi-verify
 
@@ -401,6 +402,29 @@ Một bản báo cáo ngắn liệt kê những câu trong ghi chú không khớ
 - Gợi ý xử lý (sửa lại, xóa đi, hoặc giữ lại kèm chú thích).
 
 `/lumi-verify` không bao giờ tự sửa ghi chú giúp bạn. Bạn quyết định xử lý từng phát hiện.
+
+## Khi bạn lạc đường với /lumi-help
+
+`/lumi-help` nhìn vào wiki bạn đang có và mách bạn đúng một việc nên làm tiếp — rất hữu ích khi bạn quên đang dừng ở đâu hoặc không chắc nên dùng lệnh nào. Nếu muốn xem tất cả những gì Lumina-Wiki làm được, thêm `skills` vào sau lệnh để xem danh sách đầy đủ.
+
+### Khi nào nên dùng
+
+- Bạn mở lại dự án sau một thời gian và không nhớ nên bắt đầu từ đâu.
+- Bạn vừa thêm vài file vào `raw/` nhưng quên bước kế tiếp.
+- Bạn muốn xem mọi lệnh có sẵn trong bản cài của mình (dùng `skills`).
+
+### Cách dùng
+
+```text
+/lumi-help            # gợi ý một bước kế tiếp
+/lumi-help skills     # xem mọi lệnh đang được cài
+```
+
+### Bạn nhận được gì
+
+Ở chế độ mặc định: một lệnh được gợi ý, kèm lý do ngắn dựa trên tình trạng wiki hiện tại (ví dụ: "có ba file trong `raw/` chưa được nạp"), và dòng lệnh chính xác để chạy. Nếu wiki không hoạt động hơn một tháng, sẽ có thêm một dòng nhắc bạn chạy `/lumi-check` khi sẵn sàng — nhưng gợi ý chính vẫn tập trung vào việc tiếp tục công việc chứ không phải kiểm tra.
+
+Ở chế độ `skills`: danh sách mọi lệnh được nhóm theo pack (Core, Research, Reading), mỗi lệnh kèm một câu mô tả ngắn. Phần của mỗi pack chỉ hiện ra nếu bạn đã cài pack đó.
 
 ## Thêm tài liệu với /lumi-ingest
 

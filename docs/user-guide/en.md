@@ -327,6 +327,7 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
 | `/lumi-verify` | Ask AI to check that your wiki notes actually match the sources you cited. |
+| `/lumi-help` | Ask AI for the single next step based on what's already in your wiki. Add `skills` to see every command. |
 
 ## Checking your notes with /lumi-verify
 
@@ -354,6 +355,29 @@ A short report listing any statement in your notes that does not match the cited
 - A suggestion (rewrite, remove, or keep with a note).
 
 `/lumi-verify` never edits your notes for you. You decide what to do with each finding.
+
+## Getting unstuck with /lumi-help
+
+`/lumi-help` looks at the wiki you have so far and tells you the single next thing to do — useful when you forget where you left off or you are not sure which command fits. If you want to see everything Lumina-Wiki can do, add `skills` to the command and you get the full list.
+
+### When to use it
+
+- You opened the project after a break and are not sure where to start.
+- You added some files to `raw/` but cannot remember the next step.
+- You want to see every command available in your install (with `skills`).
+
+### How to use it
+
+```text
+/lumi-help            # one recommended next step
+/lumi-help skills     # show every command you have installed
+```
+
+### What you get back
+
+For the default mode: one suggested command, a short reason that points to what is actually in your wiki right now (for example, "you have three files in `raw/` not added yet"), and the exact line to run next. If your wiki has been idle for more than a month, a one-line note suggests `/lumi-check` when you are ready — but the main suggestion still focuses on resuming the work, not auditing.
+
+For `skills` mode: a grouped list of every command available in your install, organized by pack (Core, Research, Reading), with one sentence per command. Pack sections only appear if you installed that pack.
 
 ## Adding a document with /lumi-ingest
 
