@@ -23,6 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
+  checkL13, checkL14, checkL16,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
@@ -1447,5 +1448,82 @@ describe('--summary integration round-trip', () => {
       assert.ok('severity' in f, 'verbose finding must have severity field');
       assert.ok('message' in f, 'verbose finding must have message field');
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L13/L14/L16: external_ids checks
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L13 external-ids-coverage', () => {
+  test('arxiv URL but missing external_ids → 1 warning with remediation hint', () => {
+    const fm = validSourceFm({ urls: ['https://arxiv.org/abs/1706.03762'], external_ids: {} });
+    const r = checkL13('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L13-external-ids-coverage');
+    assert.equal(r[0].severity, 'warning');
+    assert.match(r[0].message, /\/lumi-migrate-legacy --backfill-ids/);
+  });
+
+  test('github URL → no L13 (only url namespace derived)', () => {
+    const fm = validSourceFm({ urls: ['https://github.com/foo/bar'], external_ids: {} });
+    assert.deepEqual(checkL13('sources/x.md', fm), []);
+  });
+
+  test('arxiv URL with matching external_ids.arxiv → no L13', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL13('sources/x.md', fm), []);
+  });
+});
+
+describe('L14 external-ids-invalid', () => {
+  test('invalid DOI → 1 error', () => {
+    const fm = validSourceFm({ external_ids: { doi: 'not-a-doi' } });
+    const r = checkL14('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L14-external-ids-invalid');
+    assert.equal(r[0].severity, 'error');
+  });
+
+  test('valid DOI + valid arxiv → no L14', () => {
+    const fm = validSourceFm({
+      external_ids: { doi: '10.1109/abc', arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL14('sources/x.md', fm), []);
+  });
+
+  test('non-source page → no L14', () => {
+    assert.deepEqual(checkL14('concepts/x.md', { external_ids: { doi: 'bad' } }), []);
+  });
+});
+
+describe('L16 external-ids-mismatch', () => {
+  test('urls[arxiv] disagrees with external_ids.arxiv → 1 warning', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '9999.99999' },
+    });
+    const r = checkL16('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L16-external-ids-mismatch');
+  });
+
+  test('urls[arxiv] matches external_ids.arxiv → no L16', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL16('sources/x.md', fm), []);
+  });
+
+  test('invalid external_ids.arxiv suppresses L16 (L14 owns it)', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: 'garbage' },
+    });
+    assert.deepEqual(checkL16('sources/x.md', fm), []);
   });
 });

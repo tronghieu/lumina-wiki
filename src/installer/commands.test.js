@@ -78,6 +78,9 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
       await access(join(workspace, '_lumina', 'scripts', 'discover-runner.mjs'));
+      await access(join(workspace, '_lumina', 'scripts', 'external-ids.mjs'));
+      await access(join(workspace, '_lumina', 'scripts', 'parse-ids.mjs'));
+      await access(join(workspace, '_lumina', 'scripts', 'merge-ids.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'lib', 'watchlist-config.mjs'));
       await access(join(workspace, '_lumina', 'config', 'watchlist.yml'));
       await access(join(workspace, 'AGENTS.md'));

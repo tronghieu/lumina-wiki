@@ -7,6 +7,8 @@
  * Schema version: 0.1.0
  */
 
+export { EXTERNAL_ID_NAMESPACES } from './external-ids.mjs';
+
 // ---------------------------------------------------------------------------
 // SCHEMA_VERSION
 // Bumped on every breaking change to the exported shapes.
@@ -231,7 +233,7 @@ export const EDGE_TYPES = [
 /**
  * @typedef {Object} FrontmatterField
  * @property {string}   key
- * @property {'string'|'number'|'array'|'enum'|'iso-date'} type
+ * @property {'string'|'number'|'array'|'enum'|'iso-date'|'object'} type
  * @property {boolean}  required
  * @property {Array}    [values]   - Allowed values for enum type.
  * @property {Pack}     [pack]     - Pack gate; absent means always required.
@@ -265,6 +267,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'ingest_status', type: 'enum', required: false, values: ['drafted', 'linted', 'verified', 'finalized'] },
     { key: 'verify_status', type: 'enum', required: false, values: ['passed', 'findings_pending', 'drift_detected', 'skipped', 'not_applicable'] },
     { key: 'findings',     type: 'array', required: false },
+    { key: 'external_ids', type: 'object', required: false },
   ],
 
   // Concept page

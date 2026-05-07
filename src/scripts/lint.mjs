@@ -58,6 +58,11 @@ import {
   ENUMS,
   EXEMPTION_GLOBS,
 } from './schemas.mjs';
+import {
+  EXTERNAL_ID_NAMESPACES,
+  normalizeExternalId,
+  parseUrlToExternalIds,
+} from './external-ids.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -67,7 +72,7 @@ const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
 /** All check IDs in run order. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16'];
 
 /**
  * Legacy frontmatter fields that have been renamed across versions.
@@ -419,6 +424,12 @@ function checkL02(wikiRelPath, fm) {
         if (field.values && !field.values.includes(val)) {
           findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
             `"${field.key}" must be one of [${field.values.join(', ')}], got ${JSON.stringify(val)}`));
+        }
+        break;
+      case 'object':
+        if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
+            `"${field.key}" must be an object, got ${Array.isArray(val) ? 'array' : typeof val}`));
         }
         break;
     }
@@ -775,6 +786,112 @@ function checkL11(wikiRelPath, fm) {
   return [];
 }
 
+/**
+ * L13 — `external_ids` namespace coverage. WARNING when a non-`url` namespace
+ * derived from `urls[]` is missing or empty in `external_ids`.
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @returns {Finding[]}
+ */
+function checkL13(wikiRelPath, fm) {
+  const type = entityTypeForPath(wikiRelPath);
+  if (type !== 'sources') return [];
+  const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
+  if (urls.length === 0) return [];
+  const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
+    ? fm.external_ids
+    : {};
+
+  // Collect derived non-url namespaces across all urls; dedupe by namespace.
+  const derived = {};
+  for (const url of urls) {
+    const ids = parseUrlToExternalIds(url);
+    for (const ns of Object.keys(ids)) {
+      if (ns === 'url') continue;
+      if (!(ns in derived)) derived[ns] = ids[ns];
+    }
+  }
+  const findings = [];
+  for (const [ns, val] of Object.entries(derived)) {
+    const cur = ext[ns];
+    if (!cur || (typeof cur === 'string' && !cur)) {
+      findings.push(finding(
+        'L13-external-ids-coverage', 'warning', false, wikiRelPath, null,
+        `external_ids missing ${ns}=${val} derivable from urls[]. Run /lumi-migrate-legacy --backfill-ids to populate.`
+      ));
+    }
+  }
+  return findings;
+}
+
+/**
+ * L14 — `external_ids` value validity. ERROR when a value fails
+ * `normalizeExternalId(ns, value).valid`.
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @returns {Finding[]}
+ */
+function checkL14(wikiRelPath, fm) {
+  const type = entityTypeForPath(wikiRelPath);
+  if (type !== 'sources') return [];
+  const ext = fm.external_ids;
+  if (!ext || typeof ext !== 'object' || Array.isArray(ext)) return [];
+  const findings = [];
+  for (const ns of EXTERNAL_ID_NAMESPACES) {
+    const v = ext[ns];
+    if (typeof v !== 'string' || !v) continue;
+    const r = normalizeExternalId(ns, v);
+    if (!r.valid) {
+      findings.push(finding(
+        'L14-external-ids-invalid', 'error', false, wikiRelPath, null,
+        `external_ids.${ns}=${JSON.stringify(v)} is not a valid ${ns} identifier.`
+      ));
+    }
+  }
+  return findings;
+}
+
+/**
+ * L16 — mismatch between `external_ids[ns]` and the value derived from `urls[]`.
+ * Both sides go through the same helpers so canonicalizer drift cannot trigger
+ * a false positive.
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @returns {Finding[]}
+ */
+function checkL16(wikiRelPath, fm) {
+  const type = entityTypeForPath(wikiRelPath);
+  if (type !== 'sources') return [];
+  const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
+  const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
+    ? fm.external_ids
+    : {};
+  if (urls.length === 0) return [];
+
+  const derived = {};
+  for (const url of urls) {
+    const ids = parseUrlToExternalIds(url);
+    for (const ns of Object.keys(ids)) {
+      if (ns === 'url') continue;
+      if (!(ns in derived)) derived[ns] = ids[ns];
+    }
+  }
+  const findings = [];
+  for (const [ns, urlVal] of Object.entries(derived)) {
+    const cur = ext[ns];
+    if (typeof cur !== 'string' || !cur) continue;
+    const curNorm = normalizeExternalId(ns, cur);
+    if (!curNorm.valid) continue; // L14 owns this case.
+    if (curNorm.id !== urlVal) {
+      findings.push(finding(
+        'L16-external-ids-mismatch', 'warning', false, wikiRelPath, null,
+        `external_ids.${ns}=${curNorm.id} disagrees with value ${urlVal} derived from urls[]. Run /lumi-migrate-legacy --backfill-ids to reconcile.`
+      ));
+    }
+  }
+  return findings;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1029,6 +1146,9 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL05(wikiRelPath, content, knownSlugs));
     allFindings.push(...checkL11(wikiRelPath, fm));
     allFindings.push(...await checkL12(wikiRelPath, fm, projectRoot));
+    allFindings.push(...checkL13(wikiRelPath, fm));
+    allFindings.push(...checkL14(wikiRelPath, fm));
+    allFindings.push(...checkL16(wikiRelPath, fm));
   }
 
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
@@ -1330,6 +1450,7 @@ export {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
+  checkL13, checkL14, checkL16,
   fixL01, fixL03, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
