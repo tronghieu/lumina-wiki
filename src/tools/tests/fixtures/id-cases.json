@@ -1,0 +1,76 @@
+{
+  "$comment": "Shared parity fixture for external-ids.mjs and id_utils.py. Schema below.",
+  "$schema": {
+    "normalize": "[{ kind, raw, expected: { id, valid, extras? } }]",
+    "parseUrl": "[{ url, expected: object }]",
+    "canonicalize": "[{ url, expected: string|null }]",
+    "matchKey": "[{ ids, expected: string|null }]",
+    "expand": "[{ ids, expected: object }]",
+    "safeIdToken": "[{ kind, val, valid: bool }]",
+    "sanitize": "[{ input, expectedKeys: [string] }]",
+    "redos": "[{ kind, raw, maxValidLen: int }]"
+  },
+  "normalize": [
+    { "kind": "doi", "raw": "10.1109/ABC.2020.123", "expected": { "id": "10.1109/abc.2020.123", "valid": true } },
+    { "kind": "doi", "raw": "https://doi.org/10.1109/ABC.2020.123", "expected": { "id": "10.1109/abc.2020.123", "valid": true } },
+    { "kind": "doi", "raw": "https://dx.doi.org/10.1109/ABC.2020.123", "expected": { "id": "10.1109/abc.2020.123", "valid": true } },
+    { "kind": "doi", "raw": "doi:10.1109/abc", "expected": { "id": "10.1109/abc", "valid": true } },
+    { "kind": "doi", "raw": "10.48550/arXiv.1706.03762", "expected": { "id": "10.48550/arxiv.1706.03762", "valid": true } },
+    { "kind": "doi", "raw": "not-a-doi", "expected": { "id": null, "valid": false } },
+    { "kind": "doi", "raw": "10.0000/../../etc/passwd", "expected": { "id": null, "valid": false } },
+    { "kind": "doi", "raw": "10.0000/foo/..bar", "expected": { "id": null, "valid": false } },
+    { "kind": "arxiv", "raw": "1706.03762", "expected": { "id": "1706.03762", "valid": true } },
+    { "kind": "arxiv", "raw": "1706.03762v3", "expected": { "id": "1706.03762", "valid": true, "extras": { "arxiv_version": 3 } } },
+    { "kind": "arxiv", "raw": "https://arxiv.org/abs/1706.03762", "expected": { "id": "1706.03762", "valid": true } },
+    { "kind": "arxiv", "raw": "https://arxiv.org/pdf/1706.03762.pdf", "expected": { "id": "1706.03762", "valid": true } },
+    { "kind": "arxiv", "raw": "arxiv:1706.03762v2", "expected": { "id": "1706.03762", "valid": true, "extras": { "arxiv_version": 2 } } },
+    { "kind": "arxiv", "raw": "math.GT/0309136", "expected": { "id": "math.GT/0309136", "valid": true } },
+    { "kind": "arxiv", "raw": "garbage", "expected": { "id": null, "valid": false } },
+    { "kind": "s2", "raw": "0123456789abcdef0123456789abcdef01234567", "expected": { "id": "0123456789abcdef0123456789abcdef01234567", "valid": true } },
+    { "kind": "s2", "raw": "0123456789ABCDEF0123456789abcdef01234567", "expected": { "id": "0123456789abcdef0123456789abcdef01234567", "valid": true } },
+    { "kind": "s2", "raw": "tooshort", "expected": { "id": null, "valid": false } },
+    { "kind": "url", "raw": "HTTP://Example.COM/path/?utm_source=x&q=1#frag", "expected": { "id": "https://example.com/path?q=1", "valid": true } },
+    { "kind": "url", "raw": "not a url", "expected": { "id": null, "valid": false } }
+  ],
+  "parseUrl": [
+    { "url": "https://doi.org/10.1109/ABC.2020.1", "expected": { "url": "https://doi.org/10.1109/ABC.2020.1", "doi": "10.1109/abc.2020.1" } },
+    { "url": "https://arxiv.org/abs/1706.03762", "expected": { "url": "https://arxiv.org/abs/1706.03762", "arxiv": "1706.03762" } },
+    { "url": "https://arxiv.org/pdf/1706.03762v3.pdf", "expected": { "url": "https://arxiv.org/pdf/1706.03762v3.pdf", "arxiv": "1706.03762" } },
+    { "url": "https://example.com/page", "expected": { "url": "https://example.com/page" } }
+  ],
+  "canonicalize": [
+    { "url": "HTTP://Example.COM/path/?utm_source=x&q=1#frag", "expected": "https://example.com/path?q=1" },
+    { "url": "https://example.com/", "expected": "https://example.com/" },
+    { "url": "ftp://example.com/", "expected": null }
+  ],
+  "matchKey": [
+    { "ids": { "doi": "10.x/y", "arxiv": "1706.03762" }, "expected": "doi:10.x/y" },
+    { "ids": { "arxiv": "1706.03762", "url": "https://x" }, "expected": "arxiv:1706.03762" },
+    { "ids": { "url": "https://x" }, "expected": "url:https://x" },
+    { "ids": {}, "expected": null }
+  ],
+  "expand": [
+    { "ids": { "arxiv": "1706.03762" }, "expected": { "arxiv": "1706.03762", "doi": "10.48550/arxiv.1706.03762" } },
+    { "ids": { "doi": "10.48550/arxiv.1706.03762" }, "expected": { "doi": "10.48550/arxiv.1706.03762", "arxiv": "1706.03762" } },
+    { "ids": { "doi": "10.1109/abc" }, "expected": { "doi": "10.1109/abc" } }
+  ],
+  "safeIdToken": [
+    { "kind": "doi", "val": "10.1109/abc", "valid": true },
+    { "kind": "doi", "val": "../../etc/passwd", "valid": false },
+    { "kind": "arxiv", "val": "1706.03762", "valid": true },
+    { "kind": "arxiv", "val": "1706.03762; rm -rf", "valid": false },
+    { "kind": "s2", "val": "0123456789abcdef0123456789abcdef01234567", "valid": true }
+  ],
+  "sanitize": [
+    { "input": { "doi": "10.x/y", "__proto__": { "x": 1 } }, "expectedKeys": ["doi"] },
+    { "input": { "doi": "10.x/y", "constructor": "polluted" }, "expectedKeys": ["doi"] },
+    { "input": { "doi": "10.x/y", "openalex": "W123" }, "expectedKeys": ["doi"] },
+    { "input": { "doi": "" }, "expectedKeys": [] },
+    { "input": null, "expectedKeys": [] }
+  ],
+  "redos": [
+    { "kind": "doi", "raw_template": "10.1109/", "pad_char": "a", "pad_count": 256, "tail": "X", "must_complete_under_ms": 50 },
+    { "kind": "arxiv", "raw_template": "", "pad_char": "9", "pad_count": 64, "tail": "", "must_complete_under_ms": 50 },
+    { "kind": "url", "raw_template": "https://example.com/", "pad_char": "a", "pad_count": 2000, "tail": "", "must_complete_under_ms": 50 }
+  ]
+}

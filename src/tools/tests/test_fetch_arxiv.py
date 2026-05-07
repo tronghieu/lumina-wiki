@@ -100,6 +100,21 @@ class TestSearchArxiv:
                          "primary_category", "categories", "url"}
         assert required_keys.issubset(set(results[0].keys()))
 
+    def test_search_emits_external_ids(self) -> None:
+        """fetch_arxiv emits validated external_ids alongside legacy fields."""
+        mock_resp = _make_mock_response(MOCK_ATOM_RESPONSE)
+        with patch("fetch_arxiv.requests.Session") as mock_session_cls:
+            mock_session = MagicMock()
+            mock_session.get.return_value = mock_resp
+            mock_session_cls.return_value = mock_session
+            results = fetch_arxiv.search_arxiv("test")
+
+        ext = results[0].get("external_ids")
+        assert isinstance(ext, dict)
+        # arxiv ID has version suffix in fixture; helper strips → bare id.
+        assert ext.get("arxiv") == "2301.00234"
+        assert ext.get("doi") == "10.48550/arxiv.2301.00234"
+
     def test_search_5xx_raises_value_error(self) -> None:
         """HTTP 5xx from arXiv raises ValueError."""
         mock_resp = _make_mock_response("", status_code=503)
