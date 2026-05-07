@@ -90,6 +90,15 @@ node _lumina/scripts/wiki.mjs set-meta sources/<slug> external_ids "$ids_json" -
 
 `parse-ids.mjs` returns `{}` (empty JSON) for non-URL inputs and exits 2 on missing argument; either skip or leave the field unset in those cases. `set-meta` runs `sanitizeExternalIdsObject` automatically — only the four allowed namespaces (`doi`/`arxiv`/`s2`/`url`) are persisted.
 
+Then record provenance for this fetch by appending one entry to `sources` (do this every time the page is (re-)drafted from a fetcher run):
+
+```bash
+entry=$(node _lumina/scripts/build-source.mjs <provider> "<canonical-url>")
+node _lumina/scripts/wiki.mjs set-meta sources/<slug> sources "[$entry]" --json-value
+```
+
+`<provider>` is the fetcher slug used in this run: `arxiv`, `s2`, `pdf`, `wikipedia`. Omit `<canonical-url>` if there isn't one (Mode A — local file). On re-ingest of an existing page, read existing `sources` first and append the new entry; do not replace.
+
 Required body sections: `## Summary` (2–4 sentences), `## Key Claims` (bulleted, with confidence), `## Concepts` (`[[concept-slug]]` links), `## People` (`[[person-slug]]` links), `## Open Questions`.
 
 Provenance rubric (raw-centric):

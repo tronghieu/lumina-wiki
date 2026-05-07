@@ -14,6 +14,7 @@ import {
   expandExternalIds,
   safeIdToken,
   sanitizeExternalIdsObject,
+  buildSourceEntry,
 } from './external-ids.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,35 @@ test('sanitize cases', () => {
     // Prototype pollution guard.
     assert.equal(Object.getPrototypeOf(out), null);
   }
+});
+
+test('buildSourceEntry: minimal valid', () => {
+  const e = buildSourceEntry('arxiv');
+  assert.equal(e.provider, 'arxiv');
+  assert.match(e.fetched_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.ok(!('url' in e));
+});
+
+test('buildSourceEntry: with url', () => {
+  const e = buildSourceEntry('s2', { url: 'https://api.semanticscholar.org/x' });
+  assert.equal(e.url, 'https://api.semanticscholar.org/x');
+});
+
+test('buildSourceEntry: respects fetched_at override', () => {
+  const e = buildSourceEntry('pdf', { fetched_at: '2026-01-01T00:00:00Z' });
+  assert.equal(e.fetched_at, '2026-01-01T00:00:00Z');
+});
+
+test('buildSourceEntry: rejects invalid provider', () => {
+  for (const bad of ['', 'BadCase', 'has space', '1leading', '../traverse', 'a'.repeat(33)]) {
+    assert.throws(() => buildSourceEntry(bad), `should reject "${bad}"`);
+  }
+});
+
+test('buildSourceEntry: drops oversize url silently', () => {
+  const huge = 'https://x.test/' + 'a'.repeat(3000);
+  const e = buildSourceEntry('pdf', { url: huge });
+  assert.ok(!('url' in e));
 });
 
 test('redos adversarial inputs complete under budget', () => {

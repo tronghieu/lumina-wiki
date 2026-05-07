@@ -81,6 +81,7 @@ describe('installCommand', () => {
       await access(join(workspace, '_lumina', 'scripts', 'external-ids.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'parse-ids.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'merge-ids.mjs'));
+      await access(join(workspace, '_lumina', 'scripts', 'build-source.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'lib', 'watchlist-config.mjs'));
       await access(join(workspace, '_lumina', 'config', 'watchlist.yml'));
       await access(join(workspace, 'AGENTS.md'));

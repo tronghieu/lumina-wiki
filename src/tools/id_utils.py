@@ -220,6 +220,26 @@ def build_external_ids(candidates: Any) -> dict:
     return out
 
 
+_PROVIDER_SLUG_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
+def build_source_entry(provider: str, url: str | None = None, fetched_at: str | None = None) -> dict:
+    """Build one provenance entry for the `sources` frontmatter array.
+
+    Mirror of `buildSourceEntry` in external-ids.mjs. Pure helper; caller is
+    responsible for appending into the existing array.
+    """
+    if not isinstance(provider, str) or not _PROVIDER_SLUG_RE.match(provider):
+        raise ValueError(f"build_source_entry: invalid provider: {provider!r}")
+    if not isinstance(fetched_at, str) or not fetched_at:
+        from datetime import datetime, timezone
+        fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    entry: dict = {"provider": provider, "fetched_at": fetched_at}
+    if isinstance(url, str) and url and len(url) <= _MAX_URL_LEN:
+        entry["url"] = url
+    return entry
+
+
 def sanitize_external_ids_object(obj: Any) -> dict:
     """Allowlist filter; rejects __proto__/constructor/etc."""
     out: dict = {}

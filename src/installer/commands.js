@@ -770,7 +770,7 @@ function buildIdeStub(target, vars) {
 
 async function copyScripts(projectRoot) {
   const destDir = join(projectRoot, '_lumina', 'scripts');
-  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs'];
+  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs', 'build-source.mjs'];
   for (const file of scriptFiles) {
     const src = join(SCRIPTS_DIR, file);
     const dest = join(destDir, file);

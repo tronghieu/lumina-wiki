@@ -6,12 +6,13 @@
  */
 
 import { URL } from 'node:url';
+import { EXTERNAL_ID_NAMESPACES } from './schemas.mjs';
 
 export const CANONICAL_URL_V = 1;
-// Single source of truth for namespace registry.
+// Re-exported for back-compat with consumers that import from this module.
+// Source of truth lives in schemas.mjs (pure data, no I/O).
 // Documented in docs/project-context.md §"external_ids namespace registry".
-// Adding a namespace here without updating docs/project-context.md is a bug.
-export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url']);
+export { EXTERNAL_ID_NAMESPACES };
 
 const NS_SET = new Set(EXTERNAL_ID_NAMESPACES);
 const MAX_URL_LEN = 2048;
@@ -167,6 +168,32 @@ export function safeIdToken(kind, val) {
   const r = normalizeExternalId(kind, val);
   if (!r.valid || r.id !== val) throw new RangeError(`safeIdToken: not a valid ${kind}`);
   return val;
+}
+
+// Provider slug for `sources` array entries. Kebab/snake lowercase, ≤32 chars.
+const PROVIDER_SLUG_RE = /^[a-z][a-z0-9_-]{0,31}$/;
+
+/**
+ * Build one provenance entry for the `sources` frontmatter array.
+ * Caller appends into existing array — this helper is pure (no I/O).
+ *
+ * @param {string} provider - Fetcher slug (e.g. 'arxiv', 's2', 'pdf', 'wikipedia').
+ * @param {{url?: string, fetched_at?: string}} [opts]
+ * @returns {{provider: string, fetched_at: string, url?: string}}
+ */
+export function buildSourceEntry(provider, opts = {}) {
+  if (typeof provider !== 'string' || !PROVIDER_SLUG_RE.test(provider)) {
+    throw new RangeError(`buildSourceEntry: invalid provider: ${provider}`);
+  }
+  let fetched_at = opts.fetched_at;
+  if (typeof fetched_at !== 'string' || !fetched_at) {
+    fetched_at = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }
+  const entry = { provider, fetched_at };
+  if (typeof opts.url === 'string' && opts.url && opts.url.length <= MAX_URL_LEN) {
+    entry.url = opts.url;
+  }
+  return entry;
 }
 
 /** Allowlist filter; rejects __proto__/constructor/etc. Returns Object.create(null). */

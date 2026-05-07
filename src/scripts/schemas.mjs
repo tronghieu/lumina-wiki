@@ -7,7 +7,15 @@
  * Schema version: 0.1.0
  */
 
-export { EXTERNAL_ID_NAMESPACES } from './external-ids.mjs';
+// ---------------------------------------------------------------------------
+// EXTERNAL_ID_NAMESPACES
+// Locked namespace list for the `external_ids` frontmatter map on Source pages.
+// `url` is a post-spec extension (legacy from arxiv-only era; kept for back-compat).
+// `openalex`/`isbn`/`s2_corpus` reserved — add when producer/consumer ship together.
+// ---------------------------------------------------------------------------
+
+/** @type {readonly string[]} */
+export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url']);
 
 // ---------------------------------------------------------------------------
 // SCHEMA_VERSION
@@ -268,6 +276,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'verify_status', type: 'enum', required: false, values: ['passed', 'findings_pending', 'drift_detected', 'skipped', 'not_applicable'] },
     { key: 'findings',     type: 'array', required: false },
     { key: 'external_ids', type: 'object', required: false },
+    { key: 'sources',      type: 'array',  required: false },
   ],
 
   // Concept page

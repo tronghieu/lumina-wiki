@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -79,6 +80,40 @@ def test_safe_id_token(case):
 def test_sanitize(case):
     out = sanitize_external_ids_object(case["input"])
     assert sorted(out.keys()) == sorted(case["expectedKeys"]), case
+
+
+def test_build_source_entry_minimal():
+    from id_utils import build_source_entry
+    e = build_source_entry("arxiv")
+    assert e["provider"] == "arxiv"
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", e["fetched_at"])
+    assert "url" not in e
+
+
+def test_build_source_entry_with_url():
+    from id_utils import build_source_entry
+    e = build_source_entry("s2", url="https://api.semanticscholar.org/x")
+    assert e["url"] == "https://api.semanticscholar.org/x"
+
+
+def test_build_source_entry_override_fetched_at():
+    from id_utils import build_source_entry
+    e = build_source_entry("pdf", fetched_at="2026-01-01T00:00:00Z")
+    assert e["fetched_at"] == "2026-01-01T00:00:00Z"
+
+
+@pytest.mark.parametrize("bad", ["", "BadCase", "has space", "1leading", "../traverse", "a" * 33])
+def test_build_source_entry_rejects_invalid_provider(bad):
+    from id_utils import build_source_entry
+    with pytest.raises(ValueError):
+        build_source_entry(bad)
+
+
+def test_build_source_entry_drops_oversize_url():
+    from id_utils import build_source_entry
+    huge = "https://x.test/" + "a" * 3000
+    e = build_source_entry("pdf", url=huge)
+    assert "url" not in e
 
 
 @pytest.mark.parametrize("case", FIXTURE["redos"])
