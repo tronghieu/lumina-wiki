@@ -649,6 +649,9 @@ async function setMeta(projectRoot, slug, key, value) {
   const { frontmatter, body, hasFrontmatter } = parseFrontmatter(content);
   // external_ids is the only object-typed frontmatter today; sanitize untrusted
   // input (CLI / JSON.parse / fetcher output) against the namespace allowlist.
+  // Note: `sources` array entries are validated at write time by buildSourceEntry
+  // / build_source_entry (provider slug, URL parse, length bounds), so no
+  // sanitization gate is needed here. Other typed fields are checked by lint.
   if (key === 'external_ids') {
     frontmatter[key] = sanitizeExternalIdsObject(value);
   } else {

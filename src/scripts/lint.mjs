@@ -71,7 +71,9 @@ import {
 const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
-/** All check IDs in run order. */
+/** All check IDs in run order.
+ *  L15 is intentionally absent — collision check was deferred as premature
+ *  for typical wiki size. Adding L15 later is the natural next slot. */
 const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16'];
 
 /**
