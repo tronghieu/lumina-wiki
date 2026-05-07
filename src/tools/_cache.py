@@ -54,6 +54,7 @@ import requests
 DEFAULT_TTL_SECONDS = 86400  # 24 hours
 MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MiB
 CACHE_DIR_NAME = "http-cache"
+CACHE_SCHEMA_VERSION = 1  # bump when entry shape changes; mismatched entries are treated as misses
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +156,10 @@ def _build_response(entry: dict[str, Any], url: str) -> requests.Response:
     if content_type:
         resp.headers["Content-Type"] = content_type
     resp.headers["X-Lumina-Cache"] = "HIT"
-    resp.encoding = entry.get("encoding") or "utf-8"
+    # Body was normalized to UTF-8 at write time (see _write_entry), so the
+    # response's text encoding must also be UTF-8 — using the original
+    # server-declared encoding (e.g. iso-8859-1) here would mojibake .text.
+    resp.encoding = "utf-8"
     return resp
 
 
@@ -201,7 +205,7 @@ class CachedSession:
 
         if not self._lumina_disabled and path.is_file():
             entry = self._read_entry(path)
-            if entry and self._is_fresh(entry):
+            if entry and entry.get("v") == CACHE_SCHEMA_VERSION and self._is_fresh(entry):
                 return _build_response(entry, canonical)
 
         resp = self._inner.get(url, **kwargs)
@@ -249,6 +253,7 @@ class CachedSession:
         except (UnicodeDecodeError, LookupError):
             return  # not text-decodable; skip cache silently
         entry = {
+            "v": CACHE_SCHEMA_VERSION,
             "fetched_at": time.time(),
             "status": resp.status_code,
             "content_type": resp.headers.get("Content-Type"),

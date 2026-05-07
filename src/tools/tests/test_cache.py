@@ -395,3 +395,62 @@ def test_list_of_tuples_params_bypasses_cache(tmp_project: Path, monkeypatch):
         sess.get("https://api.example.com/x", params=[("a", "1"), ("a", "2")])
     assert len(log) == 2, "list-of-tuples params must bypass cache entirely"
     assert not any(sess._lumina_cache_root.glob("*.json")), "no entries should be written for list params"
+
+
+def test_non_utf8_response_text_round_trips_correctly(tmp_project: Path, monkeypatch):
+    """A non-UTF-8 response (e.g. iso-8859-1) must round-trip through the cache without mojibake.
+
+    Regression: previously _build_response set resp.encoding to the original
+    server encoding while body bytes had been re-encoded as UTF-8, causing
+    .text to mojibake (e.g. 'café' → 'cafÃ©').
+    """
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.delenv("LUMINA_NO_CACHE", raising=False)
+    sess = wrap_session(requests.Session(), namespace="test")
+    log: list = []
+    # 'café' encoded as iso-8859-1: c-a-f-\xe9
+    fake = _FakeResponse(
+        body=b"caf\xe9",
+        content_type="text/html; charset=iso-8859-1",
+    )
+    fake.encoding = "iso-8859-1"
+    with _stub_get(sess, fake, log):
+        r1 = sess.get("https://api.example.com/page")
+        r2 = sess.get("https://api.example.com/page")
+    assert len(log) == 1
+    assert r1.text == "café"
+    assert r2.text == "café", "cached response must decode identically — no mojibake"
+    assert r2.headers.get("X-Lumina-Cache") == "HIT"
+
+
+def test_schema_version_mismatch_treated_as_miss(tmp_project: Path, monkeypatch):
+    """Cache entries without the current schema version must be treated as a miss."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.delenv("LUMINA_NO_CACHE", raising=False)
+    sess = wrap_session(requests.Session(), namespace="test")
+    log: list = []
+    fake = _FakeResponse()
+    with _stub_get(sess, fake, log):
+        sess.get("https://api.example.com/x")
+        # Mutate the persisted entry to simulate a future / legacy schema.
+        for entry_path in sess._lumina_cache_root.glob("*.json"):
+            data = json.loads(entry_path.read_text())
+            data["v"] = 999
+            entry_path.write_text(json.dumps(data))
+        sess.get("https://api.example.com/x")
+    assert len(log) == 2, "stale-schema entry must refetch instead of mis-reading"
+
+
+def test_cache_entry_includes_schema_version(tmp_project: Path, monkeypatch):
+    """Newly written cache entries must include the schema version field."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.delenv("LUMINA_NO_CACHE", raising=False)
+    sess = wrap_session(requests.Session(), namespace="test")
+    log: list = []
+    fake = _FakeResponse()
+    with _stub_get(sess, fake, log):
+        sess.get("https://api.example.com/x")
+    entries = list(sess._lumina_cache_root.glob("*.json"))
+    assert len(entries) == 1
+    data = json.loads(entries[0].read_text())
+    assert data.get("v") == 1
