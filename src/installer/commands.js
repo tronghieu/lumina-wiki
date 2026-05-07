@@ -819,11 +819,13 @@ async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrad
   let templateContent;
   try {
     templateContent = await readFile(templatePath, 'utf8');
-  } catch (_) {
-    // Locale-specific template not found; fall back to EN template.
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    // Locale-specific template not present; fall back to EN template.
     try {
       templateContent = await readFile(fallbackTemplatePath, 'utf8');
-    } catch (_2) {
+    } catch (err2) {
+      if (err2.code !== 'ENOENT') throw err2;
       templateContent = defaultReadmeTemplate(templateVars);
     }
   }

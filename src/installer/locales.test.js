@@ -115,10 +115,6 @@ test('parity: zh exports same key set as en', async () => {
 });
 
 test('parity: each key has matching {var} placeholders across locales', async () => {
-  const en = await loadLocale('en');
-  const vi = await loadLocale('vi');
-  const zh = await loadLocale('zh');
-  void en; void vi; void zh;
   // Direct read via dynamic import for raw template comparison
   const enMod = (await import('./locales/en.mjs')).default;
   const viMod = (await import('./locales/vi.mjs')).default;
