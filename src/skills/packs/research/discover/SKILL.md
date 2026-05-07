@@ -38,11 +38,15 @@ References:
    node _lumina/scripts/wiki.mjs list-entities
    ```
 
-   For each entity with `type: "sources"`, `Read` the `filePath` and extract any
-   arXiv ID or Semantic Scholar paperId from frontmatter or body URLs. Patterns
-   to scan: `arxiv.org/abs/<id>`, `arXiv:<id>`, `semanticscholar.org/paper/<id>`.
-   Pass the deduped list to `init_discovery.py --exclude-ids id1,id2,...`. If
-   no sources exist yet, skip this step (omit the flag).
+   For each entity with `type: "sources"`, run `node _lumina/scripts/wiki.mjs
+   read-meta <slug>` and collect every value in the `external_ids` object
+   (`doi`, `arxiv`, `s2`, `url`). For sources without `external_ids` populated,
+   fall back to scanning body URLs (`arxiv.org/abs/<id>`,
+   `semanticscholar.org/paper/<id>`). Pass the deduped values to
+   `init_discovery.py --exclude-keys "<csv>"`. The flag matches against the
+   candidate's expanded external_ids set, so a DOI of the form
+   `10.48550/arXiv.<id>` excludes its arxiv form too. If no sources exist yet,
+   skip this step.
 3. Check research tool setup:
 
 ```bash
@@ -93,7 +97,7 @@ python3 _lumina/tools/discover.py --help
 - Do not mutate `wiki/`.
 - Do not invent source metadata not returned by a fetcher or supplied by the user.
 - Do not invent tool flags. Use only `--topic`, `--project-root`, `--phases`,
-  `--resume`, `--fetchers`, `--limit`, and `--exclude-ids` for
+  `--resume`, `--fetchers`, `--limit`, and `--exclude-keys` for
   `init_discovery.py`.
 - Do not include any non-FR35 workflows such as ideation, LaTeX writing, or
   orchestrator mode.

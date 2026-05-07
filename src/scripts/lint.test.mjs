@@ -23,6 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
+  checkL13, checkL14, checkL16,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
@@ -129,6 +130,29 @@ describe('parseFrontmatter', () => {
 
   test('returns null for malformed opening', () => {
     assert.equal(parseFrontmatter('---extra\ntitle: x\n---\n'), null);
+  });
+
+  test('parses block-mapping object (matches wiki.mjs stringify form)', () => {
+    const content = `---\ntitle: x\nexternal_ids:\n  arxiv: 1706.03762\n  doi: 10.48550/arxiv.1706.03762\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.ok(result);
+    assert.deepEqual(result.data.external_ids, {
+      arxiv: '1706.03762',
+      doi: '10.48550/arxiv.1706.03762',
+    });
+  });
+
+  test('block-mapping with quoted value strips quotes', () => {
+    const content = `---\nexternal_ids:\n  url: "https://example.com/x"\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.equal(result.data.external_ids.url, 'https://example.com/x');
+  });
+
+  test('empty key with no follow-up is null', () => {
+    const content = `---\nfoo:\nbar: 1\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.equal(result.data.foo, null);
+    assert.equal(result.data.bar, 1);
   });
 });
 
@@ -604,6 +628,46 @@ describe('runLint clean tree', () => {
     const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
     const errors = findings.filter(f => f.severity === 'error');
     assert.equal(errors.length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint with block-mapped external_ids
+// (regression — parseFrontmatter must not drop indented sub-keys)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint block-mapped external_ids', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('L14 fires on invalid DOI in block-mapped external_ids', async () => {
+    await makeWiki(tmpDir);
+    const fm = renderFm({ ...validSourceFm(), urls: ['https://doi.org/10.1109/abc'] });
+    // Inject block-mapped external_ids into the rendered FM (renderFm helper
+    // does not handle objects). Mirrors what wiki.mjs stringifyFrontmatter writes.
+    const withExt = fm.replace(/---\n$/, 'external_ids:\n  doi: not-a-doi\n---\n');
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'bad-doi.md'), withExt + '\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/bad-doi]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l14 = findings.filter(f => f.id === 'L14-external-ids-invalid');
+    assert.ok(l14.length >= 1, `expected L14 finding, got: ${JSON.stringify(findings.map(f => f.id))}`);
+  });
+
+  test('L13 does not false-positive when block-mapped external_ids covers urls[]', async () => {
+    await makeWiki(tmpDir);
+    const fm = renderFm({ ...validSourceFm(), urls: ['https://arxiv.org/abs/1706.03762'] });
+    const withExt = fm.replace(/---\n$/,
+      'external_ids:\n  arxiv: 1706.03762\n  doi: 10.48550/arxiv.1706.03762\n---\n');
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'arxiv-paper.md'), withExt + '\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/arxiv-paper]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l13 = findings.filter(f => f.id === 'L13-external-ids-coverage');
+    assert.equal(l13.length, 0, `unexpected L13 false-positive: ${JSON.stringify(l13)}`);
   });
 });
 
@@ -1447,5 +1511,82 @@ describe('--summary integration round-trip', () => {
       assert.ok('severity' in f, 'verbose finding must have severity field');
       assert.ok('message' in f, 'verbose finding must have message field');
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L13/L14/L16: external_ids checks
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L13 external-ids-coverage', () => {
+  test('arxiv URL but missing external_ids → 1 warning with remediation hint', () => {
+    const fm = validSourceFm({ urls: ['https://arxiv.org/abs/1706.03762'], external_ids: {} });
+    const r = checkL13('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L13-external-ids-coverage');
+    assert.equal(r[0].severity, 'warning');
+    assert.match(r[0].message, /\/lumi-migrate-legacy --backfill-ids/);
+  });
+
+  test('github URL → no L13 (only url namespace derived)', () => {
+    const fm = validSourceFm({ urls: ['https://github.com/foo/bar'], external_ids: {} });
+    assert.deepEqual(checkL13('sources/x.md', fm), []);
+  });
+
+  test('arxiv URL with matching external_ids.arxiv → no L13', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL13('sources/x.md', fm), []);
+  });
+});
+
+describe('L14 external-ids-invalid', () => {
+  test('invalid DOI → 1 error', () => {
+    const fm = validSourceFm({ external_ids: { doi: 'not-a-doi' } });
+    const r = checkL14('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L14-external-ids-invalid');
+    assert.equal(r[0].severity, 'error');
+  });
+
+  test('valid DOI + valid arxiv → no L14', () => {
+    const fm = validSourceFm({
+      external_ids: { doi: '10.1109/abc', arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL14('sources/x.md', fm), []);
+  });
+
+  test('non-source page → no L14', () => {
+    assert.deepEqual(checkL14('concepts/x.md', { external_ids: { doi: 'bad' } }), []);
+  });
+});
+
+describe('L16 external-ids-mismatch', () => {
+  test('urls[arxiv] disagrees with external_ids.arxiv → 1 warning', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '9999.99999' },
+    });
+    const r = checkL16('sources/x.md', fm);
+    assert.equal(r.length, 1);
+    assert.equal(r[0].id, 'L16-external-ids-mismatch');
+  });
+
+  test('urls[arxiv] matches external_ids.arxiv → no L16', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: '1706.03762' },
+    });
+    assert.deepEqual(checkL16('sources/x.md', fm), []);
+  });
+
+  test('invalid external_ids.arxiv suppresses L16 (L14 owns it)', () => {
+    const fm = validSourceFm({
+      urls: ['https://arxiv.org/abs/1706.03762'],
+      external_ids: { arxiv: 'garbage' },
+    });
+    assert.deepEqual(checkL16('sources/x.md', fm), []);
   });
 });

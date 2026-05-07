@@ -245,6 +245,70 @@ class TestPhase1KeywordSearch:
         written = sorted(p.name for p in (discovered_dir / slug).glob("*.json"))
         assert written == ["p1.json", "p3.json"]
 
+    def test_phase1_cross_namespace_dedup(self, tmp_path: Path) -> None:
+        """Candidate with arxiv ID is filtered when its DOI form is in exclude_keys."""
+        discovered_dir = tmp_path / "raw" / "discovered"
+        discovered_dir.mkdir(parents=True)
+        env = {}
+
+        mock_papers = [
+            {"id": "1706.03762", "title": "Attention", "authors": [], "year": 2017},
+        ]
+        with patch("init_discovery._arxiv_search", return_value=mock_papers):
+            results = phase1_keyword_search(
+                "topic", "x", discovered_dir, ["arxiv"], 10, env,
+                {"10.48550/arxiv.1706.03762"},
+            )
+        assert results == []
+
+    def test_phase1_invalid_external_id_dropped(self, tmp_path: Path, capsys) -> None:
+        """Invalid externalIds.DOI value is dropped with stderr warning."""
+        discovered_dir = tmp_path / "raw" / "discovered"
+        discovered_dir.mkdir(parents=True)
+        env = {}
+
+        mock_papers = [
+            {
+                "paperId": "0123456789abcdef0123456789abcdef01234567",
+                "externalIds": {"DOI": "<>not-a-doi"},
+                "title": "Bad",
+                "authors": [],
+            },
+        ]
+        with patch("init_discovery._arxiv_search", return_value=mock_papers):
+            results = phase1_keyword_search(
+                "topic", "y", discovered_dir, ["arxiv"], 10, env, set(),
+            )
+        assert len(results) == 1
+        # File written, but external_ids must NOT contain the invalid DOI.
+        files = list((discovered_dir / "y").glob("*.json"))
+        assert len(files) == 1
+        data = json.loads(files[0].read_text())
+        assert "doi" not in data.get("external_ids", {})
+        assert "[warn] dropped invalid external_id" in capsys.readouterr().err
+
+    def test_phase1_s2_null_externalids_no_crash(self, tmp_path: Path) -> None:
+        """S2 paper with externalIds: null still produces external_ids output."""
+        discovered_dir = tmp_path / "raw" / "discovered"
+        discovered_dir.mkdir(parents=True)
+        env = {}
+
+        mock_papers = [
+            {
+                "paperId": "0123456789abcdef0123456789abcdef01234567",
+                "externalIds": None,
+                "title": "S2 null",
+                "authors": [],
+            },
+        ]
+        with patch("init_discovery._arxiv_search", return_value=mock_papers):
+            results = phase1_keyword_search(
+                "topic", "z", discovered_dir, ["arxiv"], 10, env, set(),
+            )
+        assert len(results) == 1
+        data = json.loads(next((discovered_dir / "z").glob("*.json")).read_text())
+        assert data["external_ids"]["s2"] == "0123456789abcdef0123456789abcdef01234567"
+
     def test_phase1_empty_exclude_ids_no_op(self, tmp_path: Path) -> None:
         """Empty exclude_ids set behaves identically to baseline."""
         discovered_dir = tmp_path / "raw" / "discovered"

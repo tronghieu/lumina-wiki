@@ -195,9 +195,14 @@ If a checkpoint exists with a `source_path` field:
 
 - Slug-prefix match: `raw/sources/<slug>*`, `raw/notes/<slug>*`, or
   `raw/download/<resource>/<slug>*`
-- URL-derived ID match: extract arxiv ID, DOI, or URL basename from the page's
-  `urls` array (or legacy `url` string for backward compat); scan `raw/sources/`,
-  `raw/notes/`, `raw/download/**` for filenames containing that ID.
+- URL-derived ID match: parse the page's `urls` array via
+  `node _lumina/scripts/parse-ids.mjs "<url>"` (one URL per call). For each
+  validated value in the JSON output (e.g. `arxiv`, `doi`, `s2`), use that
+  literal string as the ID token to scan `raw/sources/`, `raw/notes/`, and
+  `raw/download/**` for filenames containing it. **Do not** interpolate a raw
+  URL or path-traversal-shaped value into a glob — `parse-ids.mjs` already
+  rejected non-URL inputs and `wiki.mjs` re-validates via `safeIdToken` before
+  any path concatenation. (Legacy `url` string still supported for back-compat.)
 - Research-pack flow: also scan `raw/discovered/<topic>/<id>.json` for a JSON
   whose `id` or `url` matches any entry in the page's `urls` array.
 
@@ -312,6 +317,18 @@ If `set-meta --remove` is not supported by the installed wiki.mjs version, use `
 remove the `url:` line directly after confirming `urls:` was written successfully.
 
 After backfilling all entries, proceed immediately to Phase 4.
+
+### Phase 3.5 — `--backfill-ids` (opt-in)
+
+If the user invoked the skill with `--backfill-ids`, run the
+`external_ids` backfill recipe documented in
+`references/backfill-ids.md`. It is non-destructive (existing keys win) and
+idempotent (no diff on second run). Mismatches between URL-derived values
+and stored `external_ids` are intentionally left unchanged — lint check
+**L16** surfaces them on the next `/lumi-check`. There is no `--dry-run`;
+inspect the merge with `git diff wiki/sources/`.
+
+Skip this phase entirely if `--backfill-ids` was NOT passed.
 
 ### Phase 4 — Verify
 

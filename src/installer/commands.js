@@ -939,7 +939,7 @@ function buildIdeStub(target, vars) {
 
 async function copyScripts(projectRoot) {
   const destDir = join(projectRoot, '_lumina', 'scripts');
-  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs'];
+  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs', 'build-source.mjs'];
   for (const file of scriptFiles) {
     const src = join(SCRIPTS_DIR, file);
     const dest = join(destDir, file);
@@ -1062,7 +1062,7 @@ function getSkillDefs(packs) {
 
 async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
-  const coreTools = ['extract_pdf.py', 'fetch_pdf.py'];
+  const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
   const researchTools = [
     '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
