@@ -19,7 +19,7 @@ import { atomicWrite, ensureDir } from './fs.js';
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MANIFEST_SCHEMA_VERSION = 3;
+export const MANIFEST_SCHEMA_VERSION = 4;
 
 export const SKILLS_CSV_HEADER = 'canonical_id,display_name,pack,source,relative_path,target_link_path,version';
 export const FILES_CSV_HEADER = 'relative_path,sha256,source_pack,installed_version';
@@ -38,6 +38,7 @@ export const FILES_CSV_HEADER = 'relative_path,sha256,source_pack,installed_vers
  * @typedef {Object} LuminaManifest
  * @property {number} schemaVersion
  * @property {string} packageVersion
+ * @property {string} locale         — UI locale: 'en' | 'vi' | 'zh' (non-optional post-v4)
  * @property {string} installedAt
  * @property {string} updatedAt
  * @property {Record<string, PackEntry>} packs
@@ -298,6 +299,9 @@ const MIGRATIONS = {
   // backward-compatible at the manifest level. Wiki content migration is handled
   // by /lumi-migrate-legacy, not by the installer. No manifest shape change.
   '2->3': (m) => ({ ...m }),
+  // 3->4 (v1.x): multilingual installer. Adds top-level `locale` field.
+  // Default 'en' for legacy installs. Source of truth for installer UI language.
+  '3->4': (m) => ({ ...m, locale: m.locale ?? 'en' }),
 };
 
 /**

@@ -11,7 +11,7 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { installCommand, printPostUpgradeBanner } from './commands.js';
+import { installCommand, printPostUpgradeBanner, applyInstallOverrides, validateLanguageInput } from './commands.js';
 import { writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
@@ -332,6 +332,193 @@ describe('installCommand', () => {
 
       const after = await readFile(join(tmp, '_lumina', 'config', 'watchlist.yml'), 'utf8');
       assert.equal(after, customWatchlist);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+
+describe("applyInstallOverrides — locale + language validation", () => {
+  const base = { packs: ["core"], ideTargets: ["claude_code"], communicationLang: "English", documentOutputLang: "English" };
+
+  test("--lang vi sets locale", () => {
+    const r = applyInstallOverrides({ ...base }, { lang: "vi" });
+    assert.equal(r.locale, "vi");
+  });
+
+  test("--lang fr throws code 2 with UNKNOWN_LOCALE", () => {
+    assert.throws(() => applyInstallOverrides({ ...base }, { lang: "fr" }), (err) => {
+      assert.equal(err.code, 2);
+      assert.match(err.message, /UNKNOWN_LOCALE/);
+      return true;
+    });
+  });
+
+  test("--lang EN normalizes case-insensitive", () => {
+    const r = applyInstallOverrides({ ...base }, { lang: "EN" });
+    assert.equal(r.locale, "en");
+  });
+
+  test("no --lang, no existing locale → defaults en", () => {
+    const r = applyInstallOverrides({ ...base }, {});
+    assert.equal(r.locale, "en");
+  });
+
+  test("no --lang, existing answers.locale=zh preserved", () => {
+    const r = applyInstallOverrides({ ...base, locale: "zh" }, {});
+    assert.equal(r.locale, "zh");
+  });
+
+  test("--communication-language empty after trim throws code 2", () => {
+    assert.throws(() => applyInstallOverrides({ ...base }, { communicationLang: "  " }), (err) => {
+      assert.equal(err.code, 2);
+      return true;
+    });
+  });
+
+  test("--communication-language template-injection rejected", () => {
+    assert.throws(() => applyInstallOverrides({ ...base }, { communicationLang: "Vietnamese{{evil}}" }), (err) => {
+      assert.equal(err.code, 2);
+      return true;
+    });
+  });
+
+  test("--communication-language trims whitespace", () => {
+    const r = applyInstallOverrides({ ...base }, { communicationLang: " Vietnamese " });
+    assert.equal(r.communicationLang, "Vietnamese");
+  });
+
+  test("validateLanguageInput rejects empty", () => {
+    assert.throws(() => validateLanguageInput("", "x"), (err) => err.code === 2);
+  });
+});
+
+
+
+describe("installCommand — locale-switch protection", () => {
+  test("upgrade with locale mismatch refused without --force-locale-switch (headless)", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      // First install: vi
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "vi" });
+      // Second install: en, no --force-locale-switch → refused
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "en" }),
+        (err) => {
+          assert.equal(err.code, 2);
+          assert.match(err.message, /LOCALE_SWITCH_REFUSED/);
+          return true;
+        },
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test("upgrade with locale mismatch + --force-locale-switch succeeds", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "vi" });
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "en", forceLocaleSwitch: true });
+      const mf = JSON.parse(await readFile(join(tmp, "_lumina", "manifest.json"), "utf8"));
+      assert.equal(mf.locale, "en");
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test("config drift trips gate even without --lang flag", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      // Install vi
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "vi" });
+      // Hand-edit config to claim zh
+      const configPath = join(tmp, "_lumina", "config", "lumina.config.yaml");
+      let raw = await readFile(configPath, "utf8");
+      raw = raw.replace(/locale: vi/, "locale: zh");
+      await writeFile(configPath, raw, "utf8");
+      // BUT manifest still says vi → manifest wins per Plan §6, no drift detected.
+      // Re-install with no --lang should succeed (manifest stays authoritative).
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      const mf = JSON.parse(await readFile(join(tmp, "_lumina", "manifest.json"), "utf8"));
+      assert.equal(mf.locale, "vi", "manifest should remain vi (source of truth)");
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test("legacy v3 manifest (no locale) treated as en for switch gate", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      // Install fresh
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "en" });
+      // Mutate manifest to look like v3 (drop locale field, downgrade schemaVersion)
+      const mfPath = join(tmp, "_lumina", "manifest.json");
+      const mf = JSON.parse(await readFile(mfPath, "utf8"));
+      delete mf.locale;
+      mf.schemaVersion = 3;
+      await writeFile(mfPath, JSON.stringify(mf, null, 2) + "\n", "utf8");
+      // Upgrade with --lang vi (different from migrated 'en') → refused
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "vi" }),
+        (err) => err.code === 2 && /LOCALE_SWITCH_REFUSED/.test(err.message),
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test("readAnswersFromConfig rejects invalid config.locale", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "en" });
+      const configPath = join(tmp, "_lumina", "config", "lumina.config.yaml");
+      let raw = await readFile(configPath, "utf8");
+      raw = raw.replace(/locale: en/, "locale: ../etc/passwd");
+      await writeFile(configPath, raw, "utf8");
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true }),
+        (err) => err.code === 2 && /INVALID_CONFIG_LOCALE/.test(err.message),
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+
+describe("installCommand — additional defensive tests", () => {
+  test("custom communicationLang survives subsequent --lang switch (cascade does not clobber)", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp, yes: true, noUpdate: true, lang: "en",
+        communicationLang: "Klingon",
+      });
+      // Switch to vi with --force-locale-switch; no new comm-lang flag → should keep Klingon
+      await installCommand({
+        cwd: tmp, yes: true, noUpdate: true, lang: "vi",
+        forceLocaleSwitch: true,
+      });
+      const config = await readFile(join(tmp, "_lumina", "config", "lumina.config.yaml"), "utf8");
+      assert.match(config, /communication_language: Klingon/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test("malformed config YAML throws CONFIG_READ_FAILED", async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true, lang: "en" });
+      const configPath = join(tmp, "_lumina", "config", "lumina.config.yaml");
+      // Corrupt YAML: unmatched bracket
+      await writeFile(configPath, "project_name: [\n  broken\n", "utf8");
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true }),
+        (err) => err.code === 2 && /CONFIG_READ_FAILED/.test(err.message),
+      );
     } finally {
       await cleanTmp(tmp);
     }

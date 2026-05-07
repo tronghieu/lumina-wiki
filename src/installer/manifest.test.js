@@ -411,6 +411,37 @@ describe('migrateManifest', () => {
     assert.equal(result.schemaVersion, 3);
   });
 
+  test('3->4 migration adds locale=en when missing', () => {
+    const manifest = {
+      schemaVersion: 3,
+      packageVersion: '1.1.0',
+      packs: { core: { version: '1.1.0', source: 'built-in' } },
+    };
+    const result = migrateManifest(manifest, 4);
+    assert.equal(result.schemaVersion, 4);
+    assert.equal(result.locale, 'en');
+    assert.equal(result.packageVersion, '1.1.0');
+  });
+
+  test('3->4 migration preserves explicit locale', () => {
+    const manifest = {
+      schemaVersion: 3,
+      packageVersion: '1.1.0',
+      locale: 'vi',
+    };
+    const result = migrateManifest(manifest, 4);
+    assert.equal(result.schemaVersion, 4);
+    assert.equal(result.locale, 'vi');
+  });
+
+  test('downgrade from v5 to v4 throws code 3', () => {
+    const manifest = { schemaVersion: 5, locale: 'en' };
+    assert.throws(() => migrateManifest(manifest, 4), (err) => {
+      assert.equal(err.code, 3);
+      return true;
+    });
+  });
+
   test('chains 1->2->3: all migrations applied, all original fields preserved', () => {
     const manifest = {
       schemaVersion: 1,

@@ -54,6 +54,9 @@ jobs:
       - name: Install idempotency
         run: npm run ci:idempotency
 
+      - name: Cold-start budget
+        run: npm run ci:cold-start
+
       - name: Package readiness
         run: npm run ci:package
 
