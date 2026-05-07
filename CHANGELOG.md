@@ -3,6 +3,50 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## Unreleased
+
+### Added
+
+- Source pages gain an optional `external_ids` frontmatter object holding
+  validated cross-source identifiers across four namespaces: `doi`, `arxiv`,
+  `s2`, and `url` (canonical form). The namespace registry is locked to
+  these four — `openalex`, `isbn`, and `s2_corpus` are reserved but not yet
+  implemented.
+- New module `_lumina/scripts/external-ids.mjs` and its Python mirror
+  `_lumina/tools/id_utils.py` provide pure helpers (`normalizeExternalId`,
+  `parseUrlToExternalIds`, `canonicalizeUrl`, `externalIdMatchKey`,
+  `expandExternalIds`, `safeIdToken`, `sanitizeExternalIdsObject`). Parity is
+  gated by a shared JSON fixture.
+- New CLI wrapper `_lumina/scripts/parse-ids.mjs` reads a URL from `argv` and
+  emits a validated `external_ids` JSON map. Skill prompts call this instead
+  of inline `node -e` interpolation, eliminating shell-injection risk.
+- Producers (`/lumi-ingest`, `/lumi-discover`, all fetchers) populate
+  `external_ids` automatically. `init_discovery.py --exclude-keys` filters
+  candidates by expanded external_ids set so a DOI excludes its arxiv form.
+- Three new lint checks on source pages: **L13** (warn — namespace coverage
+  derivable from `urls[]`), **L14** (error — invalid identifier value),
+  **L16** (warn — `urls[]` ↔ `external_ids` mismatch). L13's remediation
+  message points users at `/lumi-migrate-legacy --backfill-ids`.
+- Opt-in `/lumi-migrate-legacy --backfill-ids` flag populates `external_ids`
+  on legacy source pages from existing `urls[]`. Non-destructive (existing
+  keys win) and idempotent. No `--dry-run` — review with `git diff`.
+
+### Changed
+
+- `init_discovery.py` flag renamed in place: `--exclude-ids` →
+  `--exclude-keys`. No deprecation alias (LLM-driven, no human contract).
+- `wiki.mjs` `parseFrontmatter` / `stringifyFrontmatter` now round-trip
+  top-level YAML object values (block-mapping form). `set-meta external_ids`
+  runs `sanitizeExternalIdsObject` automatically — `__proto__` and unknown
+  namespaces are stripped before persisting.
+
+### Migration
+
+- Legacy wikis with no `external_ids` populated will see L13 warnings on
+  source pages whose `urls[]` contain an arxiv/doi/s2 URL. Run
+  `/lumi-migrate-legacy --backfill-ids` to populate them. The standard
+  migration flow (`/lumi-migrate-legacy` without the flag) is unchanged.
+
 ## [1.1.0] - 2026-05-06
 
 ### Added

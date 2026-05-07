@@ -195,13 +195,37 @@ Single source of truth. **Pure data, no I/O, no side effects.** Safe to import a
 **Exemption globs:** `foundations/**`, `outputs/**`, `*://*` — the `exempt-only` bidi mode default.
 
 **Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO):
-- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`
+- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object
 - `concepts`: + `key_sources[]`, `related_concepts[]`
 - `people`: + `key_sources[]`, optional `affiliations[]`
 - `summary`: + `covers[]`
 - pack-gated: `chapters` (+ `book`, `number`), `characters` (+ `book`, optional `first_seen`), `themes` (+ `book`), `plot` (+ `book`, `up_to_chapter`)
 
 No edge type currently has `confidenceRequired: true` — L08 always passes on stock schemas.
+
+**`external_ids` namespace registry (single source of truth):** the optional
+`external_ids` object on Source pages is locked to four namespaces:
+
+| Namespace | Form | Notes |
+|---|---|---|
+| `doi` | lowercased DOI body, e.g. `10.48550/arxiv.1706.03762` | URL prefixes (`doi:`, `https://doi.org/`, `dx.doi.org`) stripped, percent-decoded. |
+| `arxiv` | bare ID, e.g. `1706.03762` (new) or `math.GT/0309136` (old) | Version suffix moved to helper extras, NOT stored in frontmatter. |
+| `s2` | 40-hex paper ID | Lowercased. |
+| `url` | canonical https form | Lowercased host, no fragment, no `utm_*`/`ref*` params, no trailing `/`. Algorithm version: `CANONICAL_URL_V`. |
+
+`openalex`, `isbn`, and `s2_corpus` are **reserved** but not implemented —
+no producer or consumer exists today, so adding them now would be dead
+schema. All values pass through `normalizeExternalId(ns, raw).valid` before
+they are written to disk; consumers re-validate with `safeIdToken(ns, val)`
+before any glob/path concatenation. Lint enforces:
+
+- **L13** (warn) — namespace coverage: a non-`url` namespace derivable from
+  `urls[]` but missing in `external_ids`. Remediation message points to
+  `/lumi-migrate-legacy --backfill-ids`.
+- **L14** (error) — value validity: stored value fails `normalizeExternalId`.
+- **L16** (warn) — mismatch: stored value disagrees with the `urls[]`-derived
+  value. Both sides go through the same helpers, so canonicalizer drift
+  cannot trigger a false positive.
 
 ### `src/scripts/lint.mjs`
 
@@ -218,6 +242,9 @@ No edge type currently has `confidenceRequired: true` — L08 always passes on s
 | L07 | Symmetric edge stored both ways | yes (dedupes) |
 | L08 | Missing required confidence field | no |
 | L09 | Stale `index.md` (warning) | yes (rewrites `<!-- lumina:index -->` block) |
+| L13 | `external_ids` missing namespace derivable from `urls[]` (warning) | no |
+| L14 | `external_ids` value fails `normalizeExternalId` (error) | no |
+| L16 | `external_ids[ns]` disagrees with `urls[]`-derived value (warning) | no |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 
