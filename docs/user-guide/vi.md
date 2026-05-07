@@ -8,6 +8,7 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 
 ## Mục Lục
 
+- [Làm Quen Với /lumi-help — Hướng dẫn viên thông minh của bạn](#làm-quen-với-lumi-help--hướng-dẫn-viên-thông-minh-của-bạn)
 - [Những Vấn Đề Khi Quản Lý Tri Thức Theo Cách Cũ](#những-vấn-đề-khi-quản-lý-tri-thức-theo-cách-cũ)
 - [Bạn Có Thể Dùng Lumina-Wiki Để Làm Gì?](#bạn-có-thể-dùng-lumina-wiki-để-làm-gì)
 - [Lumina-Wiki Hoạt Động Như Thế Nào?](#lumina-wiki-hoạt-động-như-thế-nào)
@@ -23,6 +24,25 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 - [Một Workflow Gợi Ý Cho Người Làm Nghiên Cứu](#một-workflow-gợi-ý-cho-người-làm-nghiên-cứu)
 - [Nâng cao: Tìm tài liệu định kỳ](advanced-scheduled-discovery.vi.md)
 - [Nâng cao: Tăng tốc tìm kiếm với QMD](advanced-qmd.vi.md)
+
+## Làm Quen Với /lumi-help — Hướng dẫn viên thông minh của bạn
+
+`/lumi-help` là lệnh đáng nhớ nhất, trước cả những lệnh khác.
+
+Quên mất mình đang làm gì? Gõ `/lumi-help`. Mở project ra, không biết bắt đầu từ đâu? Gõ `/lumi-help`. Muốn xem hết những gì Lumina-Wiki làm được? `/lumi-help skills`.
+
+```text
+/lumi-help            # một bước kế tiếp, dựa trên wiki của bạn lúc này
+/lumi-help skills     # toàn bộ danh sách lệnh đang được cài
+```
+
+Bạn cứ hình dung nó như một hướng dẫn viên đã quen project của bạn:
+
+- Nó liếc vào `raw/` và `wiki/`, xem việc bạn vừa làm gần nhất.
+- Nó chọn nước đi hợp lý nhất — thường là một lệnh, kèm dòng để bạn copy thẳng.
+- Thêm `skills` thì nó liệt kê đủ mọi lệnh bạn có, gom theo từng pack (Core, Research, Reading).
+
+Phần còn lại của hướng dẫn này nói Lumina-Wiki *là gì* và *làm gì*. Cài xong rồi, bạn gần như không cần nhớ *dùng thế nào* — đó là việc của `/lumi-help`.
 
 ## Những Vấn Đề Khi Quản Lý Tri Thức Theo Cách Cũ
 
@@ -237,6 +257,17 @@ Hoặc:
 Lumina-Wiki giúp AI trả lời dựa trên phần kiến thức đã được đưa vào `wiki/`, thay vì chỉ dựa vào trí nhớ tạm thời của một cuộc chat.
 
 Một câu trả lời quan trọng cũng có thể trở thành một trang mới trong wiki. Nhờ vậy, kết quả đọc, so sánh và phân tích không bị mất trong lịch sử chat mà tiếp tục tích lũy vào khu vực tri thức chung.
+
+### 4. Bí? Gõ `/lumi-help`
+
+Quên mất đang làm gì? Muốn xem hết các lệnh có sẵn? Cứ gõ:
+
+```text
+/lumi-help            # một bước kế tiếp
+/lumi-help skills     # mọi lệnh đang được cài
+```
+
+Nó nhìn wiki của bạn rồi bảo bạn nên làm gì tiếp. Câu trả lời sẽ giống nhau dù bạn vừa cài xong, hay sáu tháng sau mới quay lại.
 
 ![Ví dụ AI trả lời dựa trên wiki trong OpenAI CodexApp (ChatGPT)](../../assets/social-impacts-of-AI-lumi-answer.png)
 

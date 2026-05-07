@@ -8,6 +8,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 
 ## Contents
 
+- [Meet /lumi-help — Your Intelligent Guide](#meet-lumi-help--your-intelligent-guide)
 - [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)
 - [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
 - [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
@@ -23,6 +24,25 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
 - [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
 - [Advanced: Accelerate Queries with QMD](advanced-qmd.en.md)
+
+## Meet /lumi-help — Your Intelligent Guide
+
+`/lumi-help` is the one command worth remembering before anything else.
+
+Forgot what you were doing? Type `/lumi-help`. Opened the project after a week and have no idea where to start? Type `/lumi-help`. Want to see every command this thing can run? `/lumi-help skills`.
+
+```text
+/lumi-help            # one next step, based on your wiki right now
+/lumi-help skills     # the full menu of every command you have installed
+```
+
+Think of it as a guide who already knows your project:
+
+- It glances at `raw/` and `wiki/` and notices what you did last.
+- It picks the most sensible next move — usually one command, with the exact line to copy.
+- Add `skills` and it lays out every command you have installed, grouped by pack (Core, Research, Reading).
+
+The rest of this guide explains what Lumina-Wiki *is* and *does*. Once it's installed, you almost never need to remember *how* — that's `/lumi-help`'s job.
 
 ## Problems With the Old Way of Managing Knowledge
 
@@ -192,6 +212,14 @@ Once the AI has read a few documents, you can ask:
 ```text
 $lumi-ask Are there any interesting common points among these documents?
 ```
+
+### 4. Stuck? Type `/lumi-help`
+Forgot what you were doing? Want to see every command available? Just type:
+```text
+/lumi-help            # one next step
+/lumi-help skills     # every command you have installed
+```
+It looks at your wiki and tells you what to do next. Same answer the day you install, same answer six months later when you come back.
 
 The experience with **OpenAI CodexApp** will be very smooth because it is designed to automatically understand the Lumina-Wiki structure through the `AGENTS.md` file that the installer created for you.
 
