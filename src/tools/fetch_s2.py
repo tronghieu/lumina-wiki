@@ -29,6 +29,8 @@ from typing import Any
 
 import requests
 
+# Import HTTP cache helper at module load (before any test patches requests.Session)
+from _cache import wrap_session
 from id_utils import expand_external_ids, normalize_external_id
 
 # Import env loader using relative path for portability when installed
@@ -97,7 +99,7 @@ def _make_session(api_key: str) -> requests.Session:
         "User-Agent": "lumina-wiki/0.1 (research-pack; s2 fetcher)",
         "x-api-key": api_key,
     })
-    return session
+    return wrap_session(session, namespace="s2")
 
 
 def _handle_response_errors(resp: requests.Response, context: str) -> None:

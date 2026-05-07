@@ -53,6 +53,7 @@
     "src/scripts/build-source.mjs",
     "src/scripts/lib/*.mjs",
     "src/skills/**/*.md",
+    "src/tools/_cache.py",
     "src/tools/_env.py",
     "src/tools/extract_pdf.py",
     "src/tools/discover.py",
