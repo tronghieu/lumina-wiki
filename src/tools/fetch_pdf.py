@@ -41,6 +41,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from id_utils import parse_url_to_external_ids
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -244,6 +246,7 @@ def fetch_pdf(
             "sha256": _sha256_file(out_path),
             "skipped": True,
             "reason": "exists",
+            "external_ids": parse_url_to_external_ids(url),
         }
 
     # Streaming download
@@ -316,6 +319,7 @@ def fetch_pdf(
         "size_bytes": size,
         "sha256": hasher.hexdigest(),
         "skipped": False,
+        "external_ids": parse_url_to_external_ids(url),
     }
 
 

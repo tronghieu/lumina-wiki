@@ -457,6 +457,12 @@ class TestCLI:
         assert parsed["resource"] == "arxiv"
         assert parsed["id"] == "2604.03501v2"
         assert parsed["skipped"] is False
+        # Contract: legacy fields preserved + new external_ids block.
+        legacy_keys = {"url", "resolved_url", "resource", "id", "path", "size_bytes", "sha256", "skipped"}
+        assert legacy_keys.issubset(set(parsed.keys()))
+        ext = parsed.get("external_ids")
+        assert isinstance(ext, dict)
+        assert ext.get("arxiv") == "2604.03501"
 
     def test_cli_second_run_returns_skipped(
         self, tmp_project: Path, capsys: pytest.CaptureFixture[str]
