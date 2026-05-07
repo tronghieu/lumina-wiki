@@ -177,6 +177,7 @@ Xem [Hướng dẫn Nâng cao](docs/user-guide/advanced-qmd.vi.md) để biết 
 | | `/lumi-check` | Kiểm tra lỗi trong wiki (liên kết hỏng, v.v.). |
 | | `/lumi-reset` | Xóa các phần của wiki một cách an toàn. |
 | | `/lumi-verify` | Kiểm tra xem các trang wiki có khớp với nguồn đã trích dẫn không. Báo cáo những điểm đáng ngờ để bạn xem xét; không tự sửa ghi chú giúp bạn. |
+| | `/lumi-help` | Đọc trạng thái workspace và đề xuất một bước tiếp theo. Gõ `/lumi-help skills` để xem toàn bộ danh sách lệnh. |
 | **Research**| `/lumi-research-discover` | Khám phá và xếp hạng các bài báo nghiên cứu liên quan. |
 | | `/lumi-research-watchlist` | Giúp bạn chọn các chủ đề nghiên cứu để AI tìm định kỳ. |
 | | `/lumi-research-survey` | Tạo một bài tổng quan/khảo sát từ kiến thức hiện có. |
@@ -197,7 +198,7 @@ Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; th
 Lumina-Wiki đang phát triển nhanh chóng. Dưới đây là lộ trình hướng tới người dùng của chúng tôi:
 
 **Sắp tới (Ổn định & Mở rộng nạp tài liệu)**
-- [ ] **Kỹ năng `/lumi-help`:** Trợ lý thông minh giúp bạn học và sử dụng Lumina-Wiki tức thì.
+- [x] **Kỹ năng `/lumi-help`:** Trợ lý thông minh đọc trạng thái workspace và mách bạn bước tiếp theo; gõ `/lumi-help skills` để xem toàn bộ lệnh.
 - [ ] **Cài đặt đa ngôn ngữ:** Chọn Tiếng Anh, Tiếng Việt hoặc Tiếng Trung làm ngôn ngữ chính khi cài đặt.
 - [ ] **Ingest DOCX & OCR Ảnh:** Nạp trực tiếp file Word và ảnh chụp màn hình vào wiki.
 - [ ] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn.

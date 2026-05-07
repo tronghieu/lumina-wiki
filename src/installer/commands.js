@@ -856,6 +856,7 @@ function getSkillDefs(packs) {
       { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
       { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
       { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
+      { name: 'help',            canonicalId: 'lumi-help',            displayName: '/lumi-help' },
     ];
     for (const s of coreSkills) {
       defs.push({ ...s, pack: 'core', srcPackPath: 'core' });
@@ -917,7 +918,7 @@ async function copyTools(projectRoot, { research }) {
 
 async function renderSchemaDocs(projectRoot, templateVars) {
   const schemaDir = join(projectRoot, '_lumina', 'schema');
-  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md'];
+  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'skills-catalog.md'];
 
   for (const doc of schemaDocs) {
     const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
@@ -1043,6 +1044,7 @@ async function buildFilesManifest(projectRoot, packs, pkgVersion) {
     '_lumina/schema/page-templates.md',
     '_lumina/schema/cross-reference-packs.md',
     '_lumina/schema/graph-packs.md',
+    '_lumina/schema/skills-catalog.md',
     'CLAUDE.md',
     'AGENTS.md',
     'GEMINI.md',
