@@ -120,6 +120,22 @@ class TestFetchPaper:
             with pytest.raises(ValueError, match="[Nn]ot found"):
                 fetch_s2.fetch_paper("nonexistent_id", sess)
 
+    def test_fetch_paper_invalid_external_id_dropped_with_warning(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Compromised externalIds.DOI value is dropped AND emits stderr warning."""
+        bad = dict(MOCK_PAPER)
+        bad["paperId"] = "0123456789abcdef0123456789abcdef01234567"
+        bad["externalIds"] = {"DOI": "<>not-a-doi", "ArXiv": "1706.03762"}
+        with patch("fetch_s2.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response(bad)
+            result = fetch_s2.fetch_paper("abc123", sess)
+        assert "doi" not in result["external_ids"]
+        assert result["external_ids"].get("arxiv") == "1706.03762"
+        assert "[warn] fetch_s2 dropped invalid external_id doi=" in capsys.readouterr().err
+
     def test_fetch_paper_5xx_raises_runtime_error(self) -> None:
         """5xx -> RuntimeError."""
         with patch("fetch_s2.requests.Session") as mock_cls:
