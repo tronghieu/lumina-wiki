@@ -145,6 +145,7 @@ Installing Lumina-Wiki is simple, like setting up a new "office" for your AI ass
 
 You will see a series of questions. Use the **Arrow keys** to select and **Enter** to confirm:
 
+*   **Installer language / Ngôn ngữ / 语言** *(new in v1.2)*: The very first question. Pick the language you want the installer itself to speak — **English**, **Tiếng Việt**, or **中文**. This is just the language of the setup conversation; you can still tell the AI to chat with you in any language afterwards. If you ever change your mind on a re-install, the installer will gently confirm before switching.
 *   **Installation directory**: Just press **Enter** to choose the current directory. This is recommended.
 *   **Research purpose**: Type a few words about what you want the AI to help with (e.g., "Language learning", "Market research"). This helps the AI understand your context.
 *   **AI tools (IDE targets)**: This is the most important step. Choose the tool you will use to chat with the AI:

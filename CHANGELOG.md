@@ -3,10 +3,31 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## Unreleased
+## [1.2.0] - 2026-05-07
 
 ### Added
 
+- **Multilingual installer (PR #7).** Interactive installer prompts and
+  rendered banners now ship in English, Vietnamese, and Simplified Chinese.
+  Language is selected at install time and persisted; upgrades read the
+  prior choice from manifest config. Localization covers prompts, summary
+  output, and post-install banner — workspace template content is unchanged.
+- **Persistent HTTP GET cache for fetchers (PR #5).** New
+  `_lumina/tools/http_cache.py` provides a content-addressed, file-backed
+  cache layer for arxiv / DOI / Semantic Scholar / web GET requests, shared
+  across `discover` and `ingest` runs. TTL is configurable via env
+  (validated at load time) and a cache schema version pins the on-disk
+  format so future shape changes self-invalidate. List-of-tuples query
+  params bypass caching by design.
+- **Bun smoke job in CI (PR #3).** GitHub Actions now runs a Bun
+  compatibility job alongside Node, catching runtime divergences early
+  (path resolution, module loading, child-process spawn) without making
+  Bun a supported runtime contract.
+- **Claude Code GitHub Actions workflows (PR #8).** Two opt-in workflows —
+  Claude PR Assistant (mention-triggered) and Claude Code Review (auto on
+  PR open/sync) — are shipped under `.github/workflows/`. Both are
+  restricted to repository maintainers on this public repo to prevent
+  unsolicited token usage from forks.
 - Source pages gain an optional `external_ids` frontmatter object holding
   validated cross-source identifiers across four namespaces: `doi`, `arxiv`,
   `s2`, and `url` (canonical form). The namespace registry is locked to
