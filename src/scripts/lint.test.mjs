@@ -131,6 +131,29 @@ describe('parseFrontmatter', () => {
   test('returns null for malformed opening', () => {
     assert.equal(parseFrontmatter('---extra\ntitle: x\n---\n'), null);
   });
+
+  test('parses block-mapping object (matches wiki.mjs stringify form)', () => {
+    const content = `---\ntitle: x\nexternal_ids:\n  arxiv: 1706.03762\n  doi: 10.48550/arxiv.1706.03762\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.ok(result);
+    assert.deepEqual(result.data.external_ids, {
+      arxiv: '1706.03762',
+      doi: '10.48550/arxiv.1706.03762',
+    });
+  });
+
+  test('block-mapping with quoted value strips quotes', () => {
+    const content = `---\nexternal_ids:\n  url: "https://example.com/x"\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.equal(result.data.external_ids.url, 'https://example.com/x');
+  });
+
+  test('empty key with no follow-up is null', () => {
+    const content = `---\nfoo:\nbar: 1\n---\n`;
+    const result = parseFrontmatter(content);
+    assert.equal(result.data.foo, null);
+    assert.equal(result.data.bar, 1);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -605,6 +628,46 @@ describe('runLint clean tree', () => {
     const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
     const errors = findings.filter(f => f.severity === 'error');
     assert.equal(errors.length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint with block-mapped external_ids
+// (regression — parseFrontmatter must not drop indented sub-keys)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint block-mapped external_ids', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('L14 fires on invalid DOI in block-mapped external_ids', async () => {
+    await makeWiki(tmpDir);
+    const fm = renderFm({ ...validSourceFm(), urls: ['https://doi.org/10.1109/abc'] });
+    // Inject block-mapped external_ids into the rendered FM (renderFm helper
+    // does not handle objects). Mirrors what wiki.mjs stringifyFrontmatter writes.
+    const withExt = fm.replace(/---\n$/, 'external_ids:\n  doi: not-a-doi\n---\n');
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'bad-doi.md'), withExt + '\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/bad-doi]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l14 = findings.filter(f => f.id === 'L14-external-ids-invalid');
+    assert.ok(l14.length >= 1, `expected L14 finding, got: ${JSON.stringify(findings.map(f => f.id))}`);
+  });
+
+  test('L13 does not false-positive when block-mapped external_ids covers urls[]', async () => {
+    await makeWiki(tmpDir);
+    const fm = renderFm({ ...validSourceFm(), urls: ['https://arxiv.org/abs/1706.03762'] });
+    const withExt = fm.replace(/---\n$/,
+      'external_ids:\n  arxiv: 1706.03762\n  doi: 10.48550/arxiv.1706.03762\n---\n');
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'arxiv-paper.md'), withExt + '\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/arxiv-paper]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l13 = findings.filter(f => f.id === 'L13-external-ids-coverage');
+    assert.equal(l13.length, 0, `unexpected L13 false-positive: ${JSON.stringify(l13)}`);
   });
 });
 

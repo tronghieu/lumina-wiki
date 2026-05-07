@@ -234,14 +234,34 @@ function parseFrontmatter(content) {
     const rawVal = kvMatch[2].trim();
 
     if (rawVal === '' || rawVal === null) {
-      // Check for block list on next lines.
-      const listItems = [];
+      // Empty scalar value → look ahead for indented block content.
+      // Three shapes produced by wiki.mjs stringifyFrontmatter:
+      //   key:
+      //     - item        (list)
+      //   key:
+      //     subkey: val   (block mapping — e.g. external_ids)
+      //   key:            (no follow-up — actual null)
       i++;
-      while (i < lines.length && lines[i].match(/^\s*-\s+(.+)/)) {
-        listItems.push(lines[i].match(/^\s*-\s+(.*)/)[1].trim());
-        i++;
+      const listItems = [];
+      const mapEntries = {};
+      while (i < lines.length) {
+        const ln = lines[i];
+        const listM = ln.match(/^\s+-\s+(.*)$/);
+        if (listM) { listItems.push(listM[1].trim()); i++; continue; }
+        const mapM = ln.match(/^(\s+)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/);
+        if (mapM) {
+          // Block-mapping values are kept as strings — external_ids namespaces
+          // (arxiv IDs like 1706.03762) round-trip as strings, never numbers.
+          const v = mapM[3].trim().replace(/^['"]|['"]$/g, '');
+          mapEntries[mapM[2]] = v;
+          i++;
+          continue;
+        }
+        break;
       }
-      data[key] = listItems.length > 0 ? listItems : null;
+      if (listItems.length > 0) data[key] = listItems;
+      else if (Object.keys(mapEntries).length > 0) data[key] = mapEntries;
+      else data[key] = null;
       continue;
     } else if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
       // Inline array: [a, b, c]
@@ -814,7 +834,7 @@ function checkL13(wikiRelPath, fm) {
   const findings = [];
   for (const [ns, val] of Object.entries(derived)) {
     const cur = ext[ns];
-    if (!cur || (typeof cur === 'string' && !cur)) {
+    if (!cur) {
       findings.push(finding(
         'L13-external-ids-coverage', 'warning', false, wikiRelPath, null,
         `external_ids missing ${ns}=${val} derivable from urls[]. Run /lumi-migrate-legacy --backfill-ids to populate.`
