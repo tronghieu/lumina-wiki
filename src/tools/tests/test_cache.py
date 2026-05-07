@@ -358,3 +358,40 @@ def test_default_ttl_used_when_env_missing(tmp_project: Path, monkeypatch):
     monkeypatch.delenv("LUMINA_CACHE_TTL", raising=False)
     sess = wrap_session(requests.Session(), namespace="test")
     assert sess._lumina_ttl == DEFAULT_TTL_SECONDS
+
+
+def test_invalid_ttl_env_warns_and_uses_default(tmp_project: Path, monkeypatch, capsys):
+    """Non-integer LUMINA_CACHE_TTL must warn to stderr, not silently default."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.setenv("LUMINA_CACHE_TTL", "3600.5")
+    sess = wrap_session(requests.Session(), namespace="test")
+    assert sess._lumina_ttl == DEFAULT_TTL_SECONDS
+    err = capsys.readouterr().err
+    assert "LUMINA_CACHE_TTL" in err
+    assert "3600.5" in err
+
+
+def test_negative_ttl_env_warns_and_uses_default(tmp_project: Path, monkeypatch, capsys):
+    """Negative LUMINA_CACHE_TTL must warn to stderr, not silently default."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.setenv("LUMINA_CACHE_TTL", "-1")
+    sess = wrap_session(requests.Session(), namespace="test")
+    assert sess._lumina_ttl == DEFAULT_TTL_SECONDS
+    err = capsys.readouterr().err
+    assert "LUMINA_CACHE_TTL" in err
+    assert "LUMINA_NO_CACHE" in err  # hint at correct disable mechanism
+
+
+def test_list_of_tuples_params_bypasses_cache(tmp_project: Path, monkeypatch):
+    """params=list[tuple] cannot be canonicalized — must bypass cache to avoid key collisions."""
+    monkeypatch.chdir(tmp_project)
+    monkeypatch.delenv("LUMINA_NO_CACHE", raising=False)
+    sess = wrap_session(requests.Session(), namespace="test")
+    log: list = []
+    fake = _FakeResponse()
+    with _stub_get(sess, fake, log):
+        # Two list-of-tuples calls — would collide on bare-URL key if cached.
+        sess.get("https://api.example.com/x", params=[("a", "1"), ("a", "2")])
+        sess.get("https://api.example.com/x", params=[("a", "1"), ("a", "2")])
+    assert len(log) == 2, "list-of-tuples params must bypass cache entirely"
+    assert not any(sess._lumina_cache_root.glob("*.json")), "no entries should be written for list params"

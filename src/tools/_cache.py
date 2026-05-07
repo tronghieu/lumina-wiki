@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import time
 from io import BytesIO
@@ -188,7 +189,13 @@ class CachedSession:
 
     def get(self, url, **kwargs):
         params = kwargs.get("params")
-        canonical = _canonical_url(url, params if isinstance(params, dict) else None)
+        # `requests` accepts params as dict, list[tuple], bytes, or str. Only
+        # dict (and None) can be deterministically canonicalized for the key
+        # — list-of-tuples with repeated keys would collapse onto the bare-URL
+        # cache slot and collide. Bypass the cache for non-dict params.
+        if params is not None and not isinstance(params, dict):
+            return self._inner.get(url, **kwargs)
+        canonical = _canonical_url(url, params)
         key = _cache_key("GET", canonical)
         path = self._lumina_cache_root / f"{key}.json"
 
@@ -273,8 +280,26 @@ def wrap_session(
     """
     if ttl_seconds is None:
         env_ttl = os.environ.get("LUMINA_CACHE_TTL")
-        if env_ttl and env_ttl.isdigit():
-            ttl_seconds = int(env_ttl)
+        if env_ttl:
+            try:
+                parsed = int(env_ttl)
+            except ValueError:
+                print(
+                    f"lumina: ignoring invalid LUMINA_CACHE_TTL={env_ttl!r} "
+                    f"(want a non-negative integer); using default {DEFAULT_TTL_SECONDS}s",
+                    file=sys.stderr,
+                )
+                ttl_seconds = DEFAULT_TTL_SECONDS
+            else:
+                if parsed < 0:
+                    print(
+                        f"lumina: ignoring negative LUMINA_CACHE_TTL={env_ttl!r} "
+                        f"(use LUMINA_NO_CACHE=1 to disable); using default {DEFAULT_TTL_SECONDS}s",
+                        file=sys.stderr,
+                    )
+                    ttl_seconds = DEFAULT_TTL_SECONDS
+                else:
+                    ttl_seconds = parsed
         else:
             ttl_seconds = DEFAULT_TTL_SECONDS
     try:
