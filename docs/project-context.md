@@ -195,7 +195,7 @@ Single source of truth. **Pure data, no I/O, no side effects.** Safe to import a
 **Exemption globs:** `foundations/**`, `outputs/**`, `*://*` — the `exempt-only` bidi mode default.
 
 **Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO):
-- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object
+- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?}]` — append on every (re-)ingest, never replace)
 - `concepts`: + `key_sources[]`, `related_concepts[]`
 - `people`: + `key_sources[]`, optional `affiliations[]`
 - `summary`: + `covers[]`
@@ -215,9 +215,11 @@ No edge type currently has `confidenceRequired: true` — L08 always passes on s
 
 `openalex`, `isbn`, and `s2_corpus` are **reserved** but not implemented —
 no producer or consumer exists today, so adding them now would be dead
-schema. All values pass through `normalizeExternalId(ns, raw).valid` before
-they are written to disk; consumers re-validate with `safeIdToken(ns, val)`
-before any glob/path concatenation. Lint enforces:
+schema. The namespace tuple lives in `schemas.mjs` (pure data); the helper
+module re-exports it for back-compat. All values pass through
+`normalizeExternalId(ns, raw).valid` before they are written to disk;
+consumers re-validate with `safeIdToken(ns, val)` before any glob/path
+concatenation. Lint enforces:
 
 - **L13** (warn) — namespace coverage: a non-`url` namespace derivable from
   `urls[]` but missing in `external_ids`. Remediation message points to

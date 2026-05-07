@@ -12,7 +12,7 @@ status: 'refined'
 Establish a reliable, multi-source ingestion and discovery pipeline that resolves persistent identifiers (DOIs) to full-text PDFs and monitors high-signal external feeds (RSS/Blogs) to proactively identify new research.
 
 ## High-Level Intent
-- **Namespaced ID Architecture**: Transition to a structured `external_ids` object (doi, openalex, arxiv, s2) in `schemas.mjs` to prevent ID collisions.
+- **Namespaced ID Architecture**: Transition to a structured `external_ids` object (doi, openalex, arxiv, s2, url) in `schemas.mjs` to prevent ID collisions. `url` is a post-spec extension carried over from the arxiv-only era; `openalex` is reserved and lands with the OpenAlex fetcher (AC2).
 - **Full-Text Fallback Ladder**: Implement a deterministic resolution chain: DOI → OpenAlex → Unpaywall → CORE.
 - **Discovery Channel Expansion (RSS/Feeds)**:
   - Treat RSS/Atom feeds as proactive triggers for the discovery flow.

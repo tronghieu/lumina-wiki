@@ -30,6 +30,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Opt-in `/lumi-migrate-legacy --backfill-ids` flag populates `external_ids`
   on legacy source pages from existing `urls[]`. Non-destructive (existing
   keys win) and idempotent. No `--dry-run` — review with `git diff`.
+- Source pages gain an optional `sources` frontmatter array recording fetch
+  provenance: `[{provider, fetched_at, url?}]`. Each ingest run appends one
+  entry — multi-fetch keeps history rather than replacing.
+- New CLI wrapper `_lumina/scripts/build-source.mjs` (and the underlying
+  `buildSourceEntry` / `build_source_entry` helpers in `external-ids.mjs` /
+  `id_utils.py`) constructs one validated entry per fetcher run. Provider
+  must be a kebab/snake slug (max 32 chars). `/lumi-ingest` Phase 3 calls
+  it after writing `external_ids`.
 
 ### Changed
 
@@ -39,6 +47,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   top-level YAML object values (block-mapping form). `set-meta external_ids`
   runs `sanitizeExternalIdsObject` automatically — `__proto__` and unknown
   namespaces are stripped before persisting.
+- `EXTERNAL_ID_NAMESPACES` source of truth moved from `external-ids.mjs` to
+  `schemas.mjs` (where pure-data lives). `external-ids.mjs` now imports and
+  re-exports it for back-compat with downstream consumers.
 
 ### Migration
 
