@@ -143,7 +143,7 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
 /**
  * Run the five interactive install prompts.
  * Returns default answers immediately when `acceptDefaults` is true (--yes mode).
- * Calls process.exit(0) if the user cancels (Ctrl-C).
+ * Calls process.exit(4) if the user cancels (Ctrl-C) or declines a confirm prompt.
  *
  * @param {object}  [opts]
  * @param {boolean} [opts.acceptDefaults=false] - Skip prompts; return defaults.
@@ -174,7 +174,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   if (isCancel(localeRaw)) {
     // t may be EN or may not be loaded yet — use cancel string from t if available
     cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
-    process.exit(0);
+    process.exit(4);
   }
   const locale = localeRaw;
   const langDefault = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
@@ -192,7 +192,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     });
     if (isCancel(proceed) || !proceed) {
       cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
-      process.exit(0);
+      process.exit(4);
     }
   }
 
@@ -203,7 +203,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     placeholder: cwdAbs,
     defaultValue: cwdAbs,
   });
-  if (isCancel(directoryRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(directoryRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const directory = expandUserPath(directoryRaw, cwdAbs);
   const projectName = defaultProjectName(directory);
 
@@ -212,7 +212,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     message: t ? t('prompt.purpose.message') : 'Research purpose (optional — describe what this wiki is for)',
     placeholder: t ? t('prompt.purpose.placeholder') : 'e.g. Track flash-attention variants for a survey',
   });
-  if (isCancel(researchPurposeRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(researchPurposeRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const researchPurpose = researchPurposeRaw || '';
 
   // ── Prompt 3: IDE targets ────────────────────────────────────────────────
@@ -230,7 +230,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     initialValues: ['claude_code'],
     required: false,
   });
-  if (isCancel(ideTargetsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(ideTargetsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const ideTargets = Array.isArray(ideTargetsRaw) && ideTargetsRaw.length > 0
     ? ideTargetsRaw
     : ['claude_code'];
@@ -244,7 +244,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     ],
     required: false,
   });
-  if (isCancel(packsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(packsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const selectedPacks = Array.isArray(packsRaw) ? packsRaw : [];
   const packs = ['core', ...selectedPacks.filter(p => p !== 'core')];
 
@@ -254,7 +254,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     placeholder: langDefault,
     defaultValue: langDefault,
   });
-  if (isCancel(communicationLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(communicationLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const communicationLang = communicationLangRaw || langDefault;
 
   const documentOutputLangRaw = await text({
@@ -262,7 +262,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     placeholder: langDefault,
     defaultValue: langDefault,
   });
-  if (isCancel(documentOutputLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(0); }
+  if (isCancel(documentOutputLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const documentOutputLang = documentOutputLangRaw || langDefault;
 
   return {

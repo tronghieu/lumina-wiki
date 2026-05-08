@@ -19,7 +19,8 @@
  *   --packs <list>      — comma-separated pack list for non-interactive install
  *   --ide-targets <list> — comma-separated IDE target list for non-interactive install
  *
- * Exit codes: 0 success, 1 user error, 2 filesystem error, 3 upgrade incompatibility
+ * Exit codes: 0 success, 1 user error, 2 filesystem/safety, 3 internal/network,
+ *             4 user cancelled (Ctrl-C in interactive prompt or declined confirm)
  */
 
 import { createRequire } from 'node:module';
@@ -84,8 +85,9 @@ program
 Exit codes:
   0  success
   1  user error (bad flag, missing prereq)
-  2  filesystem error (permission denied, path outside cwd)
-  3  upgrade incompatibility (manifest references unknown pack)
+  2  filesystem / safety (permission denied, path outside cwd, unknown pack slug)
+  3  internal / network (atomicWrite failure, 5xx, upgrade incompatibility)
+  4  user cancelled (Ctrl-C in interactive prompt or declined confirm)
 
 Flags applicable to all commands:
   --directory <path>  installation directory (defaults to current directory)
