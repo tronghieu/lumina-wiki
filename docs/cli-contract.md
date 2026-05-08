@@ -89,7 +89,7 @@ The lint script (`_lumina/scripts/lint.mjs`, run from inside an installed worksp
 
 ### Cancellation (Ctrl-C)
 
-In v1.x, cancelling an interactive prompt exits **0**. This is documented as known-incorrect; a new code **4 = user cancelled** will be introduced in a follow-up release. CI scripts that need to distinguish "completed" from "cancelled" should not rely on exit 0 alone — check stdout for completion markers until code 4 is available.
+Cancelling an interactive prompt (Ctrl-C or declining a confirm prompt) exits **4**. CI scripts may rely on this to distinguish user cancellation from successful completion (exit 0) or errors (exit 2/3).
 
 ---
 
