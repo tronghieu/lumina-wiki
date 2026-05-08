@@ -85,7 +85,7 @@ Every Lumina command exits with one of these codes. CI scripts may rely on this 
 
 ### Documented exception
 
-`lumina lint` (when invoked indirectly via the workspace `_lumina/scripts/lint.mjs`) follows ESLint/Ruff convention: **exit 1** means "unresolved findings exist" rather than "user error". This is intentional and will not change.
+The lint script (`_lumina/scripts/lint.mjs`, run from inside an installed workspace — there is no `lumina lint` subcommand) follows ESLint/Ruff convention: **exit 1** means "unresolved findings exist" rather than "user error". This is intentional and will not change.
 
 ### Cancellation (Ctrl-C)
 
