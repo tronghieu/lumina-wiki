@@ -13,10 +13,8 @@ Provides:
 
 from __future__ import annotations
 
-import io
 import os
 import sys
-import zipfile
 from pathlib import Path
 from typing import Generator
 

@@ -1,8 +1,8 @@
 """
 prepare_source.py — Normalize a local file into an ingest-ready package.
 
-Accepts one local file (PDF, .tex, .html, .md) and produces a deterministic
-output package at raw/tmp/<slug>/ containing:
+Accepts one local file (PDF, .tex, .html, .md, .txt, .docx, .rtf, .epub)
+and produces a deterministic output package at raw/tmp/<slug>/ containing:
     source.<ext>   — original file (hard-link or copy)
     meta.json      — extracted metadata (title, type, sha256, ext, slug, size)
     text.txt       — extracted plain text
@@ -311,7 +311,10 @@ def _extract_rtf_text(path: Path) -> str:
         src = path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         raise ValueError(f"Cannot read .rtf file: {exc}") from exc
-    return rtf_to_text(src)
+    try:
+        return rtf_to_text(src)
+    except Exception as exc:  # noqa: BLE001 — match docx/epub: surface as ValueError exit 2
+        raise ValueError(f"Cannot parse .rtf: {exc}") from exc
 
 
 def _epub_is_drm_protected(path: Path) -> bool:
