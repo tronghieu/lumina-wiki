@@ -27,6 +27,12 @@ test('every cancellation site in prompts.js exits with code 4', () => {
   // Find every line that emits process.exit(...) and tag whether it's
   // inside or after an isCancel(...) check. The grouping window is loose
   // — anything within 5 lines of an isCancel reference counts.
+  //
+  // Window limitation: if a future site puts more than 5 lines (or a blank
+  // line that pushes the gap past 5) between `isCancel(x)` and its
+  // `process.exit(...)`, this test will silently miss it. Keep the
+  // single-line `if (isCancel(x)) { cancel(...); process.exit(4); }` shape,
+  // or revise this matcher when adding multi-line cases.
   const lines = src.split('\n');
   let lastIsCancelLine = -10;
   const exitsToCheck = [];
@@ -39,7 +45,7 @@ test('every cancellation site in prompts.js exits with code 4', () => {
     }
   }
 
-  assert.ok(exitsToCheck.length >= 7, `expected at least 7 cancellation sites; found ${exitsToCheck.length}`);
+  assert.ok(exitsToCheck.length >= 8, `expected at least 8 cancellation sites; found ${exitsToCheck.length}`);
 
   const wrong = exitsToCheck.filter(e => e.code !== 4);
   assert.deepEqual(
