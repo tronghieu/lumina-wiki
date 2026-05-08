@@ -91,7 +91,7 @@ function exitCodeFor(err, defaultCode = 1) {
   if (err.code === 'EACCES' || err.code === 'EPERM') return 2;
   if (err.code === 2) return 2;
   if (err.code === 3) return 3;
-  if (typeof err.code === 'string' && /^E[A-Z]+$/.test(err.code)) return 3;
+  if (typeof err.code === 'string' && err.code.startsWith('E')) return 3;
   return defaultCode;
 }
 
