@@ -209,7 +209,7 @@ class TestPrepareSourceFunction:
 
     def test_unsupported_extension_raises_value_error(self, tmp_path: Path) -> None:
         """Unsupported file extension raises ValueError."""
-        bad_file = tmp_path / "file.docx"
+        bad_file = tmp_path / "file.xyz"
         bad_file.write_bytes(b"content")
         out_base = tmp_path / "raw" / "tmp"
         out_base.mkdir(parents=True)
@@ -303,7 +303,7 @@ class TestCLI:
 
     def test_unsupported_extension_exits_2(self, capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
         """Unsupported extension -> exit 2."""
-        bad_file = tmp_path / "file.docx"
+        bad_file = tmp_path / "file.xyz"
         bad_file.write_bytes(b"content")
         with pytest.raises(SystemExit) as exc_info:
             prepare_source.main([str(bad_file), "--project-root", str(tmp_path)])
@@ -386,3 +386,255 @@ class TestCLI:
         text1 = Path(r1["text_path"]).read_bytes()
         text2 = Path(r2["text_path"]).read_bytes()
         assert text1 == text2
+
+
+# ---------------------------------------------------------------------------
+# Local text-document ingestion (research pack) — RED contracts
+# ---------------------------------------------------------------------------
+#
+# Phase 1 lays down the failing assertions for .docx/.rtf/.epub. Each happy-path
+# and security test is xfail-strict so it cannot accidental-pass before the
+# extractor lands. ImportError contracts are written GREEN: phase 1 stubs in
+# prepare_source already enforce the lazy-import + ValueError mapping.
+
+class TestDocxExtractor:
+    def test_docx_extracts_paragraphs(self, tmp_project: Path, make_docx) -> None:
+        docx_file = tmp_project / "doc.docx"
+        make_docx(docx_file, ["First paragraph.", "Second paragraph.", "Third."])
+        out_base = tmp_project / "raw" / "tmp"
+
+        result = prepare_source_fn(docx_file, out_base)
+        text = Path(result["text_path"]).read_text(encoding="utf-8")
+        assert "First paragraph." in text
+        assert "Second paragraph." in text
+        assert "Third." in text
+
+    def test_idempotency_docx(self, tmp_project: Path, make_docx) -> None:
+        docx_file = tmp_project / "doc.docx"
+        make_docx(docx_file, ["Stable content."])
+        out_base = tmp_project / "raw" / "tmp"
+
+        r1 = prepare_source_fn(docx_file, out_base)
+        meta1 = Path(r1["meta_path"]).read_bytes()
+        text1 = Path(r1["text_path"]).read_bytes()
+
+        r2 = prepare_source_fn(docx_file, out_base)
+        meta2 = Path(r2["meta_path"]).read_bytes()
+        text2 = Path(r2["text_path"]).read_bytes()
+
+        assert meta1 == meta2
+        assert text1 == text2
+
+    def test_docx_zipbomb_rejected(self, tmp_project: Path) -> None:
+        import zipfile
+
+        bomb = tmp_project / "bomb.docx"
+        with zipfile.ZipFile(bomb, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # Single highly-compressible entry simulating an extracted blow-up.
+            zf.writestr("word/document.xml", b"A" * (300 * 1024 * 1024))
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="zip|too large|Refusing"):
+            prepare_source_fn(bomb, out_base)
+
+    def test_docx_missing_lib_raises_actionable_error(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When python-docx is missing, raise actionable ValueError (exit 2 path)."""
+        # Ensure the import inside _extract_docx_text fails.
+        monkeypatch.setitem(sys.modules, "docx", None)
+        docx_file = tmp_project / "doc.docx"
+        docx_file.write_bytes(b"PK\x03\x04 placeholder")  # not a real docx
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="python-docx"):
+            prepare_source_fn(docx_file, out_base)
+
+
+class TestRtfExtractor:
+    def test_rtf_extracts_body(self, tmp_project: Path, make_rtf) -> None:
+        rtf_file = tmp_project / "doc.rtf"
+        make_rtf(rtf_file, "Hello RTF body.")
+        out_base = tmp_project / "raw" / "tmp"
+
+        result = prepare_source_fn(rtf_file, out_base)
+        text = Path(result["text_path"]).read_text(encoding="utf-8")
+        assert "Hello RTF body." in text
+
+    def test_idempotency_rtf(self, tmp_project: Path, make_rtf) -> None:
+        rtf_file = tmp_project / "doc.rtf"
+        make_rtf(rtf_file, "Stable RTF content.")
+        out_base = tmp_project / "raw" / "tmp"
+
+        r1 = prepare_source_fn(rtf_file, out_base)
+        meta1 = Path(r1["meta_path"]).read_bytes()
+        text1 = Path(r1["text_path"]).read_bytes()
+
+        r2 = prepare_source_fn(rtf_file, out_base)
+        meta2 = Path(r2["meta_path"]).read_bytes()
+        text2 = Path(r2["text_path"]).read_bytes()
+
+        assert meta1 == meta2
+        assert text1 == text2
+
+    def test_rtf_missing_lib_raises_actionable_error(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "striprtf", None)
+        monkeypatch.setitem(sys.modules, "striprtf.striprtf", None)
+        rtf_file = tmp_project / "doc.rtf"
+        rtf_file.write_bytes(b"{\\rtf1\\ansi placeholder}")
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="striprtf"):
+            prepare_source_fn(rtf_file, out_base)
+
+
+class TestEpubExtractor:
+    def test_epub_extracts_chapters(self, tmp_project: Path, make_epub) -> None:
+        epub_file = tmp_project / "book.epub"
+        make_epub(
+            epub_file,
+            [
+                ("Chapter 1", "<p>Opening line of chapter one.</p>"),
+                ("Chapter 2", "<p>Opening line of chapter two.</p>"),
+            ],
+        )
+        out_base = tmp_project / "raw" / "tmp"
+
+        result = prepare_source_fn(epub_file, out_base)
+        text = Path(result["text_path"]).read_text(encoding="utf-8")
+        assert "Opening line of chapter one." in text
+        assert "Opening line of chapter two." in text
+
+    def test_idempotency_epub(self, tmp_project: Path, make_epub) -> None:
+        epub_file = tmp_project / "book.epub"
+        make_epub(epub_file, [("Only", "<p>Only chapter.</p>")])
+        out_base = tmp_project / "raw" / "tmp"
+
+        r1 = prepare_source_fn(epub_file, out_base)
+        meta1 = Path(r1["meta_path"]).read_bytes()
+        text1 = Path(r1["text_path"]).read_bytes()
+
+        r2 = prepare_source_fn(epub_file, out_base)
+        meta2 = Path(r2["meta_path"]).read_bytes()
+        text2 = Path(r2["text_path"]).read_bytes()
+
+        assert meta1 == meta2
+        assert text1 == text2
+
+    def test_epub_zipbomb_rejected(self, tmp_project: Path) -> None:
+        import zipfile
+
+        bomb = tmp_project / "bomb.epub"
+        with zipfile.ZipFile(bomb, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("OEBPS/big.xhtml", b"B" * (500 * 1024 * 1024))
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="zip|too large|Refusing"):
+            prepare_source_fn(bomb, out_base)
+
+    def test_epub_xml_billion_laughs_rejected(self, tmp_project: Path) -> None:
+        import zipfile
+
+        billion = (
+            "<?xml version='1.0'?>"
+            "<!DOCTYPE lolz [<!ENTITY lol \"lol\">"
+            "<!ENTITY lol2 \"&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;\">"
+            "<!ENTITY lol3 \"&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;\">"
+            "]><lolz>&lol3;</lolz>"
+        )
+        epub_file = tmp_project / "billion.epub"
+        with zipfile.ZipFile(epub_file, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip")
+            zf.writestr("META-INF/container.xml", billion)
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError):
+            prepare_source_fn(epub_file, out_base)
+
+    def test_epub_missing_lib_raises_actionable_error(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "ebooklib", None)
+        epub_file = tmp_project / "book.epub"
+        epub_file.write_bytes(b"PK\x03\x04 placeholder epub")
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="ebooklib"):
+            prepare_source_fn(epub_file, out_base)
+
+    def test_epub_drm_protected_rejected(self, tmp_project: Path, make_epub) -> None:
+        """EPUB with META-INF/encryption.xml stub → ValueError 'DRM-protected'."""
+        import zipfile
+
+        epub_file = tmp_project / "drm.epub"
+        make_epub(epub_file, [("Ch1", "<p>body</p>")])
+        # Inject encryption.xml into the existing valid .epub.
+        with zipfile.ZipFile(epub_file, "a") as zf:
+            zf.writestr("META-INF/encryption.xml", "<encryption/>")
+        out_base = tmp_project / "raw" / "tmp"
+
+        with pytest.raises(ValueError, match="DRM-protected"):
+            prepare_source_fn(epub_file, out_base)
+
+
+# ---------------------------------------------------------------------------
+# Integration smoke + lazy-import discipline guard
+# ---------------------------------------------------------------------------
+
+class TestIntegrationSmoke:
+    def test_cli_smoke_all_new_formats(
+        self, tmp_project: Path, make_docx, make_rtf, make_epub
+    ) -> None:
+        """One subprocess CLI run per new format — confirms wiring → meta.json."""
+        import subprocess
+
+        cases = [
+            (".docx", lambda p: make_docx(p, ["Smoke paragraph."])),
+            (".rtf",  lambda p: make_rtf(p, "Smoke RTF body.")),
+            (".epub", lambda p: make_epub(p, [("Ch", "<p>Smoke EPUB body.</p>")])),
+        ]
+        script = Path(__file__).resolve().parents[1] / "prepare_source.py"
+        for ext, factory in cases:
+            src = tmp_project / f"sample{ext}"
+            factory(src)
+            proc = subprocess.run(
+                [sys.executable, str(script), str(src),
+                 "--project-root", str(tmp_project)],
+                capture_output=True, text=True, check=True,
+            )
+            result = json.loads(proc.stdout)
+            assert Path(result["meta_path"]).exists()
+            meta = json.loads(Path(result["meta_path"]).read_text(encoding="utf-8"))
+            assert meta["type"] == ext.lstrip(".")
+
+
+class TestLazyImportDiscipline:
+    """Guard against accidental top-level imports of optional research-pack libs."""
+
+    FORBIDDEN_PREFIXES = (
+        "from docx",
+        "import docx",
+        "from striprtf",
+        "import striprtf",
+        "from ebooklib",
+        "import ebooklib",
+        "from bs4",
+        "import bs4",
+        "from defusedxml",
+        "import defusedxml",
+    )
+
+    def test_no_top_level_optional_imports(self) -> None:
+        src_path = Path(__file__).resolve().parents[1] / "prepare_source.py"
+        src = src_path.read_text(encoding="utf-8")
+        offenders: list[str] = []
+        for line in src.splitlines():
+            if line.startswith(self.FORBIDDEN_PREFIXES):
+                offenders.append(line)
+        assert not offenders, (
+            "Lazy-import discipline violated — these imports must live inside "
+            f"the extractor function bodies: {offenders}"
+        )
+
