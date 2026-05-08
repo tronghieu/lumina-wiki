@@ -71,9 +71,9 @@ test('load all three README templates', async () => {
   for (const locale of ['en', 'vi', 'zh']) {
     const suffix = locale === 'en' ? '' : '.' + locale;
     const filePath = join(TEMPLATES_DIR, `README${suffix}.md`);
-    const content = await readFile(filePath, 'utf8');
-    assert.ok(content.length > 0, `README${suffix}.md must not be empty`);
-    templates[locale] = content;
+    const raw = await readFile(filePath, 'utf8');
+    assert.ok(raw.length > 0, `README${suffix}.md must not be empty`);
+    templates[locale] = raw.replace(/\r\n/g, '\n');
   }
 });
 
