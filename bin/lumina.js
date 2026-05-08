@@ -12,7 +12,7 @@
  *
  * Flags (all commands):
  *   --directory <path>  — installation directory (defaults to current directory)
- *   --cwd <path>        — backward-compat alias for --directory
+ *   --cwd <path>        — [deprecated] alias for --directory; removed in v2.0
  *   --yes, -y           — accept all defaults (non-interactive / CI)
  *   --no-update         — skip npm registry version check
  *   --re-link           — recompute symlink/junction/copy strategy
@@ -76,7 +76,6 @@ if (handledVersion) process.exit(0);
 const { Command, Option } = await import('commander');
 const program = new Command();
 
-// ---------------------------------------------------------------------------
 // Exit code contract (see docs/planning-artifacts/audits/cli-contract-audit.md
 // and `--help` text below). Caught errors map as follows:
 //   - RangeError (from safePath)        → 2 (path safety)
@@ -93,6 +92,21 @@ function exitCodeFor(err, defaultCode = 1) {
   if (err.code === 3) return 3;
   if (typeof err.code === 'string' && err.code.startsWith('E')) return 3;
   return defaultCode;
+}
+
+// ---------------------------------------------------------------------------
+// Deprecation warnings — emitted to stderr once per invocation.
+// Source of truth: docs/cli-contract.md.
+// ---------------------------------------------------------------------------
+let _cwdWarned = false;
+function warnDeprecatedCwdIfUsed(cmdOpts, globalOpts) {
+  if (_cwdWarned) return;
+  if (cmdOpts.cwd != null || globalOpts.cwd != null) {
+    process.stderr.write(
+      '[deprecated] --cwd is deprecated and will be removed in v2.0. Use --directory instead.\n'
+    );
+    _cwdWarned = true;
+  }
 }
 
 program
@@ -135,6 +149,13 @@ program
   .option('-y, --yes', 'accept all defaults (non-interactive)')
   .option('--no-update', 'skip npm registry version check')
   .option('--re-link', 'recompute symlink strategy from current platform capabilities');
+
+// Single source of truth for --cwd deprecation: fires once before any
+// subcommand action regardless of whether --cwd was passed globally or
+// per-command. New subcommands inherit this for free.
+program.hook('preAction', (_thisCommand, actionCommand) => {
+  warnDeprecatedCwdIfUsed(actionCommand.opts(), program.opts());
+});
 
 // ---------------------------------------------------------------------------
 // --version / -v — print immediately then do async update check
