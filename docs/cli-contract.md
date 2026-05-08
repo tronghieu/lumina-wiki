@@ -28,11 +28,11 @@ Scaffold or upgrade a Lumina Wiki workspace.
 | Flag | Stability | Purpose |
 |---|---|---|
 | `--directory <path>` | STABLE | Installation directory (defaults to `cwd`) |
-| `--cwd <path>` | DEPRECATED | Alias for `--directory`. Will be removed in v2.0 |
+| `--cwd <path>` | DEPRECATED | Alias for `--directory`. Will be removed in v2.0 (deprecation warning pending PR-3) |
 | `-y`, `--yes` | STABLE | Non-interactive mode (CI use) |
 | `--no-update` | STABLE | Skip npm registry version check |
 | `--re-link` | STABLE | Recompute symlink/junction/copy strategy |
-| `--packs <list>` | STABLE | Comma-separated packs: `core,research,reading` |
+| `--packs <list>` | STABLE | Comma-separated packs: `core,research,reading`. `core` is always included regardless of this list |
 | `--ide-targets <list>` | STABLE | Comma-separated IDE targets (see `--help` for full list) |
 | `--communication-language <lang>` | STABLE | Language agents use when talking to the user |
 | `--document-output-language <lang>` | STABLE | Language used for generated wiki documents |
@@ -47,7 +47,7 @@ Remove Lumina-managed files. `wiki/` and `raw/` are preserved.
 | Flag | Stability | Purpose |
 |---|---|---|
 | `--directory <path>` | STABLE | Installation directory |
-| `--cwd <path>` | DEPRECATED | Alias for `--directory` |
+| `--cwd <path>` | DEPRECATED | Alias for `--directory` (deprecation warning pending PR-3) |
 | `-y`, `--yes` | STABLE | Skip confirmation prompt |
 
 ### `lumina discover run`
@@ -98,7 +98,7 @@ In v1.x, cancelling an interactive prompt exits **0**. This is documented as kno
 | Var | Stability | Purpose |
 |---|---|---|
 | `LUMINA_NO_UPDATE_CHECK=1` | STABLE | Suppress npm registry version check (equivalent to `--no-update`) |
-| `DEBUG=*` | STABLE | Print stack traces on caught errors |
+| `DEBUG=<any>` | STABLE | Print stack traces on caught errors (any non-empty value enables) |
 | `NO_COLOR=1` | STABLE | Disable ANSI color output (community standard) |
 | `LUMINA_NO_CACHE=1` | STABLE | Bypass HTTP fetch cache (research-pack tools) |
 | `LUMINA_CACHE_TTL=<seconds>` | STABLE | Override default 24h cache TTL |
@@ -113,4 +113,4 @@ In v1.x, cancelling an interactive prompt exits **0**. This is documented as kno
 - **Exit codes** in this document survive minor releases. Adding new codes (e.g. introducing `4` for cancellation) is non-breaking; changing the meaning of an existing code is breaking.
 - The `--help` output formatting is **not** part of the contract. Tooling that parses help text is fragile by design — query flags directly via the documented names instead.
 
-For the underlying audit and the reasoning behind classifications, see [`docs/planning-artifacts/audits/cli-contract-audit.md`](./planning-artifacts/audits/cli-contract-audit.md) and discussion in [issue #4](https://github.com/tronghieu/lumina-wiki/issues/4).
+For the reasoning behind classifications, see discussion in [issue #4](https://github.com/tronghieu/lumina-wiki/issues/4).
