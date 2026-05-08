@@ -12,7 +12,7 @@
  *
  * Flags (all commands):
  *   --directory <path>  — installation directory (defaults to current directory)
- *   --cwd <path>        — backward-compat alias for --directory
+ *   --cwd <path>        — [deprecated] alias for --directory; removed in v2.0
  *   --yes, -y           — accept all defaults (non-interactive / CI)
  *   --no-update         — skip npm registry version check
  *   --re-link           — recompute symlink/junction/copy strategy
@@ -77,6 +77,39 @@ if (handledVersion) process.exit(0);
 const { Command, Option } = await import('commander');
 const program = new Command();
 
+// Exit code contract (see docs/planning-artifacts/audits/cli-contract-audit.md
+// and `--help` text below). Caught errors map as follows:
+//   - RangeError (from safePath)        → 2 (path safety)
+//   - err.code in {EACCES, EPERM}        → 2 (filesystem perms)
+//   - err.code === 2 / err.code === 3    → preserved
+//   - other string fs codes (E*)         → 3 (internal/io: ENOENT, EBUSY, EIO,
+//                                            EROFS, ENOSPC, ENOTDIR, …)
+//   - everything else                    → 1 (user error)
+// ---------------------------------------------------------------------------
+function exitCodeFor(err, defaultCode = 1) {
+  if (err instanceof RangeError) return 2;
+  if (err.code === 'EACCES' || err.code === 'EPERM') return 2;
+  if (err.code === 2) return 2;
+  if (err.code === 3) return 3;
+  if (typeof err.code === 'string' && err.code.startsWith('E')) return 3;
+  return defaultCode;
+}
+
+// ---------------------------------------------------------------------------
+// Deprecation warnings — emitted to stderr once per invocation.
+// Source of truth: docs/cli-contract.md.
+// ---------------------------------------------------------------------------
+let _cwdWarned = false;
+function warnDeprecatedCwdIfUsed(cmdOpts, globalOpts) {
+  if (_cwdWarned) return;
+  if (cmdOpts.cwd != null || globalOpts.cwd != null) {
+    process.stderr.write(
+      '[deprecated] --cwd is deprecated and will be removed in v2.0. Use --directory instead.\n'
+    );
+    _cwdWarned = true;
+  }
+}
+
 program
   .name('lumina')
   .description('Lumina Wiki — domain-agnostic, multi-IDE wiki scaffolder')
@@ -86,7 +119,7 @@ Exit codes:
   0  success
   1  user error (bad flag, missing prereq)
   2  filesystem / safety (permission denied, path outside cwd, unknown pack slug)
-  3  internal / network (atomicWrite failure, 5xx, upgrade incompatibility)
+  3  internal / network (atomicWrite failure, 5xx, upgrade incompatibility, lint catastrophic)
   4  user cancelled (Ctrl-C in interactive prompt or declined confirm)
 
 Flags applicable to all commands:
@@ -118,6 +151,13 @@ program
   .option('-y, --yes', 'accept all defaults (non-interactive)')
   .option('--no-update', 'skip npm registry version check')
   .option('--re-link', 'recompute symlink strategy from current platform capabilities');
+
+// Single source of truth for --cwd deprecation: fires once before any
+// subcommand action regardless of whether --cwd was passed globally or
+// per-command. New subcommands inherit this for free.
+program.hook('preAction', (_thisCommand, actionCommand) => {
+  warnDeprecatedCwdIfUsed(actionCommand.opts(), program.opts());
+});
 
 // ---------------------------------------------------------------------------
 // --version / -v — print immediately then do async update check
@@ -171,11 +211,9 @@ program
     } catch (err) {
       // Top-level catch: locale may not be resolved yet (pre-loadLocale path).
       // Error strings kept as EN literals — machine-readable, intentionally exempt.
-      const isPermError  = err.code === 'EACCES' || err.code === 'EPERM';
-      const isRangeError = err instanceof RangeError;
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(isPermError || isRangeError || err.code === 2 ? 2 : 1);
+      process.exit(exitCodeFor(err));
     }
   });
 
@@ -202,7 +240,7 @@ program
     } catch (err) {
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(2);
+      process.exit(exitCodeFor(err));
     }
   });
 
@@ -237,7 +275,9 @@ discover
     } catch (err) {
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(err.code === 2 ? 2 : 3);
+      // Unhandled exceptions from discover-runner are by definition not user
+      // errors (main() handles those), so default unknown → 3 (internal).
+      process.exit(exitCodeFor(err, 3));
     }
   });
 
