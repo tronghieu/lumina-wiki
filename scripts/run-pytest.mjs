@@ -14,9 +14,12 @@
 
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = join(import.meta.dirname, "..");
+// `import.meta.dirname` only landed in Node 20.11 — keep this compatible
+// with the package.json `engines.node: ">=20"` floor.
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const venvDir = join(repoRoot, "src", "tools", ".venv");
 const venvPython =
   process.platform === "win32"

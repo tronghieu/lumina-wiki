@@ -425,13 +425,18 @@ class TestDocxExtractor:
         assert meta1 == meta2
         assert text1 == text2
 
-    def test_docx_zipbomb_rejected(self, tmp_project: Path) -> None:
+    def test_docx_zipbomb_rejected(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Lower the caps so a small fixture trips them — keeps the test
+        # CI-memory-friendly while still exercising _check_zip_safety on a
+        # real .docx-shaped archive.
         import zipfile
 
+        monkeypatch.setattr(prepare_source, "MAX_DOCX_EXTRACTED_BYTES", 1024)
         bomb = tmp_project / "bomb.docx"
         with zipfile.ZipFile(bomb, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            # Single highly-compressible entry simulating an extracted blow-up.
-            zf.writestr("word/document.xml", b"A" * (300 * 1024 * 1024))
+            zf.writestr("word/document.xml", b"A" * 8192)  # 8 KB > 1 KB cap
         out_base = tmp_project / "raw" / "tmp"
 
         with pytest.raises(ValueError, match="zip|too large|Refusing"):
@@ -523,12 +528,16 @@ class TestEpubExtractor:
         assert meta1 == meta2
         assert text1 == text2
 
-    def test_epub_zipbomb_rejected(self, tmp_project: Path) -> None:
+    def test_epub_zipbomb_rejected(
+        self, tmp_project: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # See test_docx_zipbomb_rejected for the cap-monkeypatch rationale.
         import zipfile
 
+        monkeypatch.setattr(prepare_source, "MAX_EPUB_EXTRACTED_BYTES", 1024)
         bomb = tmp_project / "bomb.epub"
         with zipfile.ZipFile(bomb, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("OEBPS/big.xhtml", b"B" * (500 * 1024 * 1024))
+            zf.writestr("OEBPS/big.xhtml", b"B" * 8192)
         out_base = tmp_project / "raw" / "tmp"
 
         with pytest.raises(ValueError, match="zip|too large|Refusing"):
