@@ -221,6 +221,10 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 
 ## 7. Contributing & License
 
+### CLI Contract
+
+CI scripts and integrations should reference [`docs/cli-contract.md`](./docs/cli-contract.md) for the v1.x stable flag list and exit code mapping. Anything not listed there is internal and may change without notice.
+
 ### Local Development (for contributors)
 
 If you want to contribute to the `lumina-wiki` installer:
