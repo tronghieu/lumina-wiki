@@ -125,5 +125,6 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 - `1` user error (bad args)
 - `2` filesystem / path safety / unknown slug / missing `--yes`
 - `3` internal / fs failure / upgrade incompatibility / 5xx network
+- `4` user cancelled (Ctrl-C in interactive prompt or declined confirm)
 
 `EACCES` / `EPERM` / `RangeError` (from `safePath`) all map to exit 2 at `bin/lumina.js`.

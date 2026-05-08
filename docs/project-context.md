@@ -50,6 +50,10 @@ The installer projects a single source-of-truth template tree onto whichever CLI
 
 These are absolutes. Every one corresponds to a real failure mode.
 
+### Sandbox — HIGHEST PRIORITY
+
+0. **NEVER run `lumina-wiki install` (or any variant: `node bin/lumina.js install`, `npx lumina-wiki install`, `npm run dev:sandbox` without `--keep`/`--reuse` targeting an explicit temp path) inside the repository root or any subdirectory of this repo.** This repo IS the installer source — running the installer here overwrites `README.md`, destroys `.agents/skills/`, creates `wiki/`, and corrupts the workspace in ways that are hard to recover from. Always use a dedicated sandbox directory outside the repo (see `npm run dev:sandbox` which creates a temp dir). This rule applies to ALL agents, scripts, and humans without exception. There is no scenario where installing lumina-wiki into its own source tree is correct.
+
 ### File & filesystem
 
 1. **Never call `writeFile` directly.** Always use `atomicWrite` (temp + `fd.datasync()` + rename). Same in Python: temp + fsync + `os.replace`. This is the entire reliability story of the installer.
