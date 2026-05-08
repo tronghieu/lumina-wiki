@@ -522,8 +522,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="prepare_source.py",
         description=(
-            "Normalize a local file (PDF, .tex, .html, .md) into an ingest-ready "
-            "package under raw/tmp/<slug>/. Deterministic: same input -> same output."
+            "Normalize a local file (PDF, .tex, .html, .md, .txt, .docx, .rtf, "
+            ".epub) into an ingest-ready package under raw/tmp/<slug>/. "
+            "Deterministic: same input -> same output."
         ),
     )
     parser.add_argument("file", help="Path to the source file to prepare.")
