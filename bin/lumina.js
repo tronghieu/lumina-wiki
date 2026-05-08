@@ -76,6 +76,25 @@ if (handledVersion) process.exit(0);
 const { Command, Option } = await import('commander');
 const program = new Command();
 
+// ---------------------------------------------------------------------------
+// Exit code contract (see docs/planning-artifacts/audits/cli-contract-audit.md
+// and `--help` text below). Caught errors map as follows:
+//   - RangeError (from safePath)        → 2 (path safety)
+//   - err.code in {EACCES, EPERM}        → 2 (filesystem perms)
+//   - err.code === 2 / err.code === 3    → preserved
+//   - other string fs codes (E*)         → 3 (internal/io: ENOENT, EBUSY, EIO,
+//                                            EROFS, ENOSPC, ENOTDIR, …)
+//   - everything else                    → 1 (user error)
+// ---------------------------------------------------------------------------
+function exitCodeFor(err, defaultCode = 1) {
+  if (err instanceof RangeError) return 2;
+  if (err.code === 'EACCES' || err.code === 'EPERM') return 2;
+  if (err.code === 2) return 2;
+  if (err.code === 3) return 3;
+  if (typeof err.code === 'string' && err.code.startsWith('E')) return 3;
+  return defaultCode;
+}
+
 program
   .name('lumina')
   .description('Lumina Wiki — domain-agnostic, multi-IDE wiki scaffolder')
@@ -84,8 +103,8 @@ program
 Exit codes:
   0  success
   1  user error (bad flag, missing prereq)
-  2  filesystem error (permission denied, path outside cwd)
-  3  upgrade incompatibility (manifest references unknown pack)
+  2  filesystem / safety (permission denied, path outside cwd, unknown pack slug)
+  3  internal / network (atomicWrite failure, 5xx, upgrade incompatibility, lint catastrophic)
 
 Flags applicable to all commands:
   --directory <path>  installation directory (defaults to current directory)
@@ -169,11 +188,9 @@ program
     } catch (err) {
       // Top-level catch: locale may not be resolved yet (pre-loadLocale path).
       // Error strings kept as EN literals — machine-readable, intentionally exempt.
-      const isPermError  = err.code === 'EACCES' || err.code === 'EPERM';
-      const isRangeError = err instanceof RangeError;
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(isPermError || isRangeError || err.code === 2 ? 2 : 1);
+      process.exit(exitCodeFor(err));
     }
   });
 
@@ -200,7 +217,7 @@ program
     } catch (err) {
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(2);
+      process.exit(exitCodeFor(err));
     }
   });
 
@@ -235,7 +252,9 @@ discover
     } catch (err) {
       console.error(`[error] ${err.message}`);
       if (process.env.DEBUG) console.error(err.stack);
-      process.exit(err.code === 2 ? 2 : 3);
+      // Unhandled exceptions from discover-runner are by definition not user
+      // errors (main() handles those), so default unknown → 3 (internal).
+      process.exit(exitCodeFor(err, 3));
     }
   });
 
