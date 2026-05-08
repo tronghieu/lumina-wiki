@@ -12,7 +12,7 @@
  *
  * Flags (all commands):
  *   --directory <path>  — installation directory (defaults to current directory)
- *   --cwd <path>        — backward-compat alias for --directory
+ *   --cwd <path>        — [deprecated] alias for --directory; removed in v2.0
  *   --yes, -y           — accept all defaults (non-interactive / CI)
  *   --no-update         — skip npm registry version check
  *   --re-link           — recompute symlink/junction/copy strategy
@@ -132,6 +132,13 @@ program
   .option('--no-update', 'skip npm registry version check')
   .option('--re-link', 'recompute symlink strategy from current platform capabilities');
 
+// Single source of truth for --cwd deprecation: fires once before any
+// subcommand action regardless of whether --cwd was passed globally or
+// per-command. New subcommands inherit this for free.
+program.hook('preAction', (_thisCommand, actionCommand) => {
+  warnDeprecatedCwdIfUsed(actionCommand.opts(), program.opts());
+});
+
 // ---------------------------------------------------------------------------
 // --version / -v — print immediately then do async update check
 // ---------------------------------------------------------------------------
@@ -159,7 +166,6 @@ program
   .option('--force-locale-switch', 'allow switching installer locale during upgrade')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
-    warnDeprecatedCwdIfUsed(cmdOpts, globalOpts);
     const mergedDir      = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes      = cmdOpts.yes      ?? globalOpts.yes      ?? false;
     const mergedReLink   = cmdOpts.reLink   ?? globalOpts.reLink   ?? false;
@@ -204,7 +210,6 @@ program
   .option('-y, --yes', 'skip confirmation prompt')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
-    warnDeprecatedCwdIfUsed(cmdOpts, globalOpts);
     const mergedDir = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes = cmdOpts.yes ?? globalOpts.yes ?? false;
 
