@@ -76,6 +76,21 @@ if (handledVersion) process.exit(0);
 const { Command, Option } = await import('commander');
 const program = new Command();
 
+// ---------------------------------------------------------------------------
+// Deprecation warnings — emitted to stderr once per invocation.
+// Source of truth: docs/cli-contract.md.
+// ---------------------------------------------------------------------------
+let _cwdWarned = false;
+function warnDeprecatedCwdIfUsed(cmdOpts, globalOpts) {
+  if (_cwdWarned) return;
+  if (cmdOpts.cwd != null || globalOpts.cwd != null) {
+    process.stderr.write(
+      '[deprecated] --cwd is deprecated and will be removed in v2.0. Use --directory instead.\n'
+    );
+    _cwdWarned = true;
+  }
+}
+
 program
   .name('lumina')
   .description('Lumina Wiki — domain-agnostic, multi-IDE wiki scaffolder')
@@ -144,6 +159,7 @@ program
   .option('--force-locale-switch', 'allow switching installer locale during upgrade')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
+    warnDeprecatedCwdIfUsed(cmdOpts, globalOpts);
     const mergedDir      = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes      = cmdOpts.yes      ?? globalOpts.yes      ?? false;
     const mergedReLink   = cmdOpts.reLink   ?? globalOpts.reLink   ?? false;
@@ -188,6 +204,7 @@ program
   .option('-y, --yes', 'skip confirmation prompt')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
+    warnDeprecatedCwdIfUsed(cmdOpts, globalOpts);
     const mergedDir = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes = cmdOpts.yes ?? globalOpts.yes ?? false;
 
