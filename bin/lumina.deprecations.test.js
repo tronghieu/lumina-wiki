@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -97,6 +97,80 @@ test('global --cwd (before subcommand) also emits the warning', () => {
       r.stderr,
       /\[deprecated\][^\n]*--cwd[^\n]*v2\.0/,
       `expected deprecation warning when --cwd is global; got: ${r.stderr.slice(0, 300)}`,
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Path propagation regression — pins that --cwd / --directory actually direct
+// writes to the target path, not silently to process.cwd().
+//
+// History: a `process.cwd()` default on the program-level --directory option
+// caused commander to populate `globalOpts.directory` for every invocation,
+// short-circuiting the merge expression
+//   cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd()
+// before it could see the user's --cwd value. The result: `install --cwd <X>`
+// silently scaffolded into the test runner's cwd (the repo root) instead of
+// <X>. The fix is in bin/lumina.js — drop the program-level default and rely
+// on the trailing `?? process.cwd()` as the single source of truth.
+// ---------------------------------------------------------------------------
+
+test('install --cwd <tmp> writes into <tmp>, not cwd', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'lumi-dep-cwd-install-'));
+  try {
+    const r = runCli(
+      ['install', '--cwd', tmp, '--yes', '--packs', 'core'],
+      { timeout: 60_000 },
+    );
+    assert.equal(r.status, 0, `install must succeed; stderr: ${r.stderr.slice(0, 400)}`);
+
+    // Strong signal the install landed in <tmp>: manifest is written last,
+    // and atomic-rename means it only exists if the install completed.
+    assert.ok(
+      existsSync(join(tmp, '_lumina', 'manifest.json')),
+      `expected manifest at <tmp>/_lumina/manifest.json; cwd-leak likely`,
+    );
+    assert.ok(
+      existsSync(join(tmp, 'README.md')),
+      `expected <tmp>/README.md to be rendered`,
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('install --directory <tmp> writes into <tmp> (canonical flag)', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'lumi-dep-dir-install-'));
+  try {
+    const r = runCli(
+      ['install', '--directory', tmp, '--yes', '--packs', 'core'],
+      { timeout: 60_000 },
+    );
+    assert.equal(r.status, 0, `install must succeed; stderr: ${r.stderr.slice(0, 400)}`);
+    assert.ok(
+      existsSync(join(tmp, '_lumina', 'manifest.json')),
+      `expected manifest at <tmp>/_lumina/manifest.json`,
+    );
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('global --cwd before subcommand also propagates path', () => {
+  // Mirrors the `lumina --cwd <path> install` form. Same regression class:
+  // if globalOpts.directory has a default value, this can be masked.
+  const tmp = mkdtempSync(join(tmpdir(), 'lumi-dep-global-cwd-install-'));
+  try {
+    const r = runCli(
+      ['--cwd', tmp, 'install', '--yes', '--packs', 'core'],
+      { timeout: 60_000 },
+    );
+    assert.equal(r.status, 0, `install must succeed; stderr: ${r.stderr.slice(0, 400)}`);
+    assert.ok(
+      existsSync(join(tmp, '_lumina', 'manifest.json')),
+      `global --cwd must propagate; expected <tmp>/_lumina/manifest.json`,
     );
   } finally {
     rmSync(tmp, { recursive: true, force: true });

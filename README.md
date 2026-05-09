@@ -177,7 +177,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-check` | Check the wiki for errors, such as broken links. |
 | | `/lumi-reset` | Safely reset parts of the wiki. |
 | | `/lumi-verify` | Check that wiki notes match the sources they cite. Reports anything suspicious for your review; never edits notes for you. |
-| | `/lumi-help` | Read your workspace state and recommend one next action. Pass `skills` to see every command (`/lumi-help skills`). |
+| | `/lumi-help` | Read your workspace state and recommend one next action. Pass `skills` to list every command, or `explain <topic>` to ask how Lumina itself works (e.g., `/lumi-help explain bidirectional links`). |
 | **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
 | | `/lumi-research-watchlist` | Choose research topics for scheduled discovery with AI help. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
@@ -198,7 +198,7 @@ The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`;
 Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 
 **Near-term (Stability & New Ingestion)**
-- [x] **`/lumi-help` Skill:** A smart assistant that reads your workspace state and tells you the one thing to do next; pass `skills` to see every command.
+- [x] **`/lumi-help` Skill:** A smart assistant that reads your workspace state and tells you the one thing to do next; `skills` shows every command, `explain <topic>` answers how Lumina itself works.
 - [x] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install. *(shipped in v1.2)*
 - [ ] **Native DOCX & Image OCR:** Ingest Word files and screenshots directly into your wiki.
 - [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.

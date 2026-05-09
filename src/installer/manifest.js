@@ -3,9 +3,16 @@
  * @description Reader/writer for the three Lumina installer state files.
  *
  * Three state files (single concern each, atomic write per file):
- *   1. _lumina/manifest.json       — install state
- *   2. _lumina/_state/skills-manifest.csv — skill inventory
+ *   1. _lumina/manifest.json              — install state
+ *   2. _lumina/_state/skills-manifest.csv — skill inventory (paths/sha/version)
  *   3. _lumina/_state/files-manifest.csv  — hash tracking
+ *
+ * The workflow catalog is _lumina/schema/skills-catalog.csv — it is the
+ * canonical source of truth for /lumi-help (read directly at runtime). No
+ * derived JSON mirror exists; commands.js renders the .csv template at
+ * install time and lumi-help reads it via Bash. Earlier versions of the
+ * installer wrote a derived _state/skills-manifest.json — that file is now
+ * obsolete and is cleaned up on re-install.
  *
  * All writes go through atomicWrite from fs.js.
  * Reads are defensive: missing file → null; truncated CSV → empty rows + warning.
@@ -356,11 +363,40 @@ export function migrateManifest(manifest, targetVersion) {
 }
 
 // ---------------------------------------------------------------------------
+// Obsolete-file cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove obsolete catalog files left behind by older installs.
+ *
+ * Pre-v1.4 installs wrote two files that are no longer used:
+ *   - _lumina/schema/skills-catalog.md         (replaced by skills-catalog.csv)
+ *   - _lumina/_state/skills-manifest.json      (no longer derived)
+ *
+ * This is best-effort — missing files are not an error.
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<void>}
+ */
+export async function cleanupObsoleteCatalog(projectRoot) {
+  const { unlink } = await import('node:fs/promises');
+  const candidates = [
+    join(projectRoot, '_lumina', 'schema', 'skills-catalog.md'),
+    join(projectRoot, '_lumina', '_state', 'skills-manifest.json'),
+  ];
+  await Promise.all(candidates.map(async (p) => {
+    try { await unlink(p); } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // State file paths helper
 // ---------------------------------------------------------------------------
 
 /**
- * Return the canonical paths for all three state files.
+ * Return the canonical paths for all installer state files.
  *
  * @param {string} projectRoot
  * @returns {{ manifestJson: string, skillsCsv: string, filesCsv: string }}

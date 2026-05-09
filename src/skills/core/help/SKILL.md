@@ -1,135 +1,136 @@
 ---
 name: lumi-help
 description: >
-  Orient the user in their Lumina wiki workspace. Default mode reads live
-  workspace state (manifest, index, log, raw/) and recommends ONE next action.
-  When the user passes `skills`/`catalog`/`list` as an argument OR asks a
-  features question (e.g. "what skills are available", "có những tính năng
-  nào", "list commands"), switch to catalog mode and dump the full skill
-  list. Use whenever the user says "help", "what do I do next", "where do
-  I start", "I'm lost", or asks for an orientation.
+  Orient the user in their Lumina wiki workspace. Three modes:
+  Orientation (default — recommend ONE next action; offer to run),
+  Catalog (on `skills`/`list` arg or features question — render
+  skills-catalog.csv grouped by pack), Framework Q&A (on `explain`
+  arg or how-it-works question — answer from local docs with
+  citations). Use when the user says "help", "what next", "I'm lost",
+  asks for orientation, or asks how Lumina works.
 allowed-tools:
   - Bash
+  - Read
 ---
 
 # /lumi-help
 
 Read `README.md` at the project root before this SKILL.md.
 
-## Two modes, two jobs
+This file is the contract — it has everything you need for normal invocations.
+For precision detail (exact Bash commands, full output templates, multilingual
+keyword lists, fallback codes) consult `_lumina/schema/lumi-help-runbook.md`
+**only when the relevant section explicitly points to it**. Don't load it
+upfront — Mode B never needs it.
+
+## Purpose
+
+Help the user know:
+
+1. **Where they are** — installed packs, what's done, what's pending.
+2. **What to do next** — ONE recommended skill with a cited reason.
+3. **How to invoke it** — name, args, language hint; offer to run for them.
+4. **What's available** — full catalog grouped by pack on demand.
+5. **How Lumina works** — framework questions answered from local docs with citations.
+
+## Step 0 · Read languages, ALWAYS first
+
+Before mode routing, read `_lumina/config/lumina.config.yaml` and bind:
+
+- `COMM_LANG` ← `communication_language` — language of every word back to user.
+- `DOC_LANG` ← `document_output_language` — surfaced when recommending a write-skill.
+
+User never passes a language flag. Match input tone (casual ↔ formal).
+
+## Three modes (router decides AFTER Step 0, BEFORE other reads)
 
 | Trigger | Mode | Job |
 |---|---|---|
-| No argument, or "help / I'm lost / what next" | **Orientation** | "Tell me the one thing to do next." |
-| Argument is `skills`/`catalog`/`list`, OR user asks a features/capabilities question | **Catalog** | "Show me everything Lumina can do." |
+| no arg, or "help / what next / I'm lost" | **A · Orientation** | recommend ONE next action; offer to run |
+| `skills`/`catalog`/`list`, or features question | **B · Catalog** | render `skills-catalog.csv` grouped by pack |
+| `explain`/`docs`, or how-it-works question | **C · Q&A** | answer with doc citations |
 
-Decide mode **before** running the decision ladder. Never mix the two.
+Keyword detection is multilingual (EN + VI + ZH). Mode B takes precedence over
+C. If the question is about wiki *content* (not the framework), bridge to
+`/lumi-ask` instead of answering in Mode C.
 
-### Catalog-mode keyword detection (case-insensitive, EN + VI)
+> When the user's input language is not English, or when the trigger is borderline,
+> read the full keyword lists at `_lumina/schema/lumi-help-runbook.md` § Router
+> before deciding. English plain-text triggers can be matched from this table alone.
 
-`skills`, `catalog`, `list`, `features`, `available`, `commands`, `capabilities`,
-`tính năng`, `khả năng`, `lệnh`, `liệt kê`, `có gì`, `có những gì`, `what can`, `what does`
+## Mode A — Orientation (5 steps: locate → detect → compute → ground → cite)
 
-If any of these appear in the argument or the user's surrounding message → catalog mode. Otherwise → orientation mode.
+Decision ladder is **load-bearing** — pick first match in this order:
 
----
+1. Manifest missing → `/lumi-init`.
+2. Required skill with both gates satisfied (`after` AND `before`),
+   completed=false → that skill.
+3. raw/ files not yet ingested → `/lumi-ingest`.
+4. Default → `/lumi-ask`.
 
-## Mode A — Orientation (default)
+Output: skill recommendation + one-sentence reason in `COMM_LANG` + `→ Run`
+line + (write-skill only) `DOC_LANG` note + citation arrow + **"Want me to run
+it now? (yes / show me first / skip)"**. Skip the prompt for case (4). On
+"yes" → invoke; otherwise don't.
 
-### Outcomes
+> For the exact Bash reads at each step (locate / detect / ground), the full
+> formal-and-casual output templates, the idle-wiki hint format, and fallback
+> codes (`__NO_MANIFEST__`, `__NO_CATALOG__`, `__NO_GRAPH__`, `__NO_DATE__`),
+> read `_lumina/schema/lumi-help-runbook.md` § Mode A before producing output.
 
-1. The user receives a recommendation grounded in live workspace state.
-2. Exactly one primary recommendation, with a one-sentence reason citing observed state.
-3. An explicit usage line so the user can run it immediately.
-4. No questions back to the user.
+## Mode B — Catalog
 
-### Read state (single Bash call)
+Parse `_lumina/schema/skills-catalog.csv`. Group rows by `pack` in order
+core → research → reading → other (alphabetical). Pack labels are hardcoded:
 
-```bash
-cat _lumina/manifest.json 2>/dev/null || echo "__MISSING__"
-grep -c "\- \[\[" wiki/index.md 2>/dev/null || echo "0"
-tail -n 10 wiki/log.md 2>/dev/null || echo "__NO_LOG__"
-find raw/ -maxdepth 1 -type f ! -name ".*" ! -name ".gitkeep" 2>/dev/null | sort
-date +%Y-%m-%d 2>/dev/null || echo "__NO_DATE__"
-```
+- `core` → "Core (always installed)"
+- `research` → "Research pack"
+- `reading` → "Reading pack"
+- other → pack name with first letter capitalized
 
-### Decision ladder (first match wins)
+Each entry: `` `[<menu>]` `/<id>` <args if non-empty> — <description> ``. End with
+two footer pointers to `/lumi-help` (orientation) and `/lumi-help explain <topic>`
+(framework Q&A). **Mode B never needs the runbook.**
 
-1. **Manifest is `__MISSING__` or invalid JSON** → `/lumi-init`
-   *Reason:* workspace is not initialized yet.
-2. **Wiki page count is 0** → `/lumi-ingest`
-   *Reason:* wiki has no pages — ingest the first file from `raw/`.
-3. **`raw/` has top-level files whose stems do not appear in `wiki/index.md` wikilinks** → `/lumi-ingest`
-   *Reason:* N file(s) in `raw/` not yet ingested. Include filenames if N ≤ 3.
-4. **Default — wiki is healthy** → `/lumi-ask`
-   *Reason:* wiki is healthy — query the knowledge base.
+## Mode C — Framework Q&A (5 steps: same skeleton as A)
 
-Reasons above are templates. Localize to the user's communication language at output time.
+Doc paths are stable, all shipped to the workspace at install time:
 
-### Idle-wiki hint (additive, not primary)
+| Doc | When |
+|---|---|
+| `README.md` (`<!-- lumina:schema -->` block) | core concepts: layout, page types, link syntax, cross-reference rules, constraints, skills overview |
+| `_lumina/schema/page-templates.md` | page-type frontmatter + section structure |
+| `_lumina/schema/cross-reference-packs.md` | bidirectional-link rules and pack extensions |
+| `_lumina/schema/graph-packs.md` | edge type vocabulary for `wiki/graph/edges.jsonl` |
+| `.agents/skills/<skill-id>/SKILL.md` | when the question is specifically about one skill's behavior |
 
-After the primary recommendation, if `wiki/log.md` is parseable and the most recent `## [YYYY-MM-DD]` heading is more than **30 days** before today, append one line:
+Use the Read tool (not Bash). Read just the slice you need. Build a 1–4
+sentence answer in `COMM_LANG` with a `**Source**:` line. If no doc covers
+the question, say so and point at the closest.
 
-> 💡 No wiki activity in N days — `/lumi-check` runs a graph-health audit when you're ready.
+> For the exact output templates (formal, casual, no-doc fallback) and the
+> rules for when to append the optional "→ Try it" line, read
+> `_lumina/schema/lumi-help-runbook.md` § Mode C before producing output.
 
-The hint never replaces the primary recommendation. The user's job on returning is to resume work, not audit. Skip the hint if `__NO_DATE__` is returned or the date cannot be parsed.
+## Data sources (read-only)
 
-### Output format (orientation)
+| Source | Read in |
+|---|---|
+| `_lumina/config/lumina.config.yaml` | Step 0 (every invocation) |
+| `_lumina/manifest.json` | Mode A |
+| `_lumina/schema/skills-catalog.csv` | Mode A, B |
+| `wiki.mjs list-entities`, `wiki/log.md`, `raw/`, `wiki/index.md` | Mode A |
+| `README.md` schema block, `_lumina/schema/page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`, target skill's `SKILL.md` | Mode C |
 
-```
-## Lumina — Next action
+## Constraints
 
-**/[skill-name]**
-[Reason — one sentence, factual, in the user's language.]
-
-→ Run: `/[skill-name]`
-
-[Optional idle-wiki hint here.]
-
-To see every available skill: `/lumi-help skills`
-```
-
-The trailing "To see every available skill" line appears on every orientation response — it is the bridge to catalog mode for explorer-type users.
-
----
-
-## Mode B — Catalog (skills/catalog/list arg, or features keyword)
-
-### Outcomes
-
-1. The user sees every skill installed in their workspace, grouped by pack.
-2. The list is grounded in the on-disk catalog file — never composed from memory.
-3. The user is shown how to return to orientation.
-
-### Read
-
-```bash
-cat _lumina/schema/skills-catalog.md 2>/dev/null || echo "__NO_CATALOG__"
-```
-
-The catalog file is rendered at install time with only the sections matching the user's installed packs — no further filtering is needed in this skill.
-
-### Output format (catalog)
-
-If the file is present, emit its body verbatim under your own heading, then the bridge line back to orientation:
-
-```
-## Lumina — Skills catalog
-
-[verbatim contents of skills-catalog.md, body only — drop the file's own H1 and intro paragraph]
-
-→ For a recommendation based on your current state: `/lumi-help`
-```
-
-If `__NO_CATALOG__` is returned, fall back to orientation mode and add a one-line note that the catalog file is missing. Never invent a skill list from memory.
-
----
-
-## Constraints (both modes)
-
-- Read only the data sources listed above. Never read wiki page bodies.
-- Never write a file. Never call `wiki.mjs`, `lint.mjs`, or any script.
-- If `wiki/log.md` or `wiki/index.md` is missing, treat as empty — do not surface the error.
-- Surface only what is relevant to the current state. No preamble, no trailing summary, no general reflections about Lumina.
-- All Bash reads run before any reasoning — never infer state from prior conversation.
-- Respond in the user's communication language; localize the reason templates above accordingly.
+- Read only the sources above. Never write a file. Never call mutating
+  `wiki.mjs` subcommands. Read-only ones allowed: `list-entities`,
+  `read-meta`, `read-edges`, `read-citations`, `resolve-alias`.
+- Respond in `COMM_LANG`. Surface `DOC_LANG` next to write-skills.
+- Cite every non-trivial claim in Mode C — if a doc does not say it, don't assert it.
+- Never read `wiki/` page bodies in Mode C, never `raw/`. Reading another skill's `SKILL.md` is allowed only when the user's question is specifically about that skill's behavior.
+- "Want me to run it now?" is a soft prompt — invoke only on affirmative reply.
+- Match the user's tone (casual ↔ formal).
+- All Bash reads happen before reasoning; never infer state from prior conversation.
+- When recommending a verification skill (`/lumi-check`, `/lumi-verify`) right after a write skill (`/lumi-ingest`, `/lumi-edit`, `/lumi-research-*`, `/lumi-reading-*`), suggest the user run it in a fresh context window or via a subagent — the writing context biases the check.

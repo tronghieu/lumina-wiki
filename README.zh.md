@@ -178,7 +178,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-check` | 检查 wiki 中的问题（断链等）。 |
 | | `/lumi-reset` | 安全地删除 wiki 的部分内容。 |
 | | `/lumi-verify` | 核查 wiki 里的笔记是否与引用的来源相符。把可疑之处报告给你审阅；不会替你修改笔记。 |
-| | `/lumi-help` | 读取工作区状态，给出下一步该做的一条建议。加参数 `/lumi-help skills` 可查看全部命令清单。 |
+| | `/lumi-help` | 读取工作区状态，给出下一步该做的一条建议。加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 自己的工作原理（例如 `/lumi-help explain bidirectional links`）。 |
 | **Research**| `/lumi-research-discover` | 发现并排序相关研究论文。 |
 | | `/lumi-research-watchlist` | 帮你选择要定期查找的研究主题。 |
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
@@ -199,7 +199,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 Lumina-Wiki 正在快速演进。这是我们的用户路线图：
 
 **近期计划（稳定性与新导入支持）**
-- [x] **`/lumi-help` 技能：** 智能助手读取工作区状态并告诉你下一步该做什么；加参数 `/lumi-help skills` 可查看全部命令清单。
+- [x] **`/lumi-help` 技能：** 智能助手读取工作区状态并告诉你下一步该做什么；加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 本身的工作原理。
 - [x] **多语言安装：** 安装时可选英文、越南文或中文作为主语言。*（v1.2 已发布）*
 - [ ] **原生 DOCX 与图片 OCR：** 直接将 Word 文件和截图导入您的维基。
 - [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。

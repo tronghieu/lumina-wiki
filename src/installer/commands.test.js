@@ -551,17 +551,59 @@ describe('lumi-help skill', () => {
     }
   });
 
-  test('skills-catalog.md is rendered into _lumina/schema/ and gates pack sections', async () => {
+  test('skills-catalog.csv is rendered into _lumina/schema/ and gates pack rows', async () => {
     const tmp = await makeTmpDir();
     try {
       await installCommand({ cwd: tmp, yes: true, noUpdate: true });
-      const catalog = await readFile(join(tmp, '_lumina', 'schema', 'skills-catalog.md'), 'utf8');
-      assert.match(catalog, /## Core/);
-      assert.match(catalog, /\/lumi-init/);
-      assert.match(catalog, /\/lumi-ingest/);
-      assert.match(catalog, /\/lumi-help/);
-      assert.doesNotMatch(catalog, /## Research pack/);
-      assert.doesNotMatch(catalog, /## Reading pack/);
+      const catalog = await readFile(join(tmp, '_lumina', 'schema', 'skills-catalog.csv'), 'utf8');
+
+      // Header is the contract — guards against silent column reorders.
+      assert.match(
+        catalog,
+        /^id,menu,pack,phase,after,before,required,args,outputs,description/m,
+      );
+
+      // Core skills are always present.
+      assert.match(catalog, /^lumi-init,/m);
+      assert.match(catalog, /^lumi-ingest,/m);
+      assert.match(catalog, /^lumi-help,/m);
+
+      // Pack-conditioned rows are stripped when the pack is not installed.
+      assert.doesNotMatch(catalog, /^lumi-research-/m);
+      assert.doesNotMatch(catalog, /^lumi-reading-/m);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('lumi-help-runbook.md is rendered alongside the catalog', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      const runbook = await readFile(join(tmp, '_lumina', 'schema', 'lumi-help-runbook.md'), 'utf8');
+      // Sanity-check the runbook contains the load-bearing markers it's
+      // referenced for from SKILL.md.
+      assert.match(runbook, /Step 0 · Read languages/);
+      assert.match(runbook, /Mode A · Bash reads/);
+      assert.match(runbook, /Mode B · Catalog rendering/);
+      assert.match(runbook, /Mode C · Output templates/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('install does not write the obsolete skills-catalog.md or skills-manifest.json', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await assert.rejects(
+        () => access(join(tmp, '_lumina', 'schema', 'skills-catalog.md')),
+        err => err.code === 'ENOENT',
+      );
+      await assert.rejects(
+        () => access(join(tmp, '_lumina', '_state', 'skills-manifest.json')),
+        err => err.code === 'ENOENT',
+      );
     } finally {
       await cleanTmp(tmp);
     }
