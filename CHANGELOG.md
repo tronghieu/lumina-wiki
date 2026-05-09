@@ -3,6 +3,45 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] - 2026-05-09
+
+### Added — `/lumi-help` orientation skill (PR #9)
+
+- New core skill `/lumi-help` with three modes:
+  - **Mode A — Orientation** (default): reads live workspace state
+    (`manifest.json`, `wiki/index.md`, `wiki/log.md`, `raw/`) and recommends
+    a single next action. Stale-log surfaces as a 30-day idle hint after
+    the primary recommendation, not as the primary action itself.
+  - **Mode B — Catalog** (`/lumi-help skills` or `/lumi-help catalog`): parses
+    `_lumina/schema/lumi-help.csv` and renders the full skill list grouped by
+    pack. Only sections matching installed packs are rendered at install time.
+  - **Mode C — Framework Q&A** (`/lumi-help explain <question>`): answers
+    how-it-works questions by citing shipped schema docs (`README.md` schema
+    block, `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`,
+    and the relevant `SKILL.md`).
+- `src/templates/_lumina/schema/lumi-help.csv` — pack-conditional skill
+  catalog (CSV, `{{#if pack_*}}` gates rendered at install time). Single
+  source of truth for skill names, menu strings, and prerequisite ordering.
+- `src/templates/_lumina/schema/lumi-help-runbook.md` — procedural detail
+  (bash probes, decision ladder, output formats) separated from the SKILL.md
+  contract; loaded on demand.
+- `cleanupObsoleteCatalog()` in `manifest.js` removes the pre-v1.4
+  `skills-catalog.md` and `_state/skills-manifest.json` on re-install —
+  best-effort, `ENOENT` is not an error.
+- `scripts/verify-lumi-help.test.mjs` — integrity test: validates CSV header
+  contract, column counts, id/menu uniqueness, valid enum values, pack gating,
+  and cross-references for all four pack combinations.
+- `test:catalog` script wired into `package.json` (`node --test scripts/verify-lumi-help.test.mjs`).
+- User guides (EN/VI/ZH) gain a `/lumi-help` section and a "Meet /lumi-help"
+  opener in Quick Start.
+
+### Fixed
+
+- `--cwd` / `--directory` flag propagation regression: dropping the
+  program-level `process.cwd()` default unmasks user-supplied `--cwd` values
+  that were being short-circuited by commander's `??` chain. Pinned by new
+  tests in `bin/lumina.deprecations.test.js`.
+
 ## [1.3.0] - 2026-05-09
 
 ### Added — Local text-document ingestion (research pack)
@@ -344,7 +383,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.1...v0.9.0
