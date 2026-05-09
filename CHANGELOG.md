@@ -3,7 +3,7 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] / v1.x
+## [1.3.0] - 2026-05-09
 
 ### Added — Local text-document ingestion (research pack)
 
