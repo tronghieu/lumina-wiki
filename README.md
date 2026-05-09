@@ -200,7 +200,8 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 **Near-term (Stability & New Ingestion)**
 - [x] **`/lumi-help` Skill:** A smart assistant that reads your workspace state and tells you the one thing to do next; `skills` shows every command, `explain <topic>` answers how Lumina itself works.
 - [x] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install. *(shipped in v1.2)*
-- [ ] **Native DOCX & Image OCR:** Ingest Word files and screenshots directly into your wiki.
+- [x] **Native DOCX, RTF & EPUB ingestion:** Pull Word, Rich Text, and EPUB books straight into your wiki via the research pack. *(shipped in v1.x)*
+- [ ] **Image OCR & Scanned PDFs:** Ingest screenshots and scanned PDFs into your wiki.
 - [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
 - [x] **Improved CI/CD:** Native support for Bun and Node 22 environments. *(shipped in v1.2)*
 

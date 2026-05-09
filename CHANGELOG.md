@@ -3,6 +3,37 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.0] - 2026-05-09
+
+### Added — Local text-document ingestion (research pack)
+
+- `prepare_source.py` (research pack tool) now supports `.docx`, `.rtf`, and
+  `.epub` in addition to the existing PDF / TeX / HTML / Markdown formats.
+- Hardened against zip-bomb (raw size cap + decompressed total cap) and XXE
+  / XML billion-laughs (`defusedxml.defuse_stdlib()`) for ZIP-of-XML formats
+  (`.docx`, `.epub`).
+- DRM-protected EPUB detection: explicit error with hint instead of an
+  opaque parse crash. Lumina does not strip DRM.
+
+### Requirements
+
+- The new format support requires the **research pack**:
+  `lumina install --packs core,research`. After install run
+  `pip install -r _lumina/tools/requirements.txt` to fetch
+  `python-docx`, `striprtf`, `ebooklib`, `beautifulsoup4`, and `defusedxml`.
+- Missing libs raise an actionable `ValueError` (CLI exit 2) with the
+  `pip install …` hint — no silent empty-text writes.
+
+### Known Limitations
+
+- `.docx`: shapes, text boxes, headers/footers, table cells not extracted.
+- `.rtf`: table layout and embedded images discarded.
+- `.epub`: images, CSS, footnotes, and cross-references discarded; chapter-
+  level segmentation is **not** emitted in v1 — it will land alongside
+  `/lumi-chapter-ingest` EPUB support in a future release.
+- `.odt`, image (`.png`, `.jpg`) and scanned-PDF ingestion remain out of
+  scope. See the roadmap entry "Vision/OCR ingestion" for the follow-up.
+
 ## [1.2.0] - 2026-05-07
 
 ### Added
