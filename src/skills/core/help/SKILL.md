@@ -4,7 +4,7 @@ description: >
   Orient the user in their Lumina wiki workspace. Three modes:
   Orientation (default — recommend ONE next action; offer to run),
   Catalog (on `skills`/`list` arg or features question — render
-  skills-catalog.csv grouped by pack), Framework Q&A (on `explain`
+  lumi-help.csv grouped by pack), Framework Q&A (on `explain`
   arg or how-it-works question — answer from local docs with
   citations). Use when the user says "help", "what next", "I'm lost",
   asks for orientation, or asks how Lumina works.
@@ -47,7 +47,7 @@ User never passes a language flag. Match input tone (casual ↔ formal).
 | Trigger | Mode | Job |
 |---|---|---|
 | no arg, or "help / what next / I'm lost" | **A · Orientation** | recommend ONE next action; offer to run |
-| `skills`/`catalog`/`list`, or features question | **B · Catalog** | render `skills-catalog.csv` grouped by pack |
+| `skills`/`catalog`/`list`, or features question | **B · Catalog** | render `lumi-help.csv` grouped by pack |
 | `explain`/`docs`, or how-it-works question | **C · Q&A** | answer with doc citations |
 
 Keyword detection is multilingual (EN + VI + ZH). Mode B takes precedence over
@@ -80,7 +80,7 @@ it now? (yes / show me first / skip)"**. Skip the prompt for case (4). On
 
 ## Mode B — Catalog
 
-Parse `_lumina/schema/skills-catalog.csv`. Group rows by `pack` in order
+Parse `_lumina/schema/lumi-help.csv`. Group rows by `pack` in order
 core → research → reading → other (alphabetical). Pack labels are hardcoded:
 
 - `core` → "Core (always installed)"
@@ -118,7 +118,7 @@ the question, say so and point at the closest.
 |---|---|
 | `_lumina/config/lumina.config.yaml` | Step 0 (every invocation) |
 | `_lumina/manifest.json` | Mode A |
-| `_lumina/schema/skills-catalog.csv` | Mode A, B |
+| `_lumina/schema/lumi-help.csv` | Mode A, B |
 | `wiki.mjs list-entities`, `wiki/log.md`, `raw/`, `wiki/index.md` | Mode A |
 | `README.md` schema block, `_lumina/schema/page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`, target skill's `SKILL.md` | Mode C |
 

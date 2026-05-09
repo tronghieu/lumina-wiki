@@ -187,7 +187,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 | `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
 | `/lumi-reset`  | manual         | Scoped destructive cleanup                            |
 | `/lumi-verify` | manual         | Check that wiki pages match the sources they cite; reports suspicious statements for the user to review; never auto-edits                            |
-| `/lumi-help`   | manual         | Read workspace state and recommend the single next action; offer to run it. Argument `skills`/`catalog`/`list` (or a "what's available" question) switches to catalog mode and renders `_lumina/schema/skills-catalog.csv` grouped by pack. |
+| `/lumi-help`   | manual         | Read workspace state and recommend the single next action; offer to run it. Argument `skills`/`catalog`/`list` (or a "what's available" question) switches to catalog mode and renders `_lumina/schema/lumi-help.csv` grouped by pack. |
 
 {{#if pack_research}}### Pack: research
 

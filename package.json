@@ -86,7 +86,7 @@
     "test:installer": "node --test bin/lumina.flags.test.js bin/lumina.deprecations.test.js bin/lumina.cancel.test.js src/installer/commands.test.js src/installer/fs.test.js src/installer/locales.test.js src/installer/manifest.test.js src/installer/prompts.test.js src/installer/readme-templates.test.js src/installer/template-engine.test.js src/installer/update-check.test.js",
     "test:scripts": "node --test src/scripts/lint.test.mjs src/scripts/reset.test.mjs src/scripts/wiki.test.mjs src/scripts/discover-runner.test.mjs src/scripts/external-ids.test.mjs src/scripts/parse-ids.test.mjs src/scripts/merge-ids.test.mjs src/scripts/build-source.test.mjs src/scripts/wiki-yaml-object.test.mjs",
     "test:python": "python3 -m pytest src/tools/tests -q",
-    "test:catalog": "node --test scripts/verify-skills-catalog.test.mjs",
+    "test:catalog": "node --test scripts/verify-lumi-help.test.mjs",
     "test:all": "npm run test:installer && npm run test:scripts && npm run test:catalog && npm run test:python",
     "test:fs": "node --test src/installer/fs.test.js",
     "test:manifest": "node --test src/installer/manifest.test.js",

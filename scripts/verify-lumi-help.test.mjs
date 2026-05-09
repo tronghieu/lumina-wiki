@@ -1,5 +1,5 @@
 /**
- * Catalog-template integrity check for `src/templates/_lumina/schema/skills-catalog.csv`.
+ * Catalog-template integrity check for `src/templates/_lumina/schema/lumi-help.csv`.
  *
  * Renders the template against four pack configurations (none, research,
  * reading, both) and asserts:
@@ -25,7 +25,7 @@ import { render } from '../src/installer/template-engine.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
-const TEMPLATE = join(REPO, 'src/templates/_lumina/schema/skills-catalog.csv');
+const TEMPLATE = join(REPO, 'src/templates/_lumina/schema/lumi-help.csv');
 
 const EXPECTED_HEADER = 'id,menu,pack,phase,after,before,required,args,outputs,description';
 const EXPECTED_COLUMNS = EXPECTED_HEADER.split(',');
@@ -79,7 +79,7 @@ const cases = [
 ];
 
 for (const c of cases) {
-  test(`skills-catalog.csv renders cleanly: ${c.name}`, async () => {
+  test(`lumi-help.csv renders cleanly: ${c.name}`, async () => {
     const tmpl = await readFile(TEMPLATE, 'utf8');
     const rendered = render(tmpl, c.vars);
     const { header, rows } = parseCsv(rendered);

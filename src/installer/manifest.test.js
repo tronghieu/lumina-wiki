@@ -286,7 +286,7 @@ describe('statePaths', () => {
     assert.equal(paths.skillsCsv, join(root, '_lumina', '_state', 'skills-manifest.csv'));
     assert.equal(paths.filesCsv, join(root, '_lumina', '_state', 'files-manifest.csv'));
     // No `skillsJson` — the workflow catalog is now the .csv file at
-    // _lumina/schema/skills-catalog.csv (canonical, read directly at runtime).
+    // _lumina/schema/lumi-help.csv (canonical, read directly at runtime).
     assert.equal(paths.skillsJson, undefined);
   });
 });
@@ -500,16 +500,16 @@ describe('cleanupObsoleteCatalog', () => {
     await cleanupObsoleteCatalog(root);
   });
 
-  test('does not touch the new skills-catalog.csv', async () => {
+  test('does not touch the new lumi-help.csv', async () => {
     const base = await makeTmpDir();
     const root = await setupProjectRoot(base);
     const schemaDir = join(root, '_lumina', 'schema');
     await mkdir(schemaDir, { recursive: true });
-    await writeFile(join(schemaDir, 'skills-catalog.csv'), 'id,menu\nlumi-init,IN\n', 'utf8');
+    await writeFile(join(schemaDir, 'lumi-help.csv'), 'id,menu\nlumi-init,IN\n', 'utf8');
 
     await cleanupObsoleteCatalog(root);
 
-    const after = await readFile(join(schemaDir, 'skills-catalog.csv'), 'utf8');
+    const after = await readFile(join(schemaDir, 'lumi-help.csv'), 'utf8');
     assert.equal(after, 'id,menu\nlumi-init,IN\n');
   });
 });

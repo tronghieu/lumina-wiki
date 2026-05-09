@@ -340,8 +340,8 @@ export async function installCommand(opts = {}) {
   await writeSkillsManifest(projectRoot, skillRows);
   await writeFilesManifest(projectRoot, fileRows);
   // Remove pre-v1.4 catalog files (skills-catalog.md, _state/skills-manifest.json)
-  // if they linger from an earlier install. The new canonical catalog is
-  // _lumina/schema/skills-catalog.csv, rendered by renderSchemaDocs above.
+  // if they linger from an earlier install. The canonical catalog is
+  // _lumina/schema/lumi-help.csv, rendered by renderSchemaDocs above.
   await cleanupObsoleteCatalog(projectRoot);
 
   // 17.5. Post-upgrade: spawn lint --summary, print banner if findings exist
@@ -1092,7 +1092,7 @@ async function copyTools(projectRoot, { research }) {
 
 async function renderSchemaDocs(projectRoot, templateVars) {
   const schemaDir = join(projectRoot, '_lumina', 'schema');
-  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'skills-catalog.csv', 'lumi-help-runbook.md'];
+  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'lumi-help.csv', 'lumi-help-runbook.md'];
 
   for (const doc of schemaDocs) {
     const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
@@ -1221,7 +1221,7 @@ async function buildFilesManifest(projectRoot, packs, pkgVersion) {
     '_lumina/schema/page-templates.md',
     '_lumina/schema/cross-reference-packs.md',
     '_lumina/schema/graph-packs.md',
-    '_lumina/schema/skills-catalog.csv',
+    '_lumina/schema/lumi-help.csv',
     '_lumina/schema/lumi-help-runbook.md',
     'CLAUDE.md',
     'AGENTS.md',

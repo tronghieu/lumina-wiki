@@ -48,7 +48,7 @@ instead of Mode C.
 
 ```bash
 cat _lumina/manifest.json 2>/dev/null || echo "__NO_MANIFEST__"
-cat _lumina/schema/skills-catalog.csv 2>/dev/null || echo "__NO_CATALOG__"
+cat _lumina/schema/lumi-help.csv 2>/dev/null || echo "__NO_CATALOG__"
 date +%Y-%m-%d 2>/dev/null || echo "__NO_DATE__"
 ```
 
@@ -64,11 +64,15 @@ Multi-value fields (`after`, `before`, `outputs`) are semicolon-separated.
 node _lumina/scripts/wiki.mjs list-entities 2>/dev/null || echo "__NO_GRAPH__"
 grep -E "^## \[[0-9]{4}-[0-9]{2}-[0-9]{2}\] " "wiki/log.md" 2>/dev/null | tail -n 30
 find "raw/" -maxdepth 1 -type f ! -name ".*" ! -name ".gitkeep" 2>/dev/null | sort
-sed -n '/^<!-- lumina:index -->/,/^<!-- \/lumina:index -->/p' "wiki/index.md" 2>/dev/null | head -60
+sed -n '/^<!-- lumina:index -->/,/^<!-- \/lumina:index -->/p' "wiki/index.md" 2>/dev/null | head -200
 ```
 
 Substitute `raw/`, `wiki/log.md`, `wiki/index.md` with paths from
 `manifest.resolvedPaths` if relocated. `__NO_GRAPH__` → entity counts = 0.
+
+The index grep is supplementary context only — `list-entities` is the source
+of truth for ingested-entity coverage. Detect raw/ orphans by diffing the
+`find raw/` output against `list-entities`, not against the index block.
 
 ### Step c · Compute next (DAG over CSV)
 
@@ -78,8 +82,8 @@ For every row S:
 2. Completion — true if any `S.outputs` glob matches a live entity OR `S.id`
    appears in parsed log entries.
 3. Upstream — every id in `S.after` must be completed.
-4. Downstream — for every other row T, if `T.before` contains `S.id`, don't
-   pick T before S has run.
+4. Downstream — for every other row T, if `T.before` contains `S.id`, S depends
+   on T: don't pick S before T has run.
 5. Phase order: `1-bootstrap → 2-ingest → 3-query → anytime`.
 
 Pick (first match wins):
@@ -94,7 +98,7 @@ Pick (first match wins):
 Idle hint (additive, never replaces primary): if last `## [YYYY-MM-DD]` log
 heading is more than 30 days before today, append:
 
-> 💡 No wiki activity in N days — `/lumi-check` runs a graph-health audit when you're ready.
+> Hint: No wiki activity in N days — `/lumi-check` runs a graph-health audit when you're ready.
 
 ### Step d · Ground
 
@@ -119,7 +123,7 @@ One `resolve-alias` call. No retry. Omit citation arrow when none found.
 [if write-skill: "Wiki pages will be written in <DOC_LANG>."]
 
 ↳ <citation path>     ← only if step d found one
-[💡 Idle-wiki hint, if applicable]
+[Idle-wiki hint, if applicable]
 
 Want me to run it now? (yes / show me first / skip)
 
@@ -143,7 +147,7 @@ arrow `↳` if step d found one.
 ## Mode B · Catalog rendering
 
 ```bash
-cat _lumina/schema/skills-catalog.csv 2>/dev/null || echo "__NO_CATALOG__"
+cat _lumina/schema/lumi-help.csv 2>/dev/null || echo "__NO_CATALOG__"
 ```
 
 Parse with the canonical header. Group rows by `pack` in order:

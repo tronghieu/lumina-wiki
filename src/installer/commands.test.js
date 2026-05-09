@@ -551,11 +551,11 @@ describe('lumi-help skill', () => {
     }
   });
 
-  test('skills-catalog.csv is rendered into _lumina/schema/ and gates pack rows', async () => {
+  test('lumi-help.csv is rendered into _lumina/schema/ and gates pack rows', async () => {
     const tmp = await makeTmpDir();
     try {
       await installCommand({ cwd: tmp, yes: true, noUpdate: true });
-      const catalog = await readFile(join(tmp, '_lumina', 'schema', 'skills-catalog.csv'), 'utf8');
+      const catalog = await readFile(join(tmp, '_lumina', 'schema', 'lumi-help.csv'), 'utf8');
 
       // Header is the contract — guards against silent column reorders.
       assert.match(

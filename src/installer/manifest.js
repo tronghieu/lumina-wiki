@@ -7,7 +7,7 @@
  *   2. _lumina/_state/skills-manifest.csv — skill inventory (paths/sha/version)
  *   3. _lumina/_state/files-manifest.csv  — hash tracking
  *
- * The workflow catalog is _lumina/schema/skills-catalog.csv — it is the
+ * The workflow catalog is _lumina/schema/lumi-help.csv — it is the
  * canonical source of truth for /lumi-help (read directly at runtime). No
  * derived JSON mirror exists; commands.js renders the .csv template at
  * install time and lumi-help reads it via Bash. Earlier versions of the
@@ -370,7 +370,7 @@ export function migrateManifest(manifest, targetVersion) {
  * Remove obsolete catalog files left behind by older installs.
  *
  * Pre-v1.4 installs wrote two files that are no longer used:
- *   - _lumina/schema/skills-catalog.md         (replaced by skills-catalog.csv)
+ *   - _lumina/schema/skills-catalog.md         (replaced by lumi-help.csv)
  *   - _lumina/_state/skills-manifest.json      (no longer derived)
  *
  * This is best-effort — missing files are not an error.
