@@ -18,11 +18,11 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 
 ## Mục Lục
 
-- [Làm Quen Với /lumi-help — Hướng dẫn viên thông minh của bạn](#làm-quen-với-lumi-help--hướng-dẫn-viên-thông-minh-của-bạn)
 - [Những Vấn Đề Khi Quản Lý Tri Thức Theo Cách Cũ](#những-vấn-đề-khi-quản-lý-tri-thức-theo-cách-cũ)
 - [Bạn Có Thể Dùng Lumina-Wiki Để Làm Gì?](#bạn-có-thể-dùng-lumina-wiki-để-làm-gì)
 - [Lumina-Wiki Hoạt Động Như Thế Nào?](#lumina-wiki-hoạt-động-như-thế-nào)
 - [Cài Đặt](#cài-đặt)
+- [Làm Quen Với /lumi-help](#làm-quen-với-lumi-help)
 - [Cách Gọi Lệnh Trong AI Agent](#cách-gọi-lệnh-trong-ai-agent)
 - [Bắt Đầu Nhanh](#bắt-đầu-nhanh)
 - [Research Pack Cho Công Việc Nghiên Cứu](#research-pack-cho-công-việc-nghiên-cứu)
@@ -34,27 +34,6 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 - [Một Workflow Gợi Ý Cho Người Làm Nghiên Cứu](#một-workflow-gợi-ý-cho-người-làm-nghiên-cứu)
 - [Nâng cao: Tìm tài liệu định kỳ](advanced-scheduled-discovery.vi.md)
 - [Nâng cao: Tăng tốc tìm kiếm với QMD](advanced-qmd.vi.md)
-
-## Làm Quen Với /lumi-help — Hướng dẫn viên thông minh của bạn
-
-`/lumi-help` là lệnh đáng nhớ nhất, trước cả những lệnh khác.
-
-Quên mất mình đang làm gì? Gõ `/lumi-help`. Mở project ra, không biết bắt đầu từ đâu? Gõ `/lumi-help`. Muốn xem hết những gì Lumina-Wiki làm được? `/lumi-help skills`. Tò mò Lumina hoạt động *ra sao* bên dưới? `/lumi-help explain <chủ đề>`.
-
-```text
-/lumi-help                       # một bước kế tiếp, dựa trên wiki của bạn lúc này
-/lumi-help skills                # toàn bộ danh sách lệnh đang được cài
-/lumi-help explain <chủ đề>      # hỏi cách Lumina hoạt động (ví dụ: bidirectional links)
-```
-
-Bạn cứ hình dung nó như một hướng dẫn viên đã quen project của bạn:
-
-- Nó liếc vào `raw/` và `wiki/`, xem việc bạn vừa làm gần nhất.
-- Nó chọn nước đi hợp lý nhất — thường là một lệnh, kèm dòng để bạn copy thẳng.
-- Thêm `skills` thì nó liệt kê đủ mọi lệnh bạn có, gom theo từng pack (Core, Research, Reading).
-- Thêm `explain <chủ đề>` thì nó trả lời câu hỏi về chính Lumina — `raw/` khác `wiki/` thế nào, tại sao link phải bidirectional, `lumi-check` thực sự kiểm tra gì — kèm trích dẫn docs để bạn đối chiếu.
-
-Phần còn lại của hướng dẫn này nói Lumina-Wiki *là gì* và *làm gì*. Cài xong rồi, bạn gần như không cần nhớ *dùng thế nào* — đó là việc của `/lumi-help`.
 
 ## Những Vấn Đề Khi Quản Lý Tri Thức Theo Cách Cũ
 
@@ -207,6 +186,22 @@ npx lumina-wiki uninstall
 ```
 Lệnh này sẽ dọn dẹp các tệp hệ thống do Lumina-Wiki tạo ra. Nó sẽ **không bao giờ xóa** các tài liệu gốc của bạn trong `raw/` hoặc kho tri thức trong `wiki/` mà bạn đã dày công xây dựng.
 
+## Làm Quen Với /lumi-help
+
+Cài đặt xong, điều đầu tiên nên thử là gõ `/lumi-help`. Đây là lệnh bạn dùng bất cứ lúc nào không biết làm gì tiếp theo.
+
+```text
+/lumi-help                      # gợi ý một bước tiếp theo phù hợp với dự án của bạn
+/lumi-help skills               # xem danh sách tất cả các lệnh bạn có
+/lumi-help explain <câu hỏi>    # hỏi về cách Lumina hoạt động
+```
+
+Hãy nghĩ về `/lumi-help` như một người bạn quen dự án của bạn:
+
+- **Không kèm gì thêm:** AI nhìn vào dự án của bạn và đề xuất đúng một việc nên làm tiếp. Ví dụ: "Bạn có 2 tài liệu mới chưa nạp, hãy thử `/lumi-ingest`." Dùng khi không nhớ mình đang làm đến đâu, hoặc vừa cài xong và chưa biết bắt đầu từ đâu.
+- **Thêm `skills`:** hiện danh sách đầy đủ các lệnh bạn đang có, mỗi lệnh kèm một câu giải thích ngắn.
+- **Thêm `explain <câu hỏi>`:** giải thích nhanh về cách Lumina hoạt động. Ví dụ: `/lumi-help explain thư mục raw để làm gì` hay `/lumi-help explain lumi-check kiểm tra gì`.
+
 ## Cách Gọi Lệnh Trong AI Agent
 
 Các lệnh của Lumina-Wiki có tên dạng `lumi-*`, ví dụ `lumi-ingest`, `lumi-ask`, `lumi-research-discover`.
@@ -271,16 +266,16 @@ Lumina-Wiki giúp AI trả lời dựa trên phần kiến thức đã được 
 
 Một câu trả lời quan trọng cũng có thể trở thành một trang mới trong wiki. Nhờ vậy, kết quả đọc, so sánh và phân tích không bị mất trong lịch sử chat mà tiếp tục tích lũy vào khu vực tri thức chung.
 
-### 4. Bí? Gõ `/lumi-help`
-Quên mất mình đang làm gì? Muốn xem mọi lệnh có sẵn? Cần nhắc lại một khái niệm của Lumina? Cứ gõ:
+### 4. Không biết làm gì tiếp? Gõ `/lumi-help`
+Quên mất mình đang làm đến đâu? Vừa thêm tài liệu và không biết bước tiếp theo? Muốn xem tất cả các lệnh có sẵn? Cứ gõ:
 
 ```text
-/lumi-help                       # một bước kế tiếp
-/lumi-help skills                # mọi lệnh đang được cài
-/lumi-help explain <chủ đề>      # hỏi cách Lumina hoạt động
+/lumi-help                      # gợi ý một bước tiếp theo
+/lumi-help skills               # xem tất cả các lệnh bạn có
+/lumi-help explain <câu hỏi>    # hỏi về cách Lumina hoạt động
 ```
 
-Nó nhìn wiki của bạn rồi bảo bạn nên làm gì tiếp. Câu trả lời sẽ giống nhau dù bạn vừa cài xong, hay sáu tháng sau mới quay lại.
+AI nhìn vào dự án của bạn và đề xuất đúng một việc nên làm tiếp — ví dụ "Bạn có 3 tài liệu mới chưa nạp, hãy thử `/lumi-ingest`." Câu trả lời phụ thuộc vào tình trạng thực tế của dự án lúc bạn gõ.
 
 ![Ví dụ AI trả lời dựa trên wiki trong OpenAI CodexApp (ChatGPT)](../../assets/social-impacts-of-AI-lumi-answer.png)
 
@@ -418,7 +413,7 @@ Các ví dụ dưới đây dùng cú pháp `/lumi-*`, phù hợp với các mô
 | `/lumi-check` | Nhờ AI kiểm tra sức khỏe wiki: lỗi cấu trúc, liên kết hỏng, hoặc trang chưa được cập nhật đúng. |
 | `/lumi-reset` | Xóa hoặc đặt lại một phần wiki theo cách có kiểm soát. |
 | `/lumi-verify` | Yêu cầu AI kiểm tra xem các trang wiki có thực sự khớp với nguồn bạn đã trích dẫn không. |
-| `/lumi-help` | Nhờ AI gợi ý một bước kế tiếp dựa trên tình trạng wiki hiện tại. Thêm `skills` để xem toàn bộ lệnh, hoặc `explain <chủ đề>` để hỏi cách Lumina hoạt động. |
+| `/lumi-help` | Không biết làm gì tiếp? Gõ lệnh này để được gợi ý bước kế tiếp. Thêm `skills` để xem danh sách tất cả lệnh, hoặc `explain <câu hỏi>` để hỏi về cách Lumina hoạt động. |
 
 ## Kiểm tra ghi chú với /lumi-verify
 
@@ -447,32 +442,32 @@ Một bản báo cáo ngắn liệt kê những câu trong ghi chú không khớ
 
 `/lumi-verify` không bao giờ tự sửa ghi chú giúp bạn. Bạn quyết định xử lý từng phát hiện.
 
-## Khi bạn lạc đường với /lumi-help
+## Khi Bạn Không Biết Làm Gì Tiếp — /lumi-help
 
-`/lumi-help` nhìn vào wiki bạn đang có và mách bạn đúng một việc nên làm tiếp — rất hữu ích khi bạn quên đang dừng ở đâu hoặc không chắc nên dùng lệnh nào. Nếu muốn xem tất cả những gì Lumina-Wiki làm được, thêm `skills`. Nếu muốn biết Lumina *hoạt động ra sao* — `raw/` khác `wiki/` thế nào, tại sao link phải bidirectional, trang "foundation" là gì — thêm `explain <chủ đề>`.
+`/lumi-help` là lệnh bạn có thể gõ bất cứ lúc nào: vừa cài xong chưa biết bắt đầu từ đâu, mở lại dự án sau vài ngày quên mất đang làm đến đâu, hoặc muốn biết Lumina-Wiki còn làm được gì khác.
 
 ### Khi nào nên dùng
 
-- Bạn mở lại dự án sau một thời gian và không nhớ nên bắt đầu từ đâu.
-- Bạn vừa thêm vài file vào `raw/` nhưng quên bước kế tiếp.
-- Bạn muốn xem mọi lệnh có sẵn trong bản cài của mình (dùng `skills`).
-- Bạn muốn một câu trả lời ngắn, có trích dẫn, về một khái niệm của Lumina (dùng `explain <chủ đề>`).
+- Bạn mở lại dự án sau một thời gian và không nhớ mình đang làm đến đâu.
+- Bạn vừa thêm tài liệu mới và không chắc bước tiếp theo là gì.
+- Bạn muốn xem tất cả những lệnh mình đang có.
+- Bạn có thắc mắc về cách Lumina hoạt động và muốn giải thích nhanh.
 
 ### Cách dùng
 
 ```text
-/lumi-help                       # gợi ý một bước kế tiếp
-/lumi-help skills                # xem mọi lệnh đang được cài
-/lumi-help explain <chủ đề>      # Q&A ngắn về chính Lumina
+/lumi-help                      # gợi ý một bước tiếp theo
+/lumi-help skills               # xem toàn bộ các lệnh đang có
+/lumi-help explain <câu hỏi>    # hỏi về cách Lumina hoạt động
 ```
 
 ### Bạn nhận được gì
 
-Ở chế độ mặc định: một lệnh được gợi ý, kèm lý do ngắn dựa trên tình trạng wiki hiện tại (ví dụ: "có ba file trong `raw/` chưa được nạp"), và dòng lệnh chính xác để chạy. Nếu wiki không hoạt động hơn một tháng, sẽ có thêm một dòng nhắc bạn chạy `/lumi-check` khi sẵn sàng — nhưng gợi ý chính vẫn tập trung vào việc tiếp tục công việc chứ không phải kiểm tra.
+**Gõ `/lumi-help` không kèm gì:** AI nhìn vào dự án của bạn và đề xuất đúng một việc nên làm tiếp — ví dụ: "Bạn có 3 tài liệu mới chưa nạp vào wiki, hãy thử `/lumi-ingest`." Nếu bạn chưa đụng vào dự án hơn một tháng, nó sẽ thêm một gợi ý nhỏ để kiểm tra lại tình trạng trước khi tiếp tục.
 
-Ở chế độ `explain <chủ đề>`: một câu trả lời ngắn (1–4 câu) về chính Lumina — khái niệm, quy ước, hay cách một skill cụ thể vận hành — kèm trích dẫn tới docs tương ứng để bạn xác minh hoặc đọc thêm. Mode này không bao giờ đọc nội dung wiki của bạn; muốn vậy thì dùng `/lumi-ask`. Nếu câu hỏi của bạn thực ra là "wiki của tôi nói gì về X", `/lumi-help` sẽ hướng bạn sang `/lumi-ask` thay vì đoán.
+**Gõ `/lumi-help skills`:** bạn thấy danh sách tất cả các lệnh chia thành từng nhóm, mỗi lệnh kèm một câu mô tả ngắn. Nhóm nào bạn chưa cài thì không hiện ra.
 
-Ở chế độ `skills`: danh sách mọi lệnh được nhóm theo pack (Core, Research, Reading), mỗi lệnh kèm một câu mô tả ngắn. Phần của mỗi pack chỉ hiện ra nếu bạn đã cài pack đó.
+**Gõ `/lumi-help explain <câu hỏi>`:** AI trả lời ngắn gọn về cách Lumina hoạt động. Ví dụ: `/lumi-help explain thư mục raw để làm gì` hay `/lumi-help explain lumi-check kiểm tra gì`. Lưu ý: lệnh này chỉ giải thích về cách Lumina vận hành, không đọc nội dung wiki của bạn. Nếu muốn hỏi về nội dung wiki ("wiki của tôi nói gì về chủ đề X?"), hãy dùng `/lumi-ask`.
 
 ## Thêm tài liệu với /lumi-ingest
 
