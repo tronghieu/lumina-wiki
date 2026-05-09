@@ -8,6 +8,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 
 ## Contents
 
+- [Meet /lumi-help — Your Intelligent Guide](#meet-lumi-help--your-intelligent-guide)
 - [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)
 - [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
 - [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
@@ -23,6 +24,27 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [A Suggested Workflow for Researchers](#a-suggested-workflow-for-researchers)
 - [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
 - [Advanced: Accelerate Queries with QMD](advanced-qmd.en.md)
+
+## Meet /lumi-help — Your Intelligent Guide
+
+`/lumi-help` is the one command worth remembering before anything else.
+
+Forgot what you were doing? Type `/lumi-help`. Opened the project after a week and have no idea where to start? Type `/lumi-help`. Want to see every command this thing can run? `/lumi-help skills`. Curious *how* Lumina works under the hood? `/lumi-help explain <topic>`.
+
+```text
+/lumi-help                       # one next step, based on your wiki right now
+/lumi-help skills                # the full menu of every command you have installed
+/lumi-help explain <topic>       # ask how Lumina itself works (e.g., bidirectional links)
+```
+
+Think of it as a guide who already knows your project:
+
+- It glances at `raw/` and `wiki/` and notices what you did last.
+- It picks the most sensible next move — usually one command, with the exact line to copy.
+- Add `skills` and it lays out every command you have installed, grouped by pack (Core, Research, Reading).
+- Add `explain <topic>` and it answers questions about Lumina itself — `raw/` vs `wiki/`, why links must be bidirectional, what `lumi-check` actually checks — citing the local docs so you can verify.
+
+The rest of this guide explains what Lumina-Wiki *is* and *does*. Once it's installed, you almost never need to remember *how* — that's `/lumi-help`'s job.
 
 ## Problems With the Old Way of Managing Knowledge
 
@@ -194,6 +216,15 @@ Once the AI has read a few documents, you can ask:
 $lumi-ask Are there any interesting common points among these documents?
 ```
 
+### 4. Stuck? Type `/lumi-help`
+Forgot what you were doing? Want to see every command available? Need to remember how a Lumina concept works? Just type:
+```text
+/lumi-help                  # one next step
+/lumi-help skills           # every command you have installed
+/lumi-help explain <topic>  # ask how Lumina itself works
+```
+The default mode looks at your wiki and tells you what to do next — same answer the day you install, same answer six months later when you come back. Adding `explain <topic>` switches to a quick Q&A about Lumina itself, with citations to the local docs.
+
 The experience with **OpenAI CodexApp** will be very smooth because it is designed to automatically understand the Lumina-Wiki structure through the `AGENTS.md` file that the installer created for you.
 
 ## Research Pack for Research Work
@@ -328,6 +359,7 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
 | `/lumi-verify` | Ask AI to check that your wiki notes actually match the sources you cited. |
+| `/lumi-help` | Ask AI for the single next step based on what's already in your wiki. Add `skills` to see every command, or `explain <topic>` to ask how Lumina itself works. |
 
 ## Checking your notes with /lumi-verify
 
@@ -355,6 +387,33 @@ A short report listing any statement in your notes that does not match the cited
 - A suggestion (rewrite, remove, or keep with a note).
 
 `/lumi-verify` never edits your notes for you. You decide what to do with each finding.
+
+## Getting unstuck with /lumi-help
+
+`/lumi-help` looks at the wiki you have so far and tells you the single next thing to do — useful when you forget where you left off or you are not sure which command fits. If you want to see everything Lumina-Wiki can do, add `skills`. If you want to know *how* Lumina itself works — what `raw/` vs `wiki/` is for, why links must be bidirectional, what a "foundation" page is — add `explain <topic>`.
+
+### When to use it
+
+- You opened the project after a break and are not sure where to start.
+- You added some files to `raw/` but cannot remember the next step.
+- You want to see every command available in your install (with `skills`).
+- You want a short, cited explanation of a Lumina concept (with `explain <topic>`).
+
+### How to use it
+
+```text
+/lumi-help                       # one recommended next step
+/lumi-help skills                # show every command you have installed
+/lumi-help explain <topic>       # short Q&A about Lumina itself
+```
+
+### What you get back
+
+For the default mode: one suggested command, a short reason that points to what is actually in your wiki right now (for example, "you have three files in `raw/` not added yet"), and the exact line to run next. If your wiki has been idle for more than a month, a one-line note suggests `/lumi-check` when you are ready — but the main suggestion still focuses on resuming the work, not auditing.
+
+For `skills` mode: a grouped list of every command available in your install, organized by pack (Core, Research, Reading), with one sentence per command. Pack sections only appear if you installed that pack.
+
+For `explain <topic>` mode: a short answer (1–4 sentences) about Lumina itself — concepts, conventions, or how a specific skill works — with citations to the relevant local docs so you can verify or read further. This mode never reads your wiki content; ask `/lumi-ask` for that. If your question is "what does my wiki say about X", `/lumi-help` will redirect you to `/lumi-ask` instead of guessing.
 
 ## Adding a document with /lumi-ingest
 
