@@ -786,7 +786,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       log_prefix:   '## [{{date}}] {{skill}} | {{details}}',
       bidirectional_links: {
         mode: 'exempt-only',
-        exemptions: ['foundations/**', 'outputs/**', '*://*'],
+        exemptions: ['foundations/**', 'outputs/**', '*://*', ...(answers.packs.includes('learning') ? ['reflections/**'] : [])],
       },
       graph: {
         enabled: true,

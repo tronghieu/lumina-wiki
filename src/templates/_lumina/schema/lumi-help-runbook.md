@@ -37,8 +37,10 @@ templated form.
   `tại sao`, `giải thích`, `nghĩa là gì`, `怎么`, `如何`, `为什么`, `解释`, `什么是`.
 - *Plus Lumina noun*: `lumi-`, `wiki`, `raw`, `foundations`, `outputs`,
   `summary`, `concepts`, `sources`, `ingest`, `bidirectional`, `link`, `edge`,
-  `graph`, `frontmatter`, `slug`, `pack`, `lint`, `manifest`, `Lumina`,
-  `reflections`, `reflect`, `phản tư`, `反思`.
+  `graph`, `frontmatter`, `slug`, `pack`, `lint`, `manifest`, `Lumina`.
+{{#if pack_learning}}
+  Learning pack adds: `reflections`, `reflect`, `phản tư`, `反思`.
+{{/if}}
 
 If the question is about wiki *content* (not framework), bridge to `/lumi-ask`
 instead of Mode C.
@@ -160,7 +162,9 @@ Pack labels (hardcoded):
 - `core` → "Core (always installed)"
 - `research` → "Research pack"
 - `reading` → "Reading pack"
+{{#if pack_learning}}
 - `learning` → "Learning pack"
+{{/if}}
 - other → pack name with first letter capitalized
 
 Output:

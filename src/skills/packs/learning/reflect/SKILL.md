@@ -135,10 +135,15 @@ or update the reflection page:
 - The summary in the Evolution entry may be written by the AI — it is a record of what
   was written, not the reflection itself.
 
+**Frontmatter `id` field (new pages only):** `reflection-<concept-id>` — flat slug with
+`reflection-` prefix (e.g. `reflection-cognitive-offloading`). Do not use path-prefixed form.
+
 **File path:**
 - New page: `wiki/reflections/<concept-id>.md` — use `Write` tool
-- Existing page: same path — use `Edit` tool (overwrite `## Current understanding`,
-  append to `## Evolution`)
+- Existing page: same path — use `Edit` tool. When editing, use the exact section heading
+  `## Current understanding` as the start anchor and `## Evolution` as the end boundary.
+  The `old_string` must span from `## Current understanding` through (but not including)
+  `## Evolution` — never let the match region cross into the Evolution log.
 
 ### Step 6 — Log and confirm
 

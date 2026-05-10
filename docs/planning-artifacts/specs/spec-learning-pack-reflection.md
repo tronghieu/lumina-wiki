@@ -2,7 +2,7 @@
 title: 'Learning Pack — Self-Reflection Infrastructure'
 type: 'feature'
 created: '2026-05-08'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '5ec95392f1f99ec65e47f41fcaaccd1e7964eff3'
 context:
   - 'docs/project-context.md'
@@ -112,6 +112,20 @@ CI & test layer:
 - Given a workspace without learning pack, when invoking `/lumi-help skills`, then no "Learning pack" section appears in the catalog output
 - Given `npm run test:catalog`, when lumi-help.csv renders with `pack_learning=true`, then row `lumi-learning-reflect` appears with pack=`learning`, valid column count, and unique menu code `LR`
 - Given `npm run test:all`, when all tests complete, then zero failures including new schema tests and updated catalog tests
+
+### Review Findings
+
+- [x] [Review][Decision] `id` field format convention — resolved: flat slug with `reflection-` prefix (`reflection-<slug>`). Fixed in `page-templates.md` and `SKILL.md`.
+- [x] [Review][Patch] Edit tool section boundary ambiguity in SKILL.md Step 5 — added explicit section-boundary guidance. [`src/skills/packs/learning/reflect/SKILL.md`]
+- [x] [Review][Patch] `lumina.config.yaml` exemptions list missing `reflections/**` — added `answers.packs.includes('learning')` guard. [`src/installer/commands.js`]
+- [x] [Review][Patch] `commands.test.js` zero coverage for learning pack — added two tests (with/without learning pack). [`src/installer/commands.test.js`]
+- [x] [Review][Patch] L09 false-positives for reflection pages — filter reflections/ from entityFiles before L09. [`src/scripts/lint.mjs`]
+- [x] [Review][Patch] `lumi-help-runbook.md` learning entries unguarded — added `{{#if pack_learning}}` guards for Mode B label and Mode C nouns. [`src/templates/_lumina/schema/lumi-help-runbook.md`]
+- [x] [Review][Patch] `schemas.test.mjs` excluded from `test:scripts` — added to hardcoded file list in `package.json`.
+- [x] [Review][Defer] `answers.packs.includes('learning')` null-guard on upgrade path [`src/installer/commands.js`] — deferred, pre-existing pattern for research/reading carries same risk
+- [x] [Review][Defer] Upgrade pack-addition path not covered in commands.test.js — deferred, pre-existing gap in installer test suite
+- [x] [Review][Defer] L06 exemption only on `edge.to` not `edge.from` — latent gap; convention-enforced by SKILL.md, not code [`src/scripts/lint.mjs`] — deferred, pre-existing
+- [x] [Review][Defer] `related_concepts` slug validation — AI infers slugs without checking against `wiki/concepts/`; a wrong slug silently breaks future `/lumi-learning-connect` — deferred, future improvement
 
 ## Spec Change Log
 

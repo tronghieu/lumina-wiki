@@ -93,6 +93,48 @@ describe('installCommand', () => {
     }
   });
 
+  test('CLI install with learning pack creates wiki/reflections and links skill', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'learning-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core,learning'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /learning: true/);
+      await access(join(workspace, 'wiki', 'reflections'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install without learning pack has no wiki/reflections or learning skill', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'core-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /learning: false/);
+      await assert.rejects(access(join(workspace, 'wiki', 'reflections')));
+      await assert.rejects(access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect')));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('CLI install rejects unknown pack overrides', async () => {
     const tmp = await makeTmpDir();
     try {

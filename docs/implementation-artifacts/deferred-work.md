@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of spec-learning-pack-reflection (2026-05-10)
+
+- `answers.packs.includes('learning')` null-guard on upgrade path (`src/installer/commands.js`) — pre-existing pattern; research/reading carry same risk; audit upgrade path null-safety across all three packs.
+- Upgrade pack-addition path not covered in `commands.test.js` — pre-existing gap; commands.test.js upgrade tests do not assert new directories/skills are created when packs are added on reinstall.
+- L06 exemption only on `edge.to` not `edge.from` (`src/scripts/lint.mjs`) — if a future tool accidentally writes an edge from `reflections/` to a concept, L06 will still fire; consider adding `isExempt(edge.from)` check to fully enforce reflections exemption.
+- `related_concepts` slug validation in `/lumi-learning-reflect` — AI infers slugs without verifying against `wiki/concepts/`; wrong slug silently breaks future `/lumi-learning-connect`; add a slug-resolution step in skill or wiki.mjs.
+
 ## Promoted out of deferred (record only)
 
 - **Goal B — `/lumi-ingest` workflow rewrite (multi-step with HITL gates)** — originally split out of v0.9 on 2026-05-04, then promoted back into v0.9 scope on 2026-05-04 by user decision. The verify and ingest-workflow features now ship together in v0.9. New scope captured in a sibling spec: `spec-v0-9-ingest-workflow.md`.

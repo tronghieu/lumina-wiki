@@ -223,7 +223,7 @@ Created and updated via `/lumi-learning-reflect`. AI never writes reflection con
 
 ```yaml
 ---
-id: reflections/<slug>
+id: reflection-<slug>
 title: "My understanding of <Concept Name>"
 type: reflection
 created: YYYY-MM-DD
