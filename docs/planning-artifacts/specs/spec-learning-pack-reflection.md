@@ -2,7 +2,8 @@
 title: 'Learning Pack — Self-Reflection Infrastructure'
 type: 'feature'
 created: '2026-05-08'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '5ec95392f1f99ec65e47f41fcaaccd1e7964eff3'
 context:
   - 'docs/project-context.md'
 ---
@@ -53,22 +54,23 @@ context:
 Schema layer:
 - `src/scripts/schemas.mjs` → `ENTITY_DIRS`: add `reflections` entry (pack: 'learning')
 - `src/scripts/schemas.mjs` → `EXEMPTION_GLOBS`: add `reflections/**`
-- `src/scripts/schemas.mjs` → `Pack` typedef: extend union with `'learning'`
+- `src/scripts/schemas.mjs` → `Pack` typedef (line 89): extend union with `'learning'`
 - `src/scripts/schemas.mjs` → `REQUIRED_FRONTMATTER`: add `reflections` block
 
 Installer layer:
-- `src/installer/commands.js` → `VALID_PACKS`: add `'learning'`
-- `src/installer/commands.js` → add `LEARNING_WIKI_DIRS` constant (after `READING_WIKI_DIRS`)
-- `src/installer/commands.js` → directory scaffolding block: add `hasLearning` condition
-- `src/installer/commands.js` → `templateVars`: add `pack_learning: hasLearning`
-- `src/installer/commands.js` → `getSkillDefs()`: add learning block with `lumi-learning-reflect`
+- `src/installer/commands.js` → `VALID_PACKS` (line 127): add `'learning'`
+- `src/installer/commands.js` → add `LEARNING_WIKI_DIRS` constant after line 114 (`READING_WIKI_DIRS`)
+- `src/installer/commands.js` → add `hasLearning` after line 223 (`hasReading`), add `if (hasLearning)` scaffolding block after line 243
+- `src/installer/commands.js` → `templateVars` (lines 251–261): add `pack_learning: hasLearning`
+- `src/installer/commands.js` → `renderAndWriteConfig` packs object (lines 763–767): add `learning: answers.packs.includes('learning')` — **missing from original spec, found during investigation**
+- `src/installer/commands.js` → `getSkillDefs()` (line 1064): add learning block with `lumi-learning-reflect`
 
 Template layer:
 - `src/templates/README.md` -- add `{{#if pack_learning}}` guards (layout, page types, skills)
 - `src/templates/README.vi.md` -- same guards, Vietnamese
 - `src/templates/README.zh.md` -- same guards, Chinese
 - `src/templates/_lumina/schema/page-templates.md` -- add `{{#if pack_learning}}` Reflection template
-- `src/templates/_lumina/schema/cross-reference-packs.md` -- add `{{#if pack_learning}}` block documenting reflections exemption (no cross-reference rules)
+- `src/templates/_lumina/schema/cross-reference-packs.md` -- add `{{#if pack_learning}}` block documenting reflections exemption
 - `src/templates/_lumina/schema/lumi-help.csv` -- add `{{#if pack_learning}}` guard block with `lumi-learning-reflect` row
 
 Skill layer:
@@ -78,26 +80,26 @@ Skill layer:
 - `src/templates/_lumina/schema/lumi-help-runbook.md` → Router § Mode C nouns: add `reflections`, `reflect`, `phản tư`, `反思`
 
 CI & test layer:
-- `scripts/ci-idempotency.mjs` → `full-pack` scenario: add `learning` to `--packs`
-- `scripts/ci-package.mjs` → `requiredFiles`: add `src/skills/packs/learning/reflect/SKILL.md`
-- `scripts/verify-lumi-help.test.mjs` → `KNOWN_PACKS`: add `'learning'`; add test cases with `pack_learning` flag combinations
+- `scripts/ci-idempotency.mjs` → `full-pack` scenario (line 34): add `learning` to `--packs`
+- `scripts/ci-package.mjs` → `requiredFiles` array: add `src/skills/packs/learning/reflect/SKILL.md`
+- `scripts/verify-lumi-help.test.mjs` → `KNOWN_PACKS` (line 33): add `'learning'`; expand test combo matrix to 8 cases
 - `src/scripts/schemas.test.mjs` -- **create new file**: reflections entity, EXEMPTION_GLOBS, frontmatter tests
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/scripts/schemas.mjs` -- Add `reflections` to ENTITY_DIRS (pack: 'learning'), add `reflections/**` to EXEMPTION_GLOBS, add REQUIRED_FRONTMATTER block for reflections (id, title, type, created, updated, related_concepts[], related_sources[], evolution_count), update Pack typedef to include 'learning'
-- [ ] `src/installer/commands.js` -- Add 'learning' to VALID_PACKS, add `const LEARNING_WIKI_DIRS = ['wiki/reflections']` after READING_WIKI_DIRS, add `const hasLearning = packs.includes('learning')` after hasReading, add `if (hasLearning) { dirsToCreate.push(...LEARNING_WIKI_DIRS); }` in scaffolding block, add `pack_learning: hasLearning` to templateVars, add learning block to getSkillDefs with lumi-learning-reflect (pack: 'learning', srcPackPath: 'packs/learning')
-- [ ] `src/templates/README.md` + `.vi.md` + `.zh.md` -- Add {{#if pack_learning}} guards for: Repository Layout (wiki/reflections/), Page Types table (Reflection row), Cross-Reference Rules (reflection exemption note), Skills section (learning pack table)
-- [ ] `src/templates/_lumina/schema/page-templates.md` -- Add `{{#if pack_learning}}` Reflection page template with frontmatter (id, title, type, created, updated, related_concepts, related_sources, evolution_count) and sections ## Current understanding + ## Evolution
+- [ ] `src/scripts/schemas.mjs` -- Add `reflections` to ENTITY_DIRS (pack: 'learning'), add `reflections/**` to EXEMPTION_GLOBS, add REQUIRED_FRONTMATTER block for reflections (id, title, type, created, updated, related_concepts[], related_sources[], evolution_count), extend Pack typedef to include 'learning'
+- [ ] `src/installer/commands.js` -- Add 'learning' to VALID_PACKS; add `const LEARNING_WIKI_DIRS = ['wiki/reflections']` after READING_WIKI_DIRS; add `const hasLearning = packs.includes('learning')` after hasReading; add `if (hasLearning) { dirsToCreate.push(...LEARNING_WIKI_DIRS); }` in scaffolding block; add `pack_learning: hasLearning` to templateVars; add `learning: answers.packs.includes('learning')` to the `packs:` block in `renderAndWriteConfig`; add learning block to getSkillDefs with lumi-learning-reflect (pack: 'learning', srcPackPath: 'packs/learning')
+- [ ] `src/templates/README.md` + `.vi.md` + `.zh.md` -- Add `{{#if pack_learning}}` guards for: Repository Layout (wiki/reflections/), Page Types table (Reflection row), Cross-Reference Rules (reflection exemption note), Skills section (learning pack table)
+- [ ] `src/templates/_lumina/schema/page-templates.md` -- Add `{{#if pack_learning}}` Reflection page template with frontmatter (id, title, type, created, updated, related_concepts, related_sources, evolution_count) and sections `## Current understanding` + `## Evolution`
 - [ ] `src/templates/_lumina/schema/cross-reference-packs.md` -- Add `{{#if pack_learning}}` block after reading pack section: "Learning pack has no cross-reference rules — reflections are exempt from bidirectional linking (listed in EXEMPTION_GLOBS)"
 - [ ] `src/skills/packs/learning/reflect/SKILL.md` -- Create skill with name: lumi-learning-reflect, allowed-tools: [Bash, Read, Write, Edit], workflow: read existing reflections → match related concepts → quote past user text → prompt user → write file with Current understanding rewrite + Evolution append
 - [ ] `src/templates/_lumina/schema/lumi-help.csv` -- Add guard block after reading pack block: `{{#if pack_learning}}\nlumi-learning-reflect,LR,learning,anytime,,,false,[concept-id],,guide a self-reflection session; create or update a reflection page\n{{/if}}`
 - [ ] `src/skills/core/help/SKILL.md` → Mode B pack labels list -- Add `- learning → "Learning pack"` after `reading` entry
-- [ ] `src/templates/_lumina/schema/lumi-help-runbook.md` -- (a) Mode B pack labels: add `- \`learning\` → "Learning pack"` to hardcoded list; (b) Router § Mode C Lumina nouns list: add `reflections`, `reflect`, `phản tư`, `反思`
+- [ ] `src/templates/_lumina/schema/lumi-help-runbook.md` -- (a) Mode B pack labels: add `` - `learning` → "Learning pack" `` to hardcoded list; (b) Router § Mode C Lumina nouns list: add `reflections`, `reflect`, `phản tư`, `反思`
 - [ ] `scripts/ci-idempotency.mjs` -- Add 'learning' to full-pack scenario --packs flag: `'core,research,reading,learning'`
 - [ ] `scripts/ci-package.mjs` -- Add `'src/skills/packs/learning/reflect/SKILL.md'` to requiredFiles array
-- [ ] `scripts/verify-lumi-help.test.mjs` -- Add `'learning'` to `KNOWN_PACKS` set; add test cases with `pack_learning: true/false` flag (expand from 4 to 8 combos covering all pack permutations)
+- [ ] `scripts/verify-lumi-help.test.mjs` -- Add `'learning'` to `KNOWN_PACKS` set; add 4 new test cases (existing 4 × 2 for pack_learning: true/false) covering all 8 pack permutations
 - [ ] `src/scripts/schemas.test.mjs` -- **Create new file** using node:test + node:assert/strict: test reflections in ENTITY_DIRS with pack 'learning', test `reflections/**` in EXEMPTION_GLOBS, test REQUIRED_FRONTMATTER.reflections has required keys (id, title, type, created, updated, related_concepts, related_sources, evolution_count)
 
 **Acceptance Criteria:**
@@ -110,6 +112,10 @@ CI & test layer:
 - Given a workspace without learning pack, when invoking `/lumi-help skills`, then no "Learning pack" section appears in the catalog output
 - Given `npm run test:catalog`, when lumi-help.csv renders with `pack_learning=true`, then row `lumi-learning-reflect` appears with pack=`learning`, valid column count, and unique menu code `LR`
 - Given `npm run test:all`, when all tests complete, then zero failures including new schema tests and updated catalog tests
+
+## Spec Change Log
+
+- **2026-05-10**: Investigation found missing task — `renderAndWriteConfig` packs object (lines 763–767) also needs `learning: answers.packs.includes('learning')` so that `lumina.config.yaml` persists the learning pack flag on upgrade reads. Added to commands.js task description and Code Map.
 
 ## Design Notes
 
@@ -157,4 +163,5 @@ evolution_count: 1
 - Inspect `.agents/skills/lumi-learning-reflect/SKILL.md`: frontmatter name matches canonicalId, allowed-tools present
 - Inspect `_lumina/schema/lumi-help.csv` in sandbox: with learning pack, row `lumi-learning-reflect,LR,learning,...` present; without learning pack, row absent
 - Inspect `_lumina/schema/cross-reference-packs.md` in sandbox: with learning pack, exemption section appears
+- Inspect `_lumina/config/lumina.config.yaml` in sandbox: `packs.learning: true` when installed with learning, `false` without
 - Run `/lumi-help skills` in sandbox: "Learning pack" section appears with LR entry

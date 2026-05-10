@@ -48,6 +48,9 @@ Keep this mental map in immediate context:
 {{#if pack_reading}}
 - `wiki/chapters/`, `wiki/characters/`, `wiki/themes/`, `wiki/plot/` (pack: reading)
 {{/if}}
+{{#if pack_learning}}
+- `wiki/reflections/` — personal reflection pages (pack: learning; personal overlay, not part of the academic graph)
+{{/if}}
 
 ### `raw/` is user-owned
 
@@ -96,6 +99,7 @@ Every wiki page has a defined type, frontmatter, and section structure. **Open `
 | Character  | `characters/` | Character profile with arcs, relationships, key chapters (reading)   |
 | Theme      | `themes/`     | Thematic thread traced across the work (reading)                     |
 | Plot       | `plot/`       | Plot threads, beats, and timeline (reading)                          |
+{{/if}}{{#if pack_learning}}| Reflection | `reflections/`| Personal understanding of a concept; rewritable + append-only log (learning) |
 {{/if}}
 
 ---
@@ -136,6 +140,8 @@ Some links are intentionally one-way. Defaults:
 {{#if pack_research}}- **`foundations/**`** — terminal pages
 {{/if}}- **`outputs/**`** — ephemeral artifacts
 - **External URLs** (`*://*`) — out of wiki scope
+{{#if pack_learning}}- **`reflections/**`** — personal overlay; never requires reverse links from academic pages
+{{/if}}
 
 Anything outside an exemption glob must be bidirectional.
 
@@ -196,6 +202,10 @@ Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-wat
 {{#if pack_reading}}### Pack: reading
 
 Adds `/lumi-reading-chapter-ingest` (file a chapter, update characters/themes/plot pages), `/lumi-reading-character-track` (build or refresh a character profile across chapters), `/lumi-reading-theme-map` (trace a theme across chapters with citations), `/lumi-reading-plot-recap` (summarize plot up to a chapter, spoiler-bounded).
+{{/if}}
+{{#if pack_learning}}### Pack: learning
+
+Adds `/lumi-learning-reflect` (guide a self-reflection session; creates or updates a personal `wiki/reflections/` page with a rewritable `## Current understanding` section and an append-only `## Evolution` log; AI acts as a metacognitive mirror — quotes your past words and asks questions — but never writes reflection content for you).
 {{/if}}
 
 ---

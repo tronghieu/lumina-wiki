@@ -41,3 +41,17 @@ These apply in all workspaces regardless of installed packs.
 | `chapters/C` -> `themes/T`          | `themes/T` -> `chapters/C`              | No         |
 | `characters/P` -> `characters/Q`    | `characters/Q` -> `characters/P`        | No         |
 {{/if}}
+{{#if pack_learning}}
+
+---
+
+## Learning pack cross-reference rules
+
+**No bidirectional-link rules.** `reflections/**` is listed in `EXEMPTION_GLOBS` — the entire directory is a personal overlay and is exempt from reverse-link requirements.
+
+Reflection pages reference academic pages via frontmatter (`related_concepts:`, `related_sources:`) only. No graph edges are written and no reverse links are required from concept or source pages back to reflections.
+
+| Forward link                        | Required reverse link                     | Exemption? |
+|-------------------------------------|-------------------------------------------|------------|
+| `reflections/R` -> anything         | (no reverse required — personal overlay) | Yes        |
+{{/if}}

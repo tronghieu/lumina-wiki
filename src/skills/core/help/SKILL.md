@@ -86,6 +86,7 @@ core → research → reading → other (alphabetical). Pack labels are hardcode
 - `core` → "Core (always installed)"
 - `research` → "Research pack"
 - `reading` → "Reading pack"
+- `learning` → "Learning pack"
 - other → pack name with first letter capitalized
 
 Each entry: `` `[<menu>]` `/<id>` <args if non-empty> — <description> ``. End with
