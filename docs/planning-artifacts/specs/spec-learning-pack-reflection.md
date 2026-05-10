@@ -64,6 +64,9 @@ context:
 - `src/templates/README.zh.md` -- same guards, Chinese
 - `src/templates/_lumina/schema/page-templates.md` -- add Reflection template
 - `src/skills/packs/learning/reflect/SKILL.md` -- new skill file
+- `src/templates/_lumina/schema/lumi-help.csv` -- add `{{#if pack_learning}}` guard block with `lumi-learning-reflect` row
+- `src/skills/core/help/SKILL.md` L84 -- add `learning → "Learning pack"` to Mode B pack labels list
+- `src/templates/_lumina/schema/lumi-help-runbook.md` L157-162 -- add `learning → "Learning pack"` to hardcoded pack labels
 - `scripts/ci-idempotency.mjs` L28-38 -- full-pack scenario: add `learning` to `--packs`
 - `scripts/ci-package.mjs` -- required files: add learning SKILL.md sample
 
@@ -75,6 +78,9 @@ context:
 - [ ] `src/templates/README.md` + `.vi.md` + `.zh.md` -- Add {{#if pack_learning}} guards for: Repository Layout (wiki/reflections/), Page Types table (Reflection row), Cross-Reference Rules (reflection exemption note), Skills section (learning pack table)
 - [ ] `src/templates/_lumina/schema/page-templates.md` -- Add Reflection page template with ## Current understanding and ## Evolution sections
 - [ ] `src/skills/packs/learning/reflect/SKILL.md` -- Create skill with name: lumi-learning-reflect, allowed-tools: [Bash, Read, Write, Edit], workflow: read existing reflections → match related concepts → quote past user text → prompt user → write file with Current understanding rewrite + Evolution append
+- [ ] `src/templates/_lumina/schema/lumi-help.csv` -- Add guard block after reading pack block: `{{#if pack_learning}}\nlumi-learning-reflect,LR,learning,anytime,,,false,[concept-id],,guide a self-reflection session; create or update a reflection page\n{{/if}}`
+- [ ] `src/skills/core/help/SKILL.md` L84 -- Add `- learning → "Learning pack"` to the Mode B pack labels list (after `reading`)
+- [ ] `src/templates/_lumina/schema/lumi-help-runbook.md` L157-162 -- Add `- \`learning\` → "Learning pack"` to the hardcoded pack labels list in Mode B section
 - [ ] `scripts/ci-idempotency.mjs` -- Add 'learning' to full-pack scenario --packs flag
 - [ ] `scripts/ci-package.mjs` -- Add learning SKILL.md to required files check
 - [ ] `src/scripts/schemas.test.mjs` -- Add tests: reflections entity exists, pack is 'learning', reflections in EXEMPTION_GLOBS, required frontmatter keys present
@@ -85,6 +91,8 @@ context:
 - Given two consecutive installs with `--packs core,research,reading,learning`, when diffing managed paths, then zero byte drift (idempotency)
 - Given a valid reflection page in `wiki/reflections/`, when running `node lint.mjs`, then L06 (missing reverse edge) is NOT raised for reflection→concept links
 - Given `npm run ci:package`, when checking required files, then `src/skills/packs/learning/reflect/SKILL.md` is present
+- Given a workspace with `--packs core,learning` and invoking `/lumi-help skills`, when Mode B renders the catalog, then a "Learning pack" section appears containing `[LR] /lumi-learning-reflect`
+- Given a workspace without learning pack, when invoking `/lumi-help skills`, then no "Learning pack" section appears in the catalog output
 - Given `npm run test:all`, when all tests complete, then zero failures including new schema tests
 
 ## Design Notes
@@ -129,4 +137,6 @@ evolution_count: 1
 
 **Manual checks:**
 - Inspect rendered README.md in sandbox: learning pack section appears with correct page type and skill table
-- Inspect .agents/skills/lumi-learning-reflect/SKILL.md: frontmatter name matches canonicalId, allowed-tools present
+- Inspect `.agents/skills/lumi-learning-reflect/SKILL.md`: frontmatter name matches canonicalId, allowed-tools present
+- Inspect `_lumina/schema/lumi-help.csv` in sandbox: with learning pack, row `lumi-learning-reflect,LR,learning,...` present; without learning pack, row absent
+- Run `/lumi-help skills` in sandbox: "Learning pack" section appears with LR entry
