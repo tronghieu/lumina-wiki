@@ -1,6 +1,6 @@
 # Lumina-Wiki Roadmap
 
-Lumina-Wiki has reached **v1.4.0** stable.
+Lumina-Wiki has reached **v1.5.0** stable.
 This roadmap tracks intentions and planned upgrades, categorized by timeframe and impact.
 
 **Shipped in v1.2 (2026-05-07):** Multilingual installer (EN/VI/ZH) · Bun smoke + Node 22 LTS in CI · Schema parity for cross-source IDs (`external_ids` namespace) · Persistent HTTP GET cache for fetchers.

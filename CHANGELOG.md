@@ -3,6 +3,21 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.5.0] - 2026-05-10
+
+### Added — Learning Pack: `/lumi-learning-reflect` self-reflection skill (PRs #16, #17)
+
+- New optional **learning** pack installable via `npx lumina-wiki install --packs core,learning`.
+- New skill `/lumi-learning-reflect`: guides metacognitive self-reflection sessions on any concept or source in the wiki.
+  - Creates or updates `wiki/reflections/<slug>.md` — a personal reflection page with a rewritable **"Current understanding"** section and an append-only **"Evolution"** log.
+  - AI acts as a metacognitive mirror: reads past entries, quotes the user's own words, and asks prompting questions — but **never writes reflection content**. The user always authors their own understanding.
+  - Reflection pages are a personal overlay exempt from bidirectional-link requirements (`reflections/**` added to exempt globs in `schemas.mjs`).
+- `schemas.mjs` gains the `reflections` entity type (7 required frontmatter fields: `id`, `title`, `type`, `created`, `updated`, `related_concepts`, `related_sources`, `evolution_count`) scoped to the learning pack.
+- `commands.js` registers the learning pack as a valid selectable option (`VALID_PACKS`), creates `wiki/reflections/` on install, and wires up the `/lumi-learning-reflect` skill symlink.
+- Template READMEs (EN/VI/ZH) and `lumi-help.csv` catalog updated to include the new skill and Learning Pack install option.
+- `cross-reference-packs.md` and `page-templates.md` schema docs extended with reflection page format.
+- PR #17 follow-up: locale strings (EN/VI/ZH) for the new pack prompt, `prompts.js` pack description, and `assert.rejects` CI fix.
+
 ## [1.4.0] - 2026-05-09
 
 ### Added — `/lumi-help` orientation skill (PR #9)
