@@ -128,8 +128,8 @@ describe('installCommand', () => {
       assert.equal(result.status, 0, result.stderr);
       const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
       assert.match(config, /learning: false/);
-      await assert.rejects(access(join(workspace, 'wiki', 'reflections')));
-      await assert.rejects(access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect')));
+      await assert.rejects(() => access(join(workspace, 'wiki', 'reflections')));
+      await assert.rejects(() => access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect')));
     } finally {
       await cleanTmp(tmp);
     }

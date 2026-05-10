@@ -241,6 +241,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     options: [
       { value: 'research', label: t ? t('prompt.packs.option.research.label') : 'Research', hint: t ? t('prompt.packs.option.research.hint') : 'discover/survey/prefill/setup skills + source-fetcher tools' },
       { value: 'reading',  label: t ? t('prompt.packs.option.reading.label') : 'Reading',   hint: t ? t('prompt.packs.option.reading.hint') : 'chapter-ingest/character-track/theme-map/plot-recap skills' },
+      { value: 'learning', label: t ? t('prompt.packs.option.learning.label') : 'Learning', hint: t ? t('prompt.packs.option.learning.hint') : 'self-reflection skills (reflect skill + wiki/reflections/)' },
     ],
     required: false,
   });
