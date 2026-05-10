@@ -14,7 +14,8 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
   - *Spec:* [Lumina Help Skill](./docs/planning-artifacts/specs/spec-lumi-help.md)
 - ~~**Multilingual Installer:** Support English, Vietnamese, and Chinese during the installation process, including localized CLI prompts and documentation seeding.~~ **Shipped in v1.2.**
   - *Spec:* [Multilingual Installer](./docs/planning-artifacts/specs/spec-multilingual-installer.md)
-- **Local Doc & Image Ingestion:** Expand `/lumi-ingest` to support local `.docx`, `.txt`, and Image OCR (screenshots, scans).
+- ~~**Local Text-Document Ingestion:** Expand `/lumi-ingest` to support local `.docx`, `.rtf`, and `.epub` (research pack).~~ **Shipped in v1.x** (research pack only; `pip install -r _lumina/tools/requirements.txt`).
+- **Image OCR & Scanned PDF Ingestion:** Bring screenshots, scanned receipts, and image-only PDFs into the wiki via OCR.
 - ~~**CI/CD Hardening:** Expand the test matrix to include Bun and Node 22 LTS environments.~~ **Shipped in v1.2.**
 - **Stability Lock:** Finalize CLI flags and exit code contracts to ensure long-term tool compatibility.
 - ~~**Schema Parity:** Standardize cross-source ID handling across all core and research skills.~~ **Shipped in v1.2** (`external_ids` namespace, `sources[]` provenance, lint L13/L14/L16).

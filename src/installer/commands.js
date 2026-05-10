@@ -37,6 +37,7 @@ import {
   writeSkillsManifest,
   readFilesManifest,
   writeFilesManifest,
+  cleanupObsoleteCatalog,
   MANIFEST_SCHEMA_VERSION,
 } from './manifest.js';
 import {
@@ -338,6 +339,10 @@ export async function installCommand(opts = {}) {
   await writeManifest(projectRoot, manifest);
   await writeSkillsManifest(projectRoot, skillRows);
   await writeFilesManifest(projectRoot, fileRows);
+  // Remove pre-v1.4 catalog files (skills-catalog.md, _state/skills-manifest.json)
+  // if they linger from an earlier install. The canonical catalog is
+  // _lumina/schema/lumi-help.csv, rendered by renderSchemaDocs above.
+  await cleanupObsoleteCatalog(projectRoot);
 
   // 17.5. Post-upgrade: spawn lint --summary, print banner if findings exist
   if (isUpgrade && existingManifest.packageVersion !== PKG.version) {
@@ -1025,6 +1030,7 @@ function getSkillDefs(packs) {
       { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
       { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
       { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
+      { name: 'help',            canonicalId: 'lumi-help',            displayName: '/lumi-help' },
     ];
     for (const s of coreSkills) {
       defs.push({ ...s, pack: 'core', srcPackPath: 'core' });
@@ -1086,7 +1092,7 @@ async function copyTools(projectRoot, { research }) {
 
 async function renderSchemaDocs(projectRoot, templateVars) {
   const schemaDir = join(projectRoot, '_lumina', 'schema');
-  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md'];
+  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'lumi-help.csv', 'lumi-help-runbook.md'];
 
   for (const doc of schemaDocs) {
     const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
@@ -1215,6 +1221,8 @@ async function buildFilesManifest(projectRoot, packs, pkgVersion) {
     '_lumina/schema/page-templates.md',
     '_lumina/schema/cross-reference-packs.md',
     '_lumina/schema/graph-packs.md',
+    '_lumina/schema/lumi-help.csv',
+    '_lumina/schema/lumi-help-runbook.md',
     'CLAUDE.md',
     'AGENTS.md',
     'GEMINI.md',

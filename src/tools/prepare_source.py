@@ -1,8 +1,8 @@
 """
 prepare_source.py — Normalize a local file into an ingest-ready package.
 
-Accepts one local file (PDF, .tex, .html, .md) and produces a deterministic
-output package at raw/tmp/<slug>/ containing:
+Accepts one local file (PDF, .tex, .html, .md, .txt, .docx, .rtf, .epub)
+and produces a deterministic output package at raw/tmp/<slug>/ containing:
     source.<ext>   — original file (hard-link or copy)
     meta.json      — extracted metadata (title, type, sha256, ext, slug, size)
     text.txt       — extracted plain text
@@ -61,9 +61,18 @@ from typing import Any
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_EXTENSIONS = {".pdf", ".tex", ".html", ".htm", ".md", ".txt"}
+SUPPORTED_EXTENSIONS = {".pdf", ".tex", ".html", ".htm", ".md", ".txt", ".docx", ".rtf", ".epub"}
 # Slug is the first 16 hex chars of the file's SHA256 — enough uniqueness.
 SLUG_LENGTH = 16
+
+# Zip-bomb defense thresholds for ZIP-of-XML formats (.docx, .epub).
+# Raw caps reject oversized files outright; decompressed caps reject ratio
+# attacks. Pre-flight only — does not stream the archive.
+MAX_DOCX_BYTES = 50_000_000              # 50 MB raw .docx
+MAX_DOCX_EXTRACTED_BYTES = 200_000_000   # 200 MB total uncompressed
+MAX_EPUB_BYTES = 100_000_000             # 100 MB raw .epub (long novels + images)
+MAX_EPUB_EXTRACTED_BYTES = 500_000_000   # 500 MB total uncompressed
+EPUB_SIZE_HINT_BYTES = 1_000_000         # extracted-text threshold for stderr note
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +252,136 @@ def _extract_html_text(path: Path) -> str:
     return extractor.get_text()
 
 
+def _check_zip_safety(path: Path, max_bytes: int, max_extracted: int) -> None:
+    """Pre-flight zip-bomb defense: cap raw size + sum of uncompressed sizes."""
+    import zipfile
+
+    raw_size = path.stat().st_size
+    if raw_size > max_bytes:
+        raise ValueError(
+            f"File too large for safe extraction: {raw_size} bytes "
+            f"> {max_bytes}. Refusing to ingest."
+        )
+    try:
+        with zipfile.ZipFile(path) as zf:
+            total = sum(info.file_size for info in zf.infolist())
+            if total > max_extracted:
+                raise ValueError(
+                    f"Decompressed size {total} bytes > {max_extracted}. "
+                    f"Suspected zip-bomb; refusing to ingest."
+                )
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"Not a valid zip-based document: {exc}") from exc
+
+
+def _extract_docx_text(path: Path) -> str:
+    """Extract text from .docx. Body paragraphs only; shapes/textboxes excluded."""
+    try:
+        import defusedxml  # type: ignore[import-untyped]
+        defusedxml.defuse_stdlib()
+        from docx import Document  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise ValueError(
+            "python-docx and defusedxml required for .docx ingestion. "
+            "Install: pip install python-docx defusedxml. "
+            f"(Underlying: {exc})"
+        ) from exc
+
+    _check_zip_safety(path, MAX_DOCX_BYTES, MAX_DOCX_EXTRACTED_BYTES)
+
+    try:
+        doc = Document(str(path))
+    except Exception as exc:  # noqa: BLE001 — python-docx raises wide; surface as ValueError
+        raise ValueError(f"Cannot parse .docx (corrupt or DRM): {exc}") from exc
+
+    return "\n".join(p.text for p in doc.paragraphs)
+
+
+def _extract_rtf_text(path: Path) -> str:
+    """Extract plain text from .rtf using striprtf."""
+    try:
+        from striprtf.striprtf import rtf_to_text  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise ValueError(
+            "striprtf required for .rtf ingestion. "
+            "Install: pip install striprtf. "
+            f"(Underlying: {exc})"
+        ) from exc
+    try:
+        src = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise ValueError(f"Cannot read .rtf file: {exc}") from exc
+    try:
+        return rtf_to_text(src)
+    except Exception as exc:  # noqa: BLE001 — match docx/epub: surface as ValueError exit 2
+        raise ValueError(f"Cannot parse .rtf: {exc}") from exc
+
+
+def _epub_is_drm_protected(path: Path) -> bool:
+    """Detect DRM by presence of META-INF/encryption.xml in the archive."""
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return "META-INF/encryption.xml" in zf.namelist()
+    except zipfile.BadZipFile:
+        return False
+
+
+def _extract_epub_text(path: Path) -> str:
+    """Extract flat text from .epub by walking the spine. v1 = flat text only."""
+    try:
+        import warnings
+        import defusedxml  # type: ignore[import-untyped]
+        defusedxml.defuse_stdlib()
+        import ebooklib  # type: ignore[import-untyped]
+        from ebooklib import epub  # type: ignore[import-untyped]
+        from bs4 import BeautifulSoup  # type: ignore[import-untyped]
+    except ImportError as exc:
+        raise ValueError(
+            "ebooklib, beautifulsoup4, and defusedxml required for .epub ingestion. "
+            "Install: pip install ebooklib beautifulsoup4 defusedxml. "
+            f"(Underlying: {exc})"
+        ) from exc
+
+    _check_zip_safety(path, MAX_EPUB_BYTES, MAX_EPUB_EXTRACTED_BYTES)
+
+    if _epub_is_drm_protected(path):
+        raise ValueError(
+            "EPUB is DRM-protected (META-INF/encryption.xml present). "
+            "DRM removal is the user's responsibility; Lumina does not strip DRM."
+        )
+
+    try:
+        book = epub.read_epub(str(path))
+    except Exception as exc:  # noqa: BLE001 — ebooklib raises wide on bad XML
+        raise ValueError(f"Cannot parse .epub (corrupt or unsupported): {exc}") from exc
+
+    parts: list[str] = []
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", module="bs4")
+        for spine_entry in book.spine:
+            try:
+                doc = book.get_item_with_id(spine_entry[0])
+            except Exception:  # noqa: BLE001
+                continue
+            if doc is None or doc.get_type() != ebooklib.ITEM_DOCUMENT:
+                continue
+            soup = BeautifulSoup(doc.get_content(), "html.parser")
+            text = soup.get_text(separator="\n").strip()
+            if text:
+                parts.append(text)
+
+    full = "\n\n".join(parts)
+    size_bytes = len(full.encode("utf-8"))
+    if size_bytes > EPUB_SIZE_HINT_BYTES:
+        _err(
+            f"Note: extracted EPUB text {size_bytes:,} bytes (> 1 MB). "
+            "Future: /lumi-chapter-ingest may help once EPUB support lands."
+        )
+    return full
+
+
 def _extract_text(path: Path) -> str:
     """Dispatch text extraction by file extension."""
     ext = path.suffix.lower()
@@ -252,6 +391,12 @@ def _extract_text(path: Path) -> str:
         return _extract_tex_text(path)
     if ext in (".html", ".htm"):
         return _extract_html_text(path)
+    if ext == ".docx":
+        return _extract_docx_text(path)
+    if ext == ".rtf":
+        return _extract_rtf_text(path)
+    if ext == ".epub":
+        return _extract_epub_text(path)
     # .md, .txt, and other text files — read as UTF-8
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -366,6 +511,9 @@ def _guess_type(ext: str) -> str:
         ".htm": "webpage",
         ".md": "markdown",
         ".txt": "text",
+        ".docx": "docx",
+        ".rtf": "rtf",
+        ".epub": "epub",
     }.get(ext, "unknown")
 
 
@@ -377,8 +525,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="prepare_source.py",
         description=(
-            "Normalize a local file (PDF, .tex, .html, .md) into an ingest-ready "
-            "package under raw/tmp/<slug>/. Deterministic: same input -> same output."
+            "Normalize a local file (PDF, .tex, .html, .md, .txt, .docx, .rtf, "
+            ".epub) into an ingest-ready package under raw/tmp/<slug>/. "
+            "Deterministic: same input -> same output."
         ),
     )
     parser.add_argument("file", help="Path to the source file to prepare.")

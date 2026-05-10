@@ -1,0 +1,23 @@
+id,menu,pack,phase,after,before,required,args,outputs,description
+lumi-init,IN,core,1-bootstrap,,lumi-ingest,true,,_lumina/manifest.json;wiki/index.md,bootstrap a wiki from existing raw/ content
+lumi-ingest,IG,core,2-ingest,lumi-init,lumi-ask,true,[path/to/file],wiki/sources/**;wiki/log.md,"read a source and write a wiki page (drafts shown for review, then continues unless judgment is needed)"
+lumi-ask,AS,core,3-query,lumi-ingest,,false,[your question],wiki/outputs/**;wiki/summary/**,"query the wiki, synthesize an answer, optionally file a page"
+lumi-edit,ED,core,anytime,,,false,[path/to/wiki/page],,"add, remove, or revise wiki content"
+lumi-check,CH,core,anytime,,,false,,,"lint — broken links, orphans, missing reverse links"
+lumi-reset,RS,core,anytime,,,false,,,scoped destructive cleanup (never touches raw/)
+lumi-verify,VR,core,anytime,,,false,,,flag wiki claims that diverge from cited sources (never auto-edits)
+lumi-help,HP,core,anytime,,,false,[skills | explain <topic>],,"orient yourself; recommend the next action; answer questions about Lumina itself"
+{{#if pack_research}}
+lumi-research-prefill,RP,research,1-bootstrap,lumi-init,lumi-ingest,false,,wiki/foundations/**,seed foundations/ to prevent concept duplication
+lumi-research-discover,RD,research,2-ingest,,lumi-ingest,false,,raw/discovered/**,ranked candidate shortlist of new sources
+lumi-research-watchlist,RW,research,anytime,,lumi-research-discover,false,,_lumina/config/watchlist.yml,choose topics for scheduled discovery
+lumi-research-survey,RV,research,3-query,lumi-ingest,,false,,wiki/summary/**,narrative synthesis across a topic's sources
+lumi-research-topic,RT,research,3-query,lumi-ingest,,false,,wiki/topics/**,cluster concepts and sources into a thematic topic page
+lumi-research-setup,RSS,research,anytime,,,false,,.env,interactive API key configuration
+{{/if}}
+{{#if pack_reading}}
+lumi-reading-chapter-ingest,RCI,reading,2-ingest,lumi-init,,false,[chapter],wiki/chapters/**;wiki/characters/**;wiki/themes/**;wiki/plot/**,file a chapter; update characters/themes/plot pages
+lumi-reading-character-track,RCT,reading,3-query,lumi-reading-chapter-ingest,,false,,wiki/characters/**,build or refresh a character profile across chapters
+lumi-reading-theme-map,RTM,reading,3-query,lumi-reading-chapter-ingest,,false,,wiki/themes/**,trace a theme across chapters with citations
+lumi-reading-plot-recap,RPR,reading,3-query,lumi-reading-chapter-ingest,,false,,wiki/plot/**,spoiler-bounded plot summary up to a chapter
+{{/if}}

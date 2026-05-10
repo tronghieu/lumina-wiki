@@ -7,9 +7,11 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { readFile } from 'node:fs/promises';
 
 import {
   readManifest,
@@ -23,6 +25,7 @@ import {
   FILES_CSV_HEADER,
   statePaths,
   migrateManifest,
+  cleanupObsoleteCatalog,
 } from './manifest.js';
 
 async function makeTmpDir() {
@@ -282,6 +285,9 @@ describe('statePaths', () => {
     assert.equal(paths.manifestJson, join(root, '_lumina', 'manifest.json'));
     assert.equal(paths.skillsCsv, join(root, '_lumina', '_state', 'skills-manifest.csv'));
     assert.equal(paths.filesCsv, join(root, '_lumina', '_state', 'files-manifest.csv'));
+    // No `skillsJson` — the workflow catalog is now the .csv file at
+    // _lumina/schema/lumi-help.csv (canonical, read directly at runtime).
+    assert.equal(paths.skillsJson, undefined);
   });
 });
 
@@ -457,4 +463,53 @@ describe('migrateManifest', () => {
     assert.deepEqual(result.ideTargets, ['cursor']);
   });
 
+});
+
+// ---------------------------------------------------------------------------
+// cleanupObsoleteCatalog — best-effort removal of pre-v1.4 catalog files
+// ---------------------------------------------------------------------------
+
+describe('cleanupObsoleteCatalog', () => {
+  test('removes obsolete skills-catalog.md and _state/skills-manifest.json', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    const schemaDir = join(root, '_lumina', 'schema');
+    await mkdir(schemaDir, { recursive: true });
+    await writeFile(join(schemaDir, 'skills-catalog.md'), '---\n---\n', 'utf8');
+    await writeFile(
+      join(root, '_lumina', '_state', 'skills-manifest.json'),
+      '{}\n',
+      'utf8',
+    );
+
+    await cleanupObsoleteCatalog(root);
+
+    await assert.rejects(
+      () => access(join(schemaDir, 'skills-catalog.md')),
+      err => err.code === 'ENOENT',
+    );
+    await assert.rejects(
+      () => access(join(root, '_lumina', '_state', 'skills-manifest.json')),
+      err => err.code === 'ENOENT',
+    );
+  });
+
+  test('is a no-op when the obsolete files are absent (no throw)', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await cleanupObsoleteCatalog(root);
+  });
+
+  test('does not touch the new lumi-help.csv', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    const schemaDir = join(root, '_lumina', 'schema');
+    await mkdir(schemaDir, { recursive: true });
+    await writeFile(join(schemaDir, 'lumi-help.csv'), 'id,menu\nlumi-init,IN\n', 'utf8');
+
+    await cleanupObsoleteCatalog(root);
+
+    const after = await readFile(join(schemaDir, 'lumi-help.csv'), 'utf8');
+    assert.equal(after, 'id,menu\nlumi-init,IN\n');
+  });
 });

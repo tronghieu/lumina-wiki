@@ -70,6 +70,7 @@ These are absolutes. Every one corresponds to a real failure mode.
    - `1` — user error (bad args)
    - `2` — filesystem / path safety / unknown slug / missing `--yes`
    - `3` — internal / fs failure / upgrade incompatibility / 5xx network
+   - `4` — user cancellation (Ctrl-C in interactive prompt or declined confirm)
 
 ### Cold-start
 

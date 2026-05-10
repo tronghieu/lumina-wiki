@@ -145,8 +145,21 @@ Examples:
 // ---------------------------------------------------------------------------
 // Global options
 // ---------------------------------------------------------------------------
+//
+// IMPORTANT: --directory has NO default here on purpose.
+// If we set `process.cwd()` as the default, commander stores it on
+// `globalOpts.directory` for every invocation — even when the user only
+// passed `--cwd <path>` (which lands on globalOpts.cwd because commander
+// hoists global-shaped flags up regardless of where in argv they appear).
+// The merge expression in each subcommand uses
+//   cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd()
+// and `??` short-circuits as soon as one of those is non-nullish — so a
+// program-level default of process.cwd() would *always* win over the user's
+// `--cwd` value. The trailing `?? process.cwd()` in the merge expression is
+// the single source of truth for the no-flag default; do not duplicate it
+// here. Regression: see test "install --cwd <tmp> writes into <tmp>, not cwd".
 program
-  .option('--directory <path>', 'installation directory', process.cwd())
+  .option('--directory <path>', 'installation directory')
   .addOption(new Option('--cwd <path>', 'alias for --directory').hideHelp())
   .option('-y, --yes', 'accept all defaults (non-interactive)')
   .option('--no-update', 'skip npm registry version check')
