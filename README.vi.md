@@ -78,7 +78,7 @@ npx lumina-wiki install
 
 > **Lưu ý cho người dùng Windows:** Để có trải nghiệm tốt nhất, bạn nên [bật Chế độ nhà phát triển (Developer Mode)](https://learn.microsoft.com/vi-vn/windows/apps/get-started/enable-your-device-for-development) để trình cài đặt có thể sử dụng symlink một cách chính xác. Nếu Developer Mode bị tắt, trình cài đặt sẽ chuyển sang sao chép các file skill; chức năng vẫn hoạt động nhưng sẽ không lý tưởng bằng cho việc cập nhật.
 
-Trình cài đặt sẽ hướng dẫn bạn qua một vài bước thiết lập nhanh, bao gồm cả việc lựa chọn các **Gói (Packs)** tùy chọn như `research` (nghiên cứu) và `reading` (đọc hiểu).
+Trình cài đặt sẽ hướng dẫn bạn qua một vài bước thiết lập nhanh, bao gồm cả việc lựa chọn các **Gói (Packs)** tùy chọn như `research` (nghiên cứu), `reading` (đọc hiểu) và `learning` (học tập).
 
 ### **Bước 2 (Tùy chọn): Cấu hình Gói Research**
 
@@ -117,7 +117,7 @@ Tương tác với wiki của bạn bằng cách sử dụng các lệnh này tr
 -   `/lumi-edit [đường/dẫn/tới/trang/wiki]`: Yêu cầu thay đổi hoặc sửa lỗi cho một trang wiki cụ thể.
 -   `/lumi-check`: Kiểm tra toàn bộ wiki để tìm lỗi (liên kết hỏng, trang mồ côi, v.v.).
 
-*Các kỹ năng bổ sung có thể có sẵn nếu bạn đã cài đặt các gói tùy chọn như `research` hoặc `reading`.*
+*Các kỹ năng bổ sung có thể có sẵn nếu bạn đã cài đặt các gói tùy chọn như `research`, `reading` hoặc `learning`.*
 
 ---
 
@@ -188,6 +188,7 @@ Xem [Hướng dẫn Nâng cao](docs/user-guide/advanced-qmd.vi.md) để biết 
 | | `/lumi-reading-character-track`| Theo dõi các nhân vật và mối quan hệ của họ trong truyện. |
 | | `/lumi-reading-theme-map` | Xác định và lập bản đồ các chủ đề trong một câu chuyện. |
 | | `/lumi-reading-plot-recap` | Cung cấp một bản tóm tắt tuần tự của cốt truyện. |
+| **Learning** | `/lumi-learning-reflect` | Hướng dẫn một buổi phản tư (self-reflection) về một khái niệm hoặc tài liệu bạn đã học. Tạo trang phản tư cá nhân trong `wiki/reflections/` với phần "Hiểu biết hiện tại" có thể chỉnh sửa và nhật ký "Quá trình phát triển" chỉ được ghi thêm (không xóa). AI đóng vai trò gương nhận thức — trích dẫn lại lời bạn và đặt câu hỏi — nhưng không bao giờ viết nội dung phản tư thay bạn. |
 
 Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; thông thường bạn không cần gọi trực tiếp.
 
@@ -198,16 +199,18 @@ Các script chạy nền nằm trong `_lumina/scripts/` và `_lumina/tools/`; th
 Lumina-Wiki đang phát triển nhanh chóng. Dưới đây là lộ trình hướng tới người dùng của chúng tôi:
 
 **Sắp tới (Ổn định & Mở rộng nạp tài liệu)**
-- [x] **Kỹ năng `/lumi-help`:** Trợ lý thông minh đọc trạng thái workspace và mách bạn bước tiếp theo; gõ `/lumi-help skills` để xem toàn bộ lệnh, hoặc `/lumi-help explain <chủ đề>` để hỏi Lumina hoạt động ra sao.
+- [x] **Kỹ năng `/lumi-help`:** Trợ lý thông minh đọc trạng thái workspace và mách bạn bước tiếp theo; gõ `/lumi-help skills` để xem toàn bộ lệnh, hoặc `/lumi-help explain <chủ đề>` để hỏi Lumina hoạt động ra sao. *(đã phát hành trong v1.4)*
+- [x] **Gói Learning:** Các buổi phản tư cá nhân giúp bạn theo dõi sự tiến triển trong hiểu biết về một khái niệm theo thời gian. *(đã phát hành trong v1.4)*
 - [x] **Cài đặt đa ngôn ngữ:** Chọn Tiếng Anh, Tiếng Việt hoặc Tiếng Trung làm ngôn ngữ chính khi cài đặt. *(đã phát hành trong v1.2)*
 - [x] **Nạp DOCX, RTF & EPUB native:** Đưa thẳng file Word, Rich Text và sách EPUB vào wiki qua research pack. *(đã phát hành trong v1.x)*
-- [ ] **OCR ảnh & PDF scan:** Nạp ảnh chụp màn hình và PDF dạng scan vào wiki.
-- [ ] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn.
 - [x] **Cải thiện CI/CD:** Hỗ trợ chính thức cho môi trường Bun và Node 22. *(đã phát hành trong v1.2)*
+- [ ] **Mở rộng nguồn dữ liệu toàn cầu:** Tích hợp trực tiếp với OpenAlex, CORE và Unpaywall để tra cứu DOI-to-PDF đáng tin cậy.
+- [ ] **Theo dõi RSS & Blog:** Tự động phát hiện bài báo mới từ các blog phòng thí nghiệm và tạp chí yêu thích.
+- [ ] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn.
 
 **Dài hạn (Nghiên cứu sâu & Tích hợp)**
-- [ ] **Mở rộng nguồn dữ liệu toàn cầu:** Tích hợp trực tiếp với OpenAlex, CORE và Unpaywall.
-- [ ] **Theo dõi RSS & Blog:** Tự động tìm bài báo mới từ các blog phòng thí nghiệm yêu thích.
+- [ ] **OCR ảnh & PDF scan:** Nạp ảnh chụp màn hình và PDF dạng scan vào wiki.
+- [ ] **Theo dõi phiên bản bài báo:** Nhận thông báo khi một bài báo đã nạp có bản sửa đổi hoặc phiên bản xuất bản chính thức mới.
 - [ ] **Google Workspace:** Nạp trực tiếp Google Docs và Sheets vào đồ thị tri thức.
 - [ ] **Hỗ trợ đa phương tiện:** Xử lý video YouTube và ghi âm Audio thông qua transcript.
 - [ ] **Kiểm định đồ thị tri thức:** Tự động phát hiện mâu thuẫn và sai lệch cấu trúc.
