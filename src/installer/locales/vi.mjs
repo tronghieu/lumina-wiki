@@ -36,6 +36,8 @@ export default {
   'prompt.packs.option.research.hint':         'kỹ năng discover/survey/prefill/setup + công cụ lấy nguồn',
   'prompt.packs.option.reading.label':         'Reading',
   'prompt.packs.option.reading.hint':          'kỹ năng chapter-ingest/character-track/theme-map/plot-recap',
+  'prompt.packs.option.learning.label':        'Learning',
+  'prompt.packs.option.learning.hint':         'kỹ năng tự phản tư (reflect + wiki/reflections/)',
 
   // ── Language pair ──────────────────────────────────────────────────────────
   'prompt.communication_language.message':     'Ngôn ngữ giao tiếp (LLM trò chuyện với bạn)',

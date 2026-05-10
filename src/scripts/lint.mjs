@@ -1285,7 +1285,7 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
   // Fix L09.
   const l09findings = findings.filter(f => f.id === 'L09-index-stale');
   if (l09findings.length > 0) {
-    const { newContent, preview } = fixL09(indexContent, entityFiles);
+    const { newContent, preview } = fixL09(indexContent, entityFiles.filter(f => !f.startsWith('reflections/')));
     if (newContent !== indexContent) {
       if (opts.dryRun) {
         for (const f of l09findings) { f.proposed_fix = preview; }

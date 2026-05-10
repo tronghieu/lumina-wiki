@@ -42,6 +42,8 @@ export default {
   'prompt.packs.option.research.hint':         'discover/survey/prefill/setup 技能 + 来源抓取工具',
   'prompt.packs.option.reading.label':         'Reading',
   'prompt.packs.option.reading.hint':          'chapter-ingest/character-track/theme-map/plot-recap 技能',
+  'prompt.packs.option.learning.label':        'Learning',
+  'prompt.packs.option.learning.hint':         '自我反思技能 (reflect 技能 + wiki/reflections/)',
 
   // ── Language pair ──────────────────────────────────────────────────────────
   'prompt.communication_language.message':     '交流语言(LLM 与你对话使用的语言)',
