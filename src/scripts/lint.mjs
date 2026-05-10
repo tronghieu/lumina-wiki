@@ -1178,7 +1178,8 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL08(edges));
 
   if (indexContent !== undefined) {
-    allFindings.push(...checkL09(indexPath, indexContent, entityFiles));
+    const indexEntityFiles = entityFiles.filter(f => !f.startsWith('reflections/'));
+    allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
   }
 
   // L10: collect all foundation frontmatters in one pass, then check for alias conflicts.

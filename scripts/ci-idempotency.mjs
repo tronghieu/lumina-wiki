@@ -31,7 +31,7 @@ const scenarios = [
       'install',
       '--yes',
       '--no-update',
-      '--packs', 'core,research,reading',
+      '--packs', 'core,research,reading,learning',
       '--ide-targets', 'claude_code,codex,cursor,gemini_cli,qwen,iflow',
       '--communication-language', 'English',
       '--document-output-language', 'English',

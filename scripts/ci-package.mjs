@@ -77,6 +77,7 @@ const requiredFiles = [
   'src/skills/core/init/SKILL.md',
   'src/skills/packs/research/discover/SKILL.md',
   'src/skills/packs/reading/chapter-ingest/SKILL.md',
+  'src/skills/packs/learning/reflect/SKILL.md',
   'src/templates/README.md',
   'src/tools/extract_pdf.py',
   'src/tools/prepare_source.py',

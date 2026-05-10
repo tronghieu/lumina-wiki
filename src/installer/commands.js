@@ -112,6 +112,7 @@ const CORE_WIKI_DIRS = [
 
 const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
 const READING_WIKI_DIRS  = ['wiki/chapters', 'wiki/characters', 'wiki/themes', 'wiki/plot'];
+const LEARNING_WIKI_DIRS = ['wiki/reflections'];
 
 const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download'];
 const RESEARCH_RAW_DIRS = ['raw/discovered'];
@@ -124,7 +125,7 @@ const LUMINA_DIRS = [
   '_lumina/_state',
 ];
 
-const VALID_PACKS = new Set(['core', 'research', 'reading']);
+const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
 
 // ---------------------------------------------------------------------------
@@ -221,6 +222,7 @@ export async function installCommand(opts = {}) {
   const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
+  const hasLearning = packs.includes('learning');
 
   console.log('');
   if (isUpgrade) {
@@ -242,6 +244,9 @@ export async function installCommand(opts = {}) {
   if (hasReading) {
     dirsToCreate.push(...READING_WIKI_DIRS);
   }
+  if (hasLearning) {
+    dirsToCreate.push(...LEARNING_WIKI_DIRS);
+  }
 
   for (const dir of dirsToCreate) {
     await ensureDir(join(projectRoot, dir));
@@ -256,6 +261,7 @@ export async function installCommand(opts = {}) {
     pack_core:     true,
     pack_research: hasResearch,
     pack_reading:  hasReading,
+    pack_learning: hasLearning,
     created_at:    new Date().toISOString().slice(0, 10),
     schema_version: String(MANIFEST_SCHEMA_VERSION),
   };
@@ -764,6 +770,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       core:     true,
       research: answers.packs.includes('research'),
       reading:  answers.packs.includes('reading'),
+      learning: answers.packs.includes('learning'),
     },
     paths: {
       raw:     'raw',
@@ -779,7 +786,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       log_prefix:   '## [{{date}}] {{skill}} | {{details}}',
       bidirectional_links: {
         mode: 'exempt-only',
-        exemptions: ['foundations/**', 'outputs/**', '*://*'],
+        exemptions: ['foundations/**', 'outputs/**', '*://*', ...(answers.packs.includes('learning') ? ['reflections/**'] : [])],
       },
       graph: {
         enabled: true,
@@ -1060,6 +1067,15 @@ function getSkillDefs(packs) {
     ];
     for (const s of readingSkills) {
       defs.push({ ...s, pack: 'reading', srcPackPath: 'packs/reading' });
+    }
+  }
+
+  if (packs.includes('learning')) {
+    const learningSkills = [
+      { name: 'reflect', canonicalId: 'lumi-learning-reflect', displayName: '/lumi-learning-reflect' },
+    ];
+    for (const s of learningSkills) {
+      defs.push({ ...s, pack: 'learning', srcPackPath: 'packs/learning' });
     }
   }
 

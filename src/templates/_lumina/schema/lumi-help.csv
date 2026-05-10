@@ -21,3 +21,6 @@ lumi-reading-character-track,RCT,reading,3-query,lumi-reading-chapter-ingest,,fa
 lumi-reading-theme-map,RTM,reading,3-query,lumi-reading-chapter-ingest,,false,,wiki/themes/**,trace a theme across chapters with citations
 lumi-reading-plot-recap,RPR,reading,3-query,lumi-reading-chapter-ingest,,false,,wiki/plot/**,spoiler-bounded plot summary up to a chapter
 {{/if}}
+{{#if pack_learning}}
+lumi-learning-reflect,LR,learning,anytime,,,false,[concept-id],wiki/reflections/**,guide a self-reflection session; create or update a personal reflection page
+{{/if}}

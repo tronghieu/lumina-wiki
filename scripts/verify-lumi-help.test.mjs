@@ -1,8 +1,8 @@
 /**
  * Catalog-template integrity check for `src/templates/_lumina/schema/lumi-help.csv`.
  *
- * Renders the template against four pack configurations (none, research,
- * reading, both) and asserts:
+ * Renders the template against eight pack configurations (all combinations of
+ * research, reading, and learning) and asserts:
  *   1. the rendered output has the canonical CSV header,
  *   2. every data row has the expected column count,
  *   3. ids and menu codes are unique within each rendering,
@@ -30,7 +30,7 @@ const TEMPLATE = join(REPO, 'src/templates/_lumina/schema/lumi-help.csv');
 const EXPECTED_HEADER = 'id,menu,pack,phase,after,before,required,args,outputs,description';
 const EXPECTED_COLUMNS = EXPECTED_HEADER.split(',');
 const KNOWN_PHASES = new Set(['1-bootstrap', '2-ingest', '3-query', 'anytime']);
-const KNOWN_PACKS = new Set(['core', 'research', 'reading']);
+const KNOWN_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 
 /**
  * Split a CSV line respecting double-quoted fields. Doubled quotes inside a
@@ -72,10 +72,14 @@ function parseCsv(text) {
 }
 
 const cases = [
-  { name: 'core only',                 vars: { pack_research: false, pack_reading: false } },
-  { name: 'core + research',           vars: { pack_research: true,  pack_reading: false } },
-  { name: 'core + reading',            vars: { pack_research: false, pack_reading: true  } },
-  { name: 'core + research + reading', vars: { pack_research: true,  pack_reading: true  } },
+  { name: 'core only',                          vars: { pack_research: false, pack_reading: false, pack_learning: false } },
+  { name: 'core + research',                    vars: { pack_research: true,  pack_reading: false, pack_learning: false } },
+  { name: 'core + reading',                     vars: { pack_research: false, pack_reading: true,  pack_learning: false } },
+  { name: 'core + learning',                    vars: { pack_research: false, pack_reading: false, pack_learning: true  } },
+  { name: 'core + research + reading',          vars: { pack_research: true,  pack_reading: true,  pack_learning: false } },
+  { name: 'core + research + learning',         vars: { pack_research: true,  pack_reading: false, pack_learning: true  } },
+  { name: 'core + reading + learning',          vars: { pack_research: false, pack_reading: true,  pack_learning: true  } },
+  { name: 'core + research + reading + learning', vars: { pack_research: true, pack_reading: true, pack_learning: true  } },
 ];
 
 for (const c of cases) {
@@ -124,6 +128,10 @@ for (const c of cases) {
     assert.equal(
       packs.has('reading'), c.vars.pack_reading,
       `reading pack gating wrong: expected ${c.vars.pack_reading}, got ${packs.has('reading')}`,
+    );
+    assert.equal(
+      packs.has('learning'), c.vars.pack_learning,
+      `learning pack gating wrong: expected ${c.vars.pack_learning}, got ${packs.has('learning')}`,
     );
 
     // 5. dependency references resolve within this rendering
