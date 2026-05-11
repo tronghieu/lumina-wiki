@@ -201,8 +201,9 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   // and IDE stubs. Default N — protects user content.
   if (existingManifest?.locale && existingManifest.locale !== locale) {
     const proceed = await confirm({
-      // Use trilingual literal — t() not yet bound to chosen locale and the
-      // user is mid-switch; both old and new locales are relevant context.
+      // Use trilingual literal — user is mid-switch, so both old and new
+      // locales are relevant context. t() is available here but intentionally
+      // not used so the warning is legible in either locale.
       message: `Locale change ${existingManifest.locale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
       initialValue: false,
     });
