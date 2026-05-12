@@ -151,13 +151,18 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
  * @param {Function} [opts.t]                   - Locale translator function.
  * @returns {Promise<InstallAnswers>}
  */
-export async function runInstallPrompts({ acceptDefaults = false, cwd = process.cwd(), existingManifest = null, defaultLocale = 'en', t = null } = {}) {
+export async function runInstallPrompts({ acceptDefaults = false, cwd = process.cwd(), existingManifest = null, defaultLocale = 'en', t: initialT = null } = {}) {
   if (acceptDefaults) {
     const loc = existingManifest?.locale ?? defaultLocale;
     return defaultAnswers(cwd, loc);
   }
 
   const { intro, outro, text, multiselect, select, confirm, isCancel, cancel } = await getClack();
+
+  // t starts as whatever the caller passed (may be null on fresh install where
+  // locale is unknown). After Prompt 0 selects the locale, we rebind t to the
+  // user-chosen locale so prompts 1-5 are localized.
+  let t = initialT;
 
   // t may not be available yet at intro time (locale not yet selected);
   // use hardcoded EN for intro — this is the chicken-and-egg prompt.
@@ -179,14 +184,26 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   const locale = localeRaw;
   const langDefault = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
 
+  // Rebind t to the just-selected locale so the remaining prompts render in
+  // the user's chosen language. Without this, prompts 1-5 silently fall back
+  // to EN literals even when the user picked vi/zh at Prompt 0.
+  try {
+    const { loadLocale } = await import('./locales.js');
+    const localeMod = await loadLocale(locale);
+    t = localeMod.t;
+  } catch {
+    // Keep whatever t we had (possibly null → EN literals); never block install.
+  }
+
   // Interactive locale-switch confirmation (Phase 5 §60-63):
   // If user picks a locale different from the installed one on an upgrade,
   // require explicit confirmation before destructively rewriting README.md
   // and IDE stubs. Default N — protects user content.
   if (existingManifest?.locale && existingManifest.locale !== locale) {
     const proceed = await confirm({
-      // Use trilingual literal — t() not yet bound to chosen locale and the
-      // user is mid-switch; both old and new locales are relevant context.
+      // Use trilingual literal — user is mid-switch, so both old and new
+      // locales are relevant context. t() is available here but intentionally
+      // not used so the warning is legible in either locale.
       message: `Locale change ${existingManifest.locale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
       initialValue: false,
     });
