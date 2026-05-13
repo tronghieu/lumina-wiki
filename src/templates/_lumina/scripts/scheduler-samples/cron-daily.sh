@@ -32,6 +32,6 @@ chmod 600 "$LOG"
 
 {
   echo "=== $(date -u +%FT%TZ) watch-run start ==="
-  node _lumina/scripts/discover-runner.mjs --watchlist _lumina/config/watchlist.yml || rc=$?
+  node _lumina/scripts/discover-runner.mjs --config _lumina/config/watchlist.yml || rc=$?
   echo "=== $(date -u +%FT%TZ) watch-run end (rc=${rc:-0}) ==="
 } >> "$LOG" 2>&1

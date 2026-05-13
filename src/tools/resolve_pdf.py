@@ -52,6 +52,7 @@ from fetch_pdf import (
     MAX_PDF_BYTES,
     REQUEST_TIMEOUT,
     USER_AGENT,
+    _safe_get,
     _safe_url,
     _sha16_id,
     head_check,
@@ -197,21 +198,26 @@ def _download_pdf(
         raise ValueError(f"unsafe URL rejected by SSRF guard: {pdf_url}")
 
     # HEAD probe — verify Content-Type before bandwidth commitment.
+    # `head_check` runs with allow_redirects=False so a 3xx Location cannot
+    # drive HEAD into an internal host. 3xx here is treated as inconclusive:
+    # the real defense is `_safe_get` on the GET below, which walks every
+    # redirect hop.
     try:
         status, ctype = head_check(session, pdf_url, timeout=HEAD_TIMEOUT)
     except requests.exceptions.RequestException as exc:
         raise RuntimeError(f"HEAD failed: {exc}") from exc
 
-    # Some servers reject HEAD with 405; treat as "proceed and check on GET".
+    head_is_redirect = 300 <= status < 400
     if status >= 400 and status != 405:
         raise RuntimeError(f"HEAD returned {status}")
-    if ctype and status != 405:
+    if ctype and status != 405 and not head_is_redirect:
         ct = ctype.lower().split(";")[0].strip()
         url_ends_pdf = pdf_url.lower().endswith(".pdf")
         if not (ct.startswith("application/pdf") or ct == "application/octet-stream" or url_ends_pdf):
             raise ValueError(f"HEAD content-type {ctype!r} is not PDF")
 
-    # Streaming GET via fetch_pdf primitives — reuse atomic-write + size cap.
+    # Streaming GET — `_safe_get` walks redirects manually so every hop is
+    # validated against the SSRF guard.
     rel_dir = f"raw/download/{provider_subdir}"
     out_dir = project_root / rel_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -221,14 +227,9 @@ def _download_pdf(
     if out_path.exists():
         return out_path.relative_to(project_root).as_posix()
 
-    resp = session.get(pdf_url, timeout=GET_TIMEOUT, allow_redirects=True, stream=True)
+    resp = _safe_get(session, pdf_url, timeout=GET_TIMEOUT)
     if resp.status_code >= 400:
         raise RuntimeError(f"GET returned {resp.status_code}")
-
-    # Defense-in-depth: re-validate the final URL post-redirects.
-    final_url = resp.url or pdf_url
-    if not _safe_url(final_url):
-        raise ValueError(f"redirect landed on unsafe URL: {final_url}")
 
     import hashlib
     import os
@@ -265,7 +266,15 @@ def _download_pdf(
             pass
         raise ValueError(f"downloaded body too small ({size} bytes)")
 
-    os.replace(tmp_path_str, out_path)
+    try:
+        os.replace(tmp_path_str, out_path)
+    except OSError:
+        # Cross-device rename or permission failure — clean up to avoid .tmp leak.
+        try:
+            os.unlink(tmp_path_str)
+        except OSError:
+            pass
+        raise
     return out_path.relative_to(project_root).as_posix()
 
 

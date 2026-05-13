@@ -165,6 +165,21 @@ class TestUrlValidation:
         with pytest.raises(ValueError, match="empty"):
             fetch_rss.poll("", tmp_project, feed_id="x")
 
+    @pytest.mark.parametrize("url", [
+        "https://127.0.0.1/feed",            # loopback
+        "https://169.254.169.254/feed",      # cloud metadata
+        "https://10.0.0.5/feed",             # RFC1918
+        "https://192.168.1.1/feed",          # RFC1918
+    ])
+    def test_private_ip_feed_rejected_by_ssrf_guard(self, tmp_project, url):
+        with patch("fetch_rss._make_session") as mk:
+            sess = MagicMock()
+            mk.return_value = sess
+            with pytest.raises(ValueError, match="SSRF"):
+                fetch_rss.poll(url, tmp_project, feed_id="x")
+            # Critical: guard must run BEFORE any network I/O.
+            sess.get.assert_not_called()
+
 
 class TestPerFeedStateIsolation:
     def test_two_feeds_write_distinct_files(self, tmp_project):

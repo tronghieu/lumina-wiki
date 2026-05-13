@@ -39,7 +39,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -55,6 +55,7 @@ HEAD_TIMEOUT = 30
 MIN_PDF_SIZE = 100  # bytes — smaller responses are likely error pages
 MAX_PDF_BYTES = 100 * 1024 * 1024  # 100 MiB — hard cap, enforced mid-stream
 CHUNK_SIZE = 65536  # 64 KB chunks for streaming download
+MAX_REDIRECTS = 5  # hard cap on redirect chain length
 
 # Windows-illegal characters in filenames
 _WIN_ILLEGAL_RE = re.compile(r'[<>:"/\\|?*]')
@@ -107,6 +108,15 @@ def _safe_url(url: str) -> bool:
       - hosts that resolve to RFC1918, loopback, link-local, multicast, or
         AWS/GCP metadata service (169.254.169.254)
       - hosts that fail to resolve
+
+    Known limitation — DNS rebinding: this function resolves the host once
+    via `getaddrinfo`, but `requests` resolves DNS again at connect time.
+    A hostname with TTL=0 controlled by an attacker can return a public IP
+    to this check and a private IP to the actual connection. Full
+    mitigation requires a custom HTTPAdapter that pins the resolved IP
+    on the socket (not implemented). For now, callers MUST treat the
+    network they ship into as semi-trusted and rely on egress firewalling
+    for hard SSRF defense.
     """
     try:
         parts = urlparse(url)
@@ -149,15 +159,54 @@ def head_check(
 ) -> tuple[int, str]:
     """Issue HEAD to probe the response without downloading.
 
-    Returns (status_code, content_type_header_value). Caller decides whether
-    the content-type is acceptable. Follows redirects through `_safe_url` —
-    callers MUST `_safe_url(url)` themselves before invoking this.
+    Returns (status_code, content_type_header_value). `allow_redirects=False`
+    so a 3xx Location header cannot drive the HEAD into an internal host —
+    callers must treat 3xx as inconclusive and proceed to a `_safe_get` GET,
+    which validates every redirect hop. Callers MUST `_safe_url(url)` before
+    invoking this.
 
-    Some servers reject HEAD; in that case the response.status_code is
-    propagated as-is so the caller can decide whether to fall back to GET.
+    Some servers reject HEAD with 405; in that case the response.status_code
+    is propagated as-is so the caller can fall back to GET.
     """
-    resp = session.head(url, timeout=timeout, allow_redirects=True)
+    resp = session.head(url, timeout=timeout, allow_redirects=False)
     return resp.status_code, resp.headers.get("Content-Type", "")
+
+
+def _safe_get(
+    session: requests.Session,
+    url: str,
+    *,
+    timeout: int,
+    max_redirects: int = MAX_REDIRECTS,
+) -> requests.Response:
+    """GET with per-hop SSRF validation.
+
+    `requests` follows redirects without re-validating the host of each hop —
+    a 302 → http://10.0.0.1 would be requested before the caller saw resp.url.
+    This helper walks the redirect chain by hand and aborts on the first
+    unsafe URL, ensuring an attacker-supplied Location header can never
+    reach an internal service. Returns the first non-3xx response.
+    """
+    current = url
+    for _ in range(max_redirects + 1):
+        if not _safe_url(current):
+            raise ValueError(f"unsafe URL rejected by SSRF guard: {current}")
+        resp = session.get(
+            current, timeout=timeout, allow_redirects=False, stream=True
+        )
+        if resp.status_code not in (301, 302, 303, 307, 308):
+            return resp
+        loc = resp.headers.get("Location", "")
+        try:
+            resp.close()
+        except Exception:
+            pass
+        if not loc:
+            raise ValueError(
+                f"HTTP {resp.status_code} response missing Location header"
+            )
+        current = urljoin(current, loc)
+    raise ValueError(f"too many redirects (>{max_redirects}) starting at {url}")
 
 
 def _safe_path(base: Path, rel: str, label: str) -> Path:
@@ -332,8 +381,10 @@ def fetch_pdf(
             "external_ids": parse_url_to_external_ids(url),
         }
 
-    # Streaming download
-    resp = sess.get(resolved_url, timeout=REQUEST_TIMEOUT, allow_redirects=True, stream=True)
+    # Streaming download — `_safe_get` walks redirects manually so every hop
+    # is validated against the SSRF guard. `stream=True` means body has not
+    # been read yet, so an unsafe hop aborts before any payload is consumed.
+    resp = _safe_get(sess, resolved_url, timeout=REQUEST_TIMEOUT)
 
     if resp.status_code >= 500:
         raise RuntimeError(f"HTTP {resp.status_code} from server")
@@ -398,7 +449,15 @@ def fetch_pdf(
             f"likely an error page rather than a real PDF"
         )
 
-    os.replace(tmp_path_str, out_path)
+    try:
+        os.replace(tmp_path_str, out_path)
+    except OSError:
+        # Cross-device rename or permission failure — clean up to avoid .tmp leak.
+        try:
+            os.unlink(tmp_path_str)
+        except OSError:
+            pass
+        raise
 
     return {
         "url": url,

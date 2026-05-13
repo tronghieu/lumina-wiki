@@ -51,6 +51,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from fetch_pdf import _safe_url
 from id_utils import build_source_entry, extract_ids_from_text
 
 REQUEST_TIMEOUT = 30
@@ -130,6 +131,12 @@ def _write_state(state_path: Path, state: dict[str, Any]) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_name, state_path)
+        # State files contain ETags and per-feed metadata — restrict perms
+        # so a local attacker can't tamper to force re-fetch or replay items.
+        try:
+            os.chmod(state_path, 0o600)
+        except OSError:
+            pass  # Windows / network FS may not honor — best-effort.
     except Exception:
         try:
             os.unlink(tmp_name)
@@ -141,9 +148,10 @@ def _write_state(state_path: Path, state: dict[str, Any]) -> None:
 def _evict_last_seen(seen: dict[str, str]) -> dict[str, str]:
     """Drop entries older than LAST_SEEN_MAX_AGE_DAYS, then FIFO-cap at LAST_SEEN_CAP.
 
-    Older entries get evicted first by parsing the ISO timestamp; entries
-    with unparsable timestamps are kept (charitable interpretation) but
-    sorted last so they go in the FIFO bucket if we still need to evict.
+    Unparsable timestamps are treated as oldest (`-inf`) so they get evicted
+    first under both the age filter and the FIFO cap. This prevents an
+    adversarial feed from flooding `last_seen_guids` with garbage timestamps
+    to push out legitimate fresh GUIDs and replay old entries.
     """
     if not seen:
         return {}
@@ -153,8 +161,8 @@ def _evict_last_seen(seen: dict[str, str]) -> dict[str, str]:
         try:
             stamp = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
         except (ValueError, AttributeError):
-            stamp = float("inf")  # keep, sort to end
-        if stamp == float("inf") or stamp >= cutoff:
+            stamp = float("-inf")  # treat as oldest — evict first
+        if stamp >= cutoff:
             fresh.append((stamp, guid, ts))
     fresh.sort(key=lambda t: t[0])
     if len(fresh) > LAST_SEEN_CAP:
@@ -184,26 +192,29 @@ def _make_session() -> requests.Session:
 def _is_safe_xml(body: bytes) -> bool:
     """Pre-parse via defusedxml to reject DOCTYPE / billion-laughs payloads.
 
-    Returns True if the body parses without triggering an entity-expansion
-    or DOCTYPE exception. We discard the parsed tree — feedparser does the
-    real parsing once we know the input is safe.
+    Returns True if the body parses without triggering any defusedxml-blocked
+    construct (entities, DTDs, external references, unsupported features).
+    We discard the parsed tree — feedparser does the real parsing once we
+    know the input is safe.
     """
     try:
         from defusedxml.ElementTree import fromstring as defused_fromstring
-        from defusedxml.common import EntitiesForbidden, DTDForbidden
+        from defusedxml.common import DefusedXmlException
     except ImportError:
         # If defusedxml isn't installed, fail closed — better safe than XXE.
         _err("Warning: defusedxml not installed; refusing to parse feed body.")
         return False
     try:
         defused_fromstring(body)
-    except (EntitiesForbidden, DTDForbidden):
+    except DefusedXmlException:
+        # Covers EntitiesForbidden, DTDForbidden, ExternalReferenceForbidden,
+        # NotSupportedError — every defusedxml-flagged attack vector.
         return False
     except Exception:
         # Non-XML payloads (or quirky feeds) — defer judgement to feedparser.
         # feedparser tolerates many malformed inputs; defusedxml is strict.
         # We treat parse errors as "safe to hand to feedparser" because they
-        # were not caused by an entity attack.
+        # were not caused by an entity / external-reference attack.
         return True
     return True
 
@@ -299,6 +310,11 @@ def poll(
     parsed = urlsplit(feed_url)
     if parsed.scheme not in ("https",):
         raise ValueError(f"feed_url must use https scheme: {feed_url!r}")
+    # SSRF guard — defense-in-depth on top of watchlist schema's https check.
+    # Watchlist YAML is user-curated; a curated entry could still target an
+    # internal host. Rejects private/loopback/link-local/metadata addresses.
+    if not _safe_url(feed_url):
+        raise ValueError(f"feed_url rejected by SSRF guard: {feed_url!r}")
 
     fid = _safe_feed_id(feed_id) if feed_id else _feed_id_from_url(feed_url)
     state_path = _state_dir(project_root) / f"{fid}.json"
@@ -331,13 +347,15 @@ def poll(
         raise RuntimeError(f"HTTP {resp.status_code} from feed")
 
     # Body size cap (read incrementally to avoid loading multi-GB feeds).
-    body = b""
+    # bytearray avoids O(n^2) reallocation from repeated `body += chunk`.
+    buf = bytearray()
     for chunk in resp.iter_content(chunk_size=65536):
         if not chunk:
             continue
-        body += chunk
-        if len(body) > MAX_BODY_BYTES:
+        buf.extend(chunk)
+        if len(buf) > MAX_BODY_BYTES:
             raise RuntimeError(f"feed body exceeds {MAX_BODY_BYTES} bytes")
+    body = bytes(buf)
 
     if not _is_safe_xml(body):
         # Don't mutate state — preserve recovery for the next poll.

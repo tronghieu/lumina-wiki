@@ -536,6 +536,51 @@ class TestSafeUrl:
         assert isinstance(result, bool)
 
 
+class TestFetchPdfSsrfGuard:
+    """The SSRF guard must run from the public entry point, not just in isolation.
+
+    Tests use IP literals so getaddrinfo doesn't need DNS — the IPs themselves
+    are rejected by the `is_loopback`/`is_private`/`is_link_local` checks.
+    """
+
+    @pytest.mark.parametrize("url", [
+        "https://127.0.0.1/x.pdf",            # loopback
+        "https://169.254.169.254/x.pdf",      # cloud metadata
+        "https://10.0.0.5/x.pdf",             # RFC1918
+        "https://192.168.1.1/x.pdf",          # RFC1918
+        "http://example.com/x.pdf",           # non-https
+    ])
+    def test_fetch_pdf_rejects_unsafe_url_before_network(
+        self, tmp_project: Path, url: str
+    ) -> None:
+        sess = MagicMock()
+        with pytest.raises(ValueError, match="SSRF|unsafe"):
+            fetch_pdf.fetch_pdf(url, project_root=tmp_project, session=sess)
+        # Critical: guard must run BEFORE any network I/O.
+        sess.get.assert_not_called()
+        sess.head.assert_not_called()
+
+    def test_fetch_pdf_rejects_redirect_to_unsafe_url(
+        self, tmp_project: Path
+    ) -> None:
+        # First hop returns 302 → private IP. `_safe_get` walks the redirect
+        # manually, validates the next URL, and aborts before the second hop.
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 302
+        redirect_resp.headers = {"Location": "https://10.0.0.5/leaked.pdf"}
+        redirect_resp.close = MagicMock()
+        sess = MagicMock()
+        sess.get.return_value = redirect_resp
+        with pytest.raises(ValueError, match="SSRF|unsafe"):
+            fetch_pdf.fetch_pdf(
+                "https://arxiv.org/abs/2604.03501v2",
+                project_root=tmp_project,
+                session=sess,
+            )
+        # Only one network call — the first hop — before the guard fired.
+        assert sess.get.call_count == 1
+
+
 class TestMaxPdfBytes:
     def test_oversized_stream_aborts_and_cleans_up(self, tmp_project: Path) -> None:
         """A response whose body exceeds MAX_PDF_BYTES must abort mid-stream."""
