@@ -31,6 +31,7 @@ after they provide values.
 python3 _lumina/tools/init_discovery.py --help
 python3 _lumina/tools/fetch_arxiv.py --help
 python3 _lumina/tools/fetch_s2.py --help
+python3 _lumina/tools/fetch_openalex.py --help
 python3 _lumina/tools/fetch_deepxiv.py --help
 python3 _lumina/tools/fetch_wikipedia.py --help
 ```
@@ -43,6 +44,7 @@ python3 _lumina/tools/fetch_wikipedia.py --help
    |------------------------------|-------------------|-----------|------------------------------------------------------|
    | (none)                       | arXiv             | no key    | Public XML API at `export.arxiv.org` — no signup     |
    | `SEMANTIC_SCHOLAR_API_KEY`   | Semantic Scholar  | optional  | https://www.semanticscholar.org/product/api (request form; raises rate limits from ~100/5min to higher tier) |
+   | `OPENALEX_MAILTO`            | OpenAlex          | optional  | Just supply any email you own — opts into the OpenAlex polite-pool (anonymous tier still works without it). Report presence as "set" / "unset" only; never display the value. |
    | `DEEPXIV_TOKEN`              | DeepXiv           | optional  | https://deepxiv.com (sign up, copy token from account settings; enables full-text PDF + semantic search) |
 
    Wikipedia fetcher uses the public REST API and needs no key.

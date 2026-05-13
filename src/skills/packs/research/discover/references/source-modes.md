@@ -8,8 +8,14 @@ candidate search. Do not invent flags beyond the commands shown here.
 Use `topic` when the user provides a subject area or question.
 
 ```bash
-python3 _lumina/tools/init_discovery.py --topic "<topic>" --project-root . --phases 1,2,3 --fetchers arxiv,s2 --limit 20
+python3 _lumina/tools/init_discovery.py --topic "<topic>" --project-root . --phases 1,2,3 --fetchers arxiv,s2,openalex --limit 20
 ```
+
+OpenAlex is the preferred fetcher for cross-walk metadata (DOI ↔ arXiv ↔ s2 ↔
+openalex in one record). Add `openalex` to `--fetchers` whenever a topic has
+broad coverage outside arXiv and Semantic Scholar (humanities, biomedicine,
+older work). It works anonymously; set `OPENALEX_MAILTO=<email>` to opt into
+the polite-pool with higher quota.
 
 Use `--resume` only when continuing existing
 `_lumina/_state/discovery-*.json` checkpoints. Narrow phases deliberately:
@@ -26,6 +32,8 @@ python3 _lumina/tools/fetch_s2.py paper "<id>"
 python3 _lumina/tools/fetch_s2.py citations "<id>" --limit 20
 python3 _lumina/tools/fetch_s2.py references "<id>" --limit 20
 python3 _lumina/tools/fetch_s2.py recommendations "<id>" --limit 10
+python3 _lumina/tools/fetch_openalex.py work "<doi-or-W-id>"
+python3 _lumina/tools/fetch_openalex.py search "<query>" --limit 20
 python3 _lumina/tools/fetch_arxiv.py search "<query>" --max 20
 python3 _lumina/tools/fetch_wikipedia.py page "<title>"
 python3 _lumina/tools/fetch_wikipedia.py search "<query>" --limit 10

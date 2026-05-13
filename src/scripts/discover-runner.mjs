@@ -18,7 +18,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
-const VALID_SOURCES = new Set(['arxiv', 's2']);
+const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex']);
 
 export async function runDiscover(options = {}) {
   const projectRoot = resolve(options.projectRoot ?? process.cwd());
@@ -138,10 +138,18 @@ export async function runDiscover(options = {}) {
 function fetchSource({ projectRoot, source, query, limit }) {
   if (!VALID_SOURCES.has(source)) throw new Error(`Unknown source: ${source}`);
   const toolsDir = join(projectRoot, '_lumina', 'tools');
-  const script = source === 'arxiv' ? 'fetch_arxiv.py' : 'fetch_s2.py';
-  const args = source === 'arxiv'
-    ? [join(toolsDir, script), 'search', query, '--max', String(limit)]
-    : [join(toolsDir, script), 'search', query, '--limit', String(limit)];
+  const scriptByName = {
+    arxiv: 'fetch_arxiv.py',
+    s2: 'fetch_s2.py',
+    openalex: 'fetch_openalex.py',
+  };
+  const script = scriptByName[source];
+  const argsByName = {
+    arxiv: [join(toolsDir, script), 'search', query, '--max', String(limit)],
+    s2: [join(toolsDir, script), 'search', query, '--limit', String(limit)],
+    openalex: [join(toolsDir, script), 'search', query, '--limit', String(limit)],
+  };
+  const args = argsByName[source];
   const result = spawnSync('python3', args, {
     cwd: projectRoot,
     encoding: 'utf8',
@@ -155,6 +163,7 @@ function fetchSource({ projectRoot, source, query, limit }) {
   if (source === 's2' && parsed && typeof parsed === 'object' && Array.isArray(parsed.data)) {
     return parsed.data;
   }
+  // fetch_openalex.py emits a flat array of normalized records (see normalize_record).
   if (!Array.isArray(parsed)) throw new Error(`${script} returned an unexpected shape.`);
   return parsed;
 }

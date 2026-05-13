@@ -89,7 +89,11 @@ def _cache_root_for(namespace: str, start: Optional[Path] = None) -> Path:
 # Cache key
 # ---------------------------------------------------------------------------
 
-def _canonical_url(url: str, params: Optional[dict[str, Any]] = None) -> str:
+def _canonical_url(
+    url: str,
+    params: Optional[dict[str, Any]] = None,
+    strip_params: Optional[list[str]] = None,
+) -> str:
     """Build a deterministic URL string from base URL + params dict.
 
     Delegates URL construction to `requests.PreparedRequest.prepare_url()`
@@ -98,13 +102,21 @@ def _canonical_url(url: str, params: Optional[dict[str, Any]] = None) -> str:
     avoids the double-encoding bug that plagues naive `split('=') +
     urlencode()` round-trips on already-encoded URLs (e.g. DOI strings
     like `id=DOI%3A10.x/y`).
+
+    `strip_params`: optional list of query-string keys to drop before
+    canonicalization. Use for non-functional params like polite-pool
+    `mailto=` so the same logical request hits the same cache slot
+    regardless of whose email is attached.
     """
     pr = requests.PreparedRequest()
     pr.prepare_url(url, params)  # type: ignore[arg-type]
     parts = urlsplit(pr.url or url)
     if parts.query:
-        pairs = sorted(parts.query.split("&"))
-        sorted_query = "&".join(pairs)
+        pairs = parts.query.split("&")
+        if strip_params:
+            drop = {p for p in strip_params if isinstance(p, str) and p}
+            pairs = [p for p in pairs if p.split("=", 1)[0] not in drop]
+        sorted_query = "&".join(sorted(pairs))
     else:
         sorted_query = ""
     return urlunsplit((parts.scheme, parts.netloc, parts.path, sorted_query, parts.fragment))
@@ -176,11 +188,19 @@ class CachedSession:
     behave exactly like the inner session.
     """
 
-    def __init__(self, inner: requests.Session, namespace: str, ttl_seconds: int, cache_root: Path):
+    def __init__(
+        self,
+        inner: requests.Session,
+        namespace: str,
+        ttl_seconds: int,
+        cache_root: Path,
+        strip_params: Optional[list[str]] = None,
+    ):
         self._inner = inner
         self._lumina_namespace = namespace
         self._lumina_ttl = ttl_seconds
         self._lumina_cache_root = cache_root
+        self._lumina_strip_params = list(strip_params) if strip_params else None
         self._lumina_disabled = os.environ.get("LUMINA_NO_CACHE") == "1"
 
     def __getattr__(self, name: str) -> Any:
@@ -199,7 +219,7 @@ class CachedSession:
         # cache slot and collide. Bypass the cache for non-dict params.
         if params is not None and not isinstance(params, dict):
             return self._inner.get(url, **kwargs)
-        canonical = _canonical_url(url, params)
+        canonical = _canonical_url(url, params, strip_params=self._lumina_strip_params)
         key = _cache_key("GET", canonical)
         path = self._lumina_cache_root / f"{key}.json"
 
@@ -273,6 +293,7 @@ def wrap_session(
     *,
     ttl_seconds: Optional[int] = None,
     cache_root: Optional[Path] = None,
+    strip_params: Optional[list[str]] = None,
 ):
     """Return a session-like object that caches GETs to disk.
 
@@ -282,6 +303,10 @@ def wrap_session(
     typing — the returned object always has `.get`, `.post`, `.headers`,
     etc., but its concrete type is either `requests.Session` (no-cache
     fallback) or `CachedSession` (delegating wrapper).
+
+    `strip_params`: query-string keys removed before the cache key is
+    computed. Useful for non-functional params (e.g. polite-pool `mailto=`)
+    so repeated requests collapse onto the same cache slot.
     """
     if ttl_seconds is None:
         env_ttl = os.environ.get("LUMINA_CACHE_TTL")
@@ -311,4 +336,10 @@ def wrap_session(
         root = cache_root if cache_root is not None else _cache_root_for(namespace)
     except OSError:
         return session
-    return CachedSession(inner=session, namespace=namespace, ttl_seconds=ttl_seconds, cache_root=root)
+    return CachedSession(
+        inner=session,
+        namespace=namespace,
+        ttl_seconds=ttl_seconds,
+        cache_root=root,
+        strip_params=strip_params,
+    )

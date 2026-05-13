@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 
 const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
-const VALID_SOURCES = new Set(['arxiv', 's2']);
+const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex']);
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
@@ -243,7 +243,7 @@ function normalizeSources(value, label) {
   }
   for (const source of normalized) {
     if (!VALID_SOURCES.has(source)) {
-      throw new WatchlistConfigError(`Unknown source "${source}" in ${label}. Supported sources: arxiv, s2.`);
+      throw new WatchlistConfigError(`Unknown source "${source}" in ${label}. Supported sources: arxiv, s2, openalex.`);
     }
   }
   return [...new Set(normalized)];

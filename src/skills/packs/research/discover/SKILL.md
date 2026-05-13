@@ -40,7 +40,7 @@ References:
 
    For each entity with `type: "sources"`, run `node _lumina/scripts/wiki.mjs
    read-meta <slug>` and collect every value in the `external_ids` object
-   (`doi`, `arxiv`, `s2`, `url`). For sources without `external_ids` populated,
+   (`doi`, `arxiv`, `s2`, `url`, `openalex`). For sources without `external_ids` populated,
    fall back to scanning body URLs (`arxiv.org/abs/<id>`,
    `semanticscholar.org/paper/<id>`). Pass the deduped values to
    `init_discovery.py --exclude-keys "<csv>"`. The flag matches against the
@@ -53,6 +53,7 @@ References:
 python3 _lumina/tools/init_discovery.py --help
 python3 _lumina/tools/fetch_arxiv.py --help
 python3 _lumina/tools/fetch_s2.py --help
+python3 _lumina/tools/fetch_openalex.py --help
 python3 _lumina/tools/fetch_wikipedia.py --help
 python3 _lumina/tools/fetch_deepxiv.py --help
 python3 _lumina/tools/discover.py --help

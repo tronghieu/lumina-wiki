@@ -77,8 +77,10 @@ Use this mapping:
 
 - `id`: short lowercase label, letters/numbers/hyphens only.
 - `query`: the research phrase to search for.
-- `sources`: use `arxiv` by default; add `s2` only when the user has Semantic
-  Scholar set up or asks for broader paper coverage.
+- `sources`: use `arxiv` by default; add `s2` when the user has Semantic
+  Scholar set up; add `openalex` when broader coverage (cross-walk metadata,
+  humanities/biomedicine, older work) is requested. OpenAlex works
+  anonymously — set `OPENALEX_MAILTO` only to opt into the polite-pool.
 - `schedule`: `manual`, `daily`, `weekly`, or `monthly`.
 - `limit`: how many candidates to fetch before deduping.
 - `max_new`: how many new candidates the user wants to see per run.
