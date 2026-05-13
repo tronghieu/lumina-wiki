@@ -3,6 +3,70 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.4.0] - 2026-05-14
+
+### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)
+
+- **OpenAlex fetcher** activated as the metadata anchor across the new ladder
+  (Phase 1–2). `external_ids.openalex` namespace now persists Work IDs
+  (`^W\d+$`).
+- **`fetch_unpaywall.py`** — DOI → best OA PDF URL. Requires
+  `UNPAYWALL_EMAIL` (free email-of-record).
+- **`fetch_core.py`** — CORE search + download-url. Optional
+  `CORE_API_KEY`; ladder skips CORE on 429 and warns once.
+- **`resolve_pdf.py`** — 2-layer orchestrator. Layer A always runs OpenAlex
+  (cross-walks DOI ↔ arXiv ↔ OpenAlex). Layer B is a stop-on-first-200 PDF
+  ladder: `oa_url → unpaywall → core → arxiv`. Each provider attempt is
+  logged to stderr; the final shape carries `external_ids`, `sources[]`,
+  `pdf_path`, and `status` (`ok` | `metadata_only` | `failed`).
+- **`fetch_rss.py`** — RSS / Atom poller with etag caching, defusedxml-based
+  XXE rejection, per-feed state files under `_lumina/_state/feeds/<id>.json`,
+  spill-aware `max_new` cap, and 5000-entry / 90-day `last_seen_guids`
+  eviction.
+- **Watchlist `type: feed`** items extend `_lumina/config/watchlist.yml`
+  additively. v1 files without `type` keep validating (defaults to
+  `topic`). Feed URLs are gated to `^https://` and rejected if they start
+  with `--` (flag-injection defense-in-depth).
+- **`/lumi-research-watch-run`** skill orchestrates a single pass over the
+  consolidated watchlist (topics + feeds). User owns scheduling — three
+  patterns documented (cron, launchd, Task Scheduler).
+- **`cron-daily.sh` wrapper** ships under
+  `_lumina/scripts/scheduler-samples/`. Inert until the user wires it into
+  their scheduler. Sets `umask 077`, `chmod 600` on the log,
+  rotates at 1 MB.
+- **`extract_ids_from_text()`** in `id_utils.py` — reusable free-text
+  identifier harvester for feed entry titles / summaries / link hrefs.
+
+### Security
+
+- **SSRF guard** (`_safe_url`) on every PDF candidate URL: rejects RFC1918,
+  loopback, link-local, multicast, cloud-metadata (169.254.169.254).
+  Re-validated post-redirect.
+- **`fetch_pdf.py` mid-stream size cap** (`MAX_PDF_BYTES = 100 MiB`) — a
+  malicious endpoint that lies about Content-Length now aborts mid-download
+  and cleans up `.tmp`.
+- **DOI filename hashing** — DOIs are hashed to a 16-char SHA-256 prefix on
+  disk to neutralize Windows-reserved-name collisions (CON, PRN, AUX, NUL).
+- **XXE pre-parse** — every RSS / Atom body is run through
+  `defusedxml.ElementTree.fromstring` before feedparser sees it; DOCTYPE /
+  billion-laughs payloads are rejected without state mutation.
+
+### Requirements
+
+- New optional env vars: `UNPAYWALL_EMAIL`, `CORE_API_KEY`. Both gracefully
+  skip (ladder continues) when unset.
+- `requirements.txt` adds `feedparser>=6.0` (research pack only).
+
+### Backwards compatibility
+
+- `external_ids.openalex` is additive — existing pages continue to validate.
+- `sources[]` is additive — entries without an entry stay valid.
+  `ns/value` fields drop silently if either is missing or invalid (same
+  forgiveness model as the existing `url` field).
+- Watchlist v1 (no `type` field) still validates and runs unchanged.
+- `fetch_pdf.py` CLI is stable; new helpers (`_safe_url`, `head_check`,
+  `MAX_PDF_BYTES`) are additions only.
+
 ## [1.3.0] - 2026-05-09
 
 ### Added — Local text-document ingestion (research pack)

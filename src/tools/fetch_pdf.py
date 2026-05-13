@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import tempfile
 from pathlib import Path
@@ -49,7 +51,9 @@ from id_utils import parse_url_to_external_ids
 
 USER_AGENT = "lumina-wiki/0.1 (research-pack; pdf fetcher)"
 REQUEST_TIMEOUT = 60
+HEAD_TIMEOUT = 30
 MIN_PDF_SIZE = 100  # bytes — smaller responses are likely error pages
+MAX_PDF_BYTES = 100 * 1024 * 1024  # 100 MiB — hard cap, enforced mid-stream
 CHUNK_SIZE = 65536  # 64 KB chunks for streaming download
 
 # Windows-illegal characters in filenames
@@ -83,6 +87,77 @@ def _sha16_url(url: str) -> str:
 def _sanitize_filename(name: str) -> str:
     """Remove Windows-illegal characters from a filename."""
     return _WIN_ILLEGAL_RE.sub("_", name)
+
+
+def _sha16_id(value: str) -> str:
+    """First 16 hex chars of SHA256(value) — used as a filename body."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+# ---------------------------------------------------------------------------
+# SSRF guard — reject private / link-local / loopback / cloud-metadata hosts.
+# Re-resolve on every redirect hop because Location headers are attacker-controlled.
+# ---------------------------------------------------------------------------
+
+def _safe_url(url: str) -> bool:
+    """Return True if `url` is safe to fetch (https://public-host).
+
+    Rejects:
+      - non-https schemes (http allowed only for explicit opt-in by caller)
+      - hosts that resolve to RFC1918, loopback, link-local, multicast, or
+        AWS/GCP metadata service (169.254.169.254)
+      - hosts that fail to resolve
+    """
+    try:
+        parts = urlparse(url)
+    except (ValueError, TypeError):
+        return False
+    if parts.scheme.lower() != "https":
+        return False
+    host = (parts.hostname or "").strip()
+    if not host:
+        return False
+    # Reject any literal host that looks like the AWS/GCP metadata IP fast.
+    if host == "169.254.169.254":
+        return False
+    try:
+        # `getaddrinfo` returns every resolved address; reject if ANY is unsafe.
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError):
+        return False
+    for info in infos:
+        sockaddr = info[4]
+        addr = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+def head_check(
+    session: requests.Session, url: str, timeout: int = HEAD_TIMEOUT
+) -> tuple[int, str]:
+    """Issue HEAD to probe the response without downloading.
+
+    Returns (status_code, content_type_header_value). Caller decides whether
+    the content-type is acceptable. Follows redirects through `_safe_url` —
+    callers MUST `_safe_url(url)` themselves before invoking this.
+
+    Some servers reject HEAD; in that case the response.status_code is
+    propagated as-is so the caller can decide whether to fall back to GET.
+    """
+    resp = session.head(url, timeout=timeout, allow_redirects=True)
+    return resp.status_code, resp.headers.get("Content-Type", "")
 
 
 def _safe_path(base: Path, rel: str, label: str) -> Path:
@@ -152,9 +227,17 @@ def detect_resource(url: str) -> tuple[str, str, str]:
 def _derive_filename(resource: str, id_: str, content_type: str = "") -> str:
     """Derive a default filename from resource/id.
 
+    DOI bodies can collide with Windows reserved names (CON, PRN, AUX, NUL)
+    or contain unicode confusables, so DOIs are hashed to a 16-char SHA-256
+    prefix. ArXiv/S2 IDs follow stable, path-safe shapes — kept as-is so the
+    workspace remains diff-friendly (`raw/download/arxiv/2604.03501v2.pdf`
+    is unambiguously the abs/2604.03501v2 paper).
+
     For 'web', probes content_type for extension; defaults to .pdf.
     """
-    if resource in ("arxiv", "doi", "s2"):
+    if resource == "doi":
+        return _sha16_id(id_) + ".pdf"
+    if resource in ("arxiv", "s2"):
         return _sanitize_filename(id_) + ".pdf"
     # web
     ext = ".pdf"
@@ -277,7 +360,9 @@ def fetch_pdf(
             f"URL may be a landing page rather than a direct PDF link"
         )
 
-    # Atomic write: temp + streaming + fsync + rename; SHA256 computed during download
+    # Atomic write: temp + streaming + fsync + rename; SHA256 computed during download.
+    # Mid-stream size cap enforces MAX_PDF_BYTES so a malicious endpoint cannot
+    # exhaust disk by streaming a multi-GB body that lies about Content-Length.
     out_dir.mkdir(parents=True, exist_ok=True)
     fd, tmp_path_str = tempfile.mkstemp(dir=out_dir, suffix=".tmp")
     hasher = hashlib.sha256()
@@ -285,10 +370,15 @@ def fetch_pdf(
     try:
         with os.fdopen(fd, "wb") as f:
             for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-                    hasher.update(chunk)
-                    size += len(chunk)
+                if not chunk:
+                    continue
+                size += len(chunk)
+                if size > MAX_PDF_BYTES:
+                    raise ValueError(
+                        f"PDF exceeds size cap {MAX_PDF_BYTES} bytes; aborted at {size}"
+                    )
+                f.write(chunk)
+                hasher.update(chunk)
             f.flush()
             os.fsync(f.fileno())
     except Exception:

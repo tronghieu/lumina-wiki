@@ -199,6 +199,64 @@ def external_id_match_key(ids: Any) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Free-text identifier extractor — used by RSS/Atom fetcher to harvest DOIs
+# and arXiv IDs from feed titles, summaries, and link hrefs.
+# Reuses the compiled namespace regex so behavior stays aligned with
+# normalize_external_id; no second parsing dialect.
+# ---------------------------------------------------------------------------
+
+_DOI_TEXT_RE = re.compile(r"\b10\.[0-9]{4,9}/[A-Za-z0-9._\-/()]{1,256}", re.IGNORECASE)
+_ARXIV_TEXT_RE = re.compile(
+    r"(?:arxiv\.org/(?:abs|pdf)/|arxiv:)([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)",
+    re.IGNORECASE,
+)
+_OPENALEX_TEXT_RE = re.compile(r"openalex\.org/(?:works/)?(W[0-9]{1,12})", re.IGNORECASE)
+
+
+def extract_ids_from_text(text: Any) -> dict:
+    """Scan free text for DOI / arXiv / OpenAlex IDs.
+
+    Returns a dict with keys `doi`, `arxiv`, `openalex` — each `str` or `None`.
+    First valid match per namespace wins (later matches are ignored). The
+    arxiv-DOI cross-walk is applied: an extracted arXiv ID synthesizes its
+    `10.48550/arxiv.<id>` DOI form, and vice-versa.
+    """
+    out: dict = {"doi": None, "arxiv": None, "openalex": None}
+    if not isinstance(text, str) or not text:
+        return out
+
+    # arXiv first because an arxiv-DOI like 10.48550/arxiv.X also matches the
+    # generic DOI pattern; finding the arxiv form first lets us emit both.
+    m = _ARXIV_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("arxiv", m.group(1))
+        if r["valid"]:
+            out["arxiv"] = r["id"]
+
+    m = _DOI_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("doi", m.group(0))
+        if r["valid"]:
+            out["doi"] = r["id"]
+
+    m = _OPENALEX_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("openalex", m.group(1))
+        if r["valid"]:
+            out["openalex"] = r["id"]
+
+    # Cross-walk after extraction so DOI inference doesn't suppress real DOI hits.
+    if out["arxiv"] and not out["doi"]:
+        out["doi"] = f"10.48550/arxiv.{out['arxiv']}"
+    elif out["doi"] and not out["arxiv"]:
+        m2 = EXTERNAL_ID_PATTERNS["doi_arxiv"].match(out["doi"])
+        if m2:
+            out["arxiv"] = m2.group(1)
+
+    return out
+
+
 _UNSAFE_TOKEN_RE = re.compile(r"[\x00-\x1f\\\"'`*?<>|]")
 
 

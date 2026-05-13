@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE feed [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+]>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>&xxe;</title>
+  <id>https://attacker.example.com/xxe</id>
+  <entry>
+    <title>&lol2;</title>
+    <id>xxe-entry</id>
+    <summary>&xxe;</summary>
+  </entry>
+</feed>

@@ -3,8 +3,10 @@ import { isAbsolute } from 'node:path';
 
 const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
 const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex']);
+const VALID_ITEM_TYPES = new Set(['topic', 'feed']);
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
+const HTTPS_URL_RE = /^https:\/\//i;
 
 export class WatchlistConfigError extends Error {
   constructor(message) {
@@ -185,14 +187,39 @@ function normalizeItem(item, index, defaults) {
   }
 
   const id = normalizeId(item.id, index);
-  const query = normalizeQuery(item.query ?? item.topic, id);
-  const sources = normalizeSources(item.sources ?? defaults.sources, `${id}.sources`);
+  const itemType = normalizeItemType(item.type, id);
   const schedule = normalizeSchedule(item.schedule ?? item.cadence ?? defaults.schedule, `${id}.schedule`);
   const limit = normalizeLimit(item.limit ?? item.max_results ?? defaults.limit, `${id}.limit`);
   const maxNew = normalizeOptionalLimit(item.max_new ?? item.maxNew ?? defaults.maxNew, `${id}.max_new`);
 
+  if (itemType === 'feed') {
+    // Feeds don't carry a search query or per-source list — they have a URL
+    // that fetch_rss.py hits directly. We deliberately do NOT inherit
+    // `defaults.sources` so existing watchlist v1 files keep validating after
+    // a defaults.sources expansion that doesn't include the rss provider.
+    const url = normalizeFeedUrl(item.url, id);
+    const extractDois = item.extract_dois === false ? false : true;
+    const name = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : id;
+    return {
+      id,
+      type: 'feed',
+      enabled: item.enabled === true,
+      url,
+      name,
+      extractDois,
+      sources: [],          // intentional empty — fetch_rss owns provenance
+      schedule,
+      limit,
+      maxNew,
+    };
+  }
+
+  // type: 'topic' (default)
+  const query = normalizeQuery(item.query ?? item.topic, id);
+  const sources = normalizeSources(item.sources ?? defaults.sources, `${id}.sources`);
   return {
     id,
+    type: 'topic',
     enabled: item.enabled === true,
     query,
     sources,
@@ -200,6 +227,32 @@ function normalizeItem(item, index, defaults) {
     limit,
     maxNew,
   };
+}
+
+function normalizeItemType(value, id) {
+  if (value === undefined || value === null || value === '') return 'topic';
+  if (typeof value !== 'string') {
+    throw new WatchlistConfigError(`${id}.type must be a string (topic or feed).`);
+  }
+  const t = value.trim().toLowerCase();
+  if (!VALID_ITEM_TYPES.has(t)) {
+    throw new WatchlistConfigError(`${id}.type must be 'topic' or 'feed', got ${JSON.stringify(value)}.`);
+  }
+  return t;
+}
+
+function normalizeFeedUrl(value, id) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new WatchlistConfigError(`${id}.url is required for type: feed.`);
+  }
+  const url = value.trim();
+  if (url.startsWith('--')) {
+    throw new WatchlistConfigError(`${id}.url must not start with '--' (flag-injection guard).`);
+  }
+  if (!HTTPS_URL_RE.test(url)) {
+    throw new WatchlistConfigError(`${id}.url must use https:// (got ${url.slice(0, 80)}).`);
+  }
+  return url;
 }
 
 function normalizeId(value, index) {

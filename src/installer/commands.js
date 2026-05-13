@@ -1039,6 +1039,7 @@ function getSkillDefs(packs) {
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
       { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
       { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
+      { name: 'watch-run', canonicalId: 'lumi-research-watch-run', displayName: '/lumi-research-watch-run' },
     ];
     for (const s of researchSkills) {
       defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
@@ -1064,8 +1065,10 @@ async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
   const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
   const researchTools = [
-    '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
+    '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
+    'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
+    'fetch_rss.py',
   ];
   const toolFiles = research ? [...coreTools, ...researchTools] : coreTools;
   for (const file of toolFiles) {

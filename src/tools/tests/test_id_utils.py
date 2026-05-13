@@ -164,6 +164,53 @@ def test_build_source_entry_backcompat_no_ns_value():
     assert set(e.keys()) == {"provider", "fetched_at"}
 
 
+# ---------------------------------------------------------------------------
+# extract_ids_from_text — free-text harvest used by fetch_rss.py
+# ---------------------------------------------------------------------------
+
+from id_utils import extract_ids_from_text
+
+
+class TestExtractIdsFromText:
+    def test_arxiv_abs_link(self):
+        out = extract_ids_from_text("Read https://arxiv.org/abs/2401.12345 for details.")
+        assert out["arxiv"] == "2401.12345"
+        # cross-walk synthesizes the arxiv-DOI
+        assert out["doi"] == "10.48550/arxiv.2401.12345"
+
+    def test_arxiv_pdf_link_with_version(self):
+        # normalize_external_id strips the version suffix into extras —
+        # the canonical id is the base.
+        out = extract_ids_from_text("https://arxiv.org/pdf/2503.18238v3.pdf")
+        assert out["arxiv"] == "2503.18238"
+
+    def test_arxiv_prefix(self):
+        out = extract_ids_from_text("Cite as arXiv:2401.12345")
+        assert out["arxiv"] == "2401.12345"
+
+    def test_plain_doi(self):
+        out = extract_ids_from_text("doi 10.1145/3491102.3501856 from the paper")
+        assert out["doi"] == "10.1145/3491102.3501856"
+
+    def test_openalex_url(self):
+        out = extract_ids_from_text("see openalex.org/works/W4392834756")
+        assert out["openalex"] == "W4392834756"
+
+    def test_no_match(self):
+        out = extract_ids_from_text("nothing useful here, just plain text")
+        assert out["doi"] is None
+        assert out["arxiv"] is None
+        assert out["openalex"] is None
+
+    def test_empty_input(self):
+        out = extract_ids_from_text("")
+        assert out == {"doi": None, "arxiv": None, "openalex": None}
+
+    def test_non_string_input(self):
+        out = extract_ids_from_text(None)
+        assert out == {"doi": None, "arxiv": None, "openalex": None}
+
+
 @pytest.mark.parametrize("case", FIXTURE["redos"])
 def test_redos(case):
     raw = case["raw_template"] + case["pad_char"] * case["pad_count"] + case["tail"]

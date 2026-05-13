@@ -244,7 +244,33 @@ sources:
     fetched_at: "2026-05-13T10:00:01Z"
     ns: openalex
     value: "W4392834756"
+  - provider: unpaywall
+    fetched_at: "2026-05-13T10:00:02Z"
+    ns: doi
+    value: "10.48550/arxiv.2401.12345"
+  - provider: unpaywall
+    fetched_at: "2026-05-13T10:00:02Z"
+    url: "https://arxiv.org/pdf/2401.12345.pdf"
+  - provider: rss
+    fetched_at: "2026-05-13T10:00:03Z"
+    url: "https://arxiv.org/rss/cs.LG"
 ```
+
+**Fetcher → `sources[]` provenance contract (v1.4):** every provider that
+returns metadata or a PDF candidate appends one or more entries to
+`sources[]` via the same helper:
+
+| Provider | When it runs | Provenance shape |
+|---|---|---|
+| `arxiv`, `s2`, `openalex` | metadata search / fetch | `{ns, value}` per resolved external_id |
+| `openalex` | PDF anchor (oa_url) | `{url}` |
+| `unpaywall` | DOI → best OA URL | `{ns:'doi', value}` + `{url}` if OA |
+| `core` | search + download-url | `{ns:'doi', value?}` + `{url}` |
+| `rss` | feed poll | `{url: feed_url}` + `{ns, value}` for harvested IDs |
+
+`resolve_pdf.py` orchestrates the multi-provider ladder
+(OpenAlex anchor → Unpaywall → CORE → arXiv) and emits the full `sources[]`
+array on stdout — the ingest skill persists it verbatim onto the Source page.
 
 Lint enforces:
 

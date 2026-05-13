@@ -159,8 +159,11 @@ Tell the user:
 - papers are downloaded later during `/lumi-ingest`, after the user chooses a
   candidate.
 
-If the user asks how to schedule it, point them to the advanced scheduled
-discovery guide in `docs/user-guide/`.
+If the user asks how to schedule it, point them to
+`docs/user-guide/research-watch.md` and the `/lumi-research-watch-run` skill
+which runs one pass over the watchlist on demand. They can also follow an
+RSS / Atom feed by adding a `type: feed` item (https URL required) — see the
+research-watch guide for the YAML example.
 
 ## Constraints
 
