@@ -200,7 +200,7 @@ Single source of truth. **Pure data, no I/O, no side effects.** Safe to import a
 **Exemption globs:** `foundations/**`, `outputs/**`, `*://*` — the `exempt-only` bidi mode default.
 
 **Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO):
-- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?}]` — append on every (re-)ingest, never replace)
+- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?, ns?, value?}]` — append on every (re-)ingest, never replace; `ns/value` (added 2026-05) record *which* external identifier the provider returned, must appear together or both are dropped)
 - `concepts`: + `key_sources[]`, `related_concepts[]`
 - `people`: + `key_sources[]`, optional `affiliations[]`
 - `summary`: + `covers[]`
@@ -209,7 +209,7 @@ Single source of truth. **Pure data, no I/O, no side effects.** Safe to import a
 No edge type currently has `confidenceRequired: true` — L08 always passes on stock schemas.
 
 **`external_ids` namespace registry (single source of truth):** the optional
-`external_ids` object on Source pages is locked to four namespaces:
+`external_ids` object on Source pages is locked to five active namespaces:
 
 | Namespace | Form | Notes |
 |---|---|---|
@@ -217,14 +217,36 @@ No edge type currently has `confidenceRequired: true` — L08 always passes on s
 | `arxiv` | bare ID, e.g. `1706.03762` (new) or `math.GT/0309136` (old) | Version suffix moved to helper extras, NOT stored in frontmatter. |
 | `s2` | 40-hex paper ID | Lowercased. |
 | `url` | canonical https form | Lowercased host, no fragment, no `utm_*`/`ref*` params, no trailing `/`. Algorithm version: `CANONICAL_URL_V`. |
+| `openalex` | OpenAlex Work ID, e.g. `W4392834756` | Activated 2026-05 alongside the OpenAlex fetcher. Pattern `^W[0-9]{1,12}$` — only Work IDs accepted; Author (`A`), Institution (`I`), Publisher (`P`), Venue (`V`), Source (`S`) entity types rejected. URL prefixes (`openalex.org/`, `api.openalex.org/works/`) stripped; `W` stays capital. |
 
-`openalex`, `isbn`, and `s2_corpus` are **reserved** but not implemented —
+`isbn` and `s2_corpus` remain **reserved** but not implemented —
 no producer or consumer exists today, so adding them now would be dead
 schema. The namespace tuple lives in `schemas.mjs` (pure data); the helper
-module re-exports it for back-compat. All values pass through
-`normalizeExternalId(ns, raw).valid` before they are written to disk;
-consumers re-validate with `safeIdToken(ns, val)` before any glob/path
-concatenation. Lint enforces:
+module re-exports it for back-compat. Order matters: `externalIdMatchKey`
+priority follows the tuple — `doi > arxiv > s2 > url > openalex`. All values
+pass through `normalizeExternalId(ns, raw).valid` before they are written to
+disk; consumers re-validate with `safeIdToken(ns, val)` before any glob/path
+concatenation.
+
+**`buildSourceEntry(provider, opts)` (`src/scripts/external-ids.mjs`)** —
+shape of one `sources[]` entry. Required keys: `provider`, `fetched_at`.
+Optional keys: `url` (validated via `new URL()`), `ns` + `value` (added
+2026-05; both must be present and `ns` must be in the registry, otherwise
+both are dropped silently). Example after a multi-provider fetch:
+
+```yaml
+sources:
+  - provider: openalex
+    fetched_at: "2026-05-13T10:00:01Z"
+    ns: doi
+    value: "10.48550/arxiv.2401.12345"
+  - provider: openalex
+    fetched_at: "2026-05-13T10:00:01Z"
+    ns: openalex
+    value: "W4392834756"
+```
+
+Lint enforces:
 
 - **L13** (warn) — namespace coverage: a non-`url` namespace derivable from
   `urls[]` but missing in `external_ids`. Remediation message points to

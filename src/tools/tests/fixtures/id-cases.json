@@ -29,6 +29,14 @@
     { "kind": "s2", "raw": "0123456789abcdef0123456789abcdef01234567", "expected": { "id": "0123456789abcdef0123456789abcdef01234567", "valid": true } },
     { "kind": "s2", "raw": "0123456789ABCDEF0123456789abcdef01234567", "expected": { "id": "0123456789abcdef0123456789abcdef01234567", "valid": true } },
     { "kind": "s2", "raw": "tooshort", "expected": { "id": null, "valid": false } },
+    { "kind": "openalex", "raw": "W4392834756", "expected": { "id": "W4392834756", "valid": true } },
+    { "kind": "openalex", "raw": "https://openalex.org/W4392834756", "expected": { "id": "W4392834756", "valid": true } },
+    { "kind": "openalex", "raw": "https://api.openalex.org/works/W4392834756", "expected": { "id": "W4392834756", "valid": true } },
+    { "kind": "openalex", "raw": "openalex:W123", "expected": { "id": "W123", "valid": true } },
+    { "kind": "openalex", "raw": "A1234567", "expected": { "id": null, "valid": false } },
+    { "kind": "openalex", "raw": "I1234567", "expected": { "id": null, "valid": false } },
+    { "kind": "openalex", "raw": "w4392834756", "expected": { "id": null, "valid": false } },
+    { "kind": "openalex", "raw": "not-an-id", "expected": { "id": null, "valid": false } },
     { "kind": "url", "raw": "HTTP://Example.COM/path/?utm_source=x&q=1#frag", "expected": { "id": "https://example.com/path?q=1", "valid": true } },
     { "kind": "url", "raw": "not a url", "expected": { "id": null, "valid": false } }
   ],
@@ -36,6 +44,8 @@
     { "url": "https://doi.org/10.1109/ABC.2020.1", "expected": { "url": "https://doi.org/10.1109/ABC.2020.1", "doi": "10.1109/abc.2020.1" } },
     { "url": "https://arxiv.org/abs/1706.03762", "expected": { "url": "https://arxiv.org/abs/1706.03762", "arxiv": "1706.03762" } },
     { "url": "https://arxiv.org/pdf/1706.03762v3.pdf", "expected": { "url": "https://arxiv.org/pdf/1706.03762v3.pdf", "arxiv": "1706.03762" } },
+    { "url": "https://openalex.org/W4392834756", "expected": { "url": "https://openalex.org/W4392834756", "openalex": "W4392834756" } },
+    { "url": "https://api.openalex.org/works/W4392834756", "expected": { "url": "https://api.openalex.org/works/W4392834756", "openalex": "W4392834756" } },
     { "url": "https://example.com/page", "expected": { "url": "https://example.com/page" } }
   ],
   "canonicalize": [
@@ -47,6 +57,9 @@
     { "ids": { "doi": "10.x/y", "arxiv": "1706.03762" }, "expected": "doi:10.x/y" },
     { "ids": { "arxiv": "1706.03762", "url": "https://x" }, "expected": "arxiv:1706.03762" },
     { "ids": { "url": "https://x" }, "expected": "url:https://x" },
+    { "ids": { "openalex": "W4392834756" }, "expected": "openalex:W4392834756" },
+    { "ids": { "doi": "10.48550/arxiv.2401.12345", "arxiv": "2401.12345", "openalex": "W4392834756" }, "expected": "doi:10.48550/arxiv.2401.12345" },
+    { "ids": { "url": "https://x", "openalex": "W4392834756" }, "expected": "url:https://x" },
     { "ids": {}, "expected": null }
   ],
   "expand": [
@@ -59,12 +72,16 @@
     { "kind": "doi", "val": "../../etc/passwd", "valid": false },
     { "kind": "arxiv", "val": "1706.03762", "valid": true },
     { "kind": "arxiv", "val": "1706.03762; rm -rf", "valid": false },
-    { "kind": "s2", "val": "0123456789abcdef0123456789abcdef01234567", "valid": true }
+    { "kind": "s2", "val": "0123456789abcdef0123456789abcdef01234567", "valid": true },
+    { "kind": "openalex", "val": "W4392834756", "valid": true },
+    { "kind": "openalex", "val": "A1234567", "valid": false },
+    { "kind": "openalex", "val": "W123; rm", "valid": false }
   ],
   "sanitize": [
     { "input": { "doi": "10.x/y", "__proto__": { "x": 1 } }, "expectedKeys": ["doi"] },
     { "input": { "doi": "10.x/y", "constructor": "polluted" }, "expectedKeys": ["doi"] },
-    { "input": { "doi": "10.x/y", "openalex": "W123" }, "expectedKeys": ["doi"] },
+    { "input": { "doi": "10.x/y", "openalex": "W123" }, "expectedKeys": ["doi", "openalex"] },
+    { "input": { "doi": "10.x/y", "isbn": "9780000000000" }, "expectedKeys": ["doi"] },
     { "input": { "doi": "" }, "expectedKeys": [] },
     { "input": null, "expectedKeys": [] }
   ],

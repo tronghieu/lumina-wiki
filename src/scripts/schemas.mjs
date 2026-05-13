@@ -11,11 +11,13 @@
 // EXTERNAL_ID_NAMESPACES
 // Locked namespace list for the `external_ids` frontmatter map on Source pages.
 // `url` is a post-spec extension (legacy from arxiv-only era; kept for back-compat).
-// `openalex`/`isbn`/`s2_corpus` reserved — add when producer/consumer ship together.
+// `openalex` activated 2026-05 alongside the OpenAlex fetcher (Work IDs only, `^W\d+$`).
+// `isbn`/`s2_corpus` remain reserved — add when producer/consumer ship together.
+// Order matters: `externalIdMatchKey` priority follows this array — `doi > arxiv > s2 > url > openalex`.
 // ---------------------------------------------------------------------------
 
 /** @type {readonly string[]} */
-export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url']);
+export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url', 'openalex']);
 
 // ---------------------------------------------------------------------------
 // SCHEMA_VERSION

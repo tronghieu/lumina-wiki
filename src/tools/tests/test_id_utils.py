@@ -27,7 +27,7 @@ FIXTURE = json.loads(
 
 
 def test_namespaces_locked():
-    assert tuple(EXTERNAL_ID_NAMESPACES) == ("doi", "arxiv", "s2", "url")
+    assert tuple(EXTERNAL_ID_NAMESPACES) == ("doi", "arxiv", "s2", "url", "openalex")
 
 
 def test_canonical_v_int():
@@ -114,6 +114,54 @@ def test_build_source_entry_drops_oversize_url():
     huge = "https://x.test/" + "a" * 3000
     e = build_source_entry("pdf", url=huge)
     assert "url" not in e
+
+
+def test_build_source_entry_with_ns_value():
+    from id_utils import build_source_entry
+    e = build_source_entry("openalex", ns="openalex", value="W4392834756")
+    assert e["ns"] == "openalex"
+    assert e["value"] == "W4392834756"
+    assert e["provider"] == "openalex"
+
+
+def test_build_source_entry_ns_value_url_combined():
+    from id_utils import build_source_entry
+    e = build_source_entry(
+        "openalex",
+        ns="doi",
+        value="10.48550/arxiv.2401.12345",
+        url="https://api.openalex.org/works/W123",
+    )
+    assert e["ns"] == "doi"
+    assert e["value"] == "10.48550/arxiv.2401.12345"
+    assert e["url"] == "https://api.openalex.org/works/W123"
+
+
+def test_build_source_entry_drops_invalid_ns():
+    from id_utils import build_source_entry
+    e = build_source_entry("openalex", ns="isbn", value="9780000000000")
+    assert "ns" not in e and "value" not in e
+
+
+def test_build_source_entry_drops_when_one_missing():
+    from id_utils import build_source_entry
+    e1 = build_source_entry("openalex", ns="doi")
+    assert "ns" not in e1 and "value" not in e1
+    e2 = build_source_entry("openalex", value="W123")
+    assert "ns" not in e2 and "value" not in e2
+
+
+def test_build_source_entry_drops_oversize_value():
+    from id_utils import build_source_entry
+    huge = "x" * 3000
+    e = build_source_entry("openalex", ns="doi", value=huge)
+    assert "ns" not in e and "value" not in e
+
+
+def test_build_source_entry_backcompat_no_ns_value():
+    from id_utils import build_source_entry
+    e = build_source_entry("arxiv")
+    assert set(e.keys()) == {"provider", "fetched_at"}
 
 
 @pytest.mark.parametrize("case", FIXTURE["redos"])

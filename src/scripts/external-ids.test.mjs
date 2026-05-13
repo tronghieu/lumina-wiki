@@ -21,8 +21,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, '../tools/tests/fixtures/id-cases.json');
 const F = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 
-test('namespaces locked to 4', () => {
-  assert.deepEqual([...EXTERNAL_ID_NAMESPACES], ['doi', 'arxiv', 's2', 'url']);
+test('namespaces locked', () => {
+  assert.deepEqual([...EXTERNAL_ID_NAMESPACES], ['doi', 'arxiv', 's2', 'url', 'openalex']);
 });
 
 test('CANONICAL_URL_V is a positive integer', () => {
@@ -118,6 +118,48 @@ test('buildSourceEntry: drops oversize url silently', () => {
   const huge = 'https://x.test/' + 'a'.repeat(3000);
   const e = buildSourceEntry('pdf', { url: huge });
   assert.ok(!('url' in e));
+});
+
+test('buildSourceEntry: with ns/value persists both', () => {
+  const e = buildSourceEntry('openalex', { ns: 'openalex', value: 'W4392834756' });
+  assert.equal(e.ns, 'openalex');
+  assert.equal(e.value, 'W4392834756');
+  assert.equal(e.provider, 'openalex');
+});
+
+test('buildSourceEntry: ns + value + url all together', () => {
+  const e = buildSourceEntry('openalex', {
+    ns: 'doi',
+    value: '10.48550/arxiv.2401.12345',
+    url: 'https://api.openalex.org/works/W123',
+  });
+  assert.equal(e.ns, 'doi');
+  assert.equal(e.value, '10.48550/arxiv.2401.12345');
+  assert.equal(e.url, 'https://api.openalex.org/works/W123');
+});
+
+test('buildSourceEntry: drops ns/value when ns not in registry', () => {
+  const e = buildSourceEntry('openalex', { ns: 'isbn', value: '9780000000000' });
+  assert.ok(!('ns' in e));
+  assert.ok(!('value' in e));
+});
+
+test('buildSourceEntry: drops ns/value when only one provided', () => {
+  const e1 = buildSourceEntry('openalex', { ns: 'doi' });
+  assert.ok(!('ns' in e1) && !('value' in e1));
+  const e2 = buildSourceEntry('openalex', { value: 'W123' });
+  assert.ok(!('ns' in e2) && !('value' in e2));
+});
+
+test('buildSourceEntry: drops oversize value silently', () => {
+  const huge = 'x'.repeat(3000);
+  const e = buildSourceEntry('openalex', { ns: 'doi', value: huge });
+  assert.ok(!('ns' in e) && !('value' in e));
+});
+
+test('buildSourceEntry: backward-compat — opts without ns/value unchanged', () => {
+  const e = buildSourceEntry('arxiv');
+  assert.deepEqual(Object.keys(e).sort(), ['fetched_at', 'provider']);
 });
 
 test('redos adversarial inputs complete under budget', () => {
