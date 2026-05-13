@@ -12,6 +12,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
 - [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
 - [Installation](#installation)
+- [Getting Started with /lumi-help](#getting-started-with-lumi-help)
 - [How to Call Commands in an AI Agent](#how-to-call-commands-in-an-ai-agent)
 - [Quick Start](#quick-start)
 - [Research Pack for Research Work](#research-pack-for-research-work)
@@ -163,6 +164,22 @@ When you see the **[done]** message in green, congratulations! Your "office" is 
 *   **To change settings or upgrade**: Just run the `npx lumina-wiki install` command again. Your existing data **will not be lost**.
 *   **To uninstall**: Run the command `npx lumina-wiki uninstall`. This only removes system files; **your documents and notes will always stay safe**.
 
+## Getting Started with /lumi-help
+
+Once installed, the first thing to try is typing `/lumi-help`. This is the command you use any time you are not sure what to do next.
+
+```text
+/lumi-help                      # one suggested next step based on your project right now
+/lumi-help skills               # see the full list of commands you have
+/lumi-help explain <question>   # ask how Lumina works
+```
+
+Think of `/lumi-help` as a friend who already knows your project:
+
+- **No arguments:** AI looks at your project and suggests exactly one thing to do next. For example: "You have 2 new documents not yet added to the wiki — try `/lumi-ingest`." Use this when you forget where you left off, or when you just installed and are not sure where to begin.
+- **Add `skills`:** shows the full list of commands you have, with one short explanation per command.
+- **Add `explain <question>`:** quick answers about how Lumina works. For example: `/lumi-help explain what is the raw folder for` or `/lumi-help explain what does lumi-check do`.
+
 ## How to Call Commands in an AI Agent
 
 When you chat with your AI assistant (for example, in the OpenAI CodexApp), you control it using commands starting with `/` or `$`.
@@ -193,6 +210,15 @@ Once the AI has read a few documents, you can ask:
 ```text
 $lumi-ask Are there any interesting common points among these documents?
 ```
+
+### 4. Not sure what to do next? Type `/lumi-help`
+Forgot where you left off? Just added some documents and not sure what comes next? Want to see every command available? Just type:
+```text
+/lumi-help                      # one suggested next step
+/lumi-help skills               # see every command you have
+/lumi-help explain <question>   # ask how Lumina works
+```
+AI looks at your project and suggests exactly one thing to do next — for example, "You have 3 new documents not yet added, try `/lumi-ingest`." The answer is based on the actual state of your project at the moment you type it.
 
 The experience with **OpenAI CodexApp** will be very smooth because it is designed to automatically understand the Lumina-Wiki structure through the `AGENTS.md` file that the installer created for you.
 
@@ -328,6 +354,7 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
 | `/lumi-verify` | Ask AI to check that your wiki notes actually match the sources you cited. |
+| `/lumi-help` | Not sure what to do next? Type this to get a suggested next step. Add `skills` to see the full command list, or `explain <question>` to ask how Lumina works. |
 
 ## Checking your notes with /lumi-verify
 
@@ -355,6 +382,33 @@ A short report listing any statement in your notes that does not match the cited
 - A suggestion (rewrite, remove, or keep with a note).
 
 `/lumi-verify` never edits your notes for you. You decide what to do with each finding.
+
+## When You Are Not Sure What to Do Next — /lumi-help
+
+`/lumi-help` is a command you can type any time: when you just installed and do not know where to start, when you open the project after a few days and forgot where you left off, or when you want to know what else Lumina-Wiki can do.
+
+### When to use it
+
+- You open the project after a break and do not remember where you were.
+- You just added new documents and are not sure what the next step is.
+- You want to see all the commands you have available.
+- You have a question about how Lumina works and want a quick answer.
+
+### How to use it
+
+```text
+/lumi-help                      # one suggested next step
+/lumi-help skills               # see every command you have
+/lumi-help explain <question>   # ask how Lumina works
+```
+
+### What you get back
+
+**Type `/lumi-help` on its own:** AI looks at your project and suggests exactly one thing to do next — for example: "You have 3 new documents not yet added to the wiki — try `/lumi-ingest`." If you have not touched the project for more than a month, it adds a small note suggesting you check the wiki state before continuing.
+
+**Type `/lumi-help skills`:** you see a list of all your commands grouped into sections, with one short description per command. Sections you have not installed will not appear.
+
+**Type `/lumi-help explain <question>`:** AI gives a short answer about how Lumina works. For example: `/lumi-help explain what is the raw folder for` or `/lumi-help explain what does lumi-check do`. Note: this only explains how Lumina itself works — it does not read your wiki content. If you want to ask about what is in your wiki ("what does my wiki say about X?"), use `/lumi-ask` instead.
 
 ## Adding a document with /lumi-ingest
 

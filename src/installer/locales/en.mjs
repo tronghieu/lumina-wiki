@@ -37,6 +37,8 @@ export default {
   'prompt.packs.option.research.hint':         'discover/survey/prefill/setup skills + source-fetcher tools',
   'prompt.packs.option.reading.label':         'Reading',
   'prompt.packs.option.reading.hint':          'chapter-ingest/character-track/theme-map/plot-recap skills',
+  'prompt.packs.option.learning.label':        'Learning',
+  'prompt.packs.option.learning.hint':         'self-reflection skills (reflect skill + wiki/reflections/)',
 
   // ── Language pair ──────────────────────────────────────────────────────────
   'prompt.communication_language.message':     'Communication language (how the LLM talks to you)',

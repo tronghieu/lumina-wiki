@@ -37,6 +37,7 @@ import {
   writeSkillsManifest,
   readFilesManifest,
   writeFilesManifest,
+  cleanupObsoleteCatalog,
   MANIFEST_SCHEMA_VERSION,
 } from './manifest.js';
 import {
@@ -111,6 +112,7 @@ const CORE_WIKI_DIRS = [
 
 const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
 const READING_WIKI_DIRS  = ['wiki/chapters', 'wiki/characters', 'wiki/themes', 'wiki/plot'];
+const LEARNING_WIKI_DIRS = ['wiki/reflections'];
 
 const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download'];
 const RESEARCH_RAW_DIRS = ['raw/discovered'];
@@ -123,7 +125,7 @@ const LUMINA_DIRS = [
   '_lumina/_state',
 ];
 
-const VALID_PACKS = new Set(['core', 'research', 'reading']);
+const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
 
 // ---------------------------------------------------------------------------
@@ -220,6 +222,7 @@ export async function installCommand(opts = {}) {
   const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
+  const hasLearning = packs.includes('learning');
 
   console.log('');
   if (isUpgrade) {
@@ -241,6 +244,9 @@ export async function installCommand(opts = {}) {
   if (hasReading) {
     dirsToCreate.push(...READING_WIKI_DIRS);
   }
+  if (hasLearning) {
+    dirsToCreate.push(...LEARNING_WIKI_DIRS);
+  }
 
   for (const dir of dirsToCreate) {
     await ensureDir(join(projectRoot, dir));
@@ -255,6 +261,7 @@ export async function installCommand(opts = {}) {
     pack_core:     true,
     pack_research: hasResearch,
     pack_reading:  hasReading,
+    pack_learning: hasLearning,
     created_at:    new Date().toISOString().slice(0, 10),
     schema_version: String(MANIFEST_SCHEMA_VERSION),
   };
@@ -338,6 +345,10 @@ export async function installCommand(opts = {}) {
   await writeManifest(projectRoot, manifest);
   await writeSkillsManifest(projectRoot, skillRows);
   await writeFilesManifest(projectRoot, fileRows);
+  // Remove pre-v1.4 catalog files (skills-catalog.md, _state/skills-manifest.json)
+  // if they linger from an earlier install. The canonical catalog is
+  // _lumina/schema/lumi-help.csv, rendered by renderSchemaDocs above.
+  await cleanupObsoleteCatalog(projectRoot);
 
   // 17.5. Post-upgrade: spawn lint --summary, print banner if findings exist
   if (isUpgrade && existingManifest.packageVersion !== PKG.version) {
@@ -759,6 +770,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       core:     true,
       research: answers.packs.includes('research'),
       reading:  answers.packs.includes('reading'),
+      learning: answers.packs.includes('learning'),
     },
     paths: {
       raw:     'raw',
@@ -774,7 +786,7 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       log_prefix:   '## [{{date}}] {{skill}} | {{details}}',
       bidirectional_links: {
         mode: 'exempt-only',
-        exemptions: ['foundations/**', 'outputs/**', '*://*'],
+        exemptions: ['foundations/**', 'outputs/**', '*://*', ...(answers.packs.includes('learning') ? ['reflections/**'] : [])],
       },
       graph: {
         enabled: true,
@@ -1025,6 +1037,7 @@ function getSkillDefs(packs) {
       { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
       { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
       { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
+      { name: 'help',            canonicalId: 'lumi-help',            displayName: '/lumi-help' },
     ];
     for (const s of coreSkills) {
       defs.push({ ...s, pack: 'core', srcPackPath: 'core' });
@@ -1055,6 +1068,15 @@ function getSkillDefs(packs) {
     ];
     for (const s of readingSkills) {
       defs.push({ ...s, pack: 'reading', srcPackPath: 'packs/reading' });
+    }
+  }
+
+  if (packs.includes('learning')) {
+    const learningSkills = [
+      { name: 'reflect', canonicalId: 'lumi-learning-reflect', displayName: '/lumi-learning-reflect' },
+    ];
+    for (const s of learningSkills) {
+      defs.push({ ...s, pack: 'learning', srcPackPath: 'packs/learning' });
     }
   }
 
@@ -1089,7 +1111,7 @@ async function copyTools(projectRoot, { research }) {
 
 async function renderSchemaDocs(projectRoot, templateVars) {
   const schemaDir = join(projectRoot, '_lumina', 'schema');
-  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md'];
+  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'lumi-help.csv', 'lumi-help-runbook.md'];
 
   for (const doc of schemaDocs) {
     const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
@@ -1218,6 +1240,8 @@ async function buildFilesManifest(projectRoot, packs, pkgVersion) {
     '_lumina/schema/page-templates.md',
     '_lumina/schema/cross-reference-packs.md',
     '_lumina/schema/graph-packs.md',
+    '_lumina/schema/lumi-help.csv',
+    '_lumina/schema/lumi-help-runbook.md',
     'CLAUDE.md',
     'AGENTS.md',
     'GEMINI.md',

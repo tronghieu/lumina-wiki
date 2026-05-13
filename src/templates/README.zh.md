@@ -49,6 +49,9 @@
 {{#if pack_reading}}
 - `wiki/chapters/`、`wiki/characters/`、`wiki/themes/`、`wiki/plot/`（包：reading）
 {{/if}}
+{{#if pack_learning}}
+- `wiki/reflections/` — 个人反思页面（包：learning；个人叠加层，不属于学术图谱）
+{{/if}}
 
 ### `raw/` 属于用户
 
@@ -97,6 +100,7 @@
 | Character  | `characters/` | 包含弧线、关系、关键章节的人物档案（reading）                        |
 | Theme      | `themes/`     | 贯穿作品的主题线索（reading）                                        |
 | Plot       | `plot/`       | 情节线索、节拍和时间线（reading）                                    |
+{{/if}}{{#if pack_learning}}| Reflection | `reflections/`| 对某个概念的个人理解；可更新内容 + 只追加的演化日志（learning） |
 {{/if}}
 
 ---
@@ -137,6 +141,8 @@
 {{#if pack_research}}- **`foundations/**`** — 终端页面
 {{/if}}- **`outputs/**`** — 临时工件
 - **外部 URL**（`*://*`）— 超出 wiki 范围
+{{#if pack_learning}}- **`reflections/**`** — 个人叠加层；不需要学术页面的反向链接
+{{/if}}
 
 豁免 glob 之外的任何内容必须是双向的。
 
@@ -196,6 +202,10 @@
 {{#if pack_reading}}### 包：reading
 
 添加 `/lumi-reading-chapter-ingest`（归档章节，更新人物/主题/情节页面）、`/lumi-reading-character-track`（跨章节构建或刷新人物档案）、`/lumi-reading-theme-map`（带引用地跨章节追踪主题）、`/lumi-reading-plot-recap`（总结到某章为止的情节，受 spoiler 限制）。
+{{/if}}
+{{#if pack_learning}}### 包：learning
+
+添加 `/lumi-learning-reflect`（引导自我反思会话；创建或更新 `wiki/reflections/` 页面，包含可更新的 `## 当前理解` 部分和只追加的 `## 演化` 日志；AI 充当认知镜子 — 引用您过去的话语并提问 — 但绝不为您撰写反思内容）。
 {{/if}}
 
 ---

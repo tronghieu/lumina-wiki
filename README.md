@@ -78,7 +78,7 @@ npx lumina-wiki install
 
 > **Note for Windows users:** For the best experience, enable [Developer Mode](https://learn.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development) so the installer can use symlinks correctly. If Developer Mode is off, the installer falls back to copying skill files; everything still works, but updates are less ideal.
 
-The installer will guide you through a quick setup, including optional **Packs** such as `research` and `reading`.
+The installer will guide you through a quick setup, including optional **Packs** such as `research`, `reading`, and `learning`.
 
 ### **Step 2 (Optional): Configure the Research Pack**
 
@@ -117,7 +117,7 @@ Interact with your wiki using these commands in your AI chat interface, such as 
 -   `/lumi-edit [path/to/wiki/page]`: Request a change or correction to a specific wiki page.
 -   `/lumi-check`: Check the whole wiki for errors, such as broken links or orphan pages.
 
-*Additional skills may be available if you installed optional packs such as `research` or `reading`.*
+*Additional skills may be available if you installed optional packs such as `research`, `reading`, or `learning`.*
 
 ---
 
@@ -177,6 +177,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-check` | Check the wiki for errors, such as broken links. |
 | | `/lumi-reset` | Safely reset parts of the wiki. |
 | | `/lumi-verify` | Check that wiki notes match the sources they cite. Reports anything suspicious for your review; never edits notes for you. |
+| | `/lumi-help` | Read your workspace state and recommend one next action. Pass `skills` to list every command, or `explain <topic>` to ask how Lumina itself works (e.g., `/lumi-help explain bidirectional links`). |
 | **Research** | `/lumi-research-discover` | Discover and rank relevant research papers. |
 | | `/lumi-research-watchlist` | Choose research topics for scheduled discovery with AI help. |
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
@@ -188,6 +189,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-reading-character-track` | Track characters and their relationships in a story. |
 | | `/lumi-reading-theme-map` | Identify and map themes in a narrative. |
 | | `/lumi-reading-plot-recap` | Provide a progressive plot recap. |
+| **Learning** | `/lumi-learning-reflect` | Guide a self-reflection session on a concept or source you have studied. Creates a personal reflection page in `wiki/reflections/` with a rewritable "Current understanding" section and an append-only "Evolution" log. The AI acts as a metacognitive mirror — it quotes your past words and asks questions — but never writes the reflection for you. |
 
 The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`; you usually do not need to call them directly.
 
@@ -198,16 +200,18 @@ The scripts behind these skills live in `_lumina/scripts/` and `_lumina/tools/`;
 Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 
 **Near-term (Stability & New Ingestion)**
-- [ ] **`/lumi-help` Skill:** A smart assistant to help you learn and use Lumina-Wiki instantly.
+- [x] **`/lumi-help` Skill:** A smart assistant that reads your workspace state and tells you the one thing to do next; `skills` shows every command, `explain <topic>` answers how Lumina itself works. *(shipped in v1.4)*
+- [x] **Learning Pack:** Self-reflection sessions that track how your understanding of a concept evolves over time. *(shipped in v1.4)*
 - [x] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install. *(shipped in v1.2)*
 - [x] **Native DOCX, RTF & EPUB ingestion:** Pull Word, Rich Text, and EPUB books straight into your wiki via the research pack. *(shipped in v1.x)*
-- [ ] **Image OCR & Scanned PDFs:** Ingest screenshots and scanned PDFs into your wiki.
-- [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
 - [x] **Improved CI/CD:** Native support for Bun and Node 22 environments. *(shipped in v1.2)*
+- [ ] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall for reliable DOI-to-PDF resolution.
+- [ ] **RSS & Blog Monitoring:** Automatically surface new papers from your favorite lab blogs and journals.
+- [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
 
 **Long-term (Deep Research & Integration)**
-- [ ] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall.
-- [ ] **RSS & Blog Monitoring:** Automatically identify new papers from your favorite lab blogs.
+- [ ] **Image OCR & Scanned PDFs:** Ingest screenshots and scanned PDFs into your wiki.
+- [ ] **Paper Version Tracking:** Get notified when an already-ingested paper has a new revision or published version.
 - [ ] **Google Workspace:** Ingest Google Docs and Sheets directly into your graph.
 - [ ] **Multimedia Support:** Process YouTube videos and Audio recordings via transcripts.
 - [ ] **Knowledge Graph Auditing:** Automated checks for contradictions and structural drift.

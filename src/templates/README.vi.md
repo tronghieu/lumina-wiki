@@ -48,6 +48,9 @@ Ghi nhớ bản đồ tư duy này trong ngữ cảnh tức thì:
 {{#if pack_reading}}
 - `wiki/chapters/`, `wiki/characters/`, `wiki/themes/`, `wiki/plot/` (gói: reading)
 {{/if}}
+{{#if pack_learning}}
+- `wiki/reflections/` — trang phản tư cá nhân (gói: learning; lớp phủ cá nhân, không thuộc đồ thị học thuật)
+{{/if}}
 
 ### `raw/` thuộc quyền sở hữu của người dùng
 
@@ -96,6 +99,7 @@ Mỗi trang wiki có loại, frontmatter và cấu trúc phần được định
 | Character  | `characters/` | Hồ sơ nhân vật với diễn biến, mối quan hệ, các chương chính (reading)   |
 | Theme      | `themes/`     | Chủ đề xuyên suốt tác phẩm (reading)                                    |
 | Plot       | `plot/`       | Các luồng cốt truyện, nhịp điệu và dòng thời gian (reading)             |
+{{/if}}{{#if pack_learning}}| Reflection | `reflections/`| Hiểu biết cá nhân về một khái niệm; có thể cập nhật + nhật ký chỉ thêm (learning) |
 {{/if}}
 
 ---
@@ -136,6 +140,8 @@ Một số liên kết cố ý chỉ một chiều. Mặc định:
 {{#if pack_research}}- **`foundations/**`** — trang cuối cùng
 {{/if}}- **`outputs/**`** — tạo phẩm tạm thời
 - **URL bên ngoài** (`*://*`) — ngoài phạm vi wiki
+{{#if pack_learning}}- **`reflections/**`** — lớp phủ cá nhân; không yêu cầu liên kết ngược từ các trang học thuật
+{{/if}}
 
 Bất kỳ thứ gì ngoài glob miễn trừ phải là hai chiều.
 
@@ -195,6 +201,10 @@ Thêm `/lumi-research-discover` (danh sách ứng viên được xếp hạng), 
 {{#if pack_reading}}### Gói: reading
 
 Thêm `/lumi-reading-chapter-ingest` (lưu chương, cập nhật trang nhân vật/chủ đề/cốt truyện), `/lumi-reading-character-track` (xây dựng hoặc làm mới hồ sơ nhân vật qua các chương), `/lumi-reading-theme-map` (truy tìm chủ đề qua các chương với trích dẫn), `/lumi-reading-plot-recap` (tóm tắt cốt truyện đến một chương, giới hạn spoiler).
+{{/if}}
+{{#if pack_learning}}### Gói: learning
+
+Thêm `/lumi-learning-reflect` (hướng dẫn phiên phản tư; tạo hoặc cập nhật trang `wiki/reflections/` với phần `## Hiểu biết hiện tại` có thể cập nhật và nhật ký `## Tiến trình` chỉ thêm; AI hoạt động như gương nhận thức — trích dẫn lời bạn nói trước đây và đặt câu hỏi — nhưng không bao giờ tự viết nội dung phản tư).
 {{/if}}
 
 ---

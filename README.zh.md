@@ -78,7 +78,7 @@ npx lumina-wiki install
 
 > **Windows 用户注意：** 为了获得最佳体验，建议[启用开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development)，以便安装程序正确使用符号链接。如果开发者模式关闭，安装程序会退回到复制 skill 文件；功能仍然可用，但对后续更新不如符号链接理想。
 
-安装程序会引导您完成几个快速设置步骤，包括选择可选的 **Packs**，例如 `research`（研究）和 `reading`（阅读）。
+安装程序会引导您完成几个快速设置步骤，包括选择可选的 **Packs**，例如 `research`（研究）、`reading`（阅读）和 `learning`（学习）。
 
 ### **第二步（可选）：配置 Research Pack**
 
@@ -117,7 +117,7 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 -   `/lumi-edit [path/to/wiki/page]`: 要求修改或修正某个具体 wiki 页面。
 -   `/lumi-check`: 检查整个 wiki 的问题（断链、孤立页面等）。
 
-*如果您安装了 `research` 或 `reading` 等可选包，还会有额外技能可用。*
+*如果您安装了 `research`、`reading` 或 `learning` 等可选包，还会有额外技能可用。*
 
 ---
 
@@ -178,6 +178,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-check` | 检查 wiki 中的问题（断链等）。 |
 | | `/lumi-reset` | 安全地删除 wiki 的部分内容。 |
 | | `/lumi-verify` | 核查 wiki 里的笔记是否与引用的来源相符。把可疑之处报告给你审阅；不会替你修改笔记。 |
+| | `/lumi-help` | 读取工作区状态，给出下一步该做的一条建议。加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 自己的工作原理（例如 `/lumi-help explain bidirectional links`）。 |
 | **Research**| `/lumi-research-discover` | 发现并排序相关研究论文。 |
 | | `/lumi-research-watchlist` | 帮你选择要定期查找的研究主题。 |
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
@@ -188,6 +189,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-reading-character-track`| 追踪故事中的角色及其关系。 |
 | | `/lumi-reading-theme-map` | 识别并映射故事主题。 |
 | | `/lumi-reading-plot-recap` | 提供情节的顺序回顾。 |
+| **Learning** | `/lumi-learning-reflect` | 引导一次针对某个概念或资料的自我反思（self-reflection）。在 `wiki/reflections/` 中创建个人反思页，包含可改写的"当前理解"部分和只能追加的"演变日志"。AI 充当认知镜——引用你过去说的话并提问——但从不替你撰写反思内容。 |
 
 后台脚本位于 `_lumina/scripts/` 和 `_lumina/tools/`；通常您不需要直接调用它们。
 
@@ -198,16 +200,18 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 Lumina-Wiki 正在快速演进。这是我们的用户路线图：
 
 **近期计划（稳定性与新导入支持）**
-- [ ] **`/lumi-help` 技能：** 智能助手，帮您即时学习和使用 Lumina-Wiki。
+- [x] **`/lumi-help` 技能：** 智能助手读取工作区状态并告诉你下一步该做什么；加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 本身的工作原理。*（v1.4 已发布）*
+- [x] **学习包（Learning Pack）：** 自我反思功能，帮助您追踪对某个概念的理解随时间的演变。*（v1.4 已发布）*
 - [x] **多语言安装：** 安装时可选英文、越南文或中文作为主语言。*（v1.2 已发布）*
 - [x] **原生 DOCX、RTF 与 EPUB 导入：** 通过 research pack 将 Word、Rich Text 与 EPUB 电子书直接导入维基。*（v1.x 已发布）*
-- [ ] **图片 OCR 与扫描 PDF：** 将截图与扫描版 PDF 导入维基。
-- [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。
 - [x] **改进的 CI/CD：** 正式支持 Bun 和 Node 22 环境。*（v1.2 已发布）*
+- [ ] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall，实现可靠的 DOI-to-PDF 解析。
+- [ ] **RSS 与博客监控：** 自动从您喜爱的实验室博客和期刊中发现新论文。
+- [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。
 
 **长期计划（深度研究与集成）**
-- [ ] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall。
-- [ ] **RSS 与博客监控：** 自动从您喜爱的实验室博客中发现新论文。
+- [ ] **图片 OCR 与扫描 PDF：** 将截图与扫描版 PDF 导入维基。
+- [ ] **论文版本追踪：** 当已导入的论文出现新修订版或正式发表版本时发出通知。
 - [ ] **Google Workspace：** 直接将 Google Docs 和 Sheets 导入知识图谱。
 - [ ] **多媒体支持：** 通过转录处理 YouTube 视频和音频录音。
 - [ ] **知识图谱审计：** 自动检测矛盾和结构偏移。

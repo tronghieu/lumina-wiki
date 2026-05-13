@@ -3,7 +3,7 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.4.0] - 2026-05-14
+## [Unreleased]
 
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)
 
@@ -66,6 +66,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Watchlist v1 (no `type` field) still validates and runs unchanged.
 - `fetch_pdf.py` CLI is stable; new helpers (`_safe_url`, `head_check`,
   `MAX_PDF_BYTES`) are additions only.
+
+## [1.5.0] - 2026-05-10
+
+### Added — Learning Pack: `/lumi-learning-reflect` self-reflection skill (PRs #16, #17)
+
+- New optional **learning** pack installable via `npx lumina-wiki install --packs core,learning`.
+- New skill `/lumi-learning-reflect`: guides metacognitive self-reflection sessions on any concept or source in the wiki.
+  - Creates or updates `wiki/reflections/<slug>.md` — a personal reflection page with a rewritable **"Current understanding"** section and an append-only **"Evolution"** log.
+  - AI acts as a metacognitive mirror: reads past entries, quotes the user's own words, and asks prompting questions — but **never writes reflection content**. The user always authors their own understanding.
+  - Reflection pages are a personal overlay exempt from bidirectional-link requirements (`reflections/**` added to exempt globs in `schemas.mjs`).
+- `schemas.mjs` gains the `reflections` entity type (7 required frontmatter fields: `id`, `title`, `type`, `created`, `updated`, `related_concepts`, `related_sources`, `evolution_count`) scoped to the learning pack.
+- `commands.js` registers the learning pack as a valid selectable option (`VALID_PACKS`), creates `wiki/reflections/` on install, and wires up the `/lumi-learning-reflect` skill symlink.
+- Template READMEs (EN/VI/ZH) and `lumi-help.csv` catalog updated to include the new skill and Learning Pack install option.
+- `cross-reference-packs.md` and `page-templates.md` schema docs extended with reflection page format.
+- PR #17 follow-up: locale strings (EN/VI/ZH) for the new pack prompt, `prompts.js` pack description, and `assert.rejects` CI fix.
+
+## [1.4.0] - 2026-05-09
+
+### Added — `/lumi-help` orientation skill (PR #9)
+
+- New core skill `/lumi-help` with three modes:
+  - **Mode A — Orientation** (default): reads live workspace state
+    (`manifest.json`, `wiki/index.md`, `wiki/log.md`, `raw/`) and recommends
+    a single next action. Stale-log surfaces as a 30-day idle hint after
+    the primary recommendation, not as the primary action itself.
+  - **Mode B — Catalog** (`/lumi-help skills` or `/lumi-help catalog`): parses
+    `_lumina/schema/lumi-help.csv` and renders the full skill list grouped by
+    pack. Only sections matching installed packs are rendered at install time.
+  - **Mode C — Framework Q&A** (`/lumi-help explain <question>`): answers
+    how-it-works questions by citing shipped schema docs (`README.md` schema
+    block, `page-templates.md`, `cross-reference-packs.md`, `graph-packs.md`,
+    and the relevant `SKILL.md`).
+- `src/templates/_lumina/schema/lumi-help.csv` — pack-conditional skill
+  catalog (CSV, `{{#if pack_*}}` gates rendered at install time). Single
+  source of truth for skill names, menu strings, and prerequisite ordering.
+- `src/templates/_lumina/schema/lumi-help-runbook.md` — procedural detail
+  (bash probes, decision ladder, output formats) separated from the SKILL.md
+  contract; loaded on demand.
+- `cleanupObsoleteCatalog()` in `manifest.js` removes the pre-v1.4
+  `skills-catalog.md` and `_state/skills-manifest.json` on re-install —
+  best-effort, `ENOENT` is not an error.
+- `scripts/verify-lumi-help.test.mjs` — integrity test: validates CSV header
+  contract, column counts, id/menu uniqueness, valid enum values, pack gating,
+  and cross-references for all four pack combinations.
+- `test:catalog` script wired into `package.json` (`node --test scripts/verify-lumi-help.test.mjs`).
+- User guides (EN/VI/ZH) gain a `/lumi-help` section and a "Meet /lumi-help"
+  opener in Quick Start.
+
+### Fixed
+
+- `--cwd` / `--directory` flag propagation regression: dropping the
+  program-level `process.cwd()` default unmasks user-supplied `--cwd` values
+  that were being short-circuited by commander's `??` chain. Pinned by new
+  tests in `bin/lumina.deprecations.test.js`.
 
 ## [1.3.0] - 2026-05-09
 
@@ -408,7 +462,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/tronghieu/lumina-wiki/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/tronghieu/lumina-wiki/compare/v0.8.1...v0.9.0

@@ -213,3 +213,38 @@ book: book-slug
 - `## Related themes`
 - `## Notes`
 {{/if}}
+{{#if pack_learning}}
+
+---
+
+## Reflection page — `wiki/reflections/<slug>.md` (learning pack)
+
+Created and updated via `/lumi-learning-reflect`. AI never writes reflection content.
+
+```yaml
+---
+id: reflection-<slug>
+title: "My understanding of <Concept Name>"
+type: reflection
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+related_concepts:
+  - concept-slug
+related_sources:
+  - source-slug
+evolution_count: 1
+---
+```
+
+**Sections:**
+- `## Current understanding` — **rewritable**: the user's latest thinking in their own words; AI may quote past versions to prompt reflection but never edits this section
+- `## Evolution` — **append-only**: one dated entry per reflection session; never edit or delete entries
+
+**Evolution entry format:**
+```markdown
+### YYYY-MM-DD — <brief label>
+<What you wrote or changed in this session (1–3 sentences)>
+```
+
+**Boundary rule:** Reflection pages are **personal overlay** — they reference academic pages via frontmatter only (no wikilinks that create graph edges). Do not write `[[concept-slug]]` inline body links; reference concepts only in `related_concepts:` frontmatter. No reverse link is required from concept/source pages back to reflections.
+{{/if}}

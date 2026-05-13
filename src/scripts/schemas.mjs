@@ -37,6 +37,7 @@ export const SCHEMA_VERSION = '0.1.0';
 export const EXEMPTION_GLOBS = [
   'foundations/**',
   'outputs/**',
+  'reflections/**',
   '*://*',
 ];
 
@@ -88,7 +89,7 @@ export const ENUMS = {
 // ---------------------------------------------------------------------------
 
 /**
- * @typedef {'core'|'research'|'reading'} Pack
+ * @typedef {'core'|'research'|'reading'|'learning'} Pack
  */
 
 /**
@@ -116,6 +117,9 @@ export const ENTITY_DIRS = {
   characters:  { dir: 'characters/',  pack: 'reading' },
   themes:      { dir: 'themes/',      pack: 'reading' },
   plot:        { dir: 'plot/',        pack: 'reading' },
+
+  // learning pack
+  reflections: { dir: 'reflections/', pack: 'learning' },
 };
 
 // ---------------------------------------------------------------------------
@@ -375,6 +379,18 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'updated',   type: 'iso-date', required: true,  pack: 'reading' },
     { key: 'book',      type: 'string',   required: true,  pack: 'reading' },
     { key: 'up_to_chapter', type: 'number', required: true, pack: 'reading' },
+  ],
+
+  // Learning pack: reflection page (personal overlay — exempt from bidi links)
+  reflections: [
+    { key: 'id',               type: 'string',   required: true,  pack: 'learning' },
+    { key: 'title',            type: 'string',   required: true,  pack: 'learning' },
+    { key: 'type',             type: 'string',   required: true,  pack: 'learning' },
+    { key: 'created',          type: 'iso-date', required: true,  pack: 'learning' },
+    { key: 'updated',          type: 'iso-date', required: true,  pack: 'learning' },
+    { key: 'related_concepts', type: 'array',    required: true,  pack: 'learning' },
+    { key: 'related_sources',  type: 'array',    required: true,  pack: 'learning' },
+    { key: 'evolution_count',  type: 'number',   required: true,  pack: 'learning' },
   ],
 };
 

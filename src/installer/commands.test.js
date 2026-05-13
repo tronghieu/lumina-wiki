@@ -76,6 +76,7 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-help', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
       await access(join(workspace, '_lumina', 'scripts', 'discover-runner.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'external-ids.mjs'));
@@ -87,6 +88,48 @@ describe('installCommand', () => {
       await access(join(workspace, 'AGENTS.md'));
       await access(join(workspace, 'GEMINI.md'));
       await access(join(workspace, '.cursor', 'rules', 'lumina.mdc'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install with learning pack creates wiki/reflections and links skill', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'learning-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core,learning'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /learning: true/);
+      await access(join(workspace, 'wiki', 'reflections'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install without learning pack has no wiki/reflections or learning skill', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'core-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(workspace, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /learning: false/);
+      await assert.rejects(() => access(join(workspace, 'wiki', 'reflections')));
+      await assert.rejects(() => access(join(workspace, '.agents', 'skills', 'lumi-learning-reflect')));
     } finally {
       await cleanTmp(tmp);
     }
@@ -289,6 +332,7 @@ describe('installCommand', () => {
       await access(join(tmp, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(tmp, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
+      await access(join(tmp, '.agents', 'skills', 'lumi-help', 'SKILL.md'));
       await access(join(tmp, '_lumina', 'tools', 'prepare_source.py'));
       await access(join(tmp, '_lumina', 'config', 'watchlist.yml'));
     } finally {
@@ -518,6 +562,89 @@ describe("installCommand — additional defensive tests", () => {
       await assert.rejects(
         () => installCommand({ cwd: tmp, yes: true, noUpdate: true }),
         (err) => err.code === 2 && /CONFIG_READ_FAILED/.test(err.message),
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+describe('lumi-help skill', () => {
+  test('core-only install creates lumi-help skill in .claude/skills', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await access(join(tmp, '.claude', 'skills', 'lumi-help', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('SKILL.md has valid frontmatter: name, description, and Bash in allowed-tools', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      const content = await readFile(join(tmp, '.claude', 'skills', 'lumi-help', 'SKILL.md'), 'utf8');
+      assert.match(content, /^name: lumi-help/m);
+      assert.match(content, /^description:/m);
+      assert.match(content, /- Bash/m);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('lumi-help.csv is rendered into _lumina/schema/ and gates pack rows', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      const catalog = await readFile(join(tmp, '_lumina', 'schema', 'lumi-help.csv'), 'utf8');
+
+      // Header is the contract — guards against silent column reorders.
+      assert.match(
+        catalog,
+        /^id,menu,pack,phase,after,before,required,args,outputs,description/m,
+      );
+
+      // Core skills are always present.
+      assert.match(catalog, /^lumi-init,/m);
+      assert.match(catalog, /^lumi-ingest,/m);
+      assert.match(catalog, /^lumi-help,/m);
+
+      // Pack-conditioned rows are stripped when the pack is not installed.
+      assert.doesNotMatch(catalog, /^lumi-research-/m);
+      assert.doesNotMatch(catalog, /^lumi-reading-/m);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('lumi-help-runbook.md is rendered alongside the catalog', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      const runbook = await readFile(join(tmp, '_lumina', 'schema', 'lumi-help-runbook.md'), 'utf8');
+      // Sanity-check the runbook contains the load-bearing markers it's
+      // referenced for from SKILL.md.
+      assert.match(runbook, /Step 0 · Read languages/);
+      assert.match(runbook, /Mode A · Bash reads/);
+      assert.match(runbook, /Mode B · Catalog rendering/);
+      assert.match(runbook, /Mode C · Output templates/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('install does not write the obsolete skills-catalog.md or skills-manifest.json', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await assert.rejects(
+        () => access(join(tmp, '_lumina', 'schema', 'skills-catalog.md')),
+        err => err.code === 'ENOENT',
+      );
+      await assert.rejects(
+        () => access(join(tmp, '_lumina', '_state', 'skills-manifest.json')),
+        err => err.code === 'ENOENT',
       );
     } finally {
       await cleanTmp(tmp);
