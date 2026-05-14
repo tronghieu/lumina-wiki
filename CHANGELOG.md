@@ -37,6 +37,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`extract_ids_from_text()`** in `id_utils.py` — reusable free-text
   identifier harvester for feed entry titles / summaries / link hrefs.
 
+### Added — Project governance
+
+- `CONTRIBUTING.md` at the repo root: workflow checklists for adding skills,
+  fetchers, schema changes, installer changes, and entry-point stubs; the
+  trilingual user-docs convention; CI gates; exit-code contract; and a section
+  specifically scoped to AI-agent contributors that points at
+  `docs/project-context.md`, `CLAUDE.md`, and `docs/DEVELOPMENT.md` as
+  load-bearing context.
+- `CODE_OF_CONDUCT.md` at the repo root: Contributor Covenant v2.1, contact
+  `tronghieu.luu@gmail.com`. Linked from `CONTRIBUTING.md` §2.
+- `SECURITY.md` at the repo root: supported-versions table, private
+  reporting channels (GitHub Private Vulnerability Reporting + email),
+  in-scope / out-of-scope surfaces, severity bands, and coordinated
+  disclosure expectations.
+- `.github/PULL_REQUEST_TEMPLATE.md`: per-change-type checklists that
+  mirror `CONTRIBUTING.md` §5 (skill / fetcher / schema / installer),
+  trilingual docs checkpoint, and a rule-deviation prompt.
+
 ### Security
 
 - **SSRF guard** (`_safe_url`) on every PDF candidate URL: rejects RFC1918,
@@ -462,7 +480,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.1.0...v1.2.0
