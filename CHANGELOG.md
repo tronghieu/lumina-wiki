@@ -15,6 +15,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   load-bearing context.
 - `CODE_OF_CONDUCT.md` at the repo root: Contributor Covenant v2.1, contact
   `tronghieu.luu@gmail.com`. Linked from `CONTRIBUTING.md` §2.
+- `SECURITY.md` at the repo root: supported-versions table, private
+  reporting channels (GitHub Private Vulnerability Reporting + email),
+  in-scope / out-of-scope surfaces, severity bands, and coordinated
+  disclosure expectations.
+- `.github/PULL_REQUEST_TEMPLATE.md`: per-change-type checklists that
+  mirror `CONTRIBUTING.md` §5 (skill / fetcher / schema / installer),
+  trilingual docs checkpoint, and a rule-deviation prompt.
 
 ## [1.5.0] - 2026-05-10
 
