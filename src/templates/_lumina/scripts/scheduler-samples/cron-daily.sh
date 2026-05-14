@@ -35,3 +35,10 @@ chmod 600 "$LOG"
   node _lumina/scripts/discover-runner.mjs --config _lumina/config/watchlist.yml || rc=$?
   echo "=== $(date -u +%FT%TZ) watch-run end (rc=${rc:-0}) ==="
 } >> "$LOG" 2>&1
+# Deliberate: the brace-group above always exits 0, so this wrapper exits 0
+# even when the runner failed. The actual rc is captured into the log line
+# above so operators can grep the log. We swallow failures here because
+# scheduler daemons (cron, launchd) on transient non-zero exits will email /
+# alert noisily on empty-result days; the log is the authoritative signal.
+# Monitoring that needs hard-failure detection should parse the log file
+# for `rc=` lines instead of relying on this script's exit code.

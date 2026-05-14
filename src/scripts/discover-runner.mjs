@@ -272,7 +272,7 @@ function normalizeCandidate({ item, source, candidate, nowIso }) {
     authors: normalizeAuthors(candidate.authors),
     publishedAt: candidate.published ?? candidate.publicationDate ?? (year ? String(year) : ''),
     summary: candidate.summary ?? candidate.abstract ?? '',
-    query: item.query,
+    query: item.query ?? '',
     discoveredAt: nowIso,
     status: 'new',
     score: {

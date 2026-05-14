@@ -37,10 +37,13 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -48,6 +51,7 @@ from typing import Any
 import requests
 
 import fetch_pdf
+from fetch_core import EXIT_RATE_LIMITED
 from fetch_pdf import (
     MAX_PDF_BYTES,
     REQUEST_TIMEOUT,
@@ -158,7 +162,7 @@ def _run_core_search(query: str) -> dict[str, Any] | None:
         "python3", str(TOOLS_DIR / "fetch_core.py"), "search", query, "--limit", "1"
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=GET_TIMEOUT)
-    if proc.returncode == 4:  # EXIT_RATE_LIMITED
+    if proc.returncode == EXIT_RATE_LIMITED:
         return {"_rate_limited": True}
     if proc.returncode == 2:
         # Missing key — skip silently.
@@ -230,10 +234,6 @@ def _download_pdf(
     resp = _safe_get(session, pdf_url, timeout=GET_TIMEOUT)
     if resp.status_code >= 400:
         raise RuntimeError(f"GET returned {resp.status_code}")
-
-    import hashlib
-    import os
-    import tempfile
 
     fd, tmp_path_str = tempfile.mkstemp(dir=out_dir, suffix=".tmp")
     size = 0

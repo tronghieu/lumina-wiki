@@ -342,9 +342,11 @@ def phase1_keyword_search(
     fetchers: list[str],
     limit: int,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 1: keyword search across configured fetchers."""
+    if exclude_keys is None:
+        exclude_keys = set()
     results: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
@@ -383,9 +385,11 @@ def phase2_author_backfill(
     discovered_dir: Path,
     limit: int,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 2: fetch more papers by the most prolific authors from phase 1."""
+    if exclude_keys is None:
+        exclude_keys = set()
     # Count author occurrences across phase-1 results
     author_counts: dict[str, int] = {}
     for paper in phase1_results:
@@ -426,9 +430,11 @@ def phase3_citation_expansion(
     slug: str,
     discovered_dir: Path,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 3: fetch citations of top phase-1 papers."""
+    if exclude_keys is None:
+        exclude_keys = set()
     # Sort by citation count to pick the most-cited seeds
     def sort_key(p: dict[str, Any]) -> int:
         v = p.get("citationCount") or p.get("citation_count") or 0

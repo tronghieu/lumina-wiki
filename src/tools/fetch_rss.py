@@ -51,7 +51,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from fetch_pdf import _safe_url
+from fetch_pdf import _safe_get, _safe_url
 from id_utils import build_source_entry, extract_ids_from_text
 
 REQUEST_TIMEOUT = 30
@@ -313,6 +313,13 @@ def poll(
     # SSRF guard — defense-in-depth on top of watchlist schema's https check.
     # Watchlist YAML is user-curated; a curated entry could still target an
     # internal host. Rejects private/loopback/link-local/metadata addresses.
+    #
+    # Known limitation — DNS rebinding: `_safe_url` resolves the host once via
+    # `getaddrinfo`, but `requests` resolves DNS again at connect time. A
+    # hostname with TTL=0 controlled by an attacker can return a public IP
+    # here and a private IP to the actual connection. Full mitigation requires
+    # a custom HTTPAdapter that pins the resolved IP on the socket. For now,
+    # callers MUST rely on egress firewalling for hard SSRF defense.
     if not _safe_url(feed_url):
         raise ValueError(f"feed_url rejected by SSRF guard: {feed_url!r}")
 
@@ -331,7 +338,16 @@ def poll(
             headers["If-Modified-Since"] = state["last_modified"]
 
     session = _make_session()
-    resp = session.get(feed_url, headers=headers, timeout=REQUEST_TIMEOUT, stream=True)
+    # `_safe_get` walks redirects manually so every hop — including ones the
+    # feed publisher 301s into — is re-validated by `_safe_url`. Without this,
+    # a feed at https://legit-feed.example/ that redirects to
+    # http://169.254.169.254/latest/meta-data/ would be fetched blindly.
+    resp = _safe_get(
+        session,
+        feed_url,
+        timeout=REQUEST_TIMEOUT,
+        headers=headers,
+    )
 
     if resp.status_code == 304:
         state["last_run"] = _now_iso()

@@ -13,6 +13,8 @@ JSON emitted to stdout on success. Errors → stderr; exit codes:
     0  success
     2  user error (missing key, bad input, 404, 401/403)
     3  internal/transient (network, 5xx, 429 after retry exhaustion)
+    5  rate-limited sentinel — caller skips remaining CORE calls this run
+       (distinct from project-wide exit code 4 = user cancelled / declined)
 
 The 429 path emits a `_rate_limited: true` flag in the JSON when the API
 hands back a soft 429 with cached metadata; the orchestrator uses this to
@@ -58,7 +60,10 @@ ENV_KEY_NAME = "CORE_API_KEY"
 PROVIDER = "core"
 
 # Sentinel exit code for "ratelimited" so resolve_pdf can detect cleanly.
-EXIT_RATE_LIMITED = 4
+# Uses 5 (not 4) because the project-wide CLI convention reserves exit code 4
+# for "user cancelled (Ctrl-C / declined confirm)" — see README.md exit-code
+# table. Subprocess callers handle this code explicitly.
+EXIT_RATE_LIMITED = 5
 
 
 def _err(msg: str) -> None:

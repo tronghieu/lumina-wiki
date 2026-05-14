@@ -178,6 +178,7 @@ def _safe_get(
     *,
     timeout: int,
     max_redirects: int = MAX_REDIRECTS,
+    headers: dict[str, str] | None = None,
 ) -> requests.Response:
     """GET with per-hop SSRF validation.
 
@@ -186,14 +187,23 @@ def _safe_get(
     This helper walks the redirect chain by hand and aborts on the first
     unsafe URL, ensuring an attacker-supplied Location header can never
     reach an internal service. Returns the first non-3xx response.
+
+    `headers` is forwarded only to the initial request — conditional headers
+    such as If-None-Match must NOT leak across origin boundaries on redirect.
     """
     current = url
+    is_initial = True
     for _ in range(max_redirects + 1):
         if not _safe_url(current):
             raise ValueError(f"unsafe URL rejected by SSRF guard: {current}")
         resp = session.get(
-            current, timeout=timeout, allow_redirects=False, stream=True
+            current,
+            timeout=timeout,
+            allow_redirects=False,
+            stream=True,
+            headers=headers if is_initial else None,
         )
+        is_initial = False
         if resp.status_code not in (301, 302, 303, 307, 308):
             return resp
         loc = resp.headers.get("Location", "")
