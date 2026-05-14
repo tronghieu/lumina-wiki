@@ -197,7 +197,7 @@
 
 {{#if pack_research}}### 包：research
 
-添加 `/lumi-research-discover`（排名候选人简短列表）、`/lumi-research-watchlist`（借助 AI 为定期发现选择主题）、`/lumi-research-survey`（叙事综合）、`/lumi-research-prefill`（播种基础知识以防止概念重复）、`/lumi-research-topic`（将现有概念和来源聚类为主题页面；AI 从图谱中提出聚类，您在写入任何内容之前确认）、`/lumi-research-setup`（交互式 API 密钥配置）。
+添加 `/lumi-research-discover`（排名候选人简短列表）、`/lumi-research-watchlist`（借助 AI 为定期发现选择主题）、`/lumi-research-watch-run`（基于 watchlist 运行一次计划式发现——主题 + RSS / Atom 源——仅在您要求时执行）、`/lumi-research-survey`（叙事综合）、`/lumi-research-prefill`（播种基础知识以防止概念重复）、`/lumi-research-topic`（将现有概念和来源聚类为主题页面；AI 从图谱中提出聚类，您在写入任何内容之前确认）、`/lumi-research-setup`（交互式 API 密钥配置）。
 {{/if}}
 {{#if pack_reading}}### 包：reading
 

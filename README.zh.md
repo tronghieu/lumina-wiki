@@ -185,6 +185,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
 | | `/lumi-research-topic` | 把 wiki 中已有的相关概念和来源汇聚成一个主题页，保存在 `wiki/topics/<slug>.md`。AI 会提议收录哪些内容，由你确认后再生成页面。多次 `/lumi-ingest` 之后，用它把一组相关想法整理成独立的主题页。 |
 | | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
+| | `/lumi-research-watch-run` | 基于 watchlist 运行一次计划式发现（主题 + RSS / Atom 源）。仅在你要求时才运行。 |
 | **Reading** | `/lumi-reading-chapter-ingest`| 按章节导入书籍知识。 |
 | | `/lumi-reading-character-track`| 追踪故事中的角色及其关系。 |
 | | `/lumi-reading-theme-map` | 识别并映射故事主题。 |

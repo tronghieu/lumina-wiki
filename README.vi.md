@@ -184,6 +184,7 @@ Xem [Hướng dẫn Nâng cao](docs/user-guide/advanced-qmd.vi.md) để biết 
 | | `/lumi-research-prefill` | Tạo trước các khái niệm nền tảng để tránh trùng lặp. |
 | | `/lumi-research-topic` | Gom các khái niệm và nguồn liên quan trong wiki thành một trang chủ đề tại `wiki/topics/<slug>.md`. AI đề xuất danh sách để bạn xem và xác nhận trước khi trang được tạo. Dùng sau khi đã nạp nhiều tài liệu và muốn tổng hợp một nhóm ý tưởng thành trang riêng. |
 | | `/lumi-research-setup` | Giúp cấu hình API key cho các công cụ nghiên cứu. |
+| | `/lumi-research-watch-run` | Chạy một lượt khám phá theo lịch dựa trên watchlist (chủ đề + nguồn RSS / Atom). Chỉ chạy khi bạn yêu cầu. |
 | **Reading** | `/lumi-reading-chapter-ingest`| Nạp kiến thức sách theo từng chương. |
 | | `/lumi-reading-character-track`| Theo dõi các nhân vật và mối quan hệ của họ trong truyện. |
 | | `/lumi-reading-theme-map` | Xác định và lập bản đồ các chủ đề trong một câu chuyện. |

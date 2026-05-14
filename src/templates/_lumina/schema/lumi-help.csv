@@ -11,6 +11,7 @@ lumi-help,HP,core,anytime,,,false,[skills | explain <topic>],,"orient yourself; 
 lumi-research-prefill,RP,research,1-bootstrap,lumi-init,lumi-ingest,false,,wiki/foundations/**,seed foundations/ to prevent concept duplication
 lumi-research-discover,RD,research,2-ingest,,lumi-ingest,false,,raw/discovered/**,ranked candidate shortlist of new sources
 lumi-research-watchlist,RW,research,anytime,,lumi-research-discover,false,,_lumina/config/watchlist.yml,choose topics for scheduled discovery
+lumi-research-watch-run,RWR,research,anytime,lumi-research-watchlist,,false,,raw/discovered/**,run one scheduled-discovery pass over the watchlist (topics + RSS / Atom feeds)
 lumi-research-survey,RV,research,3-query,lumi-ingest,,false,,wiki/summary/**,narrative synthesis across a topic's sources
 lumi-research-topic,RT,research,3-query,lumi-ingest,,false,,wiki/topics/**,cluster concepts and sources into a thematic topic page
 lumi-research-setup,RSS,research,anytime,,,false,,.env,interactive API key configuration
