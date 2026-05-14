@@ -180,6 +180,30 @@ class TestUrlValidation:
             # Critical: guard must run BEFORE any network I/O.
             sess.get.assert_not_called()
 
+    @pytest.mark.parametrize("redirect_target", [
+        "https://169.254.169.254/latest/meta-data/",  # AWS / GCP metadata
+        "https://10.0.0.5/feed",                       # RFC1918
+        "https://127.0.0.1/feed",                      # loopback
+    ])
+    def test_redirect_to_private_ip_rejected(self, tmp_project, redirect_target):
+        """A publicly resolvable feed that 301s into a private host must be
+        rejected by `_safe_get`'s per-hop SSRF guard, not blindly followed.
+        """
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 301
+        redirect_resp.headers = {"Location": redirect_target}
+        redirect_resp.close = MagicMock()
+        with patch("fetch_rss._make_session") as mk:
+            sess = MagicMock()
+            mk.return_value = sess
+            sess.get.return_value = redirect_resp
+            with pytest.raises(ValueError, match="unsafe URL"):
+                fetch_rss.poll(
+                    "https://example.com/feed", tmp_project, feed_id="x"
+                )
+            # The initial hop was fetched, but the redirect target must not be.
+            assert sess.get.call_count == 1
+
 
 class TestPerFeedStateIsolation:
     def test_two_feeds_write_distinct_files(self, tmp_project):
