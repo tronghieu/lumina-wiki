@@ -3,6 +3,19 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added — Project governance
+
+- `CONTRIBUTING.md` at the repo root: workflow checklists for adding skills,
+  fetchers, schema changes, installer changes, and entry-point stubs; the
+  trilingual user-docs convention; CI gates; exit-code contract; and a section
+  specifically scoped to AI-agent contributors that points at
+  `docs/project-context.md`, `CLAUDE.md`, and `docs/DEVELOPMENT.md` as
+  load-bearing context.
+- `CODE_OF_CONDUCT.md` at the repo root: Contributor Covenant v2.1, contact
+  `tronghieu.luu@gmail.com`. Linked from `CONTRIBUTING.md` §2.
+
 ## [1.5.0] - 2026-05-10
 
 ### Added — Learning Pack: `/lumi-learning-reflect` self-reflection skill (PRs #16, #17)
@@ -398,7 +411,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.1.0...v1.2.0
