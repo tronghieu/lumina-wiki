@@ -77,45 +77,19 @@ Useful flags:
 Lumina ships exactly one helper: `_lumina/scripts/scheduler-samples/cron-daily.sh`.
 It sets `umask 077`, creates `_lumina/_state/watch-run.log` with `chmod 600`,
 rotates the log at 1 MB, and invokes the runner. **The installer never
-registers it with your scheduler** — pick whichever of the three patterns
-below fits your OS.
+registers it with your scheduler** — you wire it in yourself.
 
-### Linux / macOS — crontab
+For full cron, launchd, and Windows Task Scheduler patterns, see the
+trilingual user guide:
+[Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
+([VI](advanced-scheduled-discovery.vi.md) ·
+[ZH](advanced-scheduled-discovery.zh.md)).
+Those examples invoke `lumina discover run` directly; substitute
+`cron-daily.sh` if you want the umask / log-rotation guarantees this
+wrapper provides.
 
-```cron
-0 8 * * * /absolute/path/to/your-wiki/_lumina/scripts/scheduler-samples/cron-daily.sh
-```
-
-### macOS — launchd user agent
-
-Save as `~/Library/LaunchAgents/wiki.lumina.watch.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>wiki.lumina.watch</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/absolute/path/to/your-wiki/_lumina/scripts/scheduler-samples/cron-daily.sh</string>
-  </array>
-  <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-  <key>RunAtLoad</key><false/>
-</dict>
-</plist>
-```
-
-Then `launchctl load ~/Library/LaunchAgents/wiki.lumina.watch.plist`.
-
-### Windows — Task Scheduler (via WSL)
-
-```powershell
-schtasks /Create /TN "LuminaWatch" `
-  /TR "wsl.exe -- /absolute/path/to/wiki/_lumina/scripts/scheduler-samples/cron-daily.sh" `
-  /SC DAILY /ST 08:00
-```
+For one-shot runs from inside chat (no scheduler at all), call
+`/lumi-research-watch-run`.
 
 ## Filesystem-locality note
 

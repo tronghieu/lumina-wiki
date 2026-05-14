@@ -207,3 +207,40 @@ Create a Basic Task:
 - Start in: your project folder.
 
 The computer must be on at the scheduled time.
+
+## 7. Follow RSS / Atom Feeds (v1.4+)
+
+You can also follow an RSS / Atom feed alongside topic searches. The runner
+polls every feed in your watchlist once per scheduled invocation, dedups
+against per-feed state, and writes new candidates into `raw/discovered/`
+like any topic search.
+
+Add a `type: feed` item via `/lumi-research-watchlist`, or by editing
+`_lumina/config/watchlist.yml` directly:
+
+```yaml
+items:
+  - id: arxiv-cs-lg
+    type: feed
+    enabled: true
+    url: "https://arxiv.org/rss/cs.LG"
+    name: "arXiv cs.LG"
+    schedule: daily
+    max_new: 20
+```
+
+Existing `type: topic` items keep working with no change. The feed URL must
+use `https://` and must not begin with `--`.
+
+Per-feed state lives at `_lumina/_state/feeds/<feed-id>.json` (etag,
+last-seen guids, poll count). Lumina caps `last_seen_guids` at 5000 entries
+and evicts entries older than 90 days, so the file stays small even after
+years of polling.
+
+If you want a single one-shot pass from inside chat (no scheduler), use
+`/lumi-research-watch-run`. It is the in-chat equivalent of
+`lumina discover run` and reports a plain-language summary of what was new.
+
+For the v1.4 feed schema, etag caching, XXE rejection, and the
+`cron-daily.sh` wrapper that pairs `umask 077` with log rotation, see
+[Research Watch deep-dive](research-watch.md) (English; v1.4 technical reference).

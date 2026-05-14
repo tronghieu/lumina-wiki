@@ -160,10 +160,13 @@ Tell the user:
   candidate.
 
 If the user asks how to schedule it, point them to
-`docs/user-guide/research-watch.md` and the `/lumi-research-watch-run` skill
-which runs one pass over the watchlist on demand. They can also follow an
-RSS / Atom feed by adding a `type: feed` item (https URL required) — see the
-research-watch guide for the YAML example.
+`docs/user-guide/advanced-scheduled-discovery.{en,vi,zh}.md` (trilingual
+cron / launchd / Actions / Task Scheduler patterns) and the
+`/lumi-research-watch-run` skill which runs one pass over the watchlist on
+demand. They can also follow an RSS / Atom feed by adding a `type: feed`
+item (https URL required) — the advanced-scheduled-discovery guide §7 has
+the YAML example, and `docs/user-guide/research-watch.md` carries the v1.4
+technical deep-dive (English).
 
 ## Constraints
 
