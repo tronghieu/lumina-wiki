@@ -205,8 +205,8 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 - [x] **Multilingual setup:** Choose English, Vietnamese, or Chinese as your primary language during install. *(shipped in v1.2)*
 - [x] **Native DOCX, RTF & EPUB ingestion:** Pull Word, Rich Text, and EPUB books straight into your wiki via the research pack. *(shipped in v1.x)*
 - [x] **Improved CI/CD:** Native support for Bun and Node 22 environments. *(shipped in v1.2)*
-- [ ] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall for reliable DOI-to-PDF resolution.
-- [ ] **RSS & Blog Monitoring:** Automatically surface new papers from your favorite lab blogs and journals.
+- [x] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall for reliable DOI-to-PDF resolution. *(shipped in v1.6)*
+- [x] **RSS & Blog Monitoring:** Automatically surface new papers from your favorite lab blogs and journals via `type: feed` watchlist items. *(shipped in v1.6)*
 - [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
 
 **Long-term (Deep Research & Integration)**
