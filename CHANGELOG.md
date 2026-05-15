@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-15
+
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)
 
 - **OpenAlex fetcher** activated as the metadata anchor across the new ladder
