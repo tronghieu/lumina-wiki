@@ -17,6 +17,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [20, 22]
+        exclude:
+          # Node 22 node:test runner has a structured-clone IPC bug on Windows
+          # (ERR_TEST_FAILURE / uncaughtException in runner internals). Node 20
+          # already provides Windows coverage; drop this combination until the
+          # upstream bug is fixed.
+          - os: windows-latest
+            node-version: 22
 
     steps:
       - name: Checkout
