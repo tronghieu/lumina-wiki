@@ -250,3 +250,13 @@ npm run test:all
 - [简体中文 (Tiếng Trung)](README.zh.md)
 
 **Giấy phép:** [MIT](LICENSE) © Lưu Trọng Hiếu.
+
+---
+
+## Người đóng góp
+
+Cảm ơn tất cả những người đã đóng góp cho Lumina Wiki!
+
+[![Contributors](https://contrib.rocks/image?repo=tronghieu/lumina-wiki)](https://github.com/tronghieu/lumina-wiki/graphs/contributors)
+
+**Muốn đóng góp?** Đọc [CONTRIBUTING.md](CONTRIBUTING.md) để bắt đầu — báo lỗi, thêm skill mới, tích hợp công cụ, hay dịch thuật đều được chào đón.

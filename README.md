@@ -436,3 +436,13 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 The wiki is a long-running collaboration. Maintain it patiently.
 
 <!-- /lumina:schema -->
+
+---
+
+## Contributors
+
+Thanks to everyone who has contributed to Lumina Wiki!
+
+[![Contributors](https://contrib.rocks/image?repo=tronghieu/lumina-wiki)](https://github.com/tronghieu/lumina-wiki/graphs/contributors)
+
+**Want to contribute?** Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started — bug reports, new skills, tool integrations, and translations are all welcome.

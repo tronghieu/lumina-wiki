@@ -252,3 +252,13 @@ npm run test:all
 - [Tiếng Việt（越南语）](README.vi.md)
 
 **许可：** [MIT](LICENSE) © Lưu Trọng Hiếu.
+
+---
+
+## 贡献者
+
+感谢所有为 Lumina Wiki 做出贡献的人！
+
+[![Contributors](https://contrib.rocks/image?repo=tronghieu/lumina-wiki)](https://github.com/tronghieu/lumina-wiki/graphs/contributors)
+
+**想要贡献？** 请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 开始参与——欢迎提交 Bug 报告、新 skill、工具集成以及翻译。
