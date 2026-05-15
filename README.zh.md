@@ -185,6 +185,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
 | | `/lumi-research-topic` | 把 wiki 中已有的相关概念和来源汇聚成一个主题页，保存在 `wiki/topics/<slug>.md`。AI 会提议收录哪些内容，由你确认后再生成页面。多次 `/lumi-ingest` 之后，用它把一组相关想法整理成独立的主题页。 |
 | | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
+| | `/lumi-research-watch-run` | 基于 watchlist 运行一次计划式发现（主题 + RSS / Atom 源）。仅在你要求时才运行。 |
 | **Reading** | `/lumi-reading-chapter-ingest`| 按章节导入书籍知识。 |
 | | `/lumi-reading-character-track`| 追踪故事中的角色及其关系。 |
 | | `/lumi-reading-theme-map` | 识别并映射故事主题。 |
@@ -205,8 +206,8 @@ Lumina-Wiki 正在快速演进。这是我们的用户路线图：
 - [x] **多语言安装：** 安装时可选英文、越南文或中文作为主语言。*（v1.2 已发布）*
 - [x] **原生 DOCX、RTF 与 EPUB 导入：** 通过 research pack 将 Word、Rich Text 与 EPUB 电子书直接导入维基。*（v1.x 已发布）*
 - [x] **改进的 CI/CD：** 正式支持 Bun 和 Node 22 环境。*（v1.2 已发布）*
-- [ ] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall，实现可靠的 DOI-to-PDF 解析。
-- [ ] **RSS 与博客监控：** 自动从您喜爱的实验室博客和期刊中发现新论文。
+- [x] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall，实现可靠的 DOI-to-PDF 解析。*（在 v1.6 中发布）*
+- [x] **RSS 与博客监控：** 通过 watchlist 中的 `type: feed` 项，自动从您喜爱的实验室博客和期刊中发现新论文。*（在 v1.6 中发布）*
 - [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。
 
 **长期计划（深度研究与集成）**

@@ -7,6 +7,8 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 
 **Shipped in v1.4 (2026-05-09):** `/lumi-help` RAG-based orientation skill · Learning Pack (`/lumi-learning-reflect` self-reflection infrastructure).
 
+**Shipped in v1.6 (pending release):** Research & Discovery Expansion — multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) · RSS / Atom feed monitoring (`type: feed` watchlist items, etag caching, XXE rejection) · `/lumi-research-watch-run` skill · `cron-daily.sh` wrapper.
+
 ---
 
 ## Near-term
@@ -22,8 +24,7 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - ~~**CI/CD Hardening:** Expand the test matrix to include Bun and Node 22 LTS environments.~~ **Shipped in v1.2.**
 - **Stability Lock:** Finalize CLI flags and exit code contracts to ensure long-term tool compatibility.
 - ~~**Schema Parity:** Standardize cross-source ID handling across all core and research skills.~~ **Shipped in v1.2** (`external_ids` namespace, `sources[]` provenance, lint L13/L14/L16).
-- **Research & Discovery Expansion:** Broaden coverage to OpenAlex, CORE, Unpaywall, and RSS feeds.
-  - *Outcome:* Reliable DOI-to-PDF resolution and proactive research monitoring via journals/blogs.
+- ~~**Research & Discovery Expansion:** Broaden coverage to OpenAlex, CORE, Unpaywall, and RSS feeds.~~ **Shipped in v1.6 (pending release).** Multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) with always-on OpenAlex metadata anchor; RSS / Atom feed monitoring as first-class watchlist items; `/lumi-research-watch-run` skill for on-demand polling; `cron-daily.sh` wrapper for scheduled invocation.
   - *Spec:* [Research Source & Discovery Expansion](./docs/planning-artifacts/specs/spec-research-expansion.md)
 - **Advanced Ranking:** Integrate influential citation counts and altmetrics into the core discovery flow.
   - *Outcome:* Surface quality and influence signals to prioritize research reading.

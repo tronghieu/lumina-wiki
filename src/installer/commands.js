@@ -952,26 +952,25 @@ function buildIdeStub(target, vars) {
 async function copyScripts(projectRoot) {
   const destDir = join(projectRoot, '_lumina', 'scripts');
   const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs', 'build-source.mjs'];
-  for (const file of scriptFiles) {
-    const src = join(SCRIPTS_DIR, file);
-    const dest = join(destDir, file);
+  // Parallel: each copy is independent; destDir is created earlier.
+  await Promise.all(scriptFiles.map(async file => {
     try {
-      await copyFile(src, dest);
+      await copyFile(join(SCRIPTS_DIR, file), join(destDir, file));
     } catch (_) {
       // Scripts may not exist yet (P4+ work); skip gracefully
     }
-  }
+  }));
+  // Ensure the lib subdir once, then parallelize the file copies.
+  const libDir = join(destDir, 'lib');
+  await ensureDir(libDir);
   const libFiles = ['watchlist-config.mjs', 'discovery-state.mjs'];
-  for (const file of libFiles) {
-    const src = join(SCRIPTS_DIR, 'lib', file);
-    const dest = join(destDir, 'lib', file);
+  await Promise.all(libFiles.map(async file => {
     try {
-      await ensureDir(dirname(dest));
-      await copyFile(src, dest);
+      await copyFile(join(SCRIPTS_DIR, 'lib', file), join(libDir, file));
     } catch (_) {
       // Script libs may not exist yet; skip gracefully
     }
-  }
+  }));
 }
 
 async function copyChangelog(projectRoot) {
@@ -1052,6 +1051,7 @@ function getSkillDefs(packs) {
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
       { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
       { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
+      { name: 'watch-run', canonicalId: 'lumi-research-watch-run', displayName: '/lumi-research-watch-run' },
     ];
     for (const s of researchSkills) {
       defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
@@ -1086,19 +1086,22 @@ async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
   const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
   const researchTools = [
-    '_env.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
+    '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
     'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
+    'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
+    'fetch_rss.py',
   ];
   const toolFiles = research ? [...coreTools, ...researchTools] : coreTools;
-  for (const file of toolFiles) {
-    const src = join(TOOLS_DIR, file);
-    const dest = join(destDir, file);
+  // Parallelize: each copy is independent and destDir already exists.
+  // Sequential awaits were the main Windows cold-start regression in v1.4
+  // (~30 ms per file × 14 files dominates on NTFS + Defender).
+  await Promise.all(toolFiles.map(async file => {
     try {
-      await copyFile(src, dest);
+      await copyFile(join(TOOLS_DIR, file), join(destDir, file));
     } catch (_) {
       // Tool not yet authored; skip
     }
-  }
+  }));
   try {
     await copyFile(join(TOOLS_DIR, 'requirements.txt'), join(destDir, 'requirements.txt'));
   } catch (_) {
@@ -1110,7 +1113,9 @@ async function renderSchemaDocs(projectRoot, templateVars) {
   const schemaDir = join(projectRoot, '_lumina', 'schema');
   const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'lumi-help.csv', 'lumi-help-runbook.md'];
 
-  for (const doc of schemaDocs) {
+  // Parallel render + atomicWrite. Each doc is independent; schemaDir is
+  // already created by the dirsToCreate loop in installCommand.
+  await Promise.all(schemaDocs.map(async doc => {
     const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
     const destPath = join(schemaDir, doc);
     let content;
@@ -1121,7 +1126,7 @@ async function renderSchemaDocs(projectRoot, templateVars) {
       content = `# ${doc}\n\n_This file is managed by the Lumina installer._\n`;
     }
     await atomicWrite(destPath, content);
-  }
+  }));
 }
 
 async function renderEnvExample(projectRoot) {

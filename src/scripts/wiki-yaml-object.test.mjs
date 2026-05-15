@@ -76,8 +76,9 @@ test('set-meta strips __proto__ and unknown namespaces', () => {
       'provenance: replayable',
     ].join('\n'));
 
+    // `openalex` is an active namespace (activated 2026-05); `isbn` is still reserved.
     const r1 = runWiki(root, ['set-meta', 'attention', 'external_ids',
-      '{"__proto__":{"x":1},"constructor":"polluted","openalex":"W123","doi":"10.x/y"}',
+      '{"__proto__":{"x":1},"constructor":"polluted","isbn":"9780000000000","doi":"10.x/y"}',
       '--json-value']);
     assert.equal(r1.status, 0, r1.stderr);
 

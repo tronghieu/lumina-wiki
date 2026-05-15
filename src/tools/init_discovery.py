@@ -177,12 +177,38 @@ def _compute_external_ids(paper: dict[str, Any]) -> dict[str, str]:
         for ns, val in url_ids.items():
             ids.setdefault(ns, val)
 
+    # Pre-normalized `external_ids` map (e.g. from fetch_openalex.normalize_record).
+    # Trust upstream validation — re-validate here to guard against drift.
+    pre = paper.get("external_ids")
+    if isinstance(pre, dict):
+        for ns, raw in pre.items():
+            if ns in ids:
+                continue
+            if not isinstance(ns, str) or not isinstance(raw, str):
+                continue
+            r = normalize_external_id(ns, raw)
+            if r["valid"] and r["id"]:
+                ids[ns] = r["id"]
+
     return ids
 
 
 def _save_source(discovered_dir: Path, slug: str, source: dict[str, Any]) -> Path:
     """Save a single source dict to raw/discovered/<slug>/<id>.json atomically."""
-    raw_id = source.get("id") or source.get("paperId") or "unknown"
+    raw_id = source.get("id") or source.get("paperId")
+    if not raw_id:
+        # Fall back to any namespace in pre-normalized external_ids (OpenAlex etc.).
+        # Priority mirrors `external_id_match_key` so the filename derived here
+        # stays stable across re-runs even if the same paper arrives via a
+        # different fetcher (e.g. arxiv vs openalex returning the same DOI).
+        ext = source.get("external_ids")
+        if isinstance(ext, dict):
+            for ns in ("doi", "arxiv", "s2", "openalex"):
+                v = ext.get(ns)
+                if isinstance(v, str) and v:
+                    raw_id = v
+                    break
+    raw_id = raw_id or "unknown"
     source_id = re.sub(r'[<>:"/\\|?*]', "_", raw_id)
     filename = f"{source_id}.json"
     out_path = _safe_path(discovered_dir / slug, filename)
@@ -226,6 +252,28 @@ def _arxiv_search(query: str, limit: int, env: dict[str, str]) -> list[dict[str,
         if result.returncode != 0:
             raise RuntimeError(f"fetch_arxiv.py failed: {result.stderr.strip()}")
         return json.loads(result.stdout)
+
+
+def _openalex_search(query: str, limit: int, env: dict[str, str]) -> list[dict[str, Any]]:
+    """Run OpenAlex search; return list of paper dicts. Polite-pool via OPENALEX_MAILTO."""
+    try:
+        from fetch_openalex import cmd_search
+        mailto = env.get("OPENALEX_MAILTO", "").strip()
+        return cmd_search(query, limit, [], mailto)
+    except ImportError:
+        import subprocess
+        merged_env = {**os.environ, **env}
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).parent / "fetch_openalex.py"),
+             "search", query, "--limit", str(limit)],
+            capture_output=True, text=True, env=merged_env
+        )
+        if result.returncode != 0:
+            return []
+        data = json.loads(result.stdout)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
 
 
 def _s2_search(query: str, limit: int, env: dict[str, str]) -> list[dict[str, Any]]:
@@ -294,9 +342,11 @@ def phase1_keyword_search(
     fetchers: list[str],
     limit: int,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 1: keyword search across configured fetchers."""
+    if exclude_keys is None:
+        exclude_keys = set()
     results: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
 
@@ -306,6 +356,8 @@ def phase1_keyword_search(
                 papers = _arxiv_search(topic, limit, env)
             elif fetcher == "s2":
                 papers = _s2_search(topic, limit, env)
+            elif fetcher == "openalex":
+                papers = _openalex_search(topic, limit, env)
             else:
                 _err(f"Warning: unknown fetcher '{fetcher}' skipped.")
                 continue
@@ -333,9 +385,11 @@ def phase2_author_backfill(
     discovered_dir: Path,
     limit: int,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 2: fetch more papers by the most prolific authors from phase 1."""
+    if exclude_keys is None:
+        exclude_keys = set()
     # Count author occurrences across phase-1 results
     author_counts: dict[str, int] = {}
     for paper in phase1_results:
@@ -376,9 +430,11 @@ def phase3_citation_expansion(
     slug: str,
     discovered_dir: Path,
     env: dict[str, str],
-    exclude_keys: set[str] = set(),
+    exclude_keys: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Phase 3: fetch citations of top phase-1 papers."""
+    if exclude_keys is None:
+        exclude_keys = set()
     # Sort by citation count to pick the most-cited seeds
     def sort_key(p: dict[str, Any]) -> int:
         v = p.get("citationCount") or p.get("citation_count") or 0

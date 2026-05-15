@@ -24,6 +24,8 @@ export const EXTERNAL_ID_PATTERNS = Object.freeze({
   arxiv_old:  /^[a-z\-]+(?:\.[A-Z]{2})?\/[0-9]{7}(?:v[0-9]+)?$/,
   s2:         /^[a-f0-9]{40}$/,
   doi_arxiv:  /^10\.48550\/arxiv\.([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)$/i,
+  // OpenAlex Work ID only — reject Author (A), Institution (I), Publisher (P), Venue (V), Source (S) IDs.
+  openalex:   /^W[0-9]{1,12}$/,
 });
 
 const ARXIV_VERSION_RE = /v([0-9]+)$/;
@@ -101,6 +103,19 @@ export function normalizeExternalId(kind, raw) {
     return { id: body, valid: true, extras };
   }
 
+  if (kind === 'openalex') {
+    // Strip optional URL prefixes (openalex.org, api.openalex.org/works/) and
+    // any leading `openalex:` scheme tag. OpenAlex Work IDs are case-sensitive
+    // with a leading capital `W`; do NOT lowercase the body before regex check.
+    const body = trimmed
+      .replace(/^https?:\/\/(?:api\.)?openalex\.org\/(?:works\/)?/i, '')
+      .replace(/^openalex:/i, '');
+    if (!EXTERNAL_ID_PATTERNS.openalex.test(body)) {
+      return { id: null, valid: false, extras };
+    }
+    return { id: body, valid: true, extras };
+  }
+
   if (kind === 'url') {
     try {
       const id = canonicalizeUrl(trimmed);
@@ -129,6 +144,11 @@ export function parseUrlToExternalIds(raw) {
     const r = normalizeExternalId('arxiv', axMatch[1]);
     if (r.valid) out.arxiv = r.id;
   }
+  const oaMatch = /^https:\/\/(?:api\.)?openalex\.org\/(?:works\/)?(W[0-9]{1,12})$/i.exec(canon);
+  if (oaMatch) {
+    const r = normalizeExternalId('openalex', oaMatch[1]);
+    if (r.valid) out.openalex = r.id;
+  }
   return out;
 }
 
@@ -149,7 +169,7 @@ export function expandExternalIds(ids) {
   return out;
 }
 
-/** Best stable key for dedup: doi > arxiv > s2 > url. */
+/** Best stable key for dedup: doi > arxiv > s2 > url > openalex. */
 export function externalIdMatchKey(ids) {
   if (!ids || typeof ids !== 'object') return null;
   for (const ns of EXTERNAL_ID_NAMESPACES) {
@@ -173,13 +193,21 @@ export function safeIdToken(kind, val) {
 // Provider slug for `sources` array entries. Kebab/snake lowercase, ≤32 chars.
 const PROVIDER_SLUG_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 
+// Upper bound for `ns/value` payload — same cap as URL to avoid arbitrary growth.
+const MAX_VALUE_LEN = 2048;
+
 /**
  * Build one provenance entry for the `sources` frontmatter array.
  * Caller appends into existing array — this helper is pure (no I/O).
  *
- * @param {string} provider - Fetcher slug (e.g. 'arxiv', 's2', 'pdf', 'wikipedia').
- * @param {{url?: string, fetched_at?: string}} [opts]
- * @returns {{provider: string, fetched_at: string, url?: string}}
+ * `ns` + `value` (added 2026-05) record *which* external identifier this
+ * provider resolved/returned. Both must be present together to persist; if
+ * either is missing or invalid, both are dropped silently — same forgiveness
+ * model as the existing `url` field.
+ *
+ * @param {string} provider - Fetcher slug (e.g. 'arxiv', 's2', 'openalex', 'pdf').
+ * @param {{url?: string, fetched_at?: string, ns?: string, value?: string}} [opts]
+ * @returns {{provider: string, fetched_at: string, url?: string, ns?: string, value?: string}}
  */
 export function buildSourceEntry(provider, opts = {}) {
   if (typeof provider !== 'string' || !PROVIDER_SLUG_RE.test(provider)) {
@@ -199,6 +227,14 @@ export function buildSourceEntry(provider, opts = {}) {
       new URL(opts.url);
       entry.url = opts.url;
     } catch (_) { /* drop silently */ }
+  }
+  if (
+    typeof opts.ns === 'string' && NS_SET.has(opts.ns)
+    && typeof opts.value === 'string' && opts.value
+    && opts.value.length <= MAX_VALUE_LEN
+  ) {
+    entry.ns = opts.ns;
+    entry.value = opts.value;
   }
   return entry;
 }

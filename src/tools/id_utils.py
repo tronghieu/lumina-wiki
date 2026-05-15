@@ -16,9 +16,10 @@ from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode, unquote
 
 CANONICAL_URL_V = 1
-EXTERNAL_ID_NAMESPACES = ("doi", "arxiv", "s2", "url")
+EXTERNAL_ID_NAMESPACES = ("doi", "arxiv", "s2", "url", "openalex")
 _NS_SET = frozenset(EXTERNAL_ID_NAMESPACES)
 _MAX_URL_LEN = 2048
+_MAX_VALUE_LEN = 2048
 
 # Cross-ref: src/scripts/external-ids.mjs EXTERNAL_ID_PATTERNS
 EXTERNAL_ID_PATTERNS: Mapping[str, "re.Pattern[str]"] = MappingProxyType({
@@ -27,6 +28,8 @@ EXTERNAL_ID_PATTERNS: Mapping[str, "re.Pattern[str]"] = MappingProxyType({
     "arxiv_old": re.compile(r"^[a-z\-]+(?:\.[A-Z]{2})?/[0-9]{7}(?:v[0-9]+)?$"),
     "s2":        re.compile(r"^[a-f0-9]{40}$"),
     "doi_arxiv": re.compile(r"^10\.48550/arxiv\.([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)$", re.IGNORECASE),
+    # OpenAlex Work ID only — reject Author (A), Institution (I), Publisher (P), Venue (V), Source (S).
+    "openalex":  re.compile(r"^W[0-9]{1,12}$"),
 })
 
 _ARXIV_VERSION_RE = re.compile(r"v([0-9]+)$")
@@ -38,6 +41,9 @@ _ARXIV_PREFIX_RE = re.compile(r"^arxiv:", re.IGNORECASE)
 _PDF_SUFFIX_RE = re.compile(r"\.pdf$", re.IGNORECASE)
 _DOI_URL_FULL_RE = re.compile(r"^https://doi\.org/(.+)$", re.IGNORECASE)
 _ARXIV_URL_FULL_RE = re.compile(r"^https://arxiv\.org/(?:abs|pdf)/(.+?)(?:\.pdf)?$", re.IGNORECASE)
+_OPENALEX_URL_PREFIX_RE = re.compile(r"^https?://(?:api\.)?openalex\.org/(?:works/)?", re.IGNORECASE)
+_OPENALEX_PREFIX_RE = re.compile(r"^openalex:", re.IGNORECASE)
+_OPENALEX_URL_FULL_RE = re.compile(r"^https://(?:api\.)?openalex\.org/(?:works/)?(W[0-9]{1,12})$", re.IGNORECASE)
 
 
 def _decode_uri_safe(s: str) -> str:
@@ -117,6 +123,15 @@ def normalize_external_id(kind: str, raw: Any) -> dict:
             return {"id": None, "valid": False, "extras": extras}
         return {"id": body, "valid": True, "extras": extras}
 
+    if kind == "openalex":
+        # Strip optional URL/`openalex:` prefixes. Work IDs are case-sensitive:
+        # do NOT lowercase before regex check (leading `W` must remain capital).
+        body = _OPENALEX_URL_PREFIX_RE.sub("", trimmed)
+        body = _OPENALEX_PREFIX_RE.sub("", body)
+        if not EXTERNAL_ID_PATTERNS["openalex"].match(body):
+            return {"id": None, "valid": False, "extras": extras}
+        return {"id": body, "valid": True, "extras": extras}
+
     if kind == "url":
         try:
             ident = canonicalize_url(trimmed)
@@ -147,6 +162,11 @@ def parse_url_to_external_ids(raw: Any) -> dict:
         r = normalize_external_id("arxiv", m.group(1))
         if r["valid"]:
             out["arxiv"] = r["id"]
+    m = _OPENALEX_URL_FULL_RE.match(canon)
+    if m:
+        r = normalize_external_id("openalex", m.group(1))
+        if r["valid"]:
+            out["openalex"] = r["id"]
     return out
 
 
@@ -169,7 +189,7 @@ def expand_external_ids(ids: Any) -> dict:
 
 
 def external_id_match_key(ids: Any) -> str | None:
-    """Best stable dedup key: doi > arxiv > s2 > url."""
+    """Best stable dedup key: doi > arxiv > s2 > url > openalex."""
     if not isinstance(ids, dict):
         return None
     for ns in EXTERNAL_ID_NAMESPACES:
@@ -177,6 +197,64 @@ def external_id_match_key(ids: Any) -> str | None:
         if isinstance(v, str) and v:
             return f"{ns}:{v}"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Free-text identifier extractor — used by RSS/Atom fetcher to harvest DOIs
+# and arXiv IDs from feed titles, summaries, and link hrefs.
+# Reuses the compiled namespace regex so behavior stays aligned with
+# normalize_external_id; no second parsing dialect.
+# ---------------------------------------------------------------------------
+
+_DOI_TEXT_RE = re.compile(r"\b10\.[0-9]{4,9}/[A-Za-z0-9._\-/()]{1,256}", re.IGNORECASE)
+_ARXIV_TEXT_RE = re.compile(
+    r"(?:arxiv\.org/(?:abs|pdf)/|arxiv:)([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)",
+    re.IGNORECASE,
+)
+_OPENALEX_TEXT_RE = re.compile(r"openalex\.org/(?:works/)?(W[0-9]{1,12})", re.IGNORECASE)
+
+
+def extract_ids_from_text(text: Any) -> dict:
+    """Scan free text for DOI / arXiv / OpenAlex IDs.
+
+    Returns a dict with keys `doi`, `arxiv`, `openalex` — each `str` or `None`.
+    First valid match per namespace wins (later matches are ignored). The
+    arxiv-DOI cross-walk is applied: an extracted arXiv ID synthesizes its
+    `10.48550/arxiv.<id>` DOI form, and vice-versa.
+    """
+    out: dict = {"doi": None, "arxiv": None, "openalex": None}
+    if not isinstance(text, str) or not text:
+        return out
+
+    # arXiv first because an arxiv-DOI like 10.48550/arxiv.X also matches the
+    # generic DOI pattern; finding the arxiv form first lets us emit both.
+    m = _ARXIV_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("arxiv", m.group(1))
+        if r["valid"]:
+            out["arxiv"] = r["id"]
+
+    m = _DOI_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("doi", m.group(0))
+        if r["valid"]:
+            out["doi"] = r["id"]
+
+    m = _OPENALEX_TEXT_RE.search(text)
+    if m:
+        r = normalize_external_id("openalex", m.group(1))
+        if r["valid"]:
+            out["openalex"] = r["id"]
+
+    # Cross-walk after extraction so DOI inference doesn't suppress real DOI hits.
+    if out["arxiv"] and not out["doi"]:
+        out["doi"] = f"10.48550/arxiv.{out['arxiv']}"
+    elif out["doi"] and not out["arxiv"]:
+        m2 = EXTERNAL_ID_PATTERNS["doi_arxiv"].match(out["doi"])
+        if m2:
+            out["arxiv"] = m2.group(1)
+
+    return out
 
 
 _UNSAFE_TOKEN_RE = re.compile(r"[\x00-\x1f\\\"'`*?<>|]")
@@ -222,11 +300,22 @@ def build_external_ids(candidates: Any) -> dict:
 _PROVIDER_SLUG_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
 
-def build_source_entry(provider: str, url: str | None = None, fetched_at: str | None = None) -> dict:
+def build_source_entry(
+    provider: str,
+    url: str | None = None,
+    fetched_at: str | None = None,
+    ns: str | None = None,
+    value: str | None = None,
+) -> dict:
     """Build one provenance entry for the `sources` frontmatter array.
 
     Mirror of `buildSourceEntry` in external-ids.mjs. Pure helper; caller is
     responsible for appending into the existing array.
+
+    `ns` + `value` (added 2026-05) record *which* external identifier this
+    provider resolved. Both must be present together to persist; if either is
+    missing or invalid, both are dropped silently — same forgiveness model as
+    the existing `url` field.
     """
     if not isinstance(provider, str) or not _PROVIDER_SLUG_RE.match(provider):
         raise ValueError(f"build_source_entry: invalid provider: {provider!r}")
@@ -244,6 +333,13 @@ def build_source_entry(provider: str, url: str | None = None, fetched_at: str | 
                 entry["url"] = url
         except Exception:
             pass
+    if (
+        isinstance(ns, str) and ns in _NS_SET
+        and isinstance(value, str) and value
+        and len(value) <= _MAX_VALUE_LEN
+    ):
+        entry["ns"] = ns
+        entry["value"] = value
     return entry
 
 

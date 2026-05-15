@@ -31,20 +31,35 @@ Three input modes:
 
 Use directly as `source_path`. Proceed to Phase 1.
 
-**Mode B — URL or identifier** (arxiv ID like `2604.03501v2`, arxiv URL, DOI, S2 paper ID, generic URL)
+**Mode B — URL or identifier** (arxiv ID like `2604.03501v2`, arxiv URL, DOI, OpenAlex Work ID, S2 paper ID, generic URL)
+
+Pick the right tool based on whether the input is a *bare identifier* (no `://`) or a *direct URL*:
 
 ```bash
-python3 _lumina/tools/fetch_pdf.py "<url-or-id>"
+# Bare identifier (DOI, arxiv ID, openalex W-id) — runs the metadata anchor +
+# multi-provider PDF ladder. Cross-walks identifiers and records every provider
+# attempt in `sources[]`.
+python3 _lumina/tools/resolve_pdf.py "<identifier>"
+
+# Direct URL — single-shot download, no metadata cross-walk.
+python3 _lumina/tools/fetch_pdf.py "<url>"
 ```
 
-- For bare arxiv ID: pass `https://arxiv.org/abs/<id>`
-- For DOI: pass `https://doi.org/<doi>`
+- For bare arxiv ID: prefer `resolve_pdf.py 2604.03501` (runs OpenAlex anchor so DOI is cross-walked).
+- For DOI: prefer `resolve_pdf.py 10.x/y` (try OpenAlex → Unpaywall → CORE → arxiv ladder).
+- For a URL that already points at a PDF: use `fetch_pdf.py`.
 
-On exit 0: read JSON output. Use `path` as `source_path`. Write the input URL as the first entry of `urls` on the source page.
+`resolve_pdf.py` exit 0 outputs `{external_ids, sources, pdf_path, status}`:
+- `status: "ok"` → PDF downloaded; `pdf_path` is the relative path under `raw/download/`.
+- `status: "metadata_only"` → metadata cross-walk succeeded but no OA copy. Source page is still draftable with `provenance: partial`. Ask the user whether to attach a manually-downloaded PDF.
+- `status: "failed"` → exit 3; metadata anchor itself failed (network or OpenAlex 5xx). Retry once; if still failing, surface the error.
 
-On exit 2 (HTML response): URL likely points to a paywall or non-PDF page. Report and ask for a direct PDF URL or manual download.
+`fetch_pdf.py` exit codes (URL mode):
+- 0: PDF downloaded. Read JSON `path` as `source_path`.
+- 2: HTML response or SSRF guard rejection. Report and ask for a different URL.
+- 3: network error. Retry once.
 
-On exit 3 (network error): retry once. If still failing, surface the exact error.
+Write the input identifier/URL as the first entry of `urls` on the source page; persist the full `sources[]` array returned by `resolve_pdf.py` into the source page's `sources` frontmatter (it already records every provider attempt + ns/value pairs).
 
 **Mode C — Title only**
 

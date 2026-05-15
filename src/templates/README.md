@@ -197,7 +197,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 {{#if pack_research}}### Pack: research
 
-Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-topic` (cluster existing concepts and sources into a thematic topic page; AI proposes the cluster from the graph, you confirm before anything is written), `/lumi-research-setup` (interactive API key configuration).
+Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-watch-run` (run one scheduled-discovery pass over the watchlist — topics + RSS / Atom feeds — only when you ask), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-topic` (cluster existing concepts and sources into a thematic topic page; AI proposes the cluster from the graph, you confirm before anything is written), `/lumi-research-setup` (interactive API key configuration).
 {{/if}}
 {{#if pack_reading}}### Pack: reading
 

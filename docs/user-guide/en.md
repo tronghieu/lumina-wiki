@@ -226,13 +226,14 @@ The experience with **OpenAI CodexApp** will be very smooth because it is design
 
 Research Pack is very useful if you use Lumina-Wiki for research, especially when you need to find related documents, filter sources, build a conceptual foundation, or write an overview from what you have read.
 
-Research Pack has six main commands:
+Research Pack has seven main commands:
 
 | Command | What it is for |
 | --- | --- |
 | `/lumi-research-setup` | Prepare the research environment, check Python tools, and help configure API keys if needed. |
 | `/lumi-research-discover` | Find and rank research sources related to the topic you provide. |
 | `/lumi-research-watchlist` | Choose research topics for Lumina-Wiki to check regularly. |
+| `/lumi-research-watch-run` | Run one scheduled-discovery pass over your watchlist (topics + RSS / Atom feeds). In-chat equivalent of `lumina discover run`; polls only when you ask. |
 | `/lumi-research-prefill` | Pre-create foundation pages for common concepts, so later reading links more consistently. |
 | `/lumi-research-survey` | Create a research overview from the sources and concepts already in the wiki. |
 | `/lumi-research-topic` | Gather related concepts and sources already in the wiki into a dedicated topic page at `wiki/topics/`. |
@@ -286,7 +287,10 @@ Example in OpenAI CodexApp (ChatGPT): Research Pack suggests new research source
 If you want Lumina-Wiki to check saved research topics regularly,
 use `/lumi-research-watchlist` to set up the topics first. The schedule itself
 is run by your computer or by GitHub Actions, not by the assistant waking up on
-its own. See [Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
+its own. To run a single pass on demand from inside chat, use
+`/lumi-research-watch-run` — it polls every topic and RSS feed in your
+watchlist once and reports what is new. See
+[Advanced: Find Research Regularly](advanced-scheduled-discovery.en.md)
 for GitHub Actions, cron, launchd, and Windows Task Scheduler examples.
 
 ```text

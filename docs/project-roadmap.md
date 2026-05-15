@@ -39,7 +39,7 @@ Focus: Structural expansion, multi-source synthesis, and rich ingestion.
 
 | Feature | Status | Spec |
 |---------|--------|------|
-| **Research expansion** (OpenAlex, CORE, Unpaywall, RSS) | Proposed | [spec-research-expansion.md](./planning-artifacts/specs/spec-research-expansion.md) |
+| **Research expansion** (OpenAlex, CORE, Unpaywall, RSS) | In Progress (v1.4 — phases 1–5) — see [plan](../plans/260513-research-expansion-brainstorm/plan.md) | [spec-research-expansion.md](./planning-artifacts/specs/spec-research-expansion.md) |
 | **Google Workspace integration** (Docs, Sheets) | Proposed | [spec-universal-ingestion.md](./planning-artifacts/specs/spec-universal-ingestion.md) |
 | **Multimedia ingestion** (Audio, YouTube, podcasts via transcripts) | Proposed | [spec-universal-ingestion.md](./planning-artifacts/specs/spec-universal-ingestion.md) |
 | **Knowledge graph auditing** (semantic consistency checks, contradiction detection) | Proposed | [spec-kg-audit.md](./planning-artifacts/specs/spec-kg-audit.md) |

@@ -207,3 +207,41 @@ Tạo một Basic Task:
 - Start in: thư mục project của bạn.
 
 Máy cần đang bật vào thời điểm đã đặt lịch.
+
+## 7. Theo dõi nguồn RSS / Atom (v1.4+)
+
+Ngoài chủ đề tìm kiếm, bạn có thể theo dõi cả nguồn RSS / Atom. Mỗi lần
+chạy theo lịch, runner sẽ kiểm tra mọi feed trong watchlist một lần, lọc
+trùng dựa trên state riêng của từng feed, rồi ghi các ứng viên mới vào
+`raw/discovered/` giống như khi tìm kiếm theo chủ đề.
+
+Thêm item `type: feed` qua `/lumi-research-watchlist`, hoặc chỉnh trực
+tiếp `_lumina/config/watchlist.yml`:
+
+```yaml
+items:
+  - id: arxiv-cs-lg
+    type: feed
+    enabled: true
+    url: "https://arxiv.org/rss/cs.LG"
+    name: "arXiv cs.LG"
+    schedule: daily
+    max_new: 20
+```
+
+Các item `type: topic` cũ vẫn chạy bình thường. URL của feed phải dùng
+`https://` và không được bắt đầu bằng `--`.
+
+State của từng feed nằm trong `_lumina/_state/feeds/<feed-id>.json` (etag,
+last-seen guids, đếm số lần poll). Lumina giới hạn `last_seen_guids` ở
+5000 mục và xóa các mục cũ hơn 90 ngày, nên file vẫn nhỏ ngay cả sau
+nhiều năm dùng.
+
+Nếu bạn muốn chạy một lượt duy nhất ngay trong chat (không qua lịch),
+dùng `/lumi-research-watch-run`. Đây là phiên bản trong chat của
+`lumina discover run` và sẽ báo cáo lại bằng ngôn ngữ dễ hiểu những gì mới
+tìm được.
+
+Để xem chi tiết schema feed v1.4, cơ chế etag, từ chối XXE, và wrapper
+`cron-daily.sh` (kết hợp `umask 077` với log rotation), xem
+[Research Watch deep-dive](research-watch.md) (tiếng Anh; tài liệu kỹ thuật v1.4).

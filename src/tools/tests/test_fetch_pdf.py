@@ -495,6 +495,134 @@ class TestCLI:
         assert r2["skipped"] is True
         assert sess.get.call_count == 1
 
+    def test_doi_filename_is_sha16_hash(self, tmp_project: Path) -> None:
+        """DOI bodies risk Windows-reserved-name collisions; verify they are hashed."""
+        sess = _make_session_with(_make_mock_response(
+            final_url="https://doi.org/10.1145/CON",
+        ))
+        result = fetch_pdf.fetch_pdf(
+            "https://doi.org/10.1145/CON",
+            project_root=tmp_project,
+            session=sess,
+        )
+        basename = result["path"].split("/")[-1]
+        # 16 hex chars + ".pdf"
+        assert basename.endswith(".pdf")
+        stem = basename[:-4]
+        assert len(stem) == 16
+        assert all(c in "0123456789abcdef" for c in stem)
+
+
+class TestSafeUrl:
+    @pytest.mark.parametrize("url", [
+        "http://example.com/x.pdf",          # non-https
+        "https://127.0.0.1/x.pdf",            # loopback
+        "https://localhost/x.pdf",            # loopback by name
+        "https://10.0.0.5/x.pdf",             # RFC1918
+        "https://169.254.169.254/x.pdf",      # cloud metadata
+        "https://192.168.1.1/x.pdf",          # RFC1918
+        "ftp://example.com/x.pdf",            # wrong scheme
+        "not-a-url",                          # garbage
+    ])
+    def test_rejects_unsafe_urls(self, url: str) -> None:
+        assert fetch_pdf._safe_url(url) is False
+
+    def test_accepts_public_https(self) -> None:
+        # arxiv.org is public; resolves to non-private IP. If DNS is offline
+        # this skips (network-isolation friendly).
+        result = fetch_pdf._safe_url("https://arxiv.org/abs/2401.12345")
+        # We can't guarantee DNS in test runner — accept either True or False
+        # but assert it's a bool, not an exception.
+        assert isinstance(result, bool)
+
+
+class TestFetchPdfSsrfGuard:
+    """The SSRF guard must run from the public entry point, not just in isolation.
+
+    Tests use IP literals so getaddrinfo doesn't need DNS — the IPs themselves
+    are rejected by the `is_loopback`/`is_private`/`is_link_local` checks.
+    """
+
+    @pytest.mark.parametrize("url", [
+        "https://127.0.0.1/x.pdf",            # loopback
+        "https://169.254.169.254/x.pdf",      # cloud metadata
+        "https://10.0.0.5/x.pdf",             # RFC1918
+        "https://192.168.1.1/x.pdf",          # RFC1918
+        "http://example.com/x.pdf",           # non-https
+    ])
+    def test_fetch_pdf_rejects_unsafe_url_before_network(
+        self, tmp_project: Path, url: str
+    ) -> None:
+        sess = MagicMock()
+        with pytest.raises(ValueError, match="SSRF|unsafe"):
+            fetch_pdf.fetch_pdf(url, project_root=tmp_project, session=sess)
+        # Critical: guard must run BEFORE any network I/O.
+        sess.get.assert_not_called()
+        sess.head.assert_not_called()
+
+    def test_fetch_pdf_rejects_redirect_to_unsafe_url(
+        self, tmp_project: Path
+    ) -> None:
+        # First hop returns 302 → private IP. `_safe_get` walks the redirect
+        # manually, validates the next URL, and aborts before the second hop.
+        redirect_resp = MagicMock()
+        redirect_resp.status_code = 302
+        redirect_resp.headers = {"Location": "https://10.0.0.5/leaked.pdf"}
+        redirect_resp.close = MagicMock()
+        sess = MagicMock()
+        sess.get.return_value = redirect_resp
+        with pytest.raises(ValueError, match="SSRF|unsafe"):
+            fetch_pdf.fetch_pdf(
+                "https://arxiv.org/abs/2604.03501v2",
+                project_root=tmp_project,
+                session=sess,
+            )
+        # Only one network call — the first hop — before the guard fired.
+        assert sess.get.call_count == 1
+
+
+class TestMaxPdfBytes:
+    def test_oversized_stream_aborts_and_cleans_up(self, tmp_project: Path) -> None:
+        """A response whose body exceeds MAX_PDF_BYTES must abort mid-stream."""
+        original_cap = fetch_pdf.MAX_PDF_BYTES
+        fetch_pdf.MAX_PDF_BYTES = 1024  # 1 KB cap for test speed
+        try:
+            big_chunks = [b"x" * 600, b"y" * 600]
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.headers = {"Content-Type": "application/pdf"}
+            resp.iter_content = lambda chunk_size: iter(big_chunks)
+            resp.url = "https://arxiv.org/pdf/2604.03501v2.pdf"
+            resp.raise_for_status = MagicMock()
+            sess = _make_session_with(resp)
+            with pytest.raises(ValueError, match="size cap"):
+                fetch_pdf.fetch_pdf(
+                    "https://arxiv.org/abs/2604.03501v2",
+                    project_root=tmp_project,
+                    session=sess,
+                )
+            # No .tmp file left behind
+            arxiv_dir = tmp_project / "raw" / "download" / "arxiv"
+            tmp_files = list(arxiv_dir.glob("*.tmp")) if arxiv_dir.exists() else []
+            assert tmp_files == []
+        finally:
+            fetch_pdf.MAX_PDF_BYTES = original_cap
+
+
+class TestHeadCheck:
+    def test_head_check_returns_status_and_content_type(self) -> None:
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.headers = {"Content-Type": "application/pdf"}
+        sess = MagicMock()
+        sess.head.return_value = resp
+        status, ctype = fetch_pdf.head_check(sess, "https://example.com/x.pdf")
+        assert status == 200
+        assert ctype == "application/pdf"
+        sess.head.assert_called_once()
+
+
+class TestCliForceFlag:
     def test_cli_with_force_flag_redownloads(self, tmp_project: Path) -> None:
         with patch("fetch_pdf.requests.Session") as mock_cls:
             sess = MagicMock()

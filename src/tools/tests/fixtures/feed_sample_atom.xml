@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Research Feed</title>
+  <link href="https://example.com/feed"/>
+  <updated>2026-05-13T10:00:00Z</updated>
+  <id>https://example.com/feed</id>
+  <entry>
+    <title>Attention is All You Need (revisited)</title>
+    <id>https://example.com/feed/attn-1</id>
+    <link href="https://arxiv.org/abs/2401.12345"/>
+    <updated>2026-05-13T09:00:00Z</updated>
+    <summary>arXiv:2401.12345 — A re-examination of attention mechanisms.</summary>
+  </entry>
+  <entry>
+    <title>Retrieval-Augmented Generation Survey</title>
+    <id>https://example.com/feed/rag-1</id>
+    <link href="https://doi.org/10.1234/rag-survey"/>
+    <updated>2026-05-13T08:00:00Z</updated>
+    <summary>DOI 10.1234/rag-survey — survey of RAG approaches.</summary>
+  </entry>
+  <entry>
+    <title>Plain Blog Post — No Identifiers</title>
+    <id>https://example.com/feed/plain-1</id>
+    <link href="https://example.com/blog/post-1"/>
+    <updated>2026-05-13T07:00:00Z</updated>
+    <summary>Generic blog post with no DOI or arXiv reference.</summary>
+  </entry>
+</feed>
