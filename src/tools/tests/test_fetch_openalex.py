@@ -3,11 +3,11 @@
 Covers:
 - normalize_record extracts external_ids + sources[] provenance + arxiv-DOI cross-walk
 - _path_for_id accepts DOI, OpenAlex W-id, and URL forms; rejects garbage
-- missing OPENALEX_MAILTO emits one-shot warning, no mailto in outbound params
-- mailto-set call includes mailto in outbound params
+- missing OPENALEX_API_KEY emits one-shot warning, no api_key in outbound params
+- api-key-set call includes api_key in outbound params
 - 404 → exit 2; 5xx after retries → exit 3
 - 429 with Retry-After respects header and retries once
-- cache key is mailto-independent (anonymous + polite-pool collapse to same key)
+- cache key is api-key-independent
 - search command builds /works query with filter expr
 """
 
@@ -62,8 +62,8 @@ def _resp(data, status=200, headers=None):
 
 @pytest.fixture(autouse=True)
 def _reset_warning(monkeypatch):
-    """Each test starts with the anonymous-tier warning un-emitted."""
-    monkeypatch.setattr(fetch_openalex, "_MAILTO_WARN_EMITTED", False)
+    """Each test starts with the unauthenticated warning un-emitted."""
+    monkeypatch.setattr(fetch_openalex, "_API_KEY_WARN_EMITTED", False)
     yield
 
 
@@ -156,25 +156,25 @@ def test_path_for_id_rejects_garbage(bad):
 
 
 # ---------------------------------------------------------------------------
-# Polite-pool: warning + outbound mailto param
+# API key: warning + outbound api_key param
 # ---------------------------------------------------------------------------
 
-def test_missing_mailto_emits_single_warning_per_process(capsys):
-    fetch_openalex._warn_anonymous_once()
-    fetch_openalex._warn_anonymous_once()  # second call should be silent
+def test_missing_api_key_emits_single_warning_per_process(capsys):
+    fetch_openalex._warn_unauthenticated_once()
+    fetch_openalex._warn_unauthenticated_once()  # second call should be silent
     err = capsys.readouterr().err
-    assert err.count("OPENALEX_MAILTO is not set") == 1
+    assert err.count("OPENALEX_API_KEY is not set") == 1
 
 
-def test_params_with_mailto_absent_leaves_params_unchanged():
-    out = fetch_openalex._params_with_mailto({"search": "q"}, "")
+def test_params_with_api_key_absent_leaves_params_unchanged():
+    out = fetch_openalex._params_with_api_key({"search": "q"}, "")
     assert out == {"search": "q"}
-    assert "mailto" not in out
+    assert "api_key" not in out
 
 
-def test_params_with_mailto_set_appends_param():
-    out = fetch_openalex._params_with_mailto({"search": "q"}, "user@example.com")
-    assert out["mailto"] == "user@example.com"
+def test_params_with_api_key_set_appends_param():
+    out = fetch_openalex._params_with_api_key({"search": "q"}, "test-key")
+    assert out["api_key"] == "test-key"
     assert out["search"] == "q"
 
 
@@ -186,6 +186,13 @@ def test_request_json_404_raises_value_error():
     session = MagicMock()
     session.get.return_value = _resp({}, status=404)
     with pytest.raises(ValueError):
+        fetch_openalex._request_json(session, "https://api.openalex.org/works/Wx", {})
+
+
+def test_request_json_401_raises_value_error():
+    session = MagicMock()
+    session.get.return_value = _resp({}, status=401)
+    with pytest.raises(ValueError, match="OPENALEX_API_KEY"):
         fetch_openalex._request_json(session, "https://api.openalex.org/works/Wx", {})
 
 
@@ -220,26 +227,26 @@ def test_request_json_429_without_retry_after_fails():
 
 
 # ---------------------------------------------------------------------------
-# Cache key is mailto-independent
+# Cache key is api-key-independent
 # ---------------------------------------------------------------------------
 
-def test_canonical_url_strips_mailto_param():
+def test_canonical_url_strips_api_key_param():
     from _cache import _canonical_url
-    a = _canonical_url("https://api.openalex.org/works/W1", {"mailto": "a@x"}, strip_params=["mailto"])
-    b = _canonical_url("https://api.openalex.org/works/W1", {"mailto": "b@y"}, strip_params=["mailto"])
-    c = _canonical_url("https://api.openalex.org/works/W1", {}, strip_params=["mailto"])
+    a = _canonical_url("https://api.openalex.org/works/W1", {"api_key": "key-a"}, strip_params=["api_key"])
+    b = _canonical_url("https://api.openalex.org/works/W1", {"api_key": "key-b"}, strip_params=["api_key"])
+    c = _canonical_url("https://api.openalex.org/works/W1", {}, strip_params=["api_key"])
     assert a == b == c
 
 
-def test_canonical_url_keeps_other_params_when_stripping_mailto():
+def test_canonical_url_keeps_other_params_when_stripping_api_key():
     from _cache import _canonical_url
     out = _canonical_url(
         "https://api.openalex.org/works",
-        {"search": "rag", "mailto": "a@x"},
-        strip_params=["mailto"],
+        {"search": "rag", "api_key": "test-key"},
+        strip_params=["api_key"],
     )
     assert "search=rag" in out
-    assert "mailto" not in out
+    assert "api_key" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -248,24 +255,24 @@ def test_canonical_url_keeps_other_params_when_stripping_mailto():
 
 def test_cmd_work_invokes_request_with_correct_path(no_cache):
     with patch.object(fetch_openalex, "_request_json", return_value=MOCK_WORK) as m:
-        rec = fetch_openalex.cmd_work("W4392834756", mailto="")
+        rec = fetch_openalex.cmd_work("W4392834756", api_key="")
     args, kwargs = m.call_args
     assert args[1].endswith("/works/W4392834756")
     assert rec["external_ids"]["openalex"] == "W4392834756"
 
 
-def test_cmd_work_passes_mailto_when_set(no_cache):
+def test_cmd_work_passes_api_key_when_set(no_cache):
     with patch.object(fetch_openalex, "_request_json", return_value=MOCK_WORK) as m:
-        fetch_openalex.cmd_work("W123", mailto="user@example.com")
+        fetch_openalex.cmd_work("W123", api_key="test-key")
     _args, _kwargs = m.call_args
     params = _args[2]
-    assert params.get("mailto") == "user@example.com"
+    assert params.get("api_key") == "test-key"
 
 
 def test_cmd_search_builds_works_query(no_cache):
     payload = {"results": [MOCK_WORK]}
     with patch.object(fetch_openalex, "_request_json", return_value=payload) as m:
-        results = fetch_openalex.cmd_search("rag", limit=5, filters=[("from_publication_date", "2024-01-01")], mailto="")
+        results = fetch_openalex.cmd_search("rag", limit=5, filters=[("from_publication_date", "2024-01-01")], api_key="")
     args, _kwargs = m.call_args
     assert args[1].endswith("/works")
     params = args[2]
@@ -274,6 +281,14 @@ def test_cmd_search_builds_works_query(no_cache):
     assert params["filter"] == "from_publication_date:2024-01-01"
     assert len(results) == 1
     assert results[0]["external_ids"]["openalex"] == "W4392834756"
+
+
+def test_cmd_search_clamps_limit_to_openalex_max(no_cache):
+    payload = {"results": [MOCK_WORK]}
+    with patch.object(fetch_openalex, "_request_json", return_value=payload) as m:
+        fetch_openalex.cmd_search("rag", limit=200, filters=[], api_key="")
+    args, _kwargs = m.call_args
+    assert args[2]["per_page"] == 100
 
 
 # ---------------------------------------------------------------------------

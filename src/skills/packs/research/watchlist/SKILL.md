@@ -79,8 +79,9 @@ Use this mapping:
 - `query`: the research phrase to search for.
 - `sources`: use `arxiv` by default; add `s2` when the user has Semantic
   Scholar set up; add `openalex` when broader coverage (cross-walk metadata,
-  humanities/biomedicine, older work) is requested. OpenAlex works
-  anonymously — set `OPENALEX_MAILTO` only to opt into the polite-pool.
+  humanities/biomedicine, older work) is requested. OpenAlex can work without
+  local credentials for small checks; set `OPENALEX_API_KEY` for the free daily
+  API budget and usage tracking.
 - `schedule`: `manual`, `daily`, `weekly`, or `monthly`.
 - `limit`: how many candidates to fetch before deduping.
 - `max_new`: how many new candidates the user wants to see per run.

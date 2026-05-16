@@ -47,7 +47,7 @@ python3 _lumina/tools/resolve_pdf.py --help
    |------------------------------|-------------------|-----------|------------------------------------------------------|
    | (none)                       | arXiv             | no key    | Public XML API at `export.arxiv.org` — no signup     |
    | `SEMANTIC_SCHOLAR_API_KEY`   | Semantic Scholar  | optional  | https://www.semanticscholar.org/product/api (request form; raises rate limits from ~100/5min to higher tier) |
-   | `OPENALEX_MAILTO`            | OpenAlex          | optional  | Any email you own — opts into the OpenAlex polite-pool. Anonymous tier still works without it. Report presence as "set" / "unset" only; never display the value. |
+   | `OPENALEX_API_KEY`           | OpenAlex          | optional  | https://openalex.org/settings/api (free key; enables the daily API budget and usage tracking). Report presence as "set" / "unset" only; never display the value. |
    | `UNPAYWALL_EMAIL`            | Unpaywall         | required for Unpaywall step in `resolve_pdf` ladder | Free — supply any email you own. The ladder skips Unpaywall gracefully when this is unset (the rest of the ladder still runs). |
    | `CORE_API_KEY`               | CORE              | optional  | https://core.ac.uk/services/api (free tier ≈1000 req/day). When unset, `resolve_pdf` skips CORE silently. On 429 the ladder skips CORE for the remainder of the run. |
    | `DEEPXIV_TOKEN`              | DeepXiv           | optional  | https://deepxiv.com (sign up, copy token from account settings; enables full-text PDF + semantic search) |

@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools.
 - Expanded the package-readiness check to require every Python tool copied by
   the installer, preventing future research-pack tarball omissions.
+- Updated OpenAlex research tooling from the legacy `mailto` polite-pool
+  parameter to the current `OPENALEX_API_KEY` / `api_key` flow.
 
 ## [1.6.0] - 2026-05-15
 
