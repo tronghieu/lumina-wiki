@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored v1.6 research tool scripts to the npm package allowlist so
+  upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools.
+- Expanded the package-readiness check to require every Python tool copied by
+  the installer, preventing future research-pack tarball omissions.
+
 ## [1.6.0] - 2026-05-15
 
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)
