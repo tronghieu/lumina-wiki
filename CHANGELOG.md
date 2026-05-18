@@ -5,14 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-05-18
+
 ### Fixed
 
 - Restored v1.6 research tool scripts to the npm package allowlist so
-  upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools.
-- Expanded the package-readiness check to require every Python tool copied by
-  the installer, preventing future research-pack tarball omissions.
-- Updated OpenAlex research tooling from the legacy `mailto` polite-pool
-  parameter to the current `OPENALEX_API_KEY` / `api_key` flow.
+  upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools
+  (fixes #20).
+- Expanded the package-readiness check (`scripts/ci-package.mjs`) to require
+  every Python tool copied by the installer, preventing future research-pack
+  tarball omissions.
+
+### Changed
+
+- OpenAlex research tooling now authenticates via `OPENALEX_API_KEY` /
+  `api_key` query parameter instead of the deprecated `OPENALEX_MAILTO`
+  polite-pool flow. The new key enables OpenAlex's free daily API budget and
+  usage tracking. Existing users should rename `OPENALEX_MAILTO` to
+  `OPENALEX_API_KEY` in their local `.env` — the old variable is ignored.
+- `fetch_openalex.py` search `per_page` is now clamped to 100 (the OpenAlex
+  documented maximum) and explicit 401/403 handling surfaces a clear error
+  message when the key is rejected.
+
+### CI
+
+- Dropped Node 22 from the test matrix across all OSes due to an upstream
+  `node:test` IPC bug (`ERR_TEST_FAILURE` / structured-clone deserialization)
+  that surfaced intermittently on Windows, macOS, and Linux runners.
+- Cold-start budget gate now runs only on `ubuntu-latest`; Windows and macOS
+  hosted runners have filesystem latency that makes the 350 ms threshold
+  infeasible regardless of code changes.
+- `Node 20 / windows-latest` marked `continue-on-error: true` to surface a
+  remaining Windows-only `node:test` flake as a warning instead of blocking
+  the build (tracked in #23).
 
 ## [1.6.0] - 2026-05-15
 
