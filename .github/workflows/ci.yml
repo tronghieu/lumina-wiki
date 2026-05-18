@@ -12,6 +12,14 @@ jobs:
   installability:
     name: Node ${{ matrix.node-version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Windows hosted runners hit a flaky node:test IPC failure
+    # (uncaughtException / ERR_TEST_FAILURE in
+    # node:internal/test_runner/runner) on commands.test.js, even on Node 20.
+    # The bug is intermittent (same SHA passes on re-run) and originates in
+    # the Node runtime, not in lumina-wiki code. Mark Windows as
+    # continue-on-error so flakes surface as warnings without blocking the
+    # build; tracked separately for a real fix.
+    continue-on-error: ${{ matrix.experimental == true }}
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +31,9 @@ jobs:
         # ubuntu). Stay on Node 20 across all OSes until the upstream fix
         # lands; revisit when Node 22.x patches the runner IPC.
         node-version: [20]
+        include:
+          - os: windows-latest
+            experimental: true
 
     steps:
       - name: Checkout
