@@ -16,17 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [20, 22]
-        exclude:
-          # Node 22 node:test runner has a structured-clone IPC bug
-          # (ERR_TEST_FAILURE / uncaughtException in runner internals) that
-          # surfaces on both Windows and macOS hosted runners. Node 20 already
-          # covers all three OSes; drop the Node 22 combinations on Windows and
-          # macOS until the upstream bug is fixed.
-          - os: windows-latest
-            node-version: 22
-          - os: macos-latest
-            node-version: 22
+        # Node 22 node:test runner has a structured-clone IPC bug
+        # (ERR_TEST_FAILURE / "Unable to deserialize cloned data due to invalid
+        # or unsupported version" in node:internal/test_runner/runner) that
+        # surfaces intermittently on every hosted runner (Windows, macOS, and
+        # ubuntu). Stay on Node 20 across all OSes until the upstream fix
+        # lands; revisit when Node 22.x patches the runner IPC.
+        node-version: [20]
 
     steps:
       - name: Checkout
