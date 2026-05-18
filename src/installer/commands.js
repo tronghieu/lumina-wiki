@@ -1140,6 +1140,8 @@ async function renderEnvExample(projectRoot) {
       `# Copy to .env and fill in your values. Never commit .env.\n\n` +
       `# Semantic Scholar API key (optional; improves rate limits)\n` +
       `SEMANTIC_SCHOLAR_API_KEY=\n\n` +
+      `# OpenAlex API key (optional; enables free daily API budget and usage tracking)\n` +
+      `OPENALEX_API_KEY=\n\n` +
       `# DeepXiv token (optional; enables full-text PDF access)\n` +
       `DEEPXIV_TOKEN=\n\n` +
       `# arXiv does not require an API key in v0.1\n`;
