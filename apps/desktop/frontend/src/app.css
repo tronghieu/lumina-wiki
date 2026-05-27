@@ -358,6 +358,7 @@ button {
 }
 
 .action-panel,
+.check-card,
 .detail-card,
 .note-card,
 .linked-list article {
@@ -548,6 +549,72 @@ button {
 
 .action-result span {
   font-size: 12px;
+}
+
+.check-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+}
+
+.check-card h3 {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.check-summary-grid {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 6px 10px;
+  font-size: 12px;
+}
+
+.check-summary-grid span,
+.check-output span {
+  color: #667085;
+}
+
+.check-summary-grid strong {
+  overflow: hidden;
+  color: #172033;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.check-list span {
+  padding: 4px 7px;
+  border-radius: 7px;
+  color: #344054;
+  background: #f0f3f8;
+  font-size: 12px;
+}
+
+.check-output {
+  display: grid;
+  gap: 5px;
+}
+
+.check-output pre {
+  overflow: auto;
+  max-height: 140px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  color: #172033;
+  background: #f5f7fb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .prompt-box {

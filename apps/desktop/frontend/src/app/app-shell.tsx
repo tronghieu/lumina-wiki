@@ -1,5 +1,6 @@
 import { GraphView } from '../features/graph/graph-view';
 import { NodeInspector } from '../features/graph/node-inspector';
+import type { CheckResult } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
 import type { NoteContentState } from '../features/graph/note-content';
 import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
@@ -11,6 +12,7 @@ const favoriteItems = ['Ethics', 'Privacy', 'Education', 'Ada Lovelace'];
 type AppShellProps = {
   actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
+  lastCheckResult: CheckResult | null;
   noteState: NoteContentState;
   query: string;
   selectedNodeId: string;
@@ -30,6 +32,7 @@ type AppShellProps = {
 export function AppShell({
   actionState,
   graph,
+  lastCheckResult,
   noteState,
   query,
   selectedNodeId,
@@ -101,6 +104,7 @@ export function AppShell({
       <NodeInspector
         actionState={actionState}
         graph={graph}
+        lastCheckResult={lastCheckResult}
         noteState={noteState}
         selectedNodeId={selectedNode?.id ?? ''}
         sourcePath={sourcePath}

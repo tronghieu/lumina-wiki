@@ -79,6 +79,8 @@ Current read/navigation surface:
 - `Open Workspace` uses the native folder picker, validates the selected
   Lumina workspace, and loads its real `wiki/` graph.
 - Selecting a graph node shows the full Markdown note content in the inspector.
+- `Run Check` shows both the summary and detailed stdout/stderr output in the
+  inspector.
 - The graph canvas starts with sample data only until a workspace is loaded.
 - `Choose Source` uses the native file picker; the importer service still
   performs all filesystem validation before copying.

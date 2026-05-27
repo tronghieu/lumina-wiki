@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { AppShell } from './app/app-shell';
 import { Load, ReadNote } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph/service';
 import { ImportToRawSources } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer/service';
+import type { CheckResult } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
 import { RunCheck } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/service';
 import { Validate } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/service';
 import { resolveSelectedNodeId, sampleGraph } from './features/graph/graph-data';
@@ -33,6 +34,7 @@ function App() {
   const [actionState, setActionState] = useState<WorkspaceActionState>(idleActionState);
   const [graph, setGraph] = useState<KnowledgeGraph>(sampleGraph);
   const [noteState, setNoteState] = useState<NoteContentState>(noteUnavailableState);
+  const [lastCheckResult, setLastCheckResult] = useState<CheckResult | null>(null);
   const noteRequestId = useRef(0);
 
   async function chooseWorkspace() {
@@ -67,6 +69,7 @@ function App() {
       setWorkspaceRoot(validation.root);
       setGraph(loadedGraph);
       setSelectedNodeId(nextSelectedNodeId);
+      setLastCheckResult(null);
       void loadSelectedNote(validation.root, loadedGraph, nextSelectedNodeId);
       setActionState(formatWorkspaceLoaded(validation.root, loadedGraph));
     } catch (error) {
@@ -101,7 +104,9 @@ function App() {
     }
     setActionState({ kind: 'loading', title: 'Running check', message: workspaceRoot });
     try {
-      setActionState(formatCheckResult(await RunCheck(workspaceRoot.trim())));
+      const result = await RunCheck(workspaceRoot.trim());
+      setLastCheckResult(result);
+      setActionState(formatCheckResult(result));
     } catch (error) {
       setActionState(formatActionError(error));
     }
@@ -150,6 +155,7 @@ function App() {
     <AppShell
       actionState={actionState}
       graph={graph}
+      lastCheckResult={lastCheckResult}
       query={query}
       noteState={noteState}
       selectedNodeId={selectedNodeId}

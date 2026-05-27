@@ -1,11 +1,13 @@
 import { linkedNodes } from './graph-data';
+import type { CheckResult } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
 import type { KnowledgeGraph } from './graph-types';
 import type { NoteContentState } from './note-content';
-import type { WorkspaceActionState } from '../workspace/workspace-actions';
+import { formatCheckDetails, type WorkspaceActionState } from '../workspace/workspace-actions';
 
 type NodeInspectorProps = {
   actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
+  lastCheckResult: CheckResult | null;
   noteState: NoteContentState;
   selectedNodeId: string;
   sourcePath: string;
@@ -23,6 +25,7 @@ type NodeInspectorProps = {
 export function NodeInspector({
   actionState,
   graph,
+  lastCheckResult,
   noteState,
   selectedNodeId,
   sourcePath,
@@ -38,6 +41,7 @@ export function NodeInspector({
 }: NodeInspectorProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
   const links = selectedNode ? linkedNodes(graph, selectedNode.id) : [];
+  const checkDetails = lastCheckResult ? formatCheckDetails(lastCheckResult) : null;
 
   return (
     <aside className="inspector" aria-label="Node inspector">
@@ -100,8 +104,37 @@ export function NodeInspector({
               <span>{actionState.message}</span>
             </div>
           </section>
+          {checkDetails && (
+            <section className="check-card">
+              <h3>Check Details</h3>
+              <div className="check-summary-grid">
+                <span>Status</span>
+                <strong>{checkDetails.status}</strong>
+                <span>Exit</span>
+                <strong>{checkDetails.exitCode}</strong>
+                <span>Counts</span>
+                <strong>{checkDetails.counts}</strong>
+              </div>
+              <div className="check-list">
+                {(checkDetails.byCheck.length ? checkDetails.byCheck : ['No check-specific issues.']).map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              <CheckOutput title="Stdout" value={checkDetails.stdout} />
+              <CheckOutput title="Stderr" value={checkDetails.stderr} />
+            </section>
+          )}
         </>
       )}
     </aside>
+  );
+}
+
+function CheckOutput({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="check-output">
+      <span>{title}</span>
+      <pre>{value}</pre>
+    </div>
   );
 }

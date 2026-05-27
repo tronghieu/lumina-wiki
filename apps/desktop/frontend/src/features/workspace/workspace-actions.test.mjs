@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   formatActionError,
+  formatCheckDetails,
   formatCheckResult,
   formatImportResult,
   formatWorkspaceLoaded,
@@ -16,6 +17,26 @@ describe('workspace-actions', () => {
       title: 'Check found issues',
       message: '1 errors, 2 warnings, 1 fixable.',
     });
+  });
+
+  it('formats detailed check results with sorted check counts and raw output placeholders', () => {
+    assert.deepEqual(
+      formatCheckDetails({
+        status: 'issues',
+        exitCode: 1,
+        stdout: '',
+        stderr: 'warning line',
+        summary: { errors: 2, warnings: 1, fixable: 1, by_check: { L09: 1, L01: 2 } },
+      }),
+      {
+        status: 'issues',
+        exitCode: '1',
+        counts: '2 errors, 1 warning, 1 fixable',
+        byCheck: ['L01: 2', 'L09: 1'],
+        stdout: 'No stdout captured.',
+        stderr: 'warning line',
+      },
+    );
   });
 
   it('formats import result and unknown errors', () => {

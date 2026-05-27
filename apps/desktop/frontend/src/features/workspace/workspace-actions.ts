@@ -7,6 +7,15 @@ export type WorkspaceActionState = {
   message: string;
 };
 
+export type CheckDetailsView = {
+  status: string;
+  exitCode: string;
+  counts: string;
+  byCheck: string[];
+  stdout: string;
+  stderr: string;
+};
+
 export const idleActionState: WorkspaceActionState = {
   kind: 'idle',
   title: 'Workspace actions',
@@ -26,6 +35,20 @@ export function formatCheckResult(result: CheckResult): WorkspaceActionState {
     kind: clean ? 'success' : 'error',
     title: clean ? 'Check passed' : 'Check found issues',
     message: `${summary.errors} errors, ${summary.warnings} warnings, ${summary.fixable} fixable.`,
+  };
+}
+
+export function formatCheckDetails(result: CheckResult): CheckDetailsView {
+  const summary = result.summary;
+  return {
+    status: result.status || 'unknown',
+    exitCode: String(result.exitCode ?? 0),
+    counts: `${formatCount(summary.errors, 'error')}, ${formatCount(summary.warnings, 'warning')}, ${summary.fixable} fixable`,
+    byCheck: Object.entries(summary.by_check ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([check, count]) => `${check}: ${count}`),
+    stdout: result.stdout?.trim() || 'No stdout captured.',
+    stderr: result.stderr?.trim() || 'No stderr captured.',
   };
 }
 
