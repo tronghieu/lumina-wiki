@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatActionError, formatCheckResult, formatImportResult } from './workspace-actions.ts';
+import {
+  formatActionError,
+  formatCheckResult,
+  formatImportResult,
+  formatWorkspaceLoaded,
+  workspaceLoadCanceledState,
+} from './workspace-actions.ts';
 
 describe('workspace-actions', () => {
   it('formats clean and failing check summaries', () => {
@@ -19,5 +25,14 @@ describe('workspace-actions', () => {
       message: 'raw/sources/paper.md (12 bytes)',
     });
     assert.equal(formatActionError('boom').message, 'boom');
+  });
+
+  it('formats workspace load status', () => {
+    assert.deepEqual(formatWorkspaceLoaded('/tmp/wiki', { nodes: [1, 2], edges: [1] }), {
+      kind: 'success',
+      title: 'Workspace loaded',
+      message: '/tmp/wiki · 2 nodes, 1 edge',
+    });
+    assert.equal(workspaceLoadCanceledState.kind, 'idle');
   });
 });

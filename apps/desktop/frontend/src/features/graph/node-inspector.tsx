@@ -7,8 +7,12 @@ type NodeInspectorProps = {
   graph: KnowledgeGraph;
   selectedNodeId: string;
   sourcePath: string;
+  workspaceLabel: string;
   workspaceRoot: string;
+  onChooseSourcePath: () => void;
+  onChooseWorkspace: () => void;
   onImportSource: () => void;
+  onLoadWorkspace: () => void;
   onRunCheck: () => void;
   onSourcePathChange: (path: string) => void;
   onWorkspaceRootChange: (path: string) => void;
@@ -19,8 +23,12 @@ export function NodeInspector({
   graph,
   selectedNodeId,
   sourcePath,
+  workspaceLabel,
   workspaceRoot,
+  onChooseSourcePath,
+  onChooseWorkspace,
   onImportSource,
+  onLoadWorkspace,
   onRunCheck,
   onSourcePathChange,
   onWorkspaceRootChange,
@@ -59,6 +67,7 @@ export function NodeInspector({
           </section>
           <section className="action-panel">
             <h3>Workspace Actions</h3>
+            <p className="workspace-label">{workspaceLabel}</p>
             <input
               aria-label="Workspace root"
               onChange={(event) => onWorkspaceRootChange(event.target.value)}
@@ -72,6 +81,9 @@ export function NodeInspector({
               value={sourcePath}
             />
             <div className="action-buttons">
+              <button type="button" onClick={onChooseWorkspace}>Open</button>
+              <button type="button" onClick={onLoadWorkspace}>Load Graph</button>
+              <button type="button" onClick={onChooseSourcePath}>Choose Source</button>
               <button type="button" onClick={onRunCheck}>Run Check</button>
               <button type="button" onClick={onImportSource}>Import</button>
             </div>

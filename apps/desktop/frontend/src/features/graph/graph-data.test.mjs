@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { linkedNodes, sampleGraph, searchGraph, toFlowEdges, toFlowNodes } from './graph-data.ts';
+import { linkedNodes, resolveSelectedNodeId, sampleGraph, searchGraph, toFlowEdges, toFlowNodes } from './graph-data.ts';
 
 describe('graph-data', () => {
   it('filters nodes by title, type, and path', () => {
@@ -29,5 +29,11 @@ describe('graph-data', () => {
 
     const visibleNodeIds = new Set(['ethics', 'privacy']);
     assert.deepEqual(toFlowEdges(sampleGraph.edges, visibleNodeIds).map((edge) => edge.id), ['ethics-related_to-privacy']);
+  });
+
+  it('keeps a valid selected node or falls back to the first loaded node', () => {
+    assert.equal(resolveSelectedNodeId(sampleGraph, 'privacy'), 'privacy');
+    assert.equal(resolveSelectedNodeId(sampleGraph, 'missing'), 'ai-social-impact');
+    assert.equal(resolveSelectedNodeId({ nodes: [], edges: [] }, 'missing'), '');
   });
 });

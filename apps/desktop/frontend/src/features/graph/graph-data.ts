@@ -98,6 +98,13 @@ export function linkedNodes(graph: KnowledgeGraph, nodeId: string): GraphNode[] 
   return graph.nodes.filter((node) => linkedIds.has(node.id)).sort((a, b) => a.title.localeCompare(b.title));
 }
 
+export function resolveSelectedNodeId(graph: KnowledgeGraph, selectedNodeId: string): string {
+  if (graph.nodes.some((node) => node.id === selectedNodeId)) {
+    return selectedNodeId;
+  }
+  return graph.nodes[0]?.id ?? '';
+}
+
 export function toFlowNodes(nodes: GraphNode[], selectedNodeId: string): Node[] {
   return nodes.map((node, index) => ({
     id: node.id,

@@ -204,16 +204,19 @@ button {
 }
 
 .toolbar button {
-  width: 88px;
+  min-width: 88px;
+  width: auto;
   height: 36px;
+  padding: 0 12px;
   border: 1px solid #dce2eb;
   border-radius: 8px;
   color: #344054;
   background: #ffffff;
+  white-space: nowrap;
 }
 
 .toolbar button:first-child {
-  width: 104px;
+  min-width: 132px;
 }
 
 .toolbar input,
@@ -432,6 +435,15 @@ button {
   text-transform: uppercase;
 }
 
+.workspace-label {
+  overflow: hidden;
+  margin: 0;
+  color: #344054;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .action-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -439,11 +451,16 @@ button {
 }
 
 .action-buttons button {
+  min-width: 0;
   height: 34px;
+  padding: 0 8px;
   border: 0;
   border-radius: 8px;
   color: #ffffff;
   background: #2563eb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-result {

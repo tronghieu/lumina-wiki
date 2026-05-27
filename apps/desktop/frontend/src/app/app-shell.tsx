@@ -15,6 +15,9 @@ type AppShellProps = {
   sourcePath: string;
   workspaceRoot: string;
   onImportSource: () => void;
+  onChooseSourcePath: () => void;
+  onChooseWorkspace: () => void;
+  onLoadWorkspace: () => void;
   onQueryChange: (query: string) => void;
   onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
@@ -30,6 +33,9 @@ export function AppShell({
   sourcePath,
   workspaceRoot,
   onImportSource,
+  onChooseSourcePath,
+  onChooseWorkspace,
+  onLoadWorkspace,
   onQueryChange,
   onRunCheck,
   onSelectNode,
@@ -37,6 +43,7 @@ export function AppShell({
   onWorkspaceRootChange,
 }: AppShellProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
+  const workspaceLabel = workspaceRoot || 'Sample graph';
 
   return (
     <main className="app-shell">
@@ -68,15 +75,15 @@ export function AppShell({
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="breadcrumb">Graph / AI Social Impact</p>
+            <p className="breadcrumb">Graph / {workspaceRoot ? 'Loaded workspace' : 'Sample graph'}</p>
             <h1>
               Knowledge Graph <span>{graph.nodes.length} nodes</span>
             </h1>
           </div>
           <div className="toolbar">
+            <button type="button" onClick={onChooseWorkspace}>Open Workspace</button>
             <button type="button" onClick={onRunCheck}>Run Check</button>
             <button type="button" onClick={onImportSource}>Import</button>
-            <button type="button">Filters</button>
             <input
               aria-label="Search nodes"
               onChange={(event) => onQueryChange(event.target.value)}
@@ -94,7 +101,11 @@ export function AppShell({
         selectedNodeId={selectedNode?.id ?? ''}
         sourcePath={sourcePath}
         workspaceRoot={workspaceRoot}
+        workspaceLabel={workspaceLabel}
+        onChooseSourcePath={onChooseSourcePath}
+        onChooseWorkspace={onChooseWorkspace}
         onImportSource={onImportSource}
+        onLoadWorkspace={onLoadWorkspace}
         onRunCheck={onRunCheck}
         onSourcePathChange={onSourcePathChange}
         onWorkspaceRootChange={onWorkspaceRootChange}

@@ -10,7 +10,13 @@ export type WorkspaceActionState = {
 export const idleActionState: WorkspaceActionState = {
   kind: 'idle',
   title: 'Workspace actions',
-  message: 'Run checks or import one source file.',
+  message: 'Open a workspace, run checks, or import one source file.',
+};
+
+export const workspaceLoadCanceledState: WorkspaceActionState = {
+  kind: 'idle',
+  title: 'Workspace unchanged',
+  message: 'No folder selected.',
 };
 
 export function formatCheckResult(result: CheckResult): WorkspaceActionState {
@@ -31,10 +37,22 @@ export function formatImportResult(result: ImportResult): WorkspaceActionState {
   };
 }
 
+export function formatWorkspaceLoaded(root: string, graph: { nodes: unknown[]; edges: unknown[] }): WorkspaceActionState {
+  return {
+    kind: 'success',
+    title: 'Workspace loaded',
+    message: `${root} · ${formatCount(graph.nodes.length, 'node')}, ${formatCount(graph.edges.length, 'edge')}`,
+  };
+}
+
 export function formatActionError(error: unknown): WorkspaceActionState {
   return {
     kind: 'error',
     title: 'Action failed',
     message: error instanceof Error ? error.message : String(error),
   };
+}
+
+function formatCount(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
 }

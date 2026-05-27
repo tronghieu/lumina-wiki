@@ -74,13 +74,20 @@ Current write-capable surface:
 - `Import` copies one selected file into `raw/sources/`.
 - Import refuses overwrites and rejects symlink sources.
 
+Current read/navigation surface:
+
+- `Open Workspace` uses the native folder picker, validates the selected
+  Lumina workspace, and loads its real `wiki/` graph.
+- The graph canvas starts with sample data only until a workspace is loaded.
+- `Choose Source` uses the native file picker; the importer service still
+  performs all filesystem validation before copying.
+
 Current MVP limits:
 
 - No provider-backed chat.
 - No graph edge or wiki note editing.
-- Workspace and source paths are entered manually in the action panel.
-- The graph view uses frontend sample data until workspace selection is wired
-  into the graph loader.
+- Workspace and source paths are session-only; recent workspaces are not
+  persisted yet.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:
