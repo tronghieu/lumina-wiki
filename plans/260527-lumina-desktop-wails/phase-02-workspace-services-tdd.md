@@ -1,10 +1,11 @@
 ---
 phase: 2
-title: "Workspace Services TDD"
-status: pending
+title: Workspace Services TDD
+status: completed
 priority: P1
-effort: "1d"
-dependencies: [1]
+effort: 1d
+dependencies:
+  - 1
 ---
 
 # Phase 2: Workspace Services TDD
@@ -52,12 +53,12 @@ Go services:
 
 ## Success Criteria
 
-- [ ] Go tests cover valid/invalid workspace validation.
-- [ ] Go tests cover graph node/edge load from fixture.
-- [ ] Path traversal or external path input is rejected.
-- [ ] Service outputs stable node IDs, labels, type, path, and links.
-- [ ] No writes to `wiki/graph`.
-- [ ] Phase 2 commit created.
+- [x] Go tests cover valid/invalid workspace validation.
+- [x] Go tests cover graph node/edge load from fixture.
+- [x] Path traversal or external path input is rejected.
+- [x] Service outputs stable node IDs, labels, type, path, and links.
+- [x] No writes to `wiki/graph`.
+- [x] Phase 2 commit created.
 
 ## Risk Assessment
 

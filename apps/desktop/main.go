@@ -4,6 +4,8 @@ import (
 	"embed"
 	"log"
 
+	desktopgraph "github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
+	desktopworkspace "github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -15,6 +17,10 @@ func main() {
 	app := application.New(application.Options{
 		Name:        info.Name,
 		Description: info.Description,
+		Services: []application.Service{
+			application.NewService(desktopworkspace.NewService()),
+			application.NewService(desktopgraph.NewService()),
+		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},

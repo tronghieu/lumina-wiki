@@ -1,0 +1,5 @@
+{"from":"ai-social-impact","type":"defines","to":"ethics"}
+{"from":"ethics","type":"defined_by","to":"ai-social-impact"}
+{"from":"ethics","type":"related_to","to":"privacy"}
+{"from":"ai-social-impact","type":"mentions","to":"ada-lovelace"}
+{"from":"ai-social-impact","type":"produced","to":"outputs/social-impact-brief"}
