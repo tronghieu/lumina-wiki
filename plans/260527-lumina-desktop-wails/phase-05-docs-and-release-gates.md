@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: Docs and Release Gates
-status: in-progress
+status: completed
 priority: P2
 effort: 0.5d
 dependencies:
@@ -61,8 +61,8 @@ Docs stay split:
 - [x] Desktop frontend tests/build pass.
 - [x] Root `npm run test:all`, `npm run ci:idempotency`, and `npm run ci:package` pass or any failure is documented and fixed before PR.
 - [x] Code review completed with no critical unresolved findings.
-- [ ] PR opened against `tronghieu/lumina-wiki`.
-- [ ] Phase 5 commit created.
+- [x] PR opened against `tronghieu/lumina-wiki`.
+- [x] Phase 5 commit created.
 
 ## Risk Assessment
 

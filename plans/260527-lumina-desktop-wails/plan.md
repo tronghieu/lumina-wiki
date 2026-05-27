@@ -4,7 +4,7 @@ description: >-
   Build an isolated Wails 3 desktop companion app for Lumina workspaces: graph
   browser, workspace validation, node inspector, check runner, and controlled
   raw import. TDD-first, no root CLI regression.
-status: in-progress
+status: completed
 priority: P2
 branch: feat/lumina-desktop-wails
 tags:
@@ -39,7 +39,7 @@ Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 | 2 | [Workspace Services TDD](./phase-02-workspace-services-tdd.md) | Completed |
 | 3 | [Graph Interface](./phase-03-graph-interface.md) | Completed |
 | 4 | [Tool Runner and Import](./phase-04-tool-runner-and-import.md) | Completed |
-| 5 | [Docs and Release Gates](./phase-05-docs-and-release-gates.md) | In Progress |
+| 5 | [Docs and Release Gates](./phase-05-docs-and-release-gates.md) | Completed |
 
 ## Dependencies
 
