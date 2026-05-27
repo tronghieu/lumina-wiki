@@ -1,20 +1,41 @@
 import { GraphView } from '../features/graph/graph-view';
 import { NodeInspector } from '../features/graph/node-inspector';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
+import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
 
 const navItems = ['Home', 'Graph', 'Chat', 'Nodes', 'Media', 'Settings'];
 const recentItems = ['AI Social Impact', 'Privacy Brief', 'Research Notes', 'Reading Map'];
 const favoriteItems = ['Ethics', 'Privacy', 'Education', 'Ada Lovelace'];
 
 type AppShellProps = {
+  actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
   query: string;
   selectedNodeId: string;
+  sourcePath: string;
+  workspaceRoot: string;
+  onImportSource: () => void;
   onQueryChange: (query: string) => void;
+  onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
+  onSourcePathChange: (path: string) => void;
+  onWorkspaceRootChange: (path: string) => void;
 };
 
-export function AppShell({ graph, query, selectedNodeId, onQueryChange, onSelectNode }: AppShellProps) {
+export function AppShell({
+  actionState,
+  graph,
+  query,
+  selectedNodeId,
+  sourcePath,
+  workspaceRoot,
+  onImportSource,
+  onQueryChange,
+  onRunCheck,
+  onSelectNode,
+  onSourcePathChange,
+  onWorkspaceRootChange,
+}: AppShellProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
 
   return (
@@ -53,7 +74,8 @@ export function AppShell({ graph, query, selectedNodeId, onQueryChange, onSelect
             </h1>
           </div>
           <div className="toolbar">
-            <button type="button">Import</button>
+            <button type="button" onClick={onRunCheck}>Run Check</button>
+            <button type="button" onClick={onImportSource}>Import</button>
             <button type="button">Filters</button>
             <input
               aria-label="Search nodes"
@@ -66,7 +88,17 @@ export function AppShell({ graph, query, selectedNodeId, onQueryChange, onSelect
         <GraphView graph={graph} query={query} selectedNodeId={selectedNode?.id ?? ''} onSelectNode={onSelectNode} />
       </section>
 
-      <NodeInspector graph={graph} selectedNodeId={selectedNode?.id ?? ''} />
+      <NodeInspector
+        actionState={actionState}
+        graph={graph}
+        selectedNodeId={selectedNode?.id ?? ''}
+        sourcePath={sourcePath}
+        workspaceRoot={workspaceRoot}
+        onImportSource={onImportSource}
+        onRunCheck={onRunCheck}
+        onSourcePathChange={onSourcePathChange}
+        onWorkspaceRootChange={onWorkspaceRootChange}
+      />
     </main>
   );
 }

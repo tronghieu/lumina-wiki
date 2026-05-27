@@ -1,12 +1,30 @@
 import { linkedNodes } from './graph-data';
 import type { KnowledgeGraph } from './graph-types';
+import type { WorkspaceActionState } from '../workspace/workspace-actions';
 
 type NodeInspectorProps = {
+  actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
   selectedNodeId: string;
+  sourcePath: string;
+  workspaceRoot: string;
+  onImportSource: () => void;
+  onRunCheck: () => void;
+  onSourcePathChange: (path: string) => void;
+  onWorkspaceRootChange: (path: string) => void;
 };
 
-export function NodeInspector({ graph, selectedNodeId }: NodeInspectorProps) {
+export function NodeInspector({
+  actionState,
+  graph,
+  selectedNodeId,
+  sourcePath,
+  workspaceRoot,
+  onImportSource,
+  onRunCheck,
+  onSourcePathChange,
+  onWorkspaceRootChange,
+}: NodeInspectorProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
   const links = selectedNode ? linkedNodes(graph, selectedNode.id) : [];
 
@@ -39,10 +57,29 @@ export function NodeInspector({ graph, selectedNodeId }: NodeInspectorProps) {
               </article>
             ))}
           </section>
-          <div className="prompt-box">
-            <input aria-label="Ask about graph" placeholder="Ask about this node..." />
-            <button type="button">Send</button>
-          </div>
+          <section className="action-panel">
+            <h3>Workspace Actions</h3>
+            <input
+              aria-label="Workspace root"
+              onChange={(event) => onWorkspaceRootChange(event.target.value)}
+              placeholder="Workspace root path"
+              value={workspaceRoot}
+            />
+            <input
+              aria-label="Source file path"
+              onChange={(event) => onSourcePathChange(event.target.value)}
+              placeholder="Source file path"
+              value={sourcePath}
+            />
+            <div className="action-buttons">
+              <button type="button" onClick={onRunCheck}>Run Check</button>
+              <button type="button" onClick={onImportSource}>Import</button>
+            </div>
+            <div className={`action-result ${actionState.kind}`}>
+              <strong>{actionState.title}</strong>
+              <span>{actionState.message}</span>
+            </div>
+          </section>
         </>
       )}
     </aside>

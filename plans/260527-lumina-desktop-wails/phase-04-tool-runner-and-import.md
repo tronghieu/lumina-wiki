@@ -1,10 +1,12 @@
 ---
 phase: 4
-title: "Tool Runner and Import"
-status: pending
+title: Tool Runner and Import
+status: completed
 priority: P2
-effort: "1d"
-dependencies: [2, 3]
+effort: 1d
+dependencies:
+  - 2
+  - 3
 ---
 
 # Phase 4: Tool Runner and Import
@@ -53,12 +55,12 @@ Frontend:
 
 ## Success Criteria
 
-- [ ] Check runner uses existing Lumina scripts, not duplicated logic.
-- [ ] Tool command receives args as arrays, no shell interpolation.
-- [ ] Import copies into `raw/sources` and refuses overwrite.
-- [ ] Errors render in UI without crashing.
-- [ ] Go and frontend tests pass.
-- [ ] Phase 4 commit created.
+- [x] Check runner uses existing Lumina scripts, not duplicated logic.
+- [x] Tool command receives args as arrays, no shell interpolation.
+- [x] Import copies into `raw/sources` and refuses overwrite.
+- [x] Errors render in UI without crashing.
+- [x] Go and frontend tests pass.
+- [x] Phase 4 commit created.
 
 ## Risk Assessment
 

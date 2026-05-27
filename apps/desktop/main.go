@@ -5,6 +5,8 @@ import (
 	"log"
 
 	desktopgraph "github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
+	desktopimporter "github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer"
+	desktoptools "github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools"
 	desktopworkspace "github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -20,6 +22,8 @@ func main() {
 		Services: []application.Service{
 			application.NewService(desktopworkspace.NewService()),
 			application.NewService(desktopgraph.NewService()),
+			application.NewService(desktoptools.NewService()),
+			application.NewService(desktopimporter.NewService()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

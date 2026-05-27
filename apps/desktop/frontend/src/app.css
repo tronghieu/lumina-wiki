@@ -160,6 +160,7 @@ button {
   display: grid;
   grid-template-rows: 112px minmax(0, 1fr);
   min-width: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -182,6 +183,7 @@ button {
   margin: 0;
   font-size: 25px;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .topbar h1 span {
@@ -202,7 +204,7 @@ button {
 }
 
 .toolbar button {
-  width: 86px;
+  width: 88px;
   height: 36px;
   border: 1px solid #dce2eb;
   border-radius: 8px;
@@ -210,7 +212,12 @@ button {
   background: #ffffff;
 }
 
+.toolbar button:first-child {
+  width: 104px;
+}
+
 .toolbar input,
+.action-panel input,
 .prompt-box input {
   height: 36px;
   border: 1px solid #dce2eb;
@@ -221,7 +228,7 @@ button {
 }
 
 .toolbar input {
-  width: min(260px, 28vw);
+  width: min(220px, 24vw);
 }
 
 .graph-canvas {
@@ -301,6 +308,8 @@ button {
   min-width: 0;
   padding: 22px;
   border-width: 0 0 0 1px;
+  position: relative;
+  z-index: 2;
 }
 
 .inspector-header {
@@ -345,6 +354,7 @@ button {
   font-weight: 700;
 }
 
+.action-panel,
 .detail-card,
 .linked-list article {
   border: 1px solid #e8edf4;
@@ -406,6 +416,74 @@ button {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.action-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+}
+
+.action-panel h3 {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.action-buttons button {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #2563eb;
+}
+
+.action-result {
+  display: grid;
+  gap: 3px;
+  min-height: 56px;
+  padding: 10px;
+  border-radius: 8px;
+  color: #344054;
+  background: #f5f7fb;
+}
+
+.action-result.success {
+  color: #065f46;
+  background: #dff8ee;
+}
+
+.action-result.error {
+  color: #9f1239;
+  background: #ffe4e6;
+}
+
+.action-result.loading {
+  color: #7c2d12;
+  background: #ffedd5;
+}
+
+.action-result strong,
+.action-result span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-result strong {
+  font-size: 12px;
+}
+
+.action-result span {
+  font-size: 12px;
 }
 
 .prompt-box {
