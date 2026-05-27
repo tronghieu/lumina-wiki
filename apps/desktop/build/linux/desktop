@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=Lumina Wiki
+Comment=Local-first desktop companion for Lumina Wiki workspaces
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/lumina-desktop %u
+Terminal=false
+Type=Application
+Icon=lumina-desktop
+Categories=Utility;
+StartupWMClass=lumina-desktop

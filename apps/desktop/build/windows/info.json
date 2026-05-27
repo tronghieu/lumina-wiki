@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "Lumina Wiki",
+			"FileDescription": "Local-first desktop companion for Lumina Wiki workspaces",
+			"LegalCopyright": "(c) 2026, Lumina Wiki",
+			"ProductName": "Lumina Wiki",
+			"Comments": "Desktop MVP"
+		}
+	}
+}
