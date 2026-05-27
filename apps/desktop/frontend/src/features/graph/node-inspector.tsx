@@ -1,10 +1,12 @@
 import { linkedNodes } from './graph-data';
 import type { KnowledgeGraph } from './graph-types';
+import type { NoteContentState } from './note-content';
 import type { WorkspaceActionState } from '../workspace/workspace-actions';
 
 type NodeInspectorProps = {
   actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
+  noteState: NoteContentState;
   selectedNodeId: string;
   sourcePath: string;
   workspaceLabel: string;
@@ -21,6 +23,7 @@ type NodeInspectorProps = {
 export function NodeInspector({
   actionState,
   graph,
+  noteState,
   selectedNodeId,
   sourcePath,
   workspaceLabel,
@@ -55,6 +58,11 @@ export function NodeInspector({
           <section className="detail-card">
             <span className="type-pill">{selectedNode.type}</span>
             <p>{selectedNode.preview}</p>
+          </section>
+          <section className={`note-card ${noteState.kind}`}>
+            <h3>Note Content</h3>
+            <span>{noteState.path || selectedNode.path}</span>
+            <pre>{noteState.content}</pre>
           </section>
           <section className="linked-list">
             <h3>Linked Nodes</h3>

@@ -1,6 +1,7 @@
 import { GraphView } from '../features/graph/graph-view';
 import { NodeInspector } from '../features/graph/node-inspector';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
+import type { NoteContentState } from '../features/graph/note-content';
 import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
 
 const navItems = ['Home', 'Graph', 'Chat', 'Nodes', 'Media', 'Settings'];
@@ -10,6 +11,7 @@ const favoriteItems = ['Ethics', 'Privacy', 'Education', 'Ada Lovelace'];
 type AppShellProps = {
   actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
+  noteState: NoteContentState;
   query: string;
   selectedNodeId: string;
   sourcePath: string;
@@ -28,6 +30,7 @@ type AppShellProps = {
 export function AppShell({
   actionState,
   graph,
+  noteState,
   query,
   selectedNodeId,
   sourcePath,
@@ -98,6 +101,7 @@ export function AppShell({
       <NodeInspector
         actionState={actionState}
         graph={graph}
+        noteState={noteState}
         selectedNodeId={selectedNode?.id ?? ''}
         sourcePath={sourcePath}
         workspaceRoot={workspaceRoot}

@@ -9,5 +9,6 @@ export {
 export {
     Edge,
     Graph,
-    Node
+    Node,
+    NoteContent
 } from "./models.js";

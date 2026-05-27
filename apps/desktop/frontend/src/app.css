@@ -359,6 +359,7 @@ button {
 
 .action-panel,
 .detail-card,
+.note-card,
 .linked-list article {
   border: 1px solid #e8edf4;
   border-radius: 8px;
@@ -388,6 +389,52 @@ button {
   color: #344054;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.note-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 12px;
+}
+
+.note-card h3 {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.note-card span {
+  overflow: hidden;
+  color: #667085;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-card pre {
+  overflow: auto;
+  max-height: 220px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  color: #172033;
+  background: #f5f7fb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.note-card.error pre {
+  color: #9f1239;
+  background: #ffe4e6;
+}
+
+.note-card.loading pre {
+  color: #7c2d12;
+  background: #ffedd5;
 }
 
 .linked-list {

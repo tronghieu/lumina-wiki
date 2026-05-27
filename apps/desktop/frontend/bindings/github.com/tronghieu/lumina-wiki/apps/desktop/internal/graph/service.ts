@@ -15,5 +15,12 @@ export function Load(root: string): $CancellablePromise<$models.Graph> {
     });
 }
 
+export function ReadNote(root: string, notePath: string): $CancellablePromise<$models.NoteContent> {
+    return $Call.ByID(2818013651, root, notePath).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 // Private type creation functions
 const $$createType0 = $models.Graph.createFrom;
+const $$createType1 = $models.NoteContent.createFrom;

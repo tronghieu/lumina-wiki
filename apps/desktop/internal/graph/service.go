@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	desktopworkspace "github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
 type Service struct{}
@@ -35,6 +37,67 @@ func (s *Service) Load(root string) (Graph, error) {
 		return Graph{}, err
 	}
 	return Graph{Nodes: nodes, Edges: edges}, nil
+}
+
+func (s *Service) ReadNote(root, notePath string) (NoteContent, error) {
+	if filepath.IsAbs(notePath) {
+		return NoteContent{}, errors.New("absolute note paths are not allowed")
+	}
+	if strings.Contains(notePath, `\`) {
+		return NoteContent{}, errors.New("backslash note paths are not allowed")
+	}
+	if !strings.HasSuffix(notePath, ".md") {
+		return NoteContent{}, errors.New("only markdown notes can be read")
+	}
+	if !isEntityNotePath(notePath) {
+		return NoteContent{}, errors.New("note path is not a wiki entity note")
+	}
+
+	workspaceService := desktopworkspace.NewService()
+	validation, err := workspaceService.Validate(root)
+	if err != nil {
+		return NoteContent{}, err
+	}
+	wikiRoot, err := workspaceService.ResolveInside(validation.Root, "wiki")
+	if err != nil {
+		return NoteContent{}, err
+	}
+	path, err := workspaceService.ResolveInside(wikiRoot, notePath)
+	if err != nil {
+		return NoteContent{}, err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return NoteContent{}, err
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return NoteContent{}, errors.New("note symlinks are not allowed")
+	}
+	if !info.Mode().IsRegular() {
+		return NoteContent{}, errors.New("note must be a regular file")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return NoteContent{}, err
+	}
+	return NoteContent{Path: filepath.ToSlash(notePath), Content: string(content)}, nil
+}
+
+func isEntityNotePath(notePath string) bool {
+	clean := filepath.ToSlash(filepath.Clean(notePath))
+	if clean != notePath || clean == "." || strings.HasPrefix(clean, "../") {
+		return false
+	}
+	dir, _, ok := strings.Cut(clean, "/")
+	if !ok {
+		return false
+	}
+	for _, entityDir := range entityDirs() {
+		if dir == entityDir {
+			return true
+		}
+	}
+	return false
 }
 
 func loadNodes(wikiRoot string) ([]Node, error) {

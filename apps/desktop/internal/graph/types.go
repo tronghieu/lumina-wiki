@@ -18,3 +18,8 @@ type Edge struct {
 	Type string `json:"type"`
 	To   string `json:"to"`
 }
+
+type NoteContent struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}

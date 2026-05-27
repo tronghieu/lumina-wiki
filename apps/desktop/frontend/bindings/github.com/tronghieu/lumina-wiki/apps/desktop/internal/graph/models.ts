@@ -104,6 +104,31 @@ export class Node {
     }
 }
 
+export class NoteContent {
+    "path": string;
+    "content": string;
+
+    /** Creates a new NoteContent instance. */
+    constructor($$source: Partial<NoteContent> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("content" in $$source)) {
+            this["content"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NoteContent instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NoteContent {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NoteContent($$parsedSource as Partial<NoteContent>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = Node.createFrom;
 const $$createType1 = $Create.Array($$createType0);
