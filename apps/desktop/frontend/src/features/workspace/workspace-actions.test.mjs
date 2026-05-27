@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  createWorkspaceRequestGuard,
   formatActionError,
   formatCheckDetails,
   formatCheckResult,
+  formatGraphRefreshed,
   formatImportResult,
   formatWorkspaceLoaded,
   workspaceLoadCanceledState,
@@ -55,5 +57,22 @@ describe('workspace-actions', () => {
       message: '/tmp/wiki · 2 nodes, 1 edge',
     });
     assert.equal(workspaceLoadCanceledState.kind, 'idle');
+  });
+
+  it('formats graph refresh status', () => {
+    assert.deepEqual(formatGraphRefreshed({ nodes: [1], edges: [1, 2] }), {
+      kind: 'success',
+      title: 'Graph refreshed',
+      message: '1 node, 2 edges loaded from workspace.',
+    });
+  });
+
+  it('marks older workspace requests stale when a newer one starts', () => {
+    const guard = createWorkspaceRequestGuard();
+    const first = guard.begin();
+    const second = guard.begin();
+
+    assert.equal(guard.isCurrent(first), false);
+    assert.equal(guard.isCurrent(second), true);
   });
 });

@@ -21,8 +21,8 @@ type AppShellProps = {
   onImportSource: () => void;
   onChooseSourcePath: () => void;
   onChooseWorkspace: () => void;
-  onLoadWorkspace: () => void;
   onQueryChange: (query: string) => void;
+  onRefreshGraph: () => void;
   onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
   onSourcePathChange: (path: string) => void;
@@ -41,8 +41,8 @@ export function AppShell({
   onImportSource,
   onChooseSourcePath,
   onChooseWorkspace,
-  onLoadWorkspace,
   onQueryChange,
+  onRefreshGraph,
   onRunCheck,
   onSelectNode,
   onSourcePathChange,
@@ -88,6 +88,7 @@ export function AppShell({
           </div>
           <div className="toolbar">
             <button type="button" onClick={onChooseWorkspace}>Open Workspace</button>
+            <button type="button" onClick={onRefreshGraph}>Refresh Graph</button>
             <button type="button" onClick={onRunCheck}>Run Check</button>
             <button type="button" onClick={onImportSource}>Import</button>
             <input
@@ -113,7 +114,7 @@ export function AppShell({
         onChooseSourcePath={onChooseSourcePath}
         onChooseWorkspace={onChooseWorkspace}
         onImportSource={onImportSource}
-        onLoadWorkspace={onLoadWorkspace}
+        onRefreshGraph={onRefreshGraph}
         onRunCheck={onRunCheck}
         onSelectNode={onSelectNode}
         onSourcePathChange={onSourcePathChange}

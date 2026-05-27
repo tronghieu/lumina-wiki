@@ -7,6 +7,11 @@ export type WorkspaceActionState = {
   message: string;
 };
 
+export type WorkspaceRequestGuard = {
+  begin: () => number;
+  isCurrent: (requestId: number) => boolean;
+};
+
 export type CheckDetailsView = {
   status: string;
   exitCode: string;
@@ -65,6 +70,27 @@ export function formatWorkspaceLoaded(root: string, graph: { nodes: unknown[]; e
     kind: 'success',
     title: 'Workspace loaded',
     message: `${root} · ${formatCount(graph.nodes.length, 'node')}, ${formatCount(graph.edges.length, 'edge')}`,
+  };
+}
+
+export function formatGraphRefreshed(graph: { nodes: unknown[]; edges: unknown[] }): WorkspaceActionState {
+  return {
+    kind: 'success',
+    title: 'Graph refreshed',
+    message: `${formatCount(graph.nodes.length, 'node')}, ${formatCount(graph.edges.length, 'edge')} loaded from workspace.`,
+  };
+}
+
+export function createWorkspaceRequestGuard(): WorkspaceRequestGuard {
+  let currentRequestId = 0;
+  return {
+    begin() {
+      currentRequestId += 1;
+      return currentRequestId;
+    },
+    isCurrent(requestId: number) {
+      return currentRequestId === requestId;
+    },
   };
 }
 

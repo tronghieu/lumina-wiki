@@ -16,7 +16,7 @@ type NodeInspectorProps = {
   onChooseSourcePath: () => void;
   onChooseWorkspace: () => void;
   onImportSource: () => void;
-  onLoadWorkspace: () => void;
+  onRefreshGraph: () => void;
   onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
   onSourcePathChange: (path: string) => void;
@@ -35,7 +35,7 @@ export function NodeInspector({
   onChooseSourcePath,
   onChooseWorkspace,
   onImportSource,
-  onLoadWorkspace,
+  onRefreshGraph,
   onRunCheck,
   onSelectNode,
   onSourcePathChange,
@@ -97,7 +97,7 @@ export function NodeInspector({
             />
             <div className="action-buttons">
               <button type="button" onClick={onChooseWorkspace}>Open</button>
-              <button type="button" onClick={onLoadWorkspace}>Load Graph</button>
+              <button type="button" onClick={onRefreshGraph}>Refresh Graph</button>
               <button type="button" onClick={onChooseSourcePath}>Choose Source</button>
               <button type="button" onClick={onRunCheck}>Run Check</button>
               <button type="button" onClick={onImportSource}>Import</button>

@@ -1,7 +1,7 @@
 import '@xyflow/react/dist/style.css';
 import './app.css';
 import { Dialogs } from '@wailsio/runtime';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AppShell } from './app/app-shell';
 import { Load, ReadNote } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph/service';
 import { ImportToRawSources } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer/service';
@@ -17,8 +17,10 @@ import {
   type NoteContentState,
 } from './features/graph/note-content';
 import {
+  createWorkspaceRequestGuard,
   formatActionError,
   formatCheckResult,
+  formatGraphRefreshed,
   formatImportResult,
   formatWorkspaceLoaded,
   idleActionState,
@@ -35,6 +37,7 @@ function App() {
   const [graph, setGraph] = useState<KnowledgeGraph>(sampleGraph);
   const [noteState, setNoteState] = useState<NoteContentState>(noteUnavailableState);
   const [lastCheckResult, setLastCheckResult] = useState<CheckResult | null>(null);
+  const workspaceRequestGuard = useMemo(createWorkspaceRequestGuard, []);
   const noteRequestId = useRef(0);
 
   async function chooseWorkspace() {
@@ -56,25 +59,21 @@ function App() {
   }
 
   async function loadWorkspace(root = workspaceRoot) {
-    const trimmedRoot = root.trim();
-    if (!trimmedRoot) {
-      setActionState({ kind: 'error', title: 'Workspace required', message: 'Choose or enter a Lumina workspace root.' });
-      return;
-    }
-    setActionState({ kind: 'loading', title: 'Loading workspace', message: trimmedRoot });
-    try {
-      const validation = await Validate(trimmedRoot);
-      const loadedGraph = await Load(validation.root);
-      const nextSelectedNodeId = resolveSelectedNodeId(loadedGraph, selectedNodeId);
-      setWorkspaceRoot(validation.root);
-      setGraph(loadedGraph);
-      setSelectedNodeId(nextSelectedNodeId);
-      setLastCheckResult(null);
-      void loadSelectedNote(validation.root, loadedGraph, nextSelectedNodeId);
-      setActionState(formatWorkspaceLoaded(validation.root, loadedGraph));
-    } catch (error) {
-      setActionState(formatActionError(error));
-    }
+    await refreshWorkspaceGraph(root, {
+      clearCheckResult: true,
+      loadingTitle: 'Loading workspace',
+      missingRootMessage: 'Choose or enter a Lumina workspace root.',
+      successState: (validatedRoot, loadedGraph) => formatWorkspaceLoaded(validatedRoot, loadedGraph),
+    });
+  }
+
+  async function refreshGraph() {
+    await refreshWorkspaceGraph(workspaceRoot, {
+      clearCheckResult: false,
+      loadingTitle: 'Refreshing graph',
+      missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
+      successState: (_, loadedGraph) => formatGraphRefreshed(loadedGraph),
+    });
   }
 
   async function chooseSourcePath() {
@@ -98,31 +97,110 @@ function App() {
   }
 
   async function runCheck() {
-    if (!workspaceRoot.trim()) {
+    const checkedRoot = workspaceRoot.trim();
+    if (!checkedRoot) {
       setActionState({ kind: 'error', title: 'Workspace required', message: 'Enter a Lumina workspace root.' });
       return;
     }
-    setActionState({ kind: 'loading', title: 'Running check', message: workspaceRoot });
+    const requestId = beginWorkspaceRequest();
+    setActionState({ kind: 'loading', title: 'Running check', message: checkedRoot });
     try {
-      const result = await RunCheck(workspaceRoot.trim());
+      const result = await RunCheck(checkedRoot);
+      if (!workspaceRequestGuard.isCurrent(requestId)) {
+        return;
+      }
       setLastCheckResult(result);
-      setActionState(formatCheckResult(result));
+      const checkState = formatCheckResult(result);
+      await refreshWorkspaceGraph(checkedRoot, {
+        clearCheckResult: false,
+        loadingTitle: 'Refreshing graph',
+        missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
+        successState: () => checkState,
+      }, requestId);
     } catch (error) {
-      setActionState(formatActionError(error));
+      if (workspaceRequestGuard.isCurrent(requestId)) {
+        setActionState(formatActionError(error));
+      }
     }
   }
 
   async function importSource() {
-    if (!workspaceRoot.trim() || !sourcePath.trim()) {
+    const importRoot = workspaceRoot.trim();
+    const importedSourcePath = sourcePath.trim();
+    if (!importRoot || !importedSourcePath) {
       setActionState({ kind: 'error', title: 'Paths required', message: 'Enter workspace root and source file path.' });
       return;
     }
-    setActionState({ kind: 'loading', title: 'Importing source', message: sourcePath });
+    const requestId = beginWorkspaceRequest();
+    setActionState({ kind: 'loading', title: 'Importing source', message: importedSourcePath });
     try {
-      setActionState(formatImportResult(await ImportToRawSources(workspaceRoot.trim(), sourcePath.trim())));
+      const importState = formatImportResult(await ImportToRawSources(importRoot, importedSourcePath));
+      if (!workspaceRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+      await refreshWorkspaceGraph(importRoot, {
+        clearCheckResult: false,
+        loadingTitle: 'Refreshing graph',
+        missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
+        successState: () => importState,
+      }, requestId);
     } catch (error) {
-      setActionState(formatActionError(error));
+      if (workspaceRequestGuard.isCurrent(requestId)) {
+        setActionState(formatActionError(error));
+      }
     }
+  }
+
+  async function refreshWorkspaceGraph(
+    root: string,
+    options: {
+      clearCheckResult: boolean;
+      loadingTitle: string;
+      missingRootMessage: string;
+      successState: (validatedRoot: string, loadedGraph: KnowledgeGraph) => WorkspaceActionState;
+    },
+    requestId = beginWorkspaceRequest(),
+  ) {
+    const trimmedRoot = root.trim();
+    if (!trimmedRoot) {
+      setActionState({ kind: 'error', title: 'Workspace required', message: options.missingRootMessage });
+      return;
+    }
+    setActionState({ kind: 'loading', title: options.loadingTitle, message: trimmedRoot });
+    try {
+      const validation = await Validate(trimmedRoot);
+      if (!workspaceRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+      const loadedGraph = await Load(validation.root);
+      if (!workspaceRequestGuard.isCurrent(requestId)) {
+        return;
+      }
+      const nextSelectedNodeId = resolveSelectedNodeId(loadedGraph, selectedNodeId);
+      setWorkspaceRoot(validation.root);
+      setGraph(loadedGraph);
+      setSelectedNodeId(nextSelectedNodeId);
+      if (options.clearCheckResult) {
+        setLastCheckResult(null);
+      }
+      void loadSelectedNote(validation.root, loadedGraph, nextSelectedNodeId);
+      setActionState(options.successState(validation.root, loadedGraph));
+    } catch (error) {
+      if (workspaceRequestGuard.isCurrent(requestId)) {
+        setActionState(formatActionError(error));
+      }
+    }
+  }
+
+  function updateWorkspaceRoot(path: string) {
+    beginWorkspaceRequest();
+    setWorkspaceRoot(path);
+  }
+
+  function beginWorkspaceRequest() {
+    const requestId = workspaceRequestGuard.begin();
+    noteRequestId.current += 1;
+    return requestId;
   }
 
   async function selectNode(nodeId: string) {
@@ -164,12 +242,12 @@ function App() {
       onImportSource={importSource}
       onChooseSourcePath={chooseSourcePath}
       onChooseWorkspace={chooseWorkspace}
-      onLoadWorkspace={() => loadWorkspace()}
       onQueryChange={setQuery}
+      onRefreshGraph={refreshGraph}
       onRunCheck={runCheck}
       onSelectNode={selectNode}
       onSourcePathChange={setSourcePath}
-      onWorkspaceRootChange={setWorkspaceRoot}
+      onWorkspaceRootChange={updateWorkspaceRoot}
     />
   );
 }
