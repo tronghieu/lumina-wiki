@@ -1,4 +1,4 @@
-import { linkedNodes } from './graph-data';
+import { linkedNodeSelectionId, linkedNodes } from './graph-data';
 import type { CheckResult } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
 import type { KnowledgeGraph } from './graph-types';
 import type { NoteContentState } from './note-content';
@@ -18,6 +18,7 @@ type NodeInspectorProps = {
   onImportSource: () => void;
   onLoadWorkspace: () => void;
   onRunCheck: () => void;
+  onSelectNode: (nodeId: string) => void;
   onSourcePathChange: (path: string) => void;
   onWorkspaceRootChange: (path: string) => void;
 };
@@ -36,6 +37,7 @@ export function NodeInspector({
   onImportSource,
   onLoadWorkspace,
   onRunCheck,
+  onSelectNode,
   onSourcePathChange,
   onWorkspaceRootChange,
 }: NodeInspectorProps) {
@@ -70,11 +72,12 @@ export function NodeInspector({
           </section>
           <section className="linked-list">
             <h3>Linked Nodes</h3>
+            {links.length === 0 && <p>No linked nodes.</p>}
             {links.map((node) => (
-              <article key={node.id}>
+              <button key={node.id} type="button" onClick={() => onSelectNode(linkedNodeSelectionId(node))}>
                 <strong>{node.title}</strong>
                 <span>{node.type} / {node.path}</span>
-              </article>
+              </button>
             ))}
           </section>
           <section className="action-panel">

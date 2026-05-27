@@ -115,6 +115,7 @@ export function AppShell({
         onImportSource={onImportSource}
         onLoadWorkspace={onLoadWorkspace}
         onRunCheck={onRunCheck}
+        onSelectNode={onSelectNode}
         onSourcePathChange={onSourcePathChange}
         onWorkspaceRootChange={onWorkspaceRootChange}
       />

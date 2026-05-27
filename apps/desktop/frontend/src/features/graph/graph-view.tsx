@@ -11,7 +11,7 @@ type GraphViewProps = {
 };
 
 export function GraphView({ graph, query, selectedNodeId, onSelectNode }: GraphViewProps) {
-  const visibleGraph = useMemo(() => searchGraph(graph, query), [graph, query]);
+  const visibleGraph = useMemo(() => searchGraph(graph, query, selectedNodeId), [graph, query, selectedNodeId]);
   const visibleNodeIds = useMemo(() => new Set(visibleGraph.nodes.map((node) => node.id)), [visibleGraph.nodes]);
   const nodes = useMemo(() => toFlowNodes(visibleGraph.nodes, selectedNodeId), [visibleGraph.nodes, selectedNodeId]);
   const edges = useMemo(() => toFlowEdges(visibleGraph.edges, visibleNodeIds), [visibleGraph.edges, visibleNodeIds]);

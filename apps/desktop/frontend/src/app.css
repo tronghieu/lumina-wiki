@@ -361,7 +361,7 @@ button {
 .check-card,
 .detail-card,
 .note-card,
-.linked-list article {
+.linked-list button {
   border: 1px solid #e8edf4;
   border-radius: 8px;
   background: #ffffff;
@@ -451,10 +451,23 @@ button {
   text-transform: uppercase;
 }
 
-.linked-list article {
+.linked-list button {
   display: grid;
   gap: 4px;
+  width: 100%;
   padding: 12px;
+  text-align: left;
+}
+
+.linked-list button:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.linked-list p {
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
 }
 
 .linked-list strong {

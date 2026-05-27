@@ -73,7 +73,7 @@ const nodeColors: Record<string, string> = {
   summary: '#7c3aed',
 };
 
-export function searchGraph(graph: KnowledgeGraph, query: string): KnowledgeGraph {
+export function searchGraph(graph: KnowledgeGraph, query: string, selectedNodeId = ''): KnowledgeGraph {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
     return graph;
@@ -83,6 +83,9 @@ export function searchGraph(graph: KnowledgeGraph, query: string): KnowledgeGrap
       .filter((node) => [node.id, node.title, node.type, node.path].some((value) => value.toLowerCase().includes(normalizedQuery)))
       .map((node) => node.id),
   );
+  if (graph.nodes.some((node) => node.id === selectedNodeId)) {
+    visibleIds.add(selectedNodeId);
+  }
   return {
     nodes: graph.nodes.filter((node) => visibleIds.has(node.id)),
     edges: graph.edges.filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to)),
@@ -103,6 +106,10 @@ export function resolveSelectedNodeId(graph: KnowledgeGraph, selectedNodeId: str
     return selectedNodeId;
   }
   return graph.nodes[0]?.id ?? '';
+}
+
+export function linkedNodeSelectionId(node: GraphNode): string {
+  return node.id;
 }
 
 export function toFlowNodes(nodes: GraphNode[], selectedNodeId: string): Node[] {

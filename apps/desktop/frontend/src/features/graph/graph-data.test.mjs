@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { linkedNodes, resolveSelectedNodeId, sampleGraph, searchGraph, toFlowEdges, toFlowNodes } from './graph-data.ts';
+import {
+  linkedNodeSelectionId,
+  linkedNodes,
+  resolveSelectedNodeId,
+  sampleGraph,
+  searchGraph,
+  toFlowEdges,
+  toFlowNodes,
+} from './graph-data.ts';
 
 describe('graph-data', () => {
   it('filters nodes by title, type, and path', () => {
@@ -12,6 +20,12 @@ describe('graph-data', () => {
   it('keeps only edges whose endpoints are visible after search', () => {
     const filtered = searchGraph(sampleGraph, 'concept');
     assert.deepEqual(filtered.edges.map((edge) => `${edge.from}:${edge.to}`), ['ethics:privacy', 'privacy:education']);
+  });
+
+  it('keeps the selected node visible when search would otherwise hide it', () => {
+    const filtered = searchGraph(sampleGraph, 'AI Social Impact', 'privacy');
+    assert.deepEqual(filtered.nodes.map((node) => node.id), ['ai-social-impact', 'privacy']);
+    assert.deepEqual(filtered.edges.map((edge) => `${edge.from}:${edge.to}`), ['ai-social-impact:privacy']);
   });
 
   it('returns sorted linked nodes for selected node', () => {
@@ -35,5 +49,9 @@ describe('graph-data', () => {
     assert.equal(resolveSelectedNodeId(sampleGraph, 'privacy'), 'privacy');
     assert.equal(resolveSelectedNodeId(sampleGraph, 'missing'), 'ai-social-impact');
     assert.equal(resolveSelectedNodeId({ nodes: [], edges: [] }, 'missing'), '');
+  });
+
+  it('uses the linked node id as the inspector selection target', () => {
+    assert.equal(linkedNodeSelectionId(sampleGraph.nodes[2]), 'privacy');
   });
 });
