@@ -37,7 +37,7 @@ Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 |-------|------|--------|
 | 1 | [Scaffold Isolated Wails App](./phase-01-scaffold-isolated-wails-app.md) | Completed |
 | 2 | [Workspace Services TDD](./phase-02-workspace-services-tdd.md) | Completed |
-| 3 | [Graph Interface](./phase-03-graph-interface.md) | Pending |
+| 3 | [Graph Interface](./phase-03-graph-interface.md) | Completed |
 | 4 | [Tool Runner and Import](./phase-04-tool-runner-and-import.md) | Pending |
 | 5 | [Docs and Release Gates](./phase-05-docs-and-release-gates.md) | Pending |
 

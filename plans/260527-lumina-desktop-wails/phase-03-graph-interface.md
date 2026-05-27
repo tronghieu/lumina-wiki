@@ -1,10 +1,11 @@
 ---
 phase: 3
-title: "Graph Interface"
-status: pending
+title: Graph Interface
+status: completed
 priority: P1
-effort: "1.5d"
-dependencies: [2]
+effort: 1.5d
+dependencies:
+  - 2
 ---
 
 # Phase 3: Graph Interface
@@ -52,13 +53,13 @@ Frontend structure:
 
 ## Success Criteria
 
-- [ ] Graph renders sample nodes/edges.
-- [ ] Search filters visible nodes by label/path/type.
-- [ ] Node selection updates right panel.
-- [ ] Layout resembles screenshot at desktop viewport.
-- [ ] Frontend tests pass.
-- [ ] Browser screenshot/manual smoke confirms nonblank graph.
-- [ ] Phase 3 commit created.
+- [x] Graph renders sample nodes/edges.
+- [x] Search filters visible nodes by label/path/type.
+- [x] Node selection updates right panel.
+- [x] Layout resembles screenshot at desktop viewport.
+- [x] Frontend tests pass.
+- [x] Browser screenshot/manual smoke confirms nonblank graph.
+- [x] Phase 3 commit created.
 
 ## Risk Assessment
 

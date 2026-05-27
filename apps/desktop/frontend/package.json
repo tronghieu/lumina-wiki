@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "tsc --noEmit",
+    "test": "tsc --noEmit && node --test --experimental-strip-types src/**/*.test.mjs",
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
     "preview": "vite preview"
