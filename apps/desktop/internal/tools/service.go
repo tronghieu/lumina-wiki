@@ -74,11 +74,12 @@ func (s *Service) RunCheck(root string) (CheckResult, error) {
 	err = cmd.Run()
 	result := CheckResult{Stdout: stdout.String(), Stderr: stderr.String()}
 	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return result, errors.New("Lumina check timed out")
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			result.ExitCode = exitErr.ExitCode()
-		} else if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return result, errors.New("Lumina check timed out")
 		} else {
 			return result, err
 		}

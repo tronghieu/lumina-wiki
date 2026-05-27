@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added — Desktop companion MVP
+
+- Added an isolated Wails 3 desktop companion app under `apps/desktop/`.
+  It is local-first and does not add dependencies to the root npm CLI package.
+- Added Go services for Lumina workspace validation, read-only graph loading,
+  safe check execution through `_lumina/scripts/lint.mjs --summary`, and
+  one-file import into `raw/sources/` with overwrite refusal.
+- Added a React + TypeScript graph interface using React Flow, search/filter
+  logic, node inspector, and a small workspace action panel.
+
 ## [1.6.0] - 2026-05-15
 
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)

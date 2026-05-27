@@ -1,10 +1,14 @@
 ---
 phase: 5
-title: "Docs and Release Gates"
-status: pending
+title: Docs and Release Gates
+status: in-progress
 priority: P2
-effort: "0.5d"
-dependencies: [1, 2, 3, 4]
+effort: 0.5d
+dependencies:
+  - 1
+  - 2
+  - 3
+  - 4
 ---
 
 # Phase 5: Docs and Release Gates
@@ -51,12 +55,12 @@ Docs stay split:
 
 ## Success Criteria
 
-- [ ] Desktop README is accurate.
-- [ ] Roadmap/changelog updated or docs impact explicitly marked none.
-- [ ] Desktop Go tests pass.
-- [ ] Desktop frontend tests/build pass.
-- [ ] Root `npm run test:all`, `npm run ci:idempotency`, and `npm run ci:package` pass or any failure is documented and fixed before PR.
-- [ ] Code review completed with no critical unresolved findings.
+- [x] Desktop README is accurate.
+- [x] Roadmap/changelog updated or docs impact explicitly marked none.
+- [x] Desktop Go tests pass.
+- [x] Desktop frontend tests/build pass.
+- [x] Root `npm run test:all`, `npm run ci:idempotency`, and `npm run ci:package` pass or any failure is documented and fixed before PR.
+- [x] Code review completed with no critical unresolved findings.
 - [ ] PR opened against `tronghieu/lumina-wiki`.
 - [ ] Phase 5 commit created.
 

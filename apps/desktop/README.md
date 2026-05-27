@@ -1,8 +1,9 @@
 # Lumina Desktop
 
 Lumina Desktop is a Wails 3 companion app for existing Lumina-Wiki workspaces.
-The MVP is local-first and graph-focused: open a workspace, inspect the wiki
-graph, and run safe workspace actions without changing the npm CLI package.
+The MVP is local-first and graph-focused: inspect the wiki graph, run the
+existing Lumina check tool, and import source files without changing the root
+npm CLI package.
 
 ## Stack
 
@@ -10,6 +11,13 @@ graph, and run safe workspace actions without changing the npm CLI package.
 - Go backend
 - React + TypeScript frontend
 - React Flow for the graph canvas
+
+## Prerequisites
+
+- Node.js 20 or newer
+- Go toolchain compatible with Wails 3
+- Wails 3 CLI: `wails3`
+- Platform WebView dependencies required by Wails
 
 ## Development
 
@@ -38,12 +46,41 @@ cd apps/desktop
 wails3 build
 ```
 
+Useful verification commands:
+
+```bash
+cd apps/desktop
+go test ./...
+wails3 generate bindings -clean=true -ts
+wails3 build
+
+cd frontend
+npm run test
+npm run build
+npm audit --omit=optional
+```
+
 ## Scope
 
 This app is intentionally isolated from the root npm package. Do not add
 desktop dependencies to the root `package.json`. Desktop writes must respect
 Lumina's workspace contract: graph and wiki mutations go through existing
 Lumina tools, not direct app edits.
+
+Current write-capable surface:
+
+- `Run Check` executes the installed workspace script at
+  `_lumina/scripts/lint.mjs --summary` through Go `exec.CommandContext`.
+- `Import` copies one selected file into `raw/sources/`.
+- Import refuses overwrites and rejects symlink sources.
+
+Current MVP limits:
+
+- No provider-backed chat.
+- No graph edge or wiki note editing.
+- Workspace and source paths are entered manually in the action panel.
+- The graph view uses frontend sample data until workspace selection is wired
+  into the graph loader.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:
