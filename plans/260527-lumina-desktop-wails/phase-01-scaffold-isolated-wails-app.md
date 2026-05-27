@@ -57,12 +57,12 @@ Root CLI remains unchanged except optional docs in later phase.
 
 ## Success Criteria
 
-- [ ] `apps/desktop/` exists with Go/Wails + frontend structure.
-- [ ] Root `package.json` has no new desktop dependencies.
-- [ ] `go test ./...` passes from `apps/desktop`.
-- [ ] Frontend smoke test passes from `apps/desktop/frontend`.
-- [ ] Wails dev/build command reaches compile or documented platform dependency failure.
-- [ ] Phase 1 commit created.
+- [x] `apps/desktop/` exists with Go/Wails + frontend structure.
+- [x] Root `package.json` has no new desktop dependencies.
+- [x] `go test ./...` passes from `apps/desktop`.
+- [x] Frontend smoke test passes from `apps/desktop/frontend`.
+- [x] Wails dev/build command reaches compile or documented platform dependency failure.
+- [x] Phase 1 commit created.
 
 ## Risk Assessment
 

@@ -62,14 +62,14 @@ Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 
 ## Success Criteria
 
-- [ ] Wails desktop app scaffold exists under `apps/desktop/` and builds locally.
-- [ ] App opens/validates a Lumina workspace without running install inside this repo.
-- [ ] Graph view renders fixture workspace nodes/edges and supports search/select.
-- [ ] Right panel shows selected node details and linked nodes.
-- [ ] Check runner calls existing Lumina tooling and reports summary safely.
-- [ ] Raw import copies files without overwrite.
-- [ ] Existing root tests and package gates still pass.
-- [ ] Phase commits exist and final PR is opened to `tronghieu/lumina-wiki`.
+- [x] Wails desktop app scaffold exists under `apps/desktop/` and builds locally.
+- [x] App opens/validates a Lumina workspace without running install inside this repo.
+- [x] Graph view renders fixture workspace nodes/edges and supports search/select.
+- [x] Right panel shows selected node details and linked nodes.
+- [x] Check runner calls existing Lumina tooling and reports summary safely.
+- [x] Raw import copies files without overwrite.
+- [x] Existing root tests and package gates still pass.
+- [x] Phase commits exist and final PR is opened to `tronghieu/lumina-wiki`.
 
 ## Out of Scope
 
