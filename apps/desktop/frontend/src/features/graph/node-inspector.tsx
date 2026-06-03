@@ -54,31 +54,68 @@ export function NodeInspector({
   const checkDetails = lastCheckResult ? formatCheckDetails(lastCheckResult) : null;
 
   return (
-    <aside className="inspector" aria-label="Node inspector">
-      <header className="inspector-header">
-        <div className="brand-mark small">L</div>
+    <aside className="agent-panel" aria-label="Agent panel">
+      <header className="agent-panel-header">
+        <button className="panel-collapse" type="button" aria-label="Collapse agent panel unavailable" disabled>&gt;</button>
         <div>
-          <h2>{selectedNode?.title ?? 'No node selected'}</h2>
+          <h2>Agent Panel</h2>
           <span>{selectedNode?.path ?? 'Select a node'}</span>
         </div>
+        <button className="new-chat-button" type="button" disabled>New chat</button>
       </header>
-      <nav className="tabs">
-        {['Details', 'Chat', `Linked (${links.length})`, 'Media'].map((tab, index) => (
-          <button className={index === 0 ? 'active' : ''} key={tab} type="button">{tab}</button>
-        ))}
-      </nav>
-      {selectedNode && (
-        <>
-          <section className="detail-card">
-            <span className="type-pill">{selectedNode.type}</span>
-            <p>{selectedNode.preview}</p>
-          </section>
+
+      <div className="agent-panel-scroll">
+        {selectedNode && (
+          <>
+            <section className="agent-card selected-context">
+              <span className="type-pill">{selectedNode.type}</span>
+              <h3>{selectedNode.title}</h3>
+              <p>{selectedNode.preview}</p>
+            </section>
+
+            <section className="agent-card action-panel">
+              <h3>Workspace</h3>
+              <p className="workspace-label">{workspaceLabel}</p>
+              <input
+                aria-label="Workspace root"
+                onChange={(event) => onWorkspaceRootChange(event.target.value)}
+                placeholder="Workspace root path"
+                value={workspaceRoot}
+              />
+              <input
+                aria-label="Source file path"
+                onChange={(event) => onSourcePathChange(event.target.value)}
+                placeholder="Source file path"
+                value={sourcePath}
+              />
+              <div className="action-buttons">
+                <button type="button" onClick={onChooseWorkspace}>Open</button>
+                <button type="button" onClick={onRefreshGraph}>Refresh</button>
+                <button type="button" onClick={onChooseSourcePath}>Source</button>
+                <button type="button" onClick={onRunCheck}>Check</button>
+                <button type="button" onClick={onImportSource}>Import</button>
+              </div>
+              <div className={`action-result ${actionState.kind}`}>
+                <strong>{actionState.title}</strong>
+                <span>{actionState.message}</span>
+              </div>
+              {workspaceSummary && (
+                <div className="workspace-inventory">
+                  <span>Packs</span>
+                  <strong>{formatWorkspacePacks(workspaceSummary)}</strong>
+                  <span>Folders</span>
+                  <strong>{formatWorkspaceMissingFolders(workspaceSummary)}</strong>
+                </div>
+              )}
+            </section>
+
           <section className={`note-card ${noteState.kind}`}>
             <h3>Note Content</h3>
             <span>{noteState.path || selectedNode.path}</span>
             <pre>{noteState.content}</pre>
           </section>
-          <section className="linked-list">
+
+          <section className="agent-card linked-list">
             <h3>Linked Nodes</h3>
             {links.length === 0 && <p>No linked nodes.</p>}
             {links.map((node) => (
@@ -88,43 +125,9 @@ export function NodeInspector({
               </button>
             ))}
           </section>
-          <section className="action-panel">
-            <h3>Workspace Actions</h3>
-            <p className="workspace-label">{workspaceLabel}</p>
-            <input
-              aria-label="Workspace root"
-              onChange={(event) => onWorkspaceRootChange(event.target.value)}
-              placeholder="Workspace root path"
-              value={workspaceRoot}
-            />
-            <input
-              aria-label="Source file path"
-              onChange={(event) => onSourcePathChange(event.target.value)}
-              placeholder="Source file path"
-              value={sourcePath}
-            />
-            <div className="action-buttons">
-              <button type="button" onClick={onChooseWorkspace}>Open</button>
-              <button type="button" onClick={onRefreshGraph}>Refresh Graph</button>
-              <button type="button" onClick={onChooseSourcePath}>Choose Source</button>
-              <button type="button" onClick={onRunCheck}>Run Check</button>
-              <button type="button" onClick={onImportSource}>Import</button>
-            </div>
-            <div className={`action-result ${actionState.kind}`}>
-              <strong>{actionState.title}</strong>
-              <span>{actionState.message}</span>
-            </div>
-            {workspaceSummary && (
-              <div className="workspace-inventory">
-                <span>Packs</span>
-                <strong>{formatWorkspacePacks(workspaceSummary)}</strong>
-                <span>Folders</span>
-                <strong>{formatWorkspaceMissingFolders(workspaceSummary)}</strong>
-              </div>
-            )}
-          </section>
+
           {checkDetails && (
-            <section className="check-card">
+            <section className="agent-card check-card">
               <h3>Check Details</h3>
               <div className="check-summary-grid">
                 <span>Status</span>
@@ -143,8 +146,22 @@ export function NodeInspector({
               <CheckOutput title="Stderr" value={checkDetails.stderr} />
             </section>
           )}
-        </>
-      )}
+          </>
+        )}
+      </div>
+
+      <div className="agent-composer">
+        <label>
+          <span>Model</span>
+          <select aria-label="Model" disabled>
+            <option>local</option>
+          </select>
+        </label>
+        <div className="chat-input-row">
+          <input aria-label="Chat input" placeholder="Agent chat is not connected yet" disabled />
+          <button type="button" disabled>Send</button>
+        </div>
+      </div>
     </aside>
   );
 }

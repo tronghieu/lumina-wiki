@@ -6,10 +6,6 @@ import type { KnowledgeGraph } from '../features/graph/graph-types';
 import type { NoteContentState } from '../features/graph/note-content';
 import { formatWorkspaceOverviewStats, type WorkspaceActionState } from '../features/workspace/workspace-actions';
 
-const navItems = ['Home', 'Graph', 'Chat', 'Nodes', 'Media', 'Settings'];
-const recentItems = ['AI Social Impact', 'Privacy Brief', 'Research Notes', 'Reading Map'];
-const favoriteItems = ['Ethics', 'Privacy', 'Education', 'Ada Lovelace'];
-
 type AppShellProps = {
   actionState: WorkspaceActionState;
   graph: KnowledgeGraph;
@@ -53,53 +49,94 @@ export function AppShell({
 }: AppShellProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
   const workspaceLabel = workspaceRoot || 'Sample graph';
+  const artifactTitle = selectedNode?.title ?? 'Knowledge graph';
 
   return (
     <main className="app-shell">
-      <aside className="sidebar" aria-label="Workspace navigation">
-        <div className="brand">
-          <span className="brand-mark">L</span>
-          <span>Lumina Wiki</span>
+      <aside className="graph-menu" aria-label="Graph menu">
+        <div className="activity-rail" aria-label="Obsidian-style activity rail">
+          <button className="activity-button" type="button" aria-label="Files" disabled>
+            <span className="file-icon" />
+          </button>
+          <button className="activity-button active" type="button" aria-label="Graph view" onClick={() => onQueryChange('')}>
+            <span className="graph-icon">
+              <i />
+              <i />
+              <i />
+            </span>
+          </button>
+          <button className="activity-button" type="button" aria-label="Canvas" disabled>
+            <span className="grid-icon" />
+          </button>
+          <button className="graph-menu-settings" type="button" aria-label="Settings unavailable" disabled>
+            <svg className="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2.8v3" />
+              <path d="M12 18.2v3" />
+              <path d="M4.4 4.4l2.1 2.1" />
+              <path d="M17.5 17.5l2.1 2.1" />
+              <path d="M2.8 12h3" />
+              <path d="M18.2 12h3" />
+              <path d="M4.4 19.6l2.1-2.1" />
+              <path d="M17.5 6.5l2.1-2.1" />
+            </svg>
+          </button>
         </div>
-        <button className="primary-action" type="button">New Chat</button>
-        <nav className="nav-list">
-          {navItems.map((item) => (
-            <button className={item === 'Graph' ? 'nav-item active' : 'nav-item'} key={item} type="button">
-              <span className="nav-dot" />
-              {item}
-            </button>
-          ))}
-        </nav>
-        <SidebarSection title="Recent Chats" items={recentItems} />
-        <SidebarSection title="Favorite Nodes" items={favoriteItems} />
-        <div className="workspace-card">
-          <div className="avatar">LH</div>
-          <div>
-            <strong>tronghieu</strong>
-            <span>Local Workspace</span>
+        <div className="file-tree" aria-label="Workspace file tree">
+          <div className="file-tree-toolbar">
+            <strong>ai-work-society</strong>
+            <span>17 files</span>
           </div>
+          <nav className="file-tree-list">
+            <button type="button" disabled><span>›</span> _lumina</button>
+            <button type="button" disabled><span>⌄</span> Clippings</button>
+            <button type="button" disabled><span>›</span> raw</button>
+            <button className="expanded" type="button" disabled><span>⌄</span> wiki</button>
+            {[
+              'chapters',
+              'characters',
+              'concepts',
+              'foundations',
+              'graph',
+              'outputs',
+              'people',
+              'plot',
+              'sources',
+              'summary',
+              'themes',
+              'topics',
+              'index',
+              'log',
+            ].map((item) => (
+              <button className={item === 'foundations' ? 'tree-child selected' : 'tree-child'} key={item} type="button" disabled>
+                <span>{item === 'index' || item === 'log' ? '-' : '›'}</span> {item}
+              </button>
+            ))}
+          </nav>
         </div>
       </aside>
 
-      <section className="workspace">
-        <header className="topbar">
+      <section className="main-artifact">
+        <header className="artifact-header">
           <div>
-            <p className="breadcrumb">Graph / {workspaceRoot ? 'Loaded workspace' : 'Sample graph'}</p>
-            <h1>
-              Knowledge Graph <span>{graph.nodes.length} nodes</span>
-            </h1>
+            <p className="artifact-kicker">{workspaceRoot ? 'Loaded workspace' : 'Sample graph'}</p>
+            <h1>{artifactTitle}</h1>
           </div>
-          <div className="toolbar">
-            <button type="button" onClick={onChooseWorkspace}>Open Workspace</button>
-            <button type="button" onClick={onRefreshGraph}>Refresh Graph</button>
-            <button type="button" onClick={onRunCheck}>Run Check</button>
-            <button type="button" onClick={onImportSource}>Import</button>
+          <div className="artifact-tools">
             <input
               aria-label="Search nodes"
               onChange={(event) => onQueryChange(event.target.value)}
               placeholder="Search nodes..."
               value={query}
             />
+            <span>{graph.nodes.length} nodes</span>
+          </div>
+          <div className="artifact-fallback-actions" aria-label="Workspace actions">
+            <button type="button" onClick={onChooseWorkspace}>Open</button>
+            <button type="button" onClick={onRefreshGraph}>Refresh</button>
+            <button type="button" onClick={onChooseSourcePath}>Source</button>
+            <button type="button" onClick={onRunCheck}>Check</button>
+            <button type="button" onClick={onImportSource}>Import</button>
           </div>
         </header>
         {workspaceSummary && (
@@ -135,16 +172,5 @@ export function AppShell({
         onWorkspaceRootChange={onWorkspaceRootChange}
       />
     </main>
-  );
-}
-
-function SidebarSection({ title, items }: { title: string; items: string[] }) {
-  return (
-    <section className="sidebar-section">
-      <h2>{title}</h2>
-      {items.map((item) => (
-        <button className="sidebar-link" key={item} type="button">{item}</button>
-      ))}
-    </section>
   );
 }
