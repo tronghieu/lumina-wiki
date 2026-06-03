@@ -7,5 +7,6 @@ export {
 };
 
 export {
-    ValidationResult
+    ValidationResult,
+    WorkspaceSummary
 } from "./models.js";

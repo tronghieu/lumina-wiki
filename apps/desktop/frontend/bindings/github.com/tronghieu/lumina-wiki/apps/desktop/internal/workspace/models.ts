@@ -38,5 +38,66 @@ export class ValidationResult {
     }
 }
 
+export class WorkspaceSummary {
+    "root": string;
+    "valid": boolean;
+    "packs": string[];
+    "wikiNotes": number;
+    "rawSources": number;
+    "rawNotes": number;
+    "graphEdges": number;
+    "graphCitations": number;
+    "missingExpectedFolders": string[];
+
+    /** Creates a new WorkspaceSummary instance. */
+    constructor($$source: Partial<WorkspaceSummary> = {}) {
+        if (!("root" in $$source)) {
+            this["root"] = "";
+        }
+        if (!("valid" in $$source)) {
+            this["valid"] = false;
+        }
+        if (!("packs" in $$source)) {
+            this["packs"] = [];
+        }
+        if (!("wikiNotes" in $$source)) {
+            this["wikiNotes"] = 0;
+        }
+        if (!("rawSources" in $$source)) {
+            this["rawSources"] = 0;
+        }
+        if (!("rawNotes" in $$source)) {
+            this["rawNotes"] = 0;
+        }
+        if (!("graphEdges" in $$source)) {
+            this["graphEdges"] = 0;
+        }
+        if (!("graphCitations" in $$source)) {
+            this["graphCitations"] = 0;
+        }
+        if (!("missingExpectedFolders" in $$source)) {
+            this["missingExpectedFolders"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceSummary instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceSummary {
+        const $$createField2_0 = $$createType0;
+        const $$createField8_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("packs" in $$parsedSource) {
+            $$parsedSource["packs"] = $$createField2_0($$parsedSource["packs"]);
+        }
+        if ("missingExpectedFolders" in $$parsedSource) {
+            $$parsedSource["missingExpectedFolders"] = $$createField8_0($$parsedSource["missingExpectedFolders"]);
+        }
+        return new WorkspaceSummary($$parsedSource as Partial<WorkspaceSummary>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);

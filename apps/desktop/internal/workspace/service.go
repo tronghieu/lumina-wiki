@@ -40,6 +40,25 @@ func (s *Service) Validate(root string) (ValidationResult, error) {
 	return ValidationResult{Root: abs, Valid: true, Packs: detectPacks(abs)}, nil
 }
 
+func (s *Service) Summary(root string) (WorkspaceSummary, error) {
+	validation, err := s.Validate(root)
+	if err != nil {
+		return WorkspaceSummary{}, err
+	}
+	summary := WorkspaceSummary{
+		Root:  validation.Root,
+		Valid: validation.Valid,
+		Packs: validation.Packs,
+	}
+	summary.MissingExpectedFolders = missingExpectedFolders(validation.Root)
+	summary.WikiNotes = countMarkdownNotesInside(validation.Root, "wiki")
+	summary.RawSources = countRegularFilesInside(validation.Root, "raw/sources")
+	summary.RawNotes = countRegularFilesInside(validation.Root, "raw/notes")
+	summary.GraphEdges = countNonEmptyLinesInside(validation.Root, "wiki/graph/edges.jsonl")
+	summary.GraphCitations = countNonEmptyLinesInside(validation.Root, "wiki/graph/citations.jsonl")
+	return summary, nil
+}
+
 func (s *Service) ResolveInside(root, fragment string) (string, error) {
 	if filepath.IsAbs(fragment) {
 		return "", errors.New("absolute paths are not allowed")

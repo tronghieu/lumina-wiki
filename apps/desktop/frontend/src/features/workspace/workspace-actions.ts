@@ -12,6 +12,21 @@ export type WorkspaceRequestGuard = {
   isCurrent: (requestId: number) => boolean;
 };
 
+export type WorkspaceSummaryView = {
+  packs?: string[];
+  wikiNotes?: number;
+  rawSources?: number;
+  rawNotes?: number;
+  graphEdges?: number;
+  graphCitations?: number;
+  missingExpectedFolders?: string[];
+};
+
+export type WorkspaceOverviewStat = {
+  label: string;
+  value: string;
+};
+
 export type CheckDetailsView = {
   status: string;
   exitCode: string;
@@ -92,6 +107,27 @@ export function createWorkspaceRequestGuard(): WorkspaceRequestGuard {
       return currentRequestId === requestId;
     },
   };
+}
+
+export function formatWorkspaceOverviewStats(summary: WorkspaceSummaryView): WorkspaceOverviewStat[] {
+  return [
+    { label: 'Packs', value: String(summary.packs?.length ?? 0) },
+    { label: 'Wiki notes', value: String(summary.wikiNotes ?? 0) },
+    { label: 'Raw sources', value: String(summary.rawSources ?? 0) },
+    { label: 'Raw notes', value: String(summary.rawNotes ?? 0) },
+    { label: 'Graph edges', value: String(summary.graphEdges ?? 0) },
+    { label: 'Citations', value: String(summary.graphCitations ?? 0) },
+  ];
+}
+
+export function formatWorkspacePacks(summary: WorkspaceSummaryView): string {
+  return summary.packs?.length ? summary.packs.join(', ') : 'No packs detected';
+}
+
+export function formatWorkspaceMissingFolders(summary: WorkspaceSummaryView): string {
+  return summary.missingExpectedFolders?.length
+    ? `Missing: ${summary.missingExpectedFolders.join(', ')}`
+    : 'All expected folders present.';
 }
 
 export function formatActionError(error: unknown): WorkspaceActionState {

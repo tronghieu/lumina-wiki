@@ -157,8 +157,8 @@ button {
 }
 
 .workspace {
-  display: grid;
-  grid-template-rows: 112px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   overflow: hidden;
 }
@@ -219,6 +219,38 @@ button {
   min-width: 132px;
 }
 
+.overview-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(92px, 1fr));
+  gap: 1px;
+  padding: 0 26px 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #e3e7ef;
+}
+
+.overview-stat {
+  display: grid;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid #e3e7ef;
+  background: #ffffff;
+}
+
+.overview-stat span {
+  overflow: hidden;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.overview-stat strong {
+  color: #172033;
+  font-size: 18px;
+}
+
 .toolbar input,
 .action-panel input,
 .prompt-box input {
@@ -236,6 +268,7 @@ button {
 
 .graph-canvas {
   position: relative;
+  flex: 1 1 auto;
   overflow: hidden;
   min-height: 0;
   background: #ffffff;
@@ -564,6 +597,26 @@ button {
   font-size: 12px;
 }
 
+.workspace-inventory {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 6px 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f5f7fb;
+  font-size: 12px;
+}
+
+.workspace-inventory span {
+  color: #667085;
+}
+
+.workspace-inventory strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-weight: 650;
+}
+
 .check-card {
   display: grid;
   gap: 10px;
@@ -658,12 +711,17 @@ button {
   }
 
   .workspace {
-    grid-template-rows: auto minmax(520px, 1fr);
+    min-height: 100vh;
   }
 
   .topbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0 16px 14px;
   }
 
   .toolbar {

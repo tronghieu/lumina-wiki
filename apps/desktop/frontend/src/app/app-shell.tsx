@@ -1,9 +1,10 @@
 import { GraphView } from '../features/graph/graph-view';
 import { NodeInspector } from '../features/graph/node-inspector';
 import type { CheckResult } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
+import type { WorkspaceSummary } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
 import type { NoteContentState } from '../features/graph/note-content';
-import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
+import { formatWorkspaceOverviewStats, type WorkspaceActionState } from '../features/workspace/workspace-actions';
 
 const navItems = ['Home', 'Graph', 'Chat', 'Nodes', 'Media', 'Settings'];
 const recentItems = ['AI Social Impact', 'Privacy Brief', 'Research Notes', 'Reading Map'];
@@ -17,6 +18,7 @@ type AppShellProps = {
   query: string;
   selectedNodeId: string;
   sourcePath: string;
+  workspaceSummary: WorkspaceSummary | null;
   workspaceRoot: string;
   onImportSource: () => void;
   onChooseSourcePath: () => void;
@@ -37,6 +39,7 @@ export function AppShell({
   query,
   selectedNodeId,
   sourcePath,
+  workspaceSummary,
   workspaceRoot,
   onImportSource,
   onChooseSourcePath,
@@ -99,6 +102,16 @@ export function AppShell({
             />
           </div>
         </header>
+        {workspaceSummary && (
+          <section className="overview-strip" aria-label="Workspace overview">
+            {formatWorkspaceOverviewStats(workspaceSummary).map((stat) => (
+              <div className="overview-stat" key={stat.label}>
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </div>
+            ))}
+          </section>
+        )}
         <GraphView graph={graph} query={query} selectedNodeId={selectedNode?.id ?? ''} onSelectNode={onSelectNode} />
       </section>
 
@@ -109,6 +122,7 @@ export function AppShell({
         noteState={noteState}
         selectedNodeId={selectedNode?.id ?? ''}
         sourcePath={sourcePath}
+        workspaceSummary={workspaceSummary}
         workspaceRoot={workspaceRoot}
         workspaceLabel={workspaceLabel}
         onChooseSourcePath={onChooseSourcePath}

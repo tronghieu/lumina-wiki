@@ -13,11 +13,18 @@ export function ResolveInside(root: string, fragment: string): $CancellablePromi
     return $Call.ByID(765230928, root, fragment);
 }
 
-export function Validate(root: string): $CancellablePromise<$models.ValidationResult> {
-    return $Call.ByID(1383094894, root).then(($result: any) => {
+export function Summary(root: string): $CancellablePromise<$models.WorkspaceSummary> {
+    return $Call.ByID(3245301936, root).then(($result: any) => {
         return $$createType0($result);
     });
 }
 
+export function Validate(root: string): $CancellablePromise<$models.ValidationResult> {
+    return $Call.ByID(1383094894, root).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
 // Private type creation functions
-const $$createType0 = $models.ValidationResult.createFrom;
+const $$createType0 = $models.WorkspaceSummary.createFrom;
+const $$createType1 = $models.ValidationResult.createFrom;

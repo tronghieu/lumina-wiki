@@ -1,8 +1,14 @@
 import { linkedNodeSelectionId, linkedNodes } from './graph-data';
 import type { CheckResult } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
+import type { WorkspaceSummary } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
 import type { KnowledgeGraph } from './graph-types';
 import type { NoteContentState } from './note-content';
-import { formatCheckDetails, type WorkspaceActionState } from '../workspace/workspace-actions';
+import {
+  formatCheckDetails,
+  formatWorkspaceMissingFolders,
+  formatWorkspacePacks,
+  type WorkspaceActionState,
+} from '../workspace/workspace-actions';
 
 type NodeInspectorProps = {
   actionState: WorkspaceActionState;
@@ -12,6 +18,7 @@ type NodeInspectorProps = {
   selectedNodeId: string;
   sourcePath: string;
   workspaceLabel: string;
+  workspaceSummary: WorkspaceSummary | null;
   workspaceRoot: string;
   onChooseSourcePath: () => void;
   onChooseWorkspace: () => void;
@@ -31,6 +38,7 @@ export function NodeInspector({
   selectedNodeId,
   sourcePath,
   workspaceLabel,
+  workspaceSummary,
   workspaceRoot,
   onChooseSourcePath,
   onChooseWorkspace,
@@ -106,6 +114,14 @@ export function NodeInspector({
               <strong>{actionState.title}</strong>
               <span>{actionState.message}</span>
             </div>
+            {workspaceSummary && (
+              <div className="workspace-inventory">
+                <span>Packs</span>
+                <strong>{formatWorkspacePacks(workspaceSummary)}</strong>
+                <span>Folders</span>
+                <strong>{formatWorkspaceMissingFolders(workspaceSummary)}</strong>
+              </div>
+            )}
           </section>
           {checkDetails && (
             <section className="check-card">

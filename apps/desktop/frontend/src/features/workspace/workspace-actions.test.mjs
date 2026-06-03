@@ -8,6 +8,9 @@ import {
   formatGraphRefreshed,
   formatImportResult,
   formatWorkspaceLoaded,
+  formatWorkspaceMissingFolders,
+  formatWorkspaceOverviewStats,
+  formatWorkspacePacks,
   workspaceLoadCanceledState,
 } from './workspace-actions.ts';
 
@@ -74,5 +77,33 @@ describe('workspace-actions', () => {
 
     assert.equal(guard.isCurrent(first), false);
     assert.equal(guard.isCurrent(second), true);
+  });
+
+  it('formats workspace overview inventory', () => {
+    const summary = {
+      packs: ['core', 'research'],
+      wikiNotes: 5,
+      rawSources: 1,
+      rawNotes: 0,
+      graphEdges: 6,
+      graphCitations: 2,
+      missingExpectedFolders: ['raw/notes'],
+    };
+
+    assert.deepEqual(formatWorkspaceOverviewStats(summary), [
+      { label: 'Packs', value: '2' },
+      { label: 'Wiki notes', value: '5' },
+      { label: 'Raw sources', value: '1' },
+      { label: 'Raw notes', value: '0' },
+      { label: 'Graph edges', value: '6' },
+      { label: 'Citations', value: '2' },
+    ]);
+    assert.equal(formatWorkspacePacks(summary), 'core, research');
+    assert.equal(formatWorkspaceMissingFolders(summary), 'Missing: raw/notes');
+  });
+
+  it('formats empty workspace overview fallbacks', () => {
+    assert.equal(formatWorkspacePacks({ packs: [] }), 'No packs detected');
+    assert.equal(formatWorkspaceMissingFolders({ missingExpectedFolders: [] }), 'All expected folders present.');
   });
 });

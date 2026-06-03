@@ -7,7 +7,8 @@ import { Load, ReadNote } from '../bindings/github.com/tronghieu/lumina-wiki/app
 import { ImportToRawSources } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer/service';
 import type { CheckResult } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
 import { RunCheck } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/service';
-import { Validate } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/service';
+import type { WorkspaceSummary } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
+import { Summary, Validate } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/service';
 import { resolveSelectedNodeId, sampleGraph } from './features/graph/graph-data';
 import type { KnowledgeGraph } from './features/graph/graph-types';
 import {
@@ -37,6 +38,7 @@ function App() {
   const [graph, setGraph] = useState<KnowledgeGraph>(sampleGraph);
   const [noteState, setNoteState] = useState<NoteContentState>(noteUnavailableState);
   const [lastCheckResult, setLastCheckResult] = useState<CheckResult | null>(null);
+  const [workspaceSummary, setWorkspaceSummary] = useState<WorkspaceSummary | null>(null);
   const workspaceRequestGuard = useMemo(createWorkspaceRequestGuard, []);
   const noteRequestId = useRef(0);
 
@@ -172,12 +174,17 @@ function App() {
       if (!workspaceRequestGuard.isCurrent(requestId)) {
         return;
       }
+      const loadedSummary = await Summary(validation.root);
+      if (!workspaceRequestGuard.isCurrent(requestId)) {
+        return;
+      }
       const loadedGraph = await Load(validation.root);
       if (!workspaceRequestGuard.isCurrent(requestId)) {
         return;
       }
       const nextSelectedNodeId = resolveSelectedNodeId(loadedGraph, selectedNodeId);
       setWorkspaceRoot(validation.root);
+      setWorkspaceSummary(loadedSummary);
       setGraph(loadedGraph);
       setSelectedNodeId(nextSelectedNodeId);
       if (options.clearCheckResult) {
@@ -195,6 +202,7 @@ function App() {
   function updateWorkspaceRoot(path: string) {
     beginWorkspaceRequest();
     setWorkspaceRoot(path);
+    setWorkspaceSummary(null);
   }
 
   function beginWorkspaceRequest() {
@@ -238,6 +246,7 @@ function App() {
       noteState={noteState}
       selectedNodeId={selectedNodeId}
       sourcePath={sourcePath}
+      workspaceSummary={workspaceSummary}
       workspaceRoot={workspaceRoot}
       onImportSource={importSource}
       onChooseSourcePath={chooseSourcePath}
