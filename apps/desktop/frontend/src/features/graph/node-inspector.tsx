@@ -56,12 +56,10 @@ export function NodeInspector({
   return (
     <aside className="agent-panel" aria-label="Agent panel">
       <header className="agent-panel-header">
-        <button className="panel-collapse" type="button" aria-label="Collapse agent panel unavailable" disabled>&gt;</button>
         <div>
           <h2>Agent Panel</h2>
           <span>{selectedNode?.path ?? 'Select a node'}</span>
         </div>
-        <button className="new-chat-button" type="button" disabled>New chat</button>
       </header>
 
       <div className="agent-panel-scroll">
@@ -150,18 +148,6 @@ export function NodeInspector({
         )}
       </div>
 
-      <div className="agent-composer">
-        <label>
-          <span>Model</span>
-          <select aria-label="Model" disabled>
-            <option>local</option>
-          </select>
-        </label>
-        <div className="chat-input-row">
-          <input aria-label="Chat input" placeholder="Agent chat is not connected yet" disabled />
-          <button type="button" disabled>Send</button>
-        </div>
-      </div>
     </aside>
   );
 }

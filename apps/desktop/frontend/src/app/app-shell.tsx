@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AiSettingsPanel } from './ai-settings-panel';
 import { GraphView } from '../features/graph/graph-view';
 import { NodeInspector } from '../features/graph/node-inspector';
 import type { CheckResult } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
@@ -47,6 +49,7 @@ export function AppShell({
   onSourcePathChange,
   onWorkspaceRootChange,
 }: AppShellProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? graph.nodes[0];
   const workspaceLabel = workspaceRoot || 'Sample graph';
   const artifactTitle = selectedNode?.title ?? 'Knowledge graph';
@@ -55,9 +58,6 @@ export function AppShell({
     <main className="app-shell">
       <aside className="graph-menu" aria-label="Graph menu">
         <div className="activity-rail" aria-label="Obsidian-style activity rail">
-          <button className="activity-button" type="button" aria-label="Files" disabled>
-            <span className="file-icon" />
-          </button>
           <button className="activity-button active" type="button" aria-label="Graph view" onClick={() => onQueryChange('')}>
             <span className="graph-icon">
               <i />
@@ -65,10 +65,14 @@ export function AppShell({
               <i />
             </span>
           </button>
-          <button className="activity-button" type="button" aria-label="Canvas" disabled>
-            <span className="grid-icon" />
-          </button>
-          <button className="graph-menu-settings" type="button" aria-label="Settings unavailable" disabled>
+          <button
+            className={settingsOpen ? 'graph-menu-settings active' : 'graph-menu-settings'}
+            type="button"
+            aria-label="Settings"
+            aria-controls="settings-panel"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
             <svg className="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
               <path d="M12 2.8v3" />
@@ -114,6 +118,7 @@ export function AppShell({
             ))}
           </nav>
         </div>
+        {settingsOpen && <AiSettingsPanel onClose={() => setSettingsOpen(false)} />}
       </aside>
 
       <section className="main-artifact">
