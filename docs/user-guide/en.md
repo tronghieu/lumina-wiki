@@ -500,6 +500,8 @@ npx lumina-wiki install
 
 The installer will update scripts, schemas, and skills. Your knowledge content in `wiki/`, original documents in `raw/`, and existing log are preserved.
 
+You may run the command from the project root or from a folder inside it. Lumina will find the enclosing workspace. When you remove a pack or AI tool from the setup, its old managed commands and unchanged setup files are removed. Files you changed are kept and reported. Moving, renaming, or copying the whole project is also supported; managed links are repaired on the next upgrade.
+
 If an old wiki is missing some new metadata fields, the installer may warn you. In that case, you can run:
 
 ```text

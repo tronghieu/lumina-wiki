@@ -9,7 +9,7 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, stat, lstat, unlink, rm, symlink, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, stat, lstat, unlink, rm, symlink, readlink, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { constants as fsConstants } from 'node:fs';
@@ -295,6 +295,9 @@ describe('linkDirectory', () => {
     // The file must be accessible via linkPath regardless of strategy
     const content = await readFile(join(linkPath, 'skill.md'), 'utf8');
     assert.equal(content, 'content');
+    if (result.strategy === 'symlink' && process.platform !== 'win32') {
+      assert.equal(await readlink(linkPath), 'target-dir');
+    }
   });
 
   test('is idempotent — returns early if symlink already exists with same strategy', async () => {
@@ -309,6 +312,48 @@ describe('linkDirectory', () => {
     const r2 = await linkDirectory(target, linkPath, r1.strategy);
 
     assert.equal(r1.strategy, r2.strategy);
+  });
+
+  test('replaces a symlink that uses the recorded strategy but points to the wrong target', async (t) => {
+    const dir = await makeTmpDir();
+    const oldTarget = join(dir, 'old-project', '.agents', 'skills', 'lumi-test');
+    const currentTarget = join(dir, 'current-project', '.agents', 'skills', 'lumi-test');
+    const linkPath = join(dir, 'current-project', '.claude', 'skills', 'lumi-test');
+    await mkdir(oldTarget, { recursive: true });
+    await mkdir(currentTarget, { recursive: true });
+    await mkdir(resolve(linkPath, '..'), { recursive: true });
+    await writeFile(join(oldTarget, 'SKILL.md'), 'old project', 'utf8');
+    await writeFile(join(currentTarget, 'SKILL.md'), 'current project', 'utf8');
+
+    try {
+      await symlink(oldTarget, linkPath);
+    } catch (err) {
+      if (err.code === 'EPERM' || err.code === 'EACCES') {
+        t.skip('host does not permit directory symlinks');
+        return;
+      }
+      throw err;
+    }
+
+    const result = await linkDirectory(currentTarget, linkPath, 'symlink');
+
+    assert.equal(result.strategy, 'symlink');
+    assert.equal(await readFile(join(linkPath, 'SKILL.md'), 'utf8'), 'current project');
+  });
+
+  test('refreshes an existing copy fallback on reinstall', async () => {
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const linkPath = join(dir, 'link-copy');
+    await mkdir(target, { recursive: true });
+    await mkdir(linkPath, { recursive: true });
+    await writeFile(join(target, 'SKILL.md'), 'current content', 'utf8');
+    await writeFile(join(linkPath, 'SKILL.md'), 'stale content', 'utf8');
+
+    const result = await linkDirectory(target, linkPath, 'copy');
+
+    assert.equal(result.strategy, 'copy');
+    assert.equal(await readFile(join(linkPath, 'SKILL.md'), 'utf8'), 'current content');
   });
 
   test('re-creates link when existing strategy does not match', async () => {

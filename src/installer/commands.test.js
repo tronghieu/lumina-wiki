@@ -9,7 +9,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, access, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, access, rm, mkdir, readlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -17,7 +17,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { installCommand, printPostUpgradeBanner, applyInstallOverrides, validateLanguageInput } from './commands.js';
-import { writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
+import { readManifest, readSkillsManifest, writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
 const PKG = require('../../package.json');
@@ -381,6 +381,160 @@ describe('installCommand', () => {
 
       const after = await readFile(join(tmp, '_lumina', 'config', 'watchlist.yml'), 'utf8');
       assert.equal(after, customWatchlist);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install from a nested directory upgrades the enclosing workspace', async () => {
+    const tmp = await makeTmpDir();
+    const nested = join(tmp, 'docs', 'notes');
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await mkdir(nested, { recursive: true });
+
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update'],
+        { cwd: nested, encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      await assert.rejects(() => access(join(nested, '_lumina', 'manifest.json')));
+      await access(join(tmp, '_lumina', 'manifest.json'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade removes obsolete managed skills, links, tools, and unchanged IDE stubs', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core,research',
+        ideTargets: 'claude_code,codex',
+      });
+      await access(join(tmp, 'wiki', 'topics'));
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core',
+        ideTargets: 'codex',
+      });
+
+      await assert.rejects(() => access(join(tmp, '.agents', 'skills', 'lumi-research-discover')));
+      await assert.rejects(() => access(join(tmp, '.claude', 'skills', 'lumi-research-discover')));
+      await assert.rejects(() => access(join(tmp, '.claude', 'skills', 'lumi-init')));
+      await assert.rejects(() => access(join(tmp, '_lumina', 'tools', 'discover.py')));
+      await assert.rejects(() => access(join(tmp, '.env.example')));
+      await assert.rejects(() => access(join(tmp, 'CLAUDE.md')));
+      await access(join(tmp, 'AGENTS.md'));
+      await access(join(tmp, 'wiki', 'topics'));
+
+      const rows = await readSkillsManifest(tmp);
+      assert.ok(rows.every(row => row.pack === 'core'));
+      assert.ok(rows.every(row => row.target_link_path === ''));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade preserves a modified stub when its IDE target is removed', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        ideTargets: 'claude_code,codex',
+      });
+      const custom = '# My Claude instructions\n';
+      await writeFile(join(tmp, 'CLAUDE.md'), custom, 'utf8');
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        ideTargets: 'codex',
+      });
+
+      assert.equal(await readFile(join(tmp, 'CLAUDE.md'), 'utf8'), custom);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('pack cleanup does not remove a user-created Claude path when Claude was never selected', async () => {
+    const tmp = await makeTmpDir();
+    const customPath = join(tmp, '.claude', 'skills', 'lumi-research-discover');
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core,research',
+        ideTargets: 'codex',
+      });
+      await mkdir(customPath, { recursive: true });
+      await writeFile(join(customPath, 'CUSTOM.md'), 'user-owned\n', 'utf8');
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core',
+        ideTargets: 'codex',
+      });
+
+      assert.equal(
+        await readFile(join(customPath, 'CUSTOM.md'), 'utf8'),
+        'user-owned\n',
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('relocated workspace refreshes manifest paths and keeps portable skill links', async () => {
+    const tmp = await makeTmpDir();
+    const original = join(tmp, 'original');
+    const relocated = join(tmp, 'relocated');
+    try {
+      await mkdir(original, { recursive: true });
+      await installCommand({ cwd: original, yes: true, noUpdate: true });
+      const { cp } = await import('node:fs/promises');
+      await cp(original, relocated, { recursive: true });
+
+      await installCommand({ cwd: relocated, yes: true, noUpdate: true });
+
+      const manifest = await readManifest(relocated);
+      assert.equal(manifest.resolvedPaths.projectRoot, relocated);
+      if (process.platform !== 'win32') {
+        const target = await readlink(join(relocated, '.claude', 'skills', 'lumi-init'));
+        assert.equal(target, '../../.agents/skills/lumi-init');
+      }
+      await access(join(relocated, '.claude', 'skills', 'lumi-init', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('install fails when required Claude skill links cannot be created', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '.claude'), { recursive: true });
+      await writeFile(join(tmp, '.claude', 'skills'), 'blocks skill directory', 'utf8');
+
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true }),
+        (err) => err.code === 2 && /SKILL_LINKS_INCOMPLETE/.test(err.message),
+      );
+      await assert.rejects(() => access(join(tmp, '_lumina', 'manifest.json')));
     } finally {
       await cleanTmp(tmp);
     }

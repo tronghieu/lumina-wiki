@@ -74,6 +74,8 @@ export default {
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[cảnh báo] Không đọc được manifest hiện tại: {message}. Coi như cài đặt mới.',
   'warn.copied_skills':                        '  [cảnh báo] Một số kỹ năng được sao chép thay vì symlink. Chạy "lumina install --re-link" sau khi bật Windows Developer Mode.',
+  'warn.relocated':                            '  [cảnh báo] Workspace đã chuyển từ {from} sang {to}; các liên kết do Lumina quản lý sẽ được làm mới.',
+  'warn.preserved_modified_file':               '  [cảnh báo] Giữ lại tệp đã được chỉnh sửa dù không còn được chọn: {path}',
   'warn.upgrade_header':                       '[cảnh báo] Lumina đã nâng cấp v{from} -> v{to} — phát hiện chênh lệch schema:',
   'warn.upgrade_errors':                       '       {errors} lỗi, {warnings} cảnh báo trên các mục cũ.',
   'warn.upgrade_fix_quick':                    '     Sửa nhanh (xác định):',

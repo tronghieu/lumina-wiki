@@ -93,6 +93,8 @@ The agent will help you check the research tools and save keys to a local `.env`
 
 If you reinstall Lumina-Wiki on a project that already has a `wiki/` from an earlier version, just run `npx lumina-wiki install` again. The installer updates scripts, schemas, and skills; **your content in `wiki/`, `raw/`, and `log.md` is not modified**.
 
+You can run the command from the project root or one of its subfolders. If you remove a pack or AI tool from the setup, Lumina removes its old managed commands and unchanged setup files. Files you edited are kept with a warning. If the whole project was copied, moved, or renamed, Lumina repairs its managed links during the upgrade.
+
 If the installer warns that older entries are missing newer frontmatter fields, you have two ways to backfill them:
 
 - **Recommended:** open your AI chat and run `/lumi-migrate-legacy`.

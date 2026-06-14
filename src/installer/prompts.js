@@ -149,9 +149,17 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
  * @param {boolean} [opts.acceptDefaults=false] - Skip prompts; return defaults.
  * @param {string}  [opts.cwd]                  - Project root for defaults.
  * @param {Function} [opts.t]                   - Locale translator function.
+ * @param {Function} [opts.resolveDestination]  - Detect an existing install after directory selection.
  * @returns {Promise<InstallAnswers>}
  */
-export async function runInstallPrompts({ acceptDefaults = false, cwd = process.cwd(), existingManifest = null, defaultLocale = 'en', t: initialT = null } = {}) {
+export async function runInstallPrompts({
+  acceptDefaults = false,
+  cwd = process.cwd(),
+  existingManifest = null,
+  defaultLocale = 'en',
+  t: initialT = null,
+  resolveDestination = null,
+} = {}) {
   if (acceptDefaults) {
     const loc = existingManifest?.locale ?? defaultLocale;
     return defaultAnswers(cwd, loc);
@@ -223,6 +231,30 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   if (isCancel(directoryRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
   const directory = expandUserPath(directoryRaw, cwdAbs);
   const projectName = defaultProjectName(directory);
+
+  if (!existingManifest && resolveDestination) {
+    const detected = await resolveDestination(directory);
+    if (detected?.existingManifest && detected?.answers) {
+      let localeSwitchConfirmed = false;
+      if (detected.existingManifest.locale && detected.existingManifest.locale !== locale) {
+        const proceed = await confirm({
+          message: `Locale change ${detected.existingManifest.locale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
+          initialValue: false,
+        });
+        if (isCancel(proceed) || !proceed) {
+          cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
+          process.exit(4);
+        }
+        localeSwitchConfirmed = true;
+      }
+      return {
+        ...detected.answers,
+        directory,
+        locale,
+        localeSwitchConfirmed,
+      };
+    }
+  }
 
   // ── Prompt 2: Research purpose (multi-line free-form, optional) ─────────
   const researchPurposeRaw = await text({
