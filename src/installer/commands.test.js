@@ -1,5 +1,10 @@
 /**
  * Tests for src/installer/commands.js high-risk install behavior.
+ *
+ * Run this file directly with Node, as configured in package.json. Several
+ * tests intentionally emit localized installer output; Node 20's parent test
+ * runner multiplexes that output with its serialized protocol and can
+ * intermittently misparse the stream (GitHub issue #23).
  */
 
 import { test, describe } from 'node:test';
