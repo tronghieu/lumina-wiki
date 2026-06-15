@@ -558,6 +558,8 @@ npx lumina-wiki install
 
 Installer sẽ cập nhật script, schema và skill. Nội dung tri thức của bạn trong `wiki/`, tài liệu gốc trong `raw/`, và log hiện có được giữ lại.
 
+Bạn có thể chạy lệnh tại thư mục gốc hoặc một thư mục nằm bên trong project; Lumina sẽ tìm đúng không gian làm việc bao quanh. Khi bỏ một gói hoặc công cụ AI khỏi thiết lập, các lệnh cũ và tệp thiết lập chưa được chỉnh sửa sẽ được dọn đi. Tệp bạn đã sửa được giữ lại và báo rõ. Bạn cũng có thể di chuyển, đổi tên hoặc sao chép toàn bộ project; các liên kết do Lumina quản lý sẽ được sửa trong lần nâng cấp tiếp theo.
+
 Nếu wiki cũ thiếu một số trường metadata mới, installer có thể cảnh báo. Khi đó bạn có thể chạy:
 
 ```text

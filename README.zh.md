@@ -93,6 +93,8 @@ Agent 会引导您检查研究工具，并在需要时把 key 保存到本地 `.
 
 如果您在已经有旧版 `wiki/` 的项目上重新安装 Lumina-Wiki，直接再次运行 `npx lumina-wiki install` 即可。安装器会更新 scripts、schemas 和 skills；**您在 `wiki/`、`raw/`、`log.md` 中的内容不会被修改**。
 
+您可以在项目根目录或其子目录中运行该命令。如果从设置中移除某个包或 AI 工具，Lumina 会清理旧命令和未经您修改的设置文件。您修改过的文件会保留，并显示警告。如果整个项目被复制、移动或重命名，Lumina 会在升级时修复由系统管理的链接。
+
 如果安装器提示旧条目缺少新的 frontmatter 字段，可以用两种方式回填：
 
 - **推荐：** 打开 AI 对话并运行 `/lumi-migrate-legacy`。

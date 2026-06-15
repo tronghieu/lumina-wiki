@@ -93,6 +93,8 @@ Agent sẽ hướng dẫn bạn kiểm tra công cụ nghiên cứu và lưu key
 
 Nếu bạn cài lại Lumina-Wiki trên một dự án đã có `wiki/` từ phiên bản trước, cứ chạy lại `npx lumina-wiki install`. Installer cập nhật scripts, schemas và skills; **nội dung của bạn trong `wiki/`, `raw/`, `log.md` không bị chỉnh sửa**.
 
+Bạn có thể chạy lệnh tại thư mục gốc hoặc một thư mục con của dự án. Nếu bỏ một gói hoặc công cụ AI khỏi thiết lập, Lumina sẽ dọn các lệnh cũ và những tệp thiết lập chưa được bạn sửa. Tệp đã chỉnh sửa được giữ lại kèm cảnh báo. Nếu toàn bộ dự án được sao chép, di chuyển hoặc đổi tên, Lumina sẽ sửa lại các liên kết do hệ thống quản lý khi nâng cấp.
+
 Nếu installer cảnh báo entry cũ thiếu frontmatter mới, có hai cách backfill:
 
 - **Khuyến nghị:** mở chat AI và chạy `/lumi-migrate-legacy`.

@@ -80,6 +80,8 @@ export default {
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[警告] 无法读取现有 manifest: {message}。视为全新安装。',
   'warn.copied_skills':                        '  [警告] 部分技能采用复制而非软链接。启用 Windows 开发者模式后请运行 "lumina install --re-link"。',
+  'warn.relocated':                            '  [警告] 工作区已从 {from} 移动到 {to}；Lumina 管理的链接将被刷新。',
+  'warn.preserved_modified_file':               '  [警告] 已保留不再选用但被修改过的文件：{path}',
   'warn.upgrade_header':                       '[警告] Lumina 已从 v{from} 升级到 v{to} — 检测到 schema 差异:',
   'warn.upgrade_errors':                       '       旧条目共有 {errors} 个错误、{warnings} 个警告。',
   'warn.upgrade_fix_quick':                    '     快速修复(确定性):',

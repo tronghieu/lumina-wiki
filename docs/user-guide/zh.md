@@ -496,6 +496,8 @@ npx lumina-wiki install
 
 Installer 会更新 script、schema 和 skill。你在 `wiki/` 中的知识内容、`raw/` 中的原始资料，以及已有日志都会保留下来。
 
+你可以在项目根目录或其中的子目录运行该命令，Lumina 会找到外层工作区。当你从设置中移除某个包或 AI 工具时，其旧命令和未经修改的设置文件会被清理。你修改过的文件会保留并明确提示。你也可以移动、重命名或复制整个项目；Lumina 管理的链接会在下次升级时修复。
+
 如果旧 wiki 缺少一些新的 metadata 字段，installer 可能会给出警告。此时你可以运行：
 
 ```text
