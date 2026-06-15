@@ -1,0 +1,52 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment: npm-production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${version}"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Installer tests
+        run: npm run test:installer
+
+      - name: Install idempotency
+        run: npm run ci:idempotency
+
+      - name: Package readiness
+        run: npm run ci:package
+
+      - name: Publish package
+        run: npm publish
