@@ -249,7 +249,7 @@ export async function installCommand(opts = {}) {
     if (
       installedLocale !== answers.locale
       && !opts.forceLocaleSwitch
-      && !answers.localeSwitchConfirmed
+      && answers.localeSwitchConfirmedFor !== answers.locale
     ) {
       const e = new Error(
         `LOCALE_SWITCH_REFUSED: installed locale '${installedLocale}' differs from resolved locale '${answers.locale}'. ` +
@@ -749,7 +749,9 @@ function applyInstallOverrides(answers, opts) {
   const next = { ...answers };
   const priorLocale = answers.locale ?? null;
 
-  // Locale: --lang flag overrides; case-insensitive normalize.
+  // Locale: --lang overrides the interactive selector. Keep the installed
+  // locale in answers.locale until this point so default language values can
+  // cascade correctly when an existing destination is selected.
   // Pre-loadLocale error → EN-only string (chicken-and-egg, machine-readable).
   if (opts.lang !== undefined && opts.lang !== null && opts.lang !== '') {
     const normalized = String(opts.lang).toLowerCase().trim();
@@ -759,9 +761,12 @@ function applyInstallOverrides(answers, opts) {
       throw e;
     }
     next.locale = normalized;
+  } else if (next.selectedLocale) {
+    next.locale = next.selectedLocale;
   } else if (!next.locale) {
     next.locale = 'en';
   }
+  delete next.selectedLocale;
 
   // Cascade: if --lang changed locale and user didn't explicitly pass language
   // overrides, refresh the language defaults to match the new locale.

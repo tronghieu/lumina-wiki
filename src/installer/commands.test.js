@@ -573,6 +573,31 @@ describe("applyInstallOverrides — locale + language validation", () => {
     assert.equal(r.locale, "zh");
   });
 
+  test("interactive locale selection cascades installed default languages", () => {
+    const r = applyInstallOverrides({
+      ...base,
+      locale: "en",
+      selectedLocale: "vi",
+      communicationLang: "English",
+      documentOutputLang: "English",
+    }, {});
+    assert.equal(r.locale, "vi");
+    assert.equal(r.communicationLang, "Vietnamese");
+    assert.equal(r.documentOutputLang, "Vietnamese");
+    assert.equal("selectedLocale" in r, false);
+  });
+
+  test("--lang remains authoritative over an interactive locale selection", () => {
+    const r = applyInstallOverrides({
+      ...base,
+      locale: "en",
+      selectedLocale: "vi",
+      localeSwitchConfirmedFor: "vi",
+    }, { lang: "zh" });
+    assert.equal(r.locale, "zh");
+    assert.equal(r.localeSwitchConfirmedFor, "vi");
+  });
+
   test("--communication-language empty after trim throws code 2", () => {
     assert.throws(() => applyInstallOverrides({ ...base }, { communicationLang: "  " }), (err) => {
       assert.equal(err.code, 2);

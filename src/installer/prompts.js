@@ -235,23 +235,24 @@ export async function runInstallPrompts({
   if (!existingManifest && resolveDestination) {
     const detected = await resolveDestination(directory);
     if (detected?.existingManifest && detected?.answers) {
-      let localeSwitchConfirmed = false;
-      if (detected.existingManifest.locale && detected.existingManifest.locale !== locale) {
+      const installedLocale = detected.existingManifest.locale ?? 'en';
+      let localeSwitchConfirmedFor = null;
+      if (installedLocale !== locale) {
         const proceed = await confirm({
-          message: `Locale change ${detected.existingManifest.locale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
+          message: `Locale change ${installedLocale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
           initialValue: false,
         });
         if (isCancel(proceed) || !proceed) {
           cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
           process.exit(4);
         }
-        localeSwitchConfirmed = true;
+        localeSwitchConfirmedFor = locale;
       }
       return {
         ...detected.answers,
         directory,
-        locale,
-        localeSwitchConfirmed,
+        selectedLocale: locale,
+        localeSwitchConfirmedFor,
       };
     }
   }
