@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-06-15
+
+### Fixed
+
+- Repaired stale Claude skill links during upgrades by validating their real
+  targets instead of trusting the previously recorded link strategy.
+- Made POSIX skill links relative so copied, moved, or renamed workspaces can
+  be upgraded without retaining links to their old absolute location.
+- Reconciled removed packs and IDE targets by deleting obsolete
+  installer-managed skills, tools, links, and unchanged generated stubs while
+  preserving modified or user-owned files.
+- Made `npx lumina-wiki install` detect and upgrade an enclosing workspace when
+  invoked from a nested directory, while explicit `--directory` and `--cwd`
+  targets remain exact.
+- Fixed interactive locale switching for existing and legacy workspaces,
+  including default-language cascading and confirmation binding to the final
+  resolved locale.
+- Made installation fail clearly when required Claude skill links cannot be
+  created instead of writing successful state for a partial install.
+
 ## [1.6.1] - 2026-05-18
 
 ### Fixed
