@@ -283,6 +283,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'findings',     type: 'array', required: false },
     { key: 'external_ids', type: 'object', required: false },
     { key: 'sources',      type: 'array',  required: false },
+    { key: 'ranking',      type: 'object', required: false },
   ],
 
   // Concept page

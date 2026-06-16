@@ -19,6 +19,28 @@ source_type: paper   # paper | article | book | podcast | note | other
 importance: 3        # 1=niche  2=useful  3=field-standard  4=influential  5=seminal
 confidence: high     # high | medium | low
 tags: []
+ranking:             # optional; written by /lumi-research-rank. Omit until the paper is ranked.
+  # Flat map of scalars (one level only, like external_ids). Only include keys you have.
+  influential_citations: 42   # Semantic Scholar influentialCitationCount
+  citation_count: 318         # Semantic Scholar citationCount
+  citation_source: semantic-scholar
+  citation_fetched: YYYY-MM-DD
+  venue_name: "NeurIPS"
+  venue_tier: "CORE A*"       # free-form; agent-estimated, NOT authoritative
+  venue_source: llm-estimated
+  venue_estimated: YYYY-MM-DD
+  scite_supporting: 12        # only when SCITE_API_KEY is set
+  scite_contrasting: 1
+  scite_mentioning: 64
+  scite_fetched: YYYY-MM-DD
+  altmetric_score: 287        # only when ALTMETRIC_API_KEY is set
+  altmetric_fetched: YYYY-MM-DD
+  quality_correctness: 4      # 4C rubric, 1-5 each (LLM-assessed)
+  quality_clarity: 5
+  quality_contribution: 4
+  quality_context: 3
+  quality_source: llm
+  quality_assessed: YYYY-MM-DD
 ---
 ```
 
@@ -30,6 +52,7 @@ tags: []
 - `## Related sources` — wikilinks to other source pages
 - `## People` — wikilinks to person pages
 - `## Open questions` — unanswered questions this source raises
+- `## Ranking` — *(optional; managed by `/lumi-research-rank`)* human-readable influence signals and the 4C quality scorecard (Correctness, Clarity, Contribution, Context) with one-line rationales. Each figure states its source and date. Free-text notes you add inside `<!-- user-edited -->` markers are preserved when the ranking is refreshed.
 - `## Notes` — free-form notes (user-owned; mark with `<!-- user-edited -->` to preserve on upgrade)
 
 ---

@@ -77,12 +77,16 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'references', '4c-rubric.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-ingest', 'references', 'pdf-preprocessing.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-help', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(workspace, '_lumina', 'tools', 'fetch_scite.py'));
+      await access(join(workspace, '_lumina', 'tools', 'fetch_altmetric.py'));
       await access(join(workspace, '_lumina', 'scripts', 'discover-runner.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'external-ids.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'parse-ids.mjs'));
