@@ -118,13 +118,27 @@ References:
    `ranking` field is a one-level map of plain values — do not nest objects
    inside it.
 
-7. **Write the human-readable scorecard.** Add or refresh a `## Ranking`
-   section in the page body with the influence numbers and the 4C scores plus
-   their one-line rationales. Use `Edit`. **Never touch text inside
-   `<!-- user-edited -->` markers** — if the section already has a user note,
-   append your refreshed table above or below it, leaving the marked block
-   intact. Put the influence figures and their dates so the provenance is
-   visible to a reader who never opens the frontmatter.
+7. **Write the human-readable scorecard.** The `## Ranking` section holds a
+   **managed region** bounded by marker comments:
+
+   ```markdown
+   ## Ranking
+
+   <!-- lumina:ranking -->
+   (influence numbers and the 4C scorecard with one-line rationales go here)
+   <!-- /lumina:ranking -->
+   ```
+
+   Refresh rules, so re-running is safe in any session:
+   - If the markers already exist, **replace only the text between them** with
+     the new scorecard. Use `Edit` with the whole marked block (markers
+     included) as the search target so you never create a second `## Ranking`.
+   - If the section does not exist yet, add it once, with both markers.
+   - **Never write inside or remove `<!-- user-edited -->` blocks**, and keep any
+     user prose that sits *outside* the `lumina:ranking` markers untouched.
+
+   Put the influence figures and their dates inside the managed region so the
+   provenance is visible to a reader who never opens the frontmatter.
 
 8. **Log the activity.**
 

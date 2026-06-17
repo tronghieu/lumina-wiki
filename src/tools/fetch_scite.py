@@ -26,6 +26,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -106,15 +107,33 @@ def _handle_response_errors(resp: requests.Response, context: str) -> None:
 
     404 is NOT raised here — a DOI absent from the Scite index is a normal
     "no data" outcome handled by the caller, not an error.
+
+    ValueError -> exit 2 (request problem); RuntimeError -> exit 3 (transient).
     """
+    if resp.status_code == 404:
+        return
     if resp.status_code in (401, 403):
-        raise ValueError("Scite rejected the API key. Check SCITE_API_KEY.")
+        raise ValueError(f"Scite rejected the API key (HTTP {resp.status_code}). Check SCITE_API_KEY.")
     if resp.status_code == 429:
         raise RuntimeError("Rate limit exceeded. Wait before retrying.")
     if resp.status_code >= 500:
         raise RuntimeError(f"Scite API returned HTTP {resp.status_code}")
-    if resp.status_code != 404:
-        resp.raise_for_status()
+    if 400 <= resp.status_code < 500:
+        # Any other 4xx is a request-shape problem, not a transient one.
+        raise ValueError(f"Scite rejected the request for {context} (HTTP {resp.status_code}).")
+    resp.raise_for_status()
+
+
+def _parse_json(resp: requests.Response, context: str) -> dict[str, Any] | None:
+    """Parse a JSON object body. Returns None when the body is JSON but not an
+    object (treated as "no usable data"). A non-JSON body is a server-side
+    problem raised as RuntimeError -> exit 3, not mislabeled exit 2.
+    """
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"Scite returned a non-JSON body for {context}: {exc}") from exc
+    return data if isinstance(data, dict) else None
 
 
 # ---------------------------------------------------------------------------
@@ -127,25 +146,40 @@ def fetch_tally(doi: str, session: requests.Session) -> dict[str, Any]:
     Returns a normalized dict. When the DOI is not indexed by Scite, returns
     {"found": False, "doi": doi} rather than raising.
     """
-    url = f"{SCITE_API_BASE}/tallies/{doi}"
+    url = f"{SCITE_API_BASE}/tallies/{quote(doi, safe='/')}"
     resp = session.get(url, timeout=REQUEST_TIMEOUT)
     _handle_response_errors(resp, f"tally for '{doi}'")
     if resp.status_code == 404:
         return {"found": False, "doi": doi}
 
-    raw = resp.json()
+    raw = _parse_json(resp, f"tally for '{doi}'")
+    if raw is None:
+        # 200 with no usable tally object — treat as no data, not zeros.
+        return {"found": False, "doi": doi}
     # Scite returns either a flat tally object or {"tally": {...}}.
-    tally = raw.get("tally", raw) if isinstance(raw, dict) else {}
-    return {
+    nested = raw.get("tally")
+    tally = nested if isinstance(nested, dict) else raw
+
+    result: dict[str, Any] = {
         "found": True,
         "doi": tally.get("doi", doi),
-        "supporting": tally.get("supporting", 0),
-        "contrasting": tally.get("contradicting", tally.get("contrasting", 0)),
-        "mentioning": tally.get("mentioning", 0),
-        "unclassified": tally.get("unclassified", 0),
-        "total": tally.get("total", 0),
         "source": "scite.ai",
     }
+    # Only surface fields the API actually returned — never fabricate zeros.
+    # `contradicting` is Scite's name for what the wiki records as `contrasting`.
+    field_aliases = {
+        "supporting": ("supporting",),
+        "contrasting": ("contradicting", "contrasting"),
+        "mentioning": ("mentioning",),
+        "unclassified": ("unclassified",),
+        "total": ("total",),
+    }
+    for out_key, candidates in field_aliases.items():
+        for name in candidates:
+            if tally.get(name) is not None:
+                result[out_key] = tally[name]
+                break
+    return result
 
 
 # ---------------------------------------------------------------------------

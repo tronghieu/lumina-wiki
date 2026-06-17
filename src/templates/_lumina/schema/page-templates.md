@@ -52,7 +52,7 @@ ranking:             # optional; written by /lumi-research-rank. Omit until the 
 - `## Related sources` — wikilinks to other source pages
 - `## People` — wikilinks to person pages
 - `## Open questions` — unanswered questions this source raises
-- `## Ranking` — *(optional; managed by `/lumi-research-rank`)* human-readable influence signals and the 4C quality scorecard (Correctness, Clarity, Contribution, Context) with one-line rationales. Each figure states its source and date. Free-text notes you add inside `<!-- user-edited -->` markers are preserved when the ranking is refreshed.
+- `## Ranking` — *(optional; managed by `/lumi-research-rank`)* human-readable influence signals and the 4C quality scorecard (Correctness, Clarity, Contribution, Context) with one-line rationales. Each figure states its source and date. The scorecard lives inside a managed region bounded by `<!-- lumina:ranking -->` and `<!-- /lumina:ranking -->`; only that region is rewritten on refresh. Free-text notes you add outside those markers (or inside `<!-- user-edited -->` markers) are preserved.
 - `## Notes` — free-form notes (user-owned; mark with `<!-- user-edited -->` to preserve on upgrade)
 
 ---

@@ -30,7 +30,7 @@ import fetch_scite
 def _make_mock_response(data: dict | list = None, status_code: int = 200) -> MagicMock:
     resp = MagicMock()
     resp.status_code = status_code
-    resp.json = MagicMock(return_value=data or {})
+    resp.json = MagicMock(return_value=data if data is not None else {})
     resp.raise_for_status = MagicMock()
     return resp
 
@@ -122,6 +122,57 @@ class TestFetchTally:
             sess.get.return_value = _make_mock_response(status_code=429)
             with pytest.raises(RuntimeError, match="[Rr]ate limit"):
                 fetch_scite.fetch_tally(VALID_DOI, sess)
+
+    def test_other_4xx_raises_value_error(self) -> None:
+        """A 400/410 client error is exit-2 (ValueError), not transient exit-3."""
+        with patch("fetch_scite.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response(status_code=410)
+            with pytest.raises(ValueError):
+                fetch_scite.fetch_tally(VALID_DOI, sess)
+
+    def test_non_json_body_raises_runtime_error(self) -> None:
+        """200 with an unparseable body -> RuntimeError (exit 3), not exit 2."""
+        resp = _make_mock_response(status_code=200)
+        resp.json = MagicMock(side_effect=ValueError("Expecting value"))
+        with patch("fetch_scite.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = resp
+            with pytest.raises(RuntimeError):
+                fetch_scite.fetch_tally(VALID_DOI, sess)
+
+    def test_non_dict_json_returns_found_false(self) -> None:
+        """200 with a JSON array/scalar -> no data, never fabricated zeros."""
+        with patch("fetch_scite.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response([], status_code=200)
+            result = fetch_scite.fetch_tally(VALID_DOI, sess)
+        assert result == {"found": False, "doi": VALID_DOI}
+
+    def test_absent_fields_are_omitted_not_zeroed(self) -> None:
+        """Fields Scite does not return must be absent, not defaulted to 0."""
+        with patch("fetch_scite.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response({"supporting": 3}, status_code=200)
+            result = fetch_scite.fetch_tally(VALID_DOI, sess)
+        assert result["found"] is True
+        assert result["supporting"] == 3
+        assert "total" not in result
+        assert "mentioning" not in result
+
+    def test_doi_is_percent_encoded_in_url(self) -> None:
+        """A DOI with sub-delimiter characters is escaped into the path."""
+        with patch("fetch_scite.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response({"supporting": 1}, status_code=200)
+            fetch_scite.fetch_tally("10.1234/ab(c)d", sess)
+            url = sess.get.call_args.args[0]
+        assert "%28" in url and "(" not in url
 
 
 class TestCLI:

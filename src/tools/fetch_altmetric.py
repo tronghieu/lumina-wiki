@@ -26,6 +26,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -97,7 +98,10 @@ def _make_session() -> requests.Session:
     session.headers.update({
         "User-Agent": "lumina-wiki/0.1 (research-pack; altmetric fetcher)",
     })
-    return wrap_session(session, namespace="altmetric")
+    # Strip the secret `key` query param from the cache key so the credential is
+    # never part of the on-disk cache slot and rotating the key still hits the
+    # same cache entry (mirrors fetch_openalex.py / fetch_unpaywall.py).
+    return wrap_session(session, namespace="altmetric", strip_params=["key"])
 
 
 def _handle_response_errors(resp: requests.Response, context: str) -> None:
@@ -105,15 +109,33 @@ def _handle_response_errors(resp: requests.Response, context: str) -> None:
 
     404 is NOT raised here — a DOI with no Altmetric attention is a normal
     "no data" outcome handled by the caller, not an error.
+
+    ValueError -> exit 2 (request problem); RuntimeError -> exit 3 (transient).
     """
+    if resp.status_code == 404:
+        return
     if resp.status_code in (401, 403):
-        raise ValueError("Altmetric rejected the API key. Check ALTMETRIC_API_KEY.")
+        raise ValueError(f"Altmetric rejected the API key (HTTP {resp.status_code}). Check ALTMETRIC_API_KEY.")
     if resp.status_code == 429:
         raise RuntimeError("Rate limit exceeded. Wait before retrying.")
     if resp.status_code >= 500:
         raise RuntimeError(f"Altmetric API returned HTTP {resp.status_code}")
-    if resp.status_code != 404:
-        resp.raise_for_status()
+    if 400 <= resp.status_code < 500:
+        # Any other 4xx is a request-shape problem, not a transient one.
+        raise ValueError(f"Altmetric rejected the request for {context} (HTTP {resp.status_code}).")
+    resp.raise_for_status()
+
+
+def _parse_json(resp: requests.Response, context: str) -> dict[str, Any] | None:
+    """Parse a JSON object body. Returns None when the body is JSON but not an
+    object (treated as "no usable data"). A non-JSON body is a server-side
+    problem and is raised as RuntimeError -> exit 3, not mislabeled exit 2.
+    """
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"Altmetric returned a non-JSON body for {context}: {exc}") from exc
+    return data if isinstance(data, dict) else None
 
 
 # ---------------------------------------------------------------------------
@@ -126,24 +148,31 @@ def fetch_doi(doi: str, api_key: str, session: requests.Session) -> dict[str, An
     Returns a normalized dict. When the DOI has no Altmetric attention, returns
     {"found": False, "doi": doi} rather than raising.
     """
-    url = f"{ALTMETRIC_API_BASE}/doi/{doi}"
+    url = f"{ALTMETRIC_API_BASE}/doi/{quote(doi, safe='/')}"
     resp = session.get(url, params={"key": api_key}, timeout=REQUEST_TIMEOUT)
     _handle_response_errors(resp, f"attention for '{doi}'")
     if resp.status_code == 404:
         return {"found": False, "doi": doi}
 
-    raw = resp.json() if isinstance(resp.json(), dict) else {}
-    return {
+    raw = _parse_json(resp, f"attention for '{doi}'")
+    if raw is None:
+        # 200 with no usable attention object — treat as no data, not zeros.
+        return {"found": False, "doi": doi}
+
+    result: dict[str, Any] = {
         "found": True,
         "doi": raw.get("doi", doi),
-        "score": raw.get("score", 0),
-        "readers_count": raw.get("readers_count", 0),
-        "cited_by_posts_count": raw.get("cited_by_posts_count", 0),
-        "cited_by_tweeters_count": raw.get("cited_by_tweeters_count", 0),
-        "cited_by_msm_count": raw.get("cited_by_msm_count", 0),
-        "details_url": raw.get("details_url"),
         "source": "altmetric.com",
     }
+    # Only surface fields the API actually returned — never fabricate zeros that
+    # the ranking skill would record as provenance-bearing facts.
+    for key in (
+        "score", "readers_count", "cited_by_posts_count",
+        "cited_by_tweeters_count", "cited_by_msm_count", "details_url",
+    ):
+        if raw.get(key) is not None:
+            result[key] = raw[key]
+    return result
 
 
 # ---------------------------------------------------------------------------

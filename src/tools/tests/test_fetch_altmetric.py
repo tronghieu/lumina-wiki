@@ -115,6 +115,57 @@ class TestFetchDoi:
             with pytest.raises(RuntimeError, match="HTTP 502"):
                 fetch_altmetric.fetch_doi(VALID_DOI, "test_key", sess)
 
+    def test_other_4xx_raises_value_error(self) -> None:
+        """A 400/410 client error is exit-2 (ValueError), not transient exit-3."""
+        with patch("fetch_altmetric.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response(status_code=400)
+            with pytest.raises(ValueError):
+                fetch_altmetric.fetch_doi(VALID_DOI, "test_key", sess)
+
+    def test_non_json_body_raises_runtime_error(self) -> None:
+        """200 with an unparseable body -> RuntimeError (exit 3), not exit 2."""
+        resp = _make_mock_response(status_code=200)
+        resp.json = MagicMock(side_effect=ValueError("Expecting value"))
+        with patch("fetch_altmetric.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = resp
+            with pytest.raises(RuntimeError):
+                fetch_altmetric.fetch_doi(VALID_DOI, "test_key", sess)
+
+    def test_non_dict_json_returns_found_false(self) -> None:
+        """200 with a JSON array/scalar -> no data, never fabricated zeros."""
+        with patch("fetch_altmetric.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response([], status_code=200)
+            result = fetch_altmetric.fetch_doi(VALID_DOI, "test_key", sess)
+        assert result == {"found": False, "doi": VALID_DOI}
+
+    def test_absent_fields_are_omitted_not_zeroed(self) -> None:
+        """Fields the API does not return must be absent, not defaulted to 0."""
+        with patch("fetch_altmetric.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response({"score": 5}, status_code=200)
+            result = fetch_altmetric.fetch_doi(VALID_DOI, "test_key", sess)
+        assert result["found"] is True
+        assert result["score"] == 5
+        assert "cited_by_posts_count" not in result
+        assert "readers_count" not in result
+
+    def test_doi_is_percent_encoded_in_url(self) -> None:
+        """A DOI with sub-delimiter characters is escaped into the path."""
+        with patch("fetch_altmetric.requests.Session") as mock_cls:
+            sess = MagicMock()
+            mock_cls.return_value = sess
+            sess.get.return_value = _make_mock_response({"score": 1}, status_code=200)
+            fetch_altmetric.fetch_doi("10.1234/ab(c)d", "test_key", sess)
+            url = sess.get.call_args.args[0]
+        assert "%28" in url and "(" not in url
+
 
 class TestCLI:
     def test_doi_command_stdout_is_valid_json(
