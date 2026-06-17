@@ -51,7 +51,7 @@ References:
    If none are present, you can still do the qualitative 4C assessment — just
    tell the user the influence numbers are unavailable.
 
-2. **Fetch citation influence (no key required beyond the optional S2 key).**
+2. **Fetch citation influence (uses the optional Semantic Scholar key).**
 
    ```bash
    python3 _lumina/tools/fetch_s2.py paper <s2-id|arXiv:ID|DOI:ID>
@@ -60,6 +60,13 @@ References:
    From the result, keep `influentialCitationCount`, `citationCount`, and the
    `journal` name. These become `influential_citations`, `citation_count`, and
    the venue hint, with `citation_source: semantic-scholar`.
+
+   This tool needs `SEMANTIC_SCHOLAR_API_KEY`. If it is not set, the tool exits
+   with a clear "no key set" message (exit code 2) — treat this exactly like the
+   optional signals in step 3: skip the citation-influence numbers, continue
+   with the qualitative assessment, and tell the user that influence figures are
+   unavailable until they add the key (offer `/lumi-research-setup`). Do not
+   abort the ranking over a missing S2 key.
 
 3. **Optional key-gated signals.** Only attempt these when the paper has a DOI.
    Each tool exits with a clear "no key set" message (exit code 2) when the key
