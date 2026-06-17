@@ -131,7 +131,7 @@ const RESEARCH_TOOL_FILES = [
   '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
   'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
   'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
-  'fetch_rss.py',
+  'fetch_rss.py', 'fetch_scite.py', 'fetch_altmetric.py',
 ];
 
 async function findEnclosingWorkspace(startDir) {
@@ -1234,6 +1234,7 @@ function getSkillDefs(packs) {
       { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
       { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
+      { name: 'rank',      canonicalId: 'lumi-research-rank',      displayName: '/lumi-research-rank' },
       { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
       { name: 'watch-run', canonicalId: 'lumi-research-watch-run', displayName: '/lumi-research-watch-run' },
     ];
@@ -1322,6 +1323,10 @@ async function renderEnvExample(projectRoot) {
       `OPENALEX_API_KEY=\n\n` +
       `# DeepXiv token (optional; enables full-text PDF access)\n` +
       `DEEPXIV_TOKEN=\n\n` +
+      `# Scite.ai API key (optional; enables Smart Citation tallies in /lumi-research-rank)\n` +
+      `SCITE_API_KEY=\n\n` +
+      `# Altmetric API key (optional; enables attention scores in /lumi-research-rank)\n` +
+      `ALTMETRIC_API_KEY=\n\n` +
       `# arXiv does not require an API key in v0.1\n`;
   }
   await atomicWrite(destPath, content);

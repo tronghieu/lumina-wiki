@@ -92,6 +92,8 @@ const requiredFiles = [
   'src/tools/fetch_pdf.py',
   'src/tools/fetch_rss.py',
   'src/tools/fetch_s2.py',
+  'src/tools/fetch_scite.py',
+  'src/tools/fetch_altmetric.py',
   'src/tools/fetch_unpaywall.py',
   'src/tools/fetch_wikipedia.py',
   'src/tools/id_utils.py',

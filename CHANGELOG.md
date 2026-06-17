@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-16
+
+### Added
+
+- **Advanced paper ranking** via the new research-pack skill
+  `/lumi-research-rank`. It scores an already-ingested paper and records the
+  results on its source page, both as a machine-readable `ranking:` frontmatter
+  block and a human-readable `## Ranking` scorecard. Re-running refreshes the
+  ranking and preserves any notes inside `<!-- user-edited -->` markers.
+- **Citation influence signal**: surfaces Semantic Scholar's influential-citation
+  count alongside the raw citation count (reuses the existing `fetch_s2.py`; no
+  new key required).
+- **4C qualitative rubric** (Correctness, Clarity, Contribution, Context, each
+  scored 1-5) produced with a three-pass reading method to keep the assessment
+  efficient. Scores are explicitly recorded as LLM-assessed with a timestamp.
+- **Venue prestige** recorded from the agent's own knowledge and explicitly
+  flagged as an estimate (`venue_source: llm-estimated`) — no live API or
+  bundled dataset.
+- **Optional, key-gated influence fetchers** `fetch_scite.py` (Scite.ai Smart
+  Citation tallies) and `fetch_altmetric.py` (Altmetric attention score). Both
+  degrade gracefully: with no key set they exit with a clear message and the
+  skill simply skips that signal. New `.env` keys `SCITE_API_KEY` and
+  `ALTMETRIC_API_KEY`.
+
+### Changed
+
+- Source page schema gains an optional `ranking` frontmatter object (no change
+  required for existing un-ranked pages).
+
 ## [1.6.2] - 2026-06-15
 
 ### Fixed

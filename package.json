@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "lumina-wiki",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "description": "Domain-agnostic, multi-IDE wiki scaffolder — Karpathy's LLM-Wiki vision, cross-platform and pack-based.",
   "keywords": [
     "llm-wiki",
@@ -69,6 +69,8 @@
     "src/tools/fetch_core.py",
     "src/tools/resolve_pdf.py",
     "src/tools/fetch_rss.py",
+    "src/tools/fetch_scite.py",
+    "src/tools/fetch_altmetric.py",
     "src/tools/id_utils.py",
     "src/tools/requirements.txt",
     "CHANGELOG.md",
