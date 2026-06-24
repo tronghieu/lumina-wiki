@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of spec-paper-ranking (2026-06-16)
+
+- **404 "no data" results are not cached** — `_cache.py` only caches HTTP 200, so re-ranking a paper Scite/Altmetric do not index re-hits the API every run. By design across all fetchers; revisit only if it becomes a rate-limit problem.
+- **Scite/Altmetric real-API contract is untested** — endpoint shapes and field names (`/tallies/{doi}`, `contradicting`, `/doi/{doi}` score fields) are assumptions exercised only against mocks. Verify against the live APIs once a `SCITE_API_KEY` / `ALTMETRIC_API_KEY` is available.
+
 ## Deferred from: code review of spec-learning-pack-reflection (2026-05-10)
 
 - `answers.packs.includes('learning')` null-guard on upgrade path (`src/installer/commands.js`) — pre-existing pattern; research/reading carry same risk; audit upgrade path null-safety across all three packs.

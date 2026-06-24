@@ -93,6 +93,8 @@ The agent will help you check the research tools and save keys to a local `.env`
 
 If you reinstall Lumina-Wiki on a project that already has a `wiki/` from an earlier version, just run `npx lumina-wiki install` again. The installer updates scripts, schemas, and skills; **your content in `wiki/`, `raw/`, and `log.md` is not modified**.
 
+You can run the command from the project root or one of its subfolders. If you remove a pack or AI tool from the setup, Lumina removes its old managed commands and unchanged setup files. Files you edited are kept with a warning. If the whole project was copied, moved, or renamed, Lumina repairs its managed links during the upgrade.
+
 If the installer warns that older entries are missing newer frontmatter fields, you have two ways to backfill them:
 
 - **Recommended:** open your AI chat and run `/lumi-migrate-legacy`.
@@ -183,6 +185,7 @@ These are the commands you can use when chatting with your AI agent.
 | | `/lumi-research-survey` | Create a survey or summary from existing knowledge. |
 | | `/lumi-research-prefill` | Seed foundational concepts to avoid duplicates. |
 | | `/lumi-research-topic` | Create a topic page at `wiki/topics/<slug>.md` by gathering related concepts and sources already in your wiki. The AI proposes what to include and you confirm before anything is written. Use this after several `/lumi-ingest` runs when you want to give a theme its own page. |
+| | `/lumi-research-rank` | Score a paper you have already ingested so you know what to read first. It looks up how influential the paper is (citation signals), estimates how respected its venue is, and rates its quality on four points — Correctness, Clarity, Contribution, and Context — then adds a clear scorecard to the paper's page. Measured numbers and the AI's own estimates are always kept separate. |
 | | `/lumi-research-setup` | Help configure API keys for research tools. |
 | | `/lumi-research-watch-run` | Run one scheduled-discovery pass over your watchlist (topics + RSS / Atom feeds). Polls only when you ask. |
 | **Reading** | `/lumi-reading-chapter-ingest` | Ingest a book chapter by chapter. |
@@ -207,7 +210,7 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 - [x] **Improved CI/CD:** Native support for Bun and Node 22 environments. *(shipped in v1.2)*
 - [x] **Global Source Expansion:** Direct integration with OpenAlex, CORE, and Unpaywall for reliable DOI-to-PDF resolution. *(shipped in v1.6)*
 - [x] **RSS & Blog Monitoring:** Automatically surface new papers from your favorite lab blogs and journals via `type: feed` watchlist items. *(shipped in v1.6)*
-- [ ] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers.
+- [x] **Advanced Paper Ranking:** See influence scores and quality signals for your research papers via `/lumi-research-rank`. *(shipped in v1.7)*
 
 **Long-term (Deep Research & Integration)**
 - [ ] **Image OCR & Scanned PDFs:** Ingest screenshots and scanned PDFs into your wiki.

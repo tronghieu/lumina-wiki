@@ -15,6 +15,89 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added a React + TypeScript graph interface using React Flow, search/filter
   logic, node inspector, and a small workspace action panel.
 
+## [1.7.0] - 2026-06-16
+
+### Added
+
+- **Advanced paper ranking** via the new research-pack skill
+  `/lumi-research-rank`. It scores an already-ingested paper and records the
+  results on its source page, both as a machine-readable `ranking:` frontmatter
+  block and a human-readable `## Ranking` scorecard. Re-running refreshes the
+  ranking and preserves any notes inside `<!-- user-edited -->` markers.
+- **Citation influence signal**: surfaces Semantic Scholar's influential-citation
+  count alongside the raw citation count (reuses the existing `fetch_s2.py`; no
+  new key required).
+- **4C qualitative rubric** (Correctness, Clarity, Contribution, Context, each
+  scored 1-5) produced with a three-pass reading method to keep the assessment
+  efficient. Scores are explicitly recorded as LLM-assessed with a timestamp.
+- **Venue prestige** recorded from the agent's own knowledge and explicitly
+  flagged as an estimate (`venue_source: llm-estimated`) — no live API or
+  bundled dataset.
+- **Optional, key-gated influence fetchers** `fetch_scite.py` (Scite.ai Smart
+  Citation tallies) and `fetch_altmetric.py` (Altmetric attention score). Both
+  degrade gracefully: with no key set they exit with a clear message and the
+  skill simply skips that signal. New `.env` keys `SCITE_API_KEY` and
+  `ALTMETRIC_API_KEY`.
+
+### Changed
+
+- Source page schema gains an optional `ranking` frontmatter object (no change
+  required for existing un-ranked pages).
+
+## [1.6.2] - 2026-06-15
+
+### Fixed
+
+- Repaired stale Claude skill links during upgrades by validating their real
+  targets instead of trusting the previously recorded link strategy.
+- Made POSIX skill links relative so copied, moved, or renamed workspaces can
+  be upgraded without retaining links to their old absolute location.
+- Reconciled removed packs and IDE targets by deleting obsolete
+  installer-managed skills, tools, links, and unchanged generated stubs while
+  preserving modified or user-owned files.
+- Made `npx lumina-wiki install` detect and upgrade an enclosing workspace when
+  invoked from a nested directory, while explicit `--directory` and `--cwd`
+  targets remain exact.
+- Fixed interactive locale switching for existing and legacy workspaces,
+  including default-language cascading and confirmation binding to the final
+  resolved locale.
+- Made installation fail clearly when required Claude skill links cannot be
+  created instead of writing successful state for a partial install.
+
+## [1.6.1] - 2026-05-18
+
+### Fixed
+
+- Restored v1.6 research tool scripts to the npm package allowlist so
+  upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools
+  (fixes #20).
+- Expanded the package-readiness check (`scripts/ci-package.mjs`) to require
+  every Python tool copied by the installer, preventing future research-pack
+  tarball omissions.
+
+### Changed
+
+- OpenAlex research tooling now authenticates via `OPENALEX_API_KEY` /
+  `api_key` query parameter instead of the deprecated `OPENALEX_MAILTO`
+  polite-pool flow. The new key enables OpenAlex's free daily API budget and
+  usage tracking. Existing users should rename `OPENALEX_MAILTO` to
+  `OPENALEX_API_KEY` in their local `.env` — the old variable is ignored.
+- `fetch_openalex.py` search `per_page` is now clamped to 100 (the OpenAlex
+  documented maximum) and explicit 401/403 handling surfaces a clear error
+  message when the key is rejected.
+
+### CI
+
+- Dropped Node 22 from the test matrix across all OSes due to an upstream
+  `node:test` IPC bug (`ERR_TEST_FAILURE` / structured-clone deserialization)
+  that surfaced intermittently on Windows, macOS, and Linux runners.
+- Cold-start budget gate now runs only on `ubuntu-latest`; Windows and macOS
+  hosted runners have filesystem latency that makes the 350 ms threshold
+  infeasible regardless of code changes.
+- `Node 20 / windows-latest` marked `continue-on-error: true` to surface a
+  remaining Windows-only `node:test` flake as a warning instead of blocking
+  the build (tracked in #23).
+
 ## [1.6.0] - 2026-05-15
 
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)

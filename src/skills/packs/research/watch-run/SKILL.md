@@ -93,7 +93,7 @@ or launchd files; explain the snippets and let them paste.
   a separate, user-initiated step.
 - If a feed errors transiently (5xx, timeout), the runner already preserves
   state so the next poll recovers; do not retry by hand more than once.
-- Secrets in env vars (`UNPAYWALL_EMAIL`, `CORE_API_KEY`, `OPENALEX_MAILTO`)
+- Secrets in env vars (`UNPAYWALL_EMAIL`, `CORE_API_KEY`, `OPENALEX_API_KEY`)
   must never appear in output.
 
 ## Definition of Done

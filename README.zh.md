@@ -93,6 +93,8 @@ Agent 会引导您检查研究工具，并在需要时把 key 保存到本地 `.
 
 如果您在已经有旧版 `wiki/` 的项目上重新安装 Lumina-Wiki，直接再次运行 `npx lumina-wiki install` 即可。安装器会更新 scripts、schemas 和 skills；**您在 `wiki/`、`raw/`、`log.md` 中的内容不会被修改**。
 
+您可以在项目根目录或其子目录中运行该命令。如果从设置中移除某个包或 AI 工具，Lumina 会清理旧命令和未经您修改的设置文件。您修改过的文件会保留，并显示警告。如果整个项目被复制、移动或重命名，Lumina 会在升级时修复由系统管理的链接。
+
 如果安装器提示旧条目缺少新的 frontmatter 字段，可以用两种方式回填：
 
 - **推荐：** 打开 AI 对话并运行 `/lumi-migrate-legacy`。
@@ -184,6 +186,7 @@ npx skills add https://github.com/tobi/qmd --skill qmd
 | | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
 | | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
 | | `/lumi-research-topic` | 把 wiki 中已有的相关概念和来源汇聚成一个主题页，保存在 `wiki/topics/<slug>.md`。AI 会提议收录哪些内容，由你确认后再生成页面。多次 `/lumi-ingest` 之后，用它把一组相关想法整理成独立的主题页。 |
+| | `/lumi-research-rank` | 给已经纳入的论文打分，帮你决定先读哪一篇。它会查询论文的影响力（引用信号）、估计发表场所的声望，并从四个方面评估质量——正确性、清晰度、贡献、背景——然后在论文页面上加上一份清晰的评分卡。实测数据与 AI 的估计始终分开标注。 |
 | | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
 | | `/lumi-research-watch-run` | 基于 watchlist 运行一次计划式发现（主题 + RSS / Atom 源）。仅在你要求时才运行。 |
 | **Reading** | `/lumi-reading-chapter-ingest`| 按章节导入书籍知识。 |
@@ -208,7 +211,7 @@ Lumina-Wiki 正在快速演进。这是我们的用户路线图：
 - [x] **改进的 CI/CD：** 正式支持 Bun 和 Node 22 环境。*（v1.2 已发布）*
 - [x] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall，实现可靠的 DOI-to-PDF 解析。*（在 v1.6 中发布）*
 - [x] **RSS 与博客监控：** 通过 watchlist 中的 `type: feed` 项，自动从您喜爱的实验室博客和期刊中发现新论文。*（在 v1.6 中发布）*
-- [ ] **高级论文排名：** 查看研究论文的影响力评分和质量信号。
+- [x] **高级论文排名：** 通过 `/lumi-research-rank` 查看研究论文的影响力评分和质量信号。*（在 v1.7 中发布）*
 
 **长期计划（深度研究与集成）**
 - [ ] **图片 OCR 与扫描 PDF：** 将截图与扫描版 PDF 导入维基。

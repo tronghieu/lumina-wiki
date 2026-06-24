@@ -14,6 +14,7 @@ lumi-research-watchlist,RW,research,anytime,,lumi-research-discover,false,,_lumi
 lumi-research-watch-run,RWR,research,anytime,lumi-research-watchlist,,false,,raw/discovered/**,run one scheduled-discovery pass over the watchlist (topics + RSS / Atom feeds)
 lumi-research-survey,RV,research,3-query,lumi-ingest,,false,,wiki/summary/**,narrative synthesis across a topic's sources
 lumi-research-topic,RT,research,3-query,lumi-ingest,,false,,wiki/topics/**,cluster concepts and sources into a thematic topic page
+lumi-research-rank,RR,research,3-query,lumi-ingest,,false,[source-slug],wiki/sources/**,"score a paper's citation influence and 4C quality, recorded on its source page"
 lumi-research-setup,RSS,research,anytime,,,false,,.env,interactive API key configuration
 {{/if}}
 {{#if pack_reading}}

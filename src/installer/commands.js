@@ -127,6 +127,37 @@ const LUMINA_DIRS = [
 
 const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
+const RESEARCH_TOOL_FILES = [
+  '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
+  'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
+  'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
+  'fetch_rss.py', 'fetch_scite.py', 'fetch_altmetric.py',
+];
+
+async function findEnclosingWorkspace(startDir) {
+  let current = resolve(startDir);
+  while (true) {
+    try {
+      await access(join(current, '_lumina', 'manifest.json'), fsConstants.F_OK);
+      return current;
+    } catch (err) {
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+    }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+async function readManifestForInstall(projectRoot) {
+  try {
+    return await readManifest(projectRoot);
+  } catch (err) {
+    const e = new Error(`MANIFEST_READ_FAILED: ${err.message} (path: ${projectRoot}/_lumina/manifest.json)`);
+    e.code = 2;
+    throw e;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // install command
@@ -144,32 +175,24 @@ const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli
  * @param {string} [opts.projectName]  - Hidden escape hatch; default = basename(directory)
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
+ * @param {boolean} [opts.searchParents] - Find an enclosing Lumina workspace when no directory flag was used
  */
 export async function installCommand(opts = {}) {
   const { yes = false, reLink = false } = opts;
   const initialDir = opts.directory ?? opts.cwd ?? process.cwd();
-  let projectRoot = resolve(initialDir);
+  const requestedRoot = resolve(initialDir);
+  let projectRoot = opts.searchParents
+    ? (await findEnclosingWorkspace(requestedRoot) ?? requestedRoot)
+    : requestedRoot;
   const colors = await getColorFns();
 
   // 1. Read existing manifest at the initial path (upgrade detection)
   // Distinguish ENOENT (fresh install) from real I/O errors. Real errors must
   // bail loud — silently treating them as "fresh install" would let a transient
   // permission failure quietly nuke an existing install.
-  let existingManifest = null;
-  try {
-    existingManifest = await readManifest(projectRoot);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      existingManifest = null;
-    } else {
-      // Pre-loadLocale path — intentionally EN-only and machine-readable.
-      const e = new Error(`MANIFEST_READ_FAILED: ${err.message} (path: ${projectRoot}/_lumina/manifest.json)`);
-      e.code = 2;
-      throw e;
-    }
-  }
+  let existingManifest = await readManifestForInstall(projectRoot);
 
-  const isUpgrade = existingManifest !== null;
+  let isUpgrade = existingManifest !== null;
 
   // 2. Collect answers (locale not yet loaded; prompts use EN fallback literals)
   let answers;
@@ -182,13 +205,27 @@ export async function installCommand(opts = {}) {
       cwd: projectRoot,
       existingManifest,
       defaultLocale: opts.lang ?? 'en',
+      resolveDestination: async (directory) => {
+        const manifest = await readManifestForInstall(directory);
+        if (!manifest) return null;
+        return {
+          existingManifest: manifest,
+          answers: await readAnswersFromConfig(directory, manifest),
+        };
+      },
     });
     // Re-resolve projectRoot from the directory the user typed.
     if (answers.directory) {
       projectRoot = resolve(answers.directory);
     }
+    existingManifest = await readManifestForInstall(projectRoot);
+    isUpgrade = existingManifest !== null;
   }
   answers = applyInstallOverrides(answers, opts);
+  const previousSkillRows = isUpgrade
+    ? previousManagedSkillRows(await readSkillsManifest(projectRoot), existingManifest)
+    : [];
+  const previousFileRows = isUpgrade ? await readFilesManifest(projectRoot) : [];
 
   // 2b. Load locale module ONCE after applyInstallOverrides resolves locale.
   const localeMod = await loadLocale(answers.locale ?? 'en');
@@ -209,7 +246,11 @@ export async function installCommand(opts = {}) {
         ?? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION).locale
         ?? 'en'
     );
-    if (installedLocale !== answers.locale && !opts.forceLocaleSwitch) {
+    if (
+      installedLocale !== answers.locale
+      && !opts.forceLocaleSwitch
+      && answers.localeSwitchConfirmedFor !== answers.locale
+    ) {
       const e = new Error(
         `LOCALE_SWITCH_REFUSED: installed locale '${installedLocale}' differs from resolved locale '${answers.locale}'. ` +
         `Pass --force-locale-switch to confirm (this will rewrite README.md and IDE stubs in the new locale).`,
@@ -223,12 +264,18 @@ export async function installCommand(opts = {}) {
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
   const hasLearning = packs.includes('learning');
+  const previousProjectRoot = existingManifest?.resolvedPaths?.projectRoot;
+  const relocated = Boolean(previousProjectRoot && resolve(previousProjectRoot) !== projectRoot);
+  const effectiveReLink = reLink || relocated;
 
   console.log('');
   if (isUpgrade) {
     console.log(colors.bold(t('progress.upgrading', { dir: projectRoot })));
   } else {
     console.log(colors.bold(t('progress.installing', { dir: projectRoot })));
+  }
+  if (relocated) {
+    console.log(colors.yellow(t('warn.relocated', { from: previousProjectRoot, to: projectRoot })));
   }
 
   // 3. Scaffold directories
@@ -250,6 +297,20 @@ export async function installCommand(opts = {}) {
 
   for (const dir of dirsToCreate) {
     await ensureDir(join(projectRoot, dir));
+  }
+
+  await reconcileRemovedIdeTargets({
+    projectRoot,
+    previousIdeTargets: existingManifest?.ideTargets ?? [],
+    currentIdeTargets: ideTargets,
+    previousFileRows,
+    previousSkillRows,
+    colors,
+    t,
+  });
+
+  if (isUpgrade && existingManifest?.packs?.research && !hasResearch) {
+    await cleanupRemovedResearchPack(projectRoot, previousFileRows, colors, t);
   }
 
   // 4. Template variables
@@ -282,7 +343,10 @@ export async function installCommand(opts = {}) {
   await copyChangelog(projectRoot);
 
   // 9. Copy skills
-  const skillRows = await copySkills(projectRoot, packs);
+  const skillRows = await copySkills(projectRoot, packs, {
+    claudeCode: ideTargets.includes('claude_code'),
+  });
+  await reconcileRemovedSkills(projectRoot, previousSkillRows, skillRows);
 
   // 10. Copy Python tools (core: extract_pdf; research pack: discovery/fetchers)
   await copyTools(projectRoot, { research: hasResearch });
@@ -307,10 +371,18 @@ export async function installCommand(opts = {}) {
   // 15. Create per-skill symlinks (.claude/skills/lumi-*) for Claude Code
   const symlinkStrategies = {};
   if (ideTargets.includes('claude_code')) {
-    const { strategies } = await createSkillSymlinks(
-      projectRoot, skillRows, existingManifest, reLink, colors, t
+    const { strategies, errors } = await createSkillSymlinks(
+      projectRoot, skillRows, existingManifest, effectiveReLink, colors, t
     );
     Object.assign(symlinkStrategies, strategies);
+    if (errors.length > 0) {
+      const e = new Error(
+        `SKILL_LINKS_INCOMPLETE: ${errors.length} of ${skillRows.length} Claude skill links failed: ` +
+        errors.map(item => `${item.skill}: ${item.error.message}`).join('; '),
+      );
+      e.code = 2;
+      throw e;
+    }
   }
 
   // 16. Build files-manifest rows
@@ -677,7 +749,9 @@ function applyInstallOverrides(answers, opts) {
   const next = { ...answers };
   const priorLocale = answers.locale ?? null;
 
-  // Locale: --lang flag overrides; case-insensitive normalize.
+  // Locale: --lang overrides the interactive selector. Keep the installed
+  // locale in answers.locale until this point so default language values can
+  // cascade correctly when an existing destination is selected.
   // Pre-loadLocale error → EN-only string (chicken-and-egg, machine-readable).
   if (opts.lang !== undefined && opts.lang !== null && opts.lang !== '') {
     const normalized = String(opts.lang).toLowerCase().trim();
@@ -687,9 +761,12 @@ function applyInstallOverrides(answers, opts) {
       throw e;
     }
     next.locale = normalized;
+  } else if (next.selectedLocale) {
+    next.locale = next.selectedLocale;
   } else if (!next.locale) {
     next.locale = 'en';
   }
+  delete next.selectedLocale;
 
   // Cascade: if --lang changed locale and user didn't explicitly pass language
   // overrides, refresh the language defaults to match the new locale.
@@ -929,6 +1006,113 @@ function ideTargetStubFiles(ideTargets) {
     .filter(Boolean);
 }
 
+async function removeManagedFileIfUnchanged(projectRoot, relPath, previousFileRows, colors, t) {
+  const absPath = safePath(projectRoot, relPath);
+  try {
+    await access(absPath, fsConstants.F_OK);
+  } catch (err) {
+    if (err.code === 'ENOENT') return;
+    throw err;
+  }
+
+  const previous = previousFileRows.find(row => row.relative_path === relPath);
+  if (previous?.sha256) {
+    try {
+      if (await fileHash(absPath) === previous.sha256) {
+        await unlink(absPath);
+        return;
+      }
+    } catch (_) {}
+  }
+
+  console.log(colors.yellow(t('warn.preserved_modified_file', { path: relPath })));
+}
+
+function previousManagedSkillRows(previousSkillRows, existingManifest) {
+  const rowsById = new Map(previousSkillRows.map(row => [row.canonical_id, row]));
+  const previousStrategies = existingManifest?.symlinkStrategies ?? {};
+  const claudeWasSelected = existingManifest?.ideTargets?.includes('claude_code') ?? false;
+  const previousPacks = Object.keys(existingManifest?.packs ?? {});
+  for (const skill of getSkillDefs(previousPacks)) {
+    if (!rowsById.has(skill.canonicalId)) {
+      rowsById.set(skill.canonicalId, {
+        canonical_id: skill.canonicalId,
+        relative_path: join('.agents', 'skills', skill.canonicalId),
+        target_link_path: existingManifest?.ideTargets?.includes('claude_code')
+          ? join('.claude', 'skills', skill.canonicalId)
+          : '',
+      });
+    }
+  }
+  for (const canonicalId of Object.keys(previousStrategies)) {
+    if (!rowsById.has(canonicalId)) {
+      rowsById.set(canonicalId, {
+        canonical_id: canonicalId,
+        relative_path: join('.agents', 'skills', canonicalId),
+        target_link_path: join('.claude', 'skills', canonicalId),
+      });
+    }
+  }
+  return [...rowsById.values()].map(row => ({
+    ...row,
+    managed_link: claudeWasSelected
+      || Object.prototype.hasOwnProperty.call(previousStrategies, row.canonical_id),
+  }));
+}
+
+async function removeManagedSkillLink(projectRoot, skill) {
+  if (skill.managed_link === false) return;
+  const relPath = skill.target_link_path || join('.claude', 'skills', skill.canonical_id);
+  await rm(safePath(projectRoot, relPath), { recursive: true, force: true });
+}
+
+async function reconcileRemovedIdeTargets({
+  projectRoot,
+  previousIdeTargets,
+  currentIdeTargets,
+  previousFileRows,
+  previousSkillRows,
+  colors,
+  t,
+}) {
+  const removedTargets = previousIdeTargets.filter(target => !currentIdeTargets.includes(target));
+  for (const target of removedTargets) {
+    if (target === 'claude_code') {
+      await Promise.all(previousSkillRows.map(skill => removeManagedSkillLink(projectRoot, skill)));
+    }
+
+    const relPath = ideTargetStubFiles([target])[0];
+    if (relPath) {
+      await removeManagedFileIfUnchanged(projectRoot, relPath, previousFileRows, colors, t);
+    }
+  }
+}
+
+async function reconcileRemovedSkills(projectRoot, previousSkillRows, currentSkillRows) {
+  const currentIds = new Set(currentSkillRows.map(row => row.canonical_id));
+  const obsolete = previousSkillRows.filter(row => !currentIds.has(row.canonical_id));
+
+  for (const skill of obsolete) {
+    if (skill.relative_path) {
+      await rm(safePath(projectRoot, skill.relative_path), { recursive: true, force: true });
+    }
+    await removeManagedSkillLink(projectRoot, skill);
+  }
+}
+
+async function cleanupRemovedResearchPack(projectRoot, previousFileRows, colors, t) {
+  await Promise.all(RESEARCH_TOOL_FILES.map(file => (
+    rm(safePath(projectRoot, join('_lumina', 'tools', file)), { force: true })
+  )));
+  await removeManagedFileIfUnchanged(
+    projectRoot,
+    '.env.example',
+    previousFileRows,
+    colors,
+    t,
+  );
+}
+
 function buildIdeStub(target, vars) {
   const name = vars.project_name || 'this wiki';
   switch (target) {
@@ -983,7 +1167,7 @@ async function copyChangelog(projectRoot) {
   }
 }
 
-async function copySkills(projectRoot, packs) {
+async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
   const skillRows = [];
   const skillDefs = getSkillDefs(packs);
 
@@ -1003,7 +1187,7 @@ async function copySkills(projectRoot, packs) {
       pack:            skill.pack,
       source:          'built-in',
       relative_path:   `.agents/skills/${skill.canonicalId}`,
-      target_link_path: join('.claude', 'skills', skill.canonicalId),
+      target_link_path: claudeCode ? join('.claude', 'skills', skill.canonicalId) : '',
       version:         PKG.version,
     });
   }
@@ -1050,6 +1234,7 @@ function getSkillDefs(packs) {
       { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
       { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
       { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
+      { name: 'rank',      canonicalId: 'lumi-research-rank',      displayName: '/lumi-research-rank' },
       { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
       { name: 'watch-run', canonicalId: 'lumi-research-watch-run', displayName: '/lumi-research-watch-run' },
     ];
@@ -1085,13 +1270,7 @@ function getSkillDefs(packs) {
 async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
   const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
-  const researchTools = [
-    '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
-    'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
-    'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
-    'fetch_rss.py',
-  ];
-  const toolFiles = research ? [...coreTools, ...researchTools] : coreTools;
+  const toolFiles = research ? [...coreTools, ...RESEARCH_TOOL_FILES] : coreTools;
   // Parallelize: each copy is independent and destDir already exists.
   // Sequential awaits were the main Windows cold-start regression in v1.4
   // (~30 ms per file × 14 files dominates on NTFS + Defender).
@@ -1140,8 +1319,14 @@ async function renderEnvExample(projectRoot) {
       `# Copy to .env and fill in your values. Never commit .env.\n\n` +
       `# Semantic Scholar API key (optional; improves rate limits)\n` +
       `SEMANTIC_SCHOLAR_API_KEY=\n\n` +
+      `# OpenAlex API key (optional; enables free daily API budget and usage tracking)\n` +
+      `OPENALEX_API_KEY=\n\n` +
       `# DeepXiv token (optional; enables full-text PDF access)\n` +
       `DEEPXIV_TOKEN=\n\n` +
+      `# Scite.ai API key (optional; enables Smart Citation tallies in /lumi-research-rank)\n` +
+      `SCITE_API_KEY=\n\n` +
+      `# Altmetric API key (optional; enables attention scores in /lumi-research-rank)\n` +
+      `ALTMETRIC_API_KEY=\n\n` +
       `# arXiv does not require an API key in v0.1\n`;
   }
   await atomicWrite(destPath, content);
@@ -1211,6 +1396,7 @@ async function seedWikiFiles(projectRoot) {
 
 async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors, t = null) {
   const strategies = {};
+  const errors = [];
 
   for (const skill of skillRows) {
     const target   = resolve(projectRoot, skill.relative_path);
@@ -1225,6 +1411,7 @@ async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reL
         console.log(colors.yellow(`  [warn] ${result.message}`));
       }
     } catch (err) {
+      errors.push({ skill: skill.canonical_id, error: err });
       const msg = t
         ? t('error.symlink', { skill: skill.canonical_id, message: err.message })
         : `  [error] Failed to link ${skill.canonical_id}: ${err.message}`;
@@ -1232,7 +1419,7 @@ async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reL
     }
   }
 
-  return { strategies };
+  return { strategies, errors };
 }
 
 async function buildFilesManifest(projectRoot, packs, pkgVersion) {

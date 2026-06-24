@@ -75,6 +75,8 @@ export default {
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[warn] Could not read existing manifest: {message}. Treating as fresh install.',
   'warn.copied_skills':                        '  [warn] Some skills were copied instead of symlinked. Run "lumina install --re-link" after enabling Windows Developer Mode.',
+  'warn.relocated':                            '  [warn] Workspace moved from {from} to {to}; managed links will be refreshed.',
+  'warn.preserved_modified_file':               '  [warn] Kept modified file that is no longer selected: {path}',
   'warn.upgrade_header':                       '[warn] Lumina upgraded v{from} -> v{to} — schema gap detected:',
   'warn.upgrade_errors':                       '       {errors} error(s), {warnings} warning(s) across legacy entries.',
   'warn.upgrade_fix_quick':                    '     Quick fix (deterministic):',

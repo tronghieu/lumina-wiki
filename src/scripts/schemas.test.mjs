@@ -55,3 +55,10 @@ test('REQUIRED_FRONTMATTER.reflections required fields are all marked required',
     );
   }
 });
+
+test('REQUIRED_FRONTMATTER.sources has optional ranking object field', () => {
+  const ranking = REQUIRED_FRONTMATTER.sources.find(f => f.key === 'ranking');
+  assert.ok(ranking, 'sources must define a ranking field');
+  assert.equal(ranking.type, 'object', 'ranking must be an object field');
+  assert.equal(ranking.required, false, 'ranking must be optional (un-ranked pages lint clean)');
+});
