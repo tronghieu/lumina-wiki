@@ -20,19 +20,20 @@ func NewService() *Service {
 }
 
 func (s *Service) Load(root string) (Graph, error) {
-	absRoot, err := filepath.Abs(root)
+	workspaceService := desktopworkspace.NewService()
+	validation, err := workspaceService.Validate(root)
 	if err != nil {
 		return Graph{}, err
 	}
-	wikiRoot := filepath.Join(absRoot, "wiki")
-	if info, err := os.Stat(wikiRoot); err != nil || !info.IsDir() {
+	wikiRoot, err := desktopworkspace.ResolveExisting(validation.Root, "wiki")
+	if err != nil {
 		return Graph{}, errors.New("workspace wiki directory not found")
 	}
-	nodes, err := loadNodes(wikiRoot)
+	nodes, err := loadNodes(workspaceService, wikiRoot)
 	if err != nil {
 		return Graph{}, err
 	}
-	edges, err := loadEdges(filepath.Join(wikiRoot, "graph"))
+	edges, err := loadEdges(workspaceService, wikiRoot)
 	if err != nil {
 		return Graph{}, err
 	}
@@ -62,7 +63,7 @@ func (s *Service) ReadNote(root, notePath string) (NoteContent, error) {
 	if err != nil {
 		return NoteContent{}, err
 	}
-	path, err := workspaceService.ResolveInside(wikiRoot, notePath)
+	path, err := desktopworkspace.ResolveExisting(wikiRoot, notePath)
 	if err != nil {
 		return NoteContent{}, err
 	}
@@ -100,15 +101,31 @@ func isEntityNotePath(notePath string) bool {
 	return false
 }
 
-func loadNodes(wikiRoot string) ([]Node, error) {
+func loadNodes(workspaceService *desktopworkspace.Service, wikiRoot string) ([]Node, error) {
 	var nodes []Node
 	for _, dir := range entityDirs() {
-		base := filepath.Join(wikiRoot, dir)
-		err := filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
-			if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+		base, err := workspaceService.ResolveInside(wikiRoot, dir)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Lstat(base)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			return nil, errors.New("wiki entity paths must be real directories")
+		}
+		err = filepath.WalkDir(base, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
 				return err
 			}
 			if entry.Type()&fs.ModeSymlink != 0 {
+				return errors.New("wiki entity symlinks are not allowed")
+			}
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 				return nil
 			}
 			rel, err := filepath.Rel(wikiRoot, path)
@@ -138,10 +155,28 @@ func entityDirs() []string {
 	}
 }
 
-func loadEdges(graphRoot string) ([]Edge, error) {
+func loadEdges(workspaceService *desktopworkspace.Service, wikiRoot string) ([]Edge, error) {
 	var edges []Edge
+	graphRoot, err := workspaceService.ResolveInside(wikiRoot, "graph")
+	if err != nil {
+		return nil, err
+	}
+	graphInfo, err := os.Lstat(graphRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return edges, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !graphInfo.IsDir() {
+		return nil, errors.New("wiki graph path must be a real directory")
+	}
 	for _, name := range []string{"edges.jsonl", "citations.jsonl"} {
-		fileEdges, err := readEdgeFile(filepath.Join(graphRoot, name))
+		path, err := workspaceService.ResolveInside(graphRoot, name)
+		if err != nil {
+			return nil, err
+		}
+		fileEdges, err := readEdgeFile(path)
 		if err != nil {
 			return nil, err
 		}

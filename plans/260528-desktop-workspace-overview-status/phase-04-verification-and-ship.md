@@ -52,5 +52,5 @@ rendering compile together.
 
 ## Risk Assessment
 
-Risk: generated bindings not committed.  
+Risk: generated bindings not committed.
 Mitigation: inspect staged file list and run Wails build before commit.

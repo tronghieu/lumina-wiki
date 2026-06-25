@@ -28,8 +28,8 @@ read-only summary of the current workspace; the frontend loads it alongside the
 graph and renders counts for packs, wiki notes, raw sources, raw notes, graph
 edges, citations, and missing expected folders.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: file watching, recent workspace persistence, auto-ingest, check

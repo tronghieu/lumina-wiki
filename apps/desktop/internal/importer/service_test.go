@@ -63,6 +63,46 @@ func TestImportToRawSourcesRejectsInvalidWorkspace(t *testing.T) {
 	}
 }
 
+func TestImportToRawSourcesRejectsSymlinkedRawDirectory(t *testing.T) {
+	root := makeImportWorkspace(t)
+	outside := t.TempDir()
+	if err := os.Mkdir(filepath.Join(outside, "sources"), 0o700); err != nil {
+		t.Fatalf("create outside sources: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "raw")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	source := filepath.Join(t.TempDir(), "paper.md")
+	if err := os.WriteFile(source, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	if _, err := NewService().ImportToRawSources(root, source); err == nil {
+		t.Fatal("expected symlinked raw directory rejection")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "sources", "paper.md")); !os.IsNotExist(err) {
+		t.Fatalf("import escaped the workspace: %v", err)
+	}
+}
+
+func TestImportToRawSourcesLeavesNoTemporaryFile(t *testing.T) {
+	root := makeImportWorkspace(t)
+	source := filepath.Join(t.TempDir(), "paper.md")
+	if err := os.WriteFile(source, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if _, err := NewService().ImportToRawSources(root, source); err != nil {
+		t.Fatalf("ImportToRawSources returned error: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, "raw", "sources"))
+	if err != nil {
+		t.Fatalf("read raw sources: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "paper.md" {
+		t.Fatalf("unexpected import artifacts: %#v", entries)
+	}
+}
+
 func makeImportWorkspace(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

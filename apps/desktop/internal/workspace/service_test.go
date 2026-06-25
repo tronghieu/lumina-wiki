@@ -59,8 +59,14 @@ func TestSummaryCountsWorkspaceInventory(t *testing.T) {
 	if summary.GraphCitations != 1 {
 		t.Fatalf("expected 1 graph citation, got %d", summary.GraphCitations)
 	}
-	if len(summary.MissingExpectedFolders) != 1 || summary.MissingExpectedFolders[0] != "raw/notes" {
+	expectedMissing := []string{"raw", "raw/sources", "raw/notes"}
+	if len(summary.MissingExpectedFolders) != len(expectedMissing) {
 		t.Fatalf("unexpected missing folders: %#v", summary.MissingExpectedFolders)
+	}
+	for index, folder := range expectedMissing {
+		if summary.MissingExpectedFolders[index] != folder {
+			t.Fatalf("expected missing folder %q at %d, got %#v", folder, index, summary.MissingExpectedFolders)
+		}
 	}
 }
 
@@ -180,11 +186,56 @@ func TestValidateRejectsWikiFile(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsSymlinkedWorkspaceEntries(t *testing.T) {
+	t.Run("README", func(t *testing.T) {
+		root := t.TempDir()
+		outside := filepath.Join(t.TempDir(), "README.md")
+		if err := os.WriteFile(outside, []byte("# Outside"), 0o600); err != nil {
+			t.Fatalf("write outside README: %v", err)
+		}
+		if err := os.Symlink(outside, filepath.Join(root, "README.md")); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		if err := os.Mkdir(filepath.Join(root, "wiki"), 0o700); err != nil {
+			t.Fatalf("create wiki: %v", err)
+		}
+		if _, err := NewService().Validate(root); err == nil {
+			t.Fatal("expected symlinked README rejection")
+		}
+	})
+
+	t.Run("wiki", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+			t.Fatalf("write README: %v", err)
+		}
+		if err := os.Symlink(t.TempDir(), filepath.Join(root, "wiki")); err != nil {
+			t.Skipf("symlink unavailable: %v", err)
+		}
+		if _, err := NewService().Validate(root); err == nil {
+			t.Fatal("expected symlinked wiki rejection")
+		}
+	})
+}
+
 func TestResolveInsideRejectsEscape(t *testing.T) {
 	root := filepath.Join("..", "testdata", "lumina-workspace")
 	service := NewService()
 	if _, err := service.ResolveInside(root, "../outside.md"); err == nil {
 		t.Fatal("expected path escape to be rejected")
+	}
+}
+
+func TestResolveInsideRejectsSymlinkedIntermediateDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if err := os.Mkdir(root, 0o700); err != nil {
+		t.Fatalf("create root: %v", err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "raw")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := NewService().ResolveInside(root, "raw/sources/paper.md"); err == nil {
+		t.Fatal("expected symlinked intermediate directory rejection")
 	}
 }
 

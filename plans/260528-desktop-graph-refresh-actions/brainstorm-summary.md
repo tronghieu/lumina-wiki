@@ -22,21 +22,21 @@
 
 Create a shared frontend helper that validates the workspace, reloads graph data, preserves selection, and optionally preserves check details.
 
-Pros: no backend change, one selection path, easy to use after import/check/manual action.  
+Pros: no backend change, one selection path, easy to use after import/check/manual action.
 Cons: app-level function grows a bit.
 
 ### B. Backend refresh endpoint
 
 Add a Go method that validates and loads graph in one backend call.
 
-Pros: frontend gets simpler.  
+Pros: frontend gets simpler.
 Cons: duplicates existing service composition and increases backend API surface for no new capability.
 
 ### C. File watcher
 
 Watch workspace `wiki/` or graph files and refresh automatically.
 
-Pros: best live experience.  
+Pros: best live experience.
 Cons: larger cross-platform scope, more edge cases, easy to refresh while files are mid-write.
 
 ## Recommendation

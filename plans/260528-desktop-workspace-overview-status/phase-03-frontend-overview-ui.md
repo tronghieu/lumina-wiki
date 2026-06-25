@@ -54,5 +54,5 @@ renders overview stats; `NodeInspector` renders packs/missing inventory.
 
 ## Risk Assessment
 
-Risk: adding too much UI in an already dense shell.  
+Risk: adding too much UI in an already dense shell.
 Mitigation: compact stat strip and restrained inspector details.

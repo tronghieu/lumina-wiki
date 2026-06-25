@@ -50,5 +50,5 @@ desktop build.
 
 ## Risk Assessment
 
-Risk: app-level async state changes can regress note loading.  
+Risk: app-level async state changes can regress note loading.
 Mitigation: reuse existing note loader and verify through TypeScript/build plus review.

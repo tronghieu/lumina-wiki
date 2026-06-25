@@ -53,7 +53,9 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - **Domain Packs:** Create specialized "Science Packs" for bio-medical or physics domains.
 - ~~**Local Cache Layer:** Implement session-level caching for fetcher responses to optimize rate limits.~~ **Shipped in v1.2** (persistent HTTP GET cache via `_lumina/tools/http_cache.py`).
 - **Intelligence Layer:** Graph-walking algorithms for proactive "missing link" or "relevant paper" recommendations.
-- **Desktop Application:** Explore a standalone desktop environment (Electron/Tauri) for a richer GUI-driven experience and native OS integration.
+- **Desktop Application Expansion:** Build beyond the repository's Wails
+  companion MVP with richer guided workflows, persistence, and signed native
+  releases.
 
 ---
 *Note: This roadmap is non-binding and evolved based on research needs and technical feasibility.*

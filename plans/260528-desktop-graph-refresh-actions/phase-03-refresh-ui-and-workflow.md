@@ -49,5 +49,5 @@ rename the current load callback to refresh semantics.
 
 ## Risk Assessment
 
-Risk: refresh failure after import/check could hide the original success.  
+Risk: refresh failure after import/check could hide the original success.
 Mitigation: surface refresh error because graph state is the visible UI contract.

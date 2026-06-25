@@ -51,5 +51,5 @@ regular files under known workspace folders.
 
 ## Risk Assessment
 
-Risk: symlink traversal or accidental broad reads.  
+Risk: symlink traversal or accidental broad reads.
 Mitigation: use `WalkDir`; count only regular files; ignore symlinked entries.

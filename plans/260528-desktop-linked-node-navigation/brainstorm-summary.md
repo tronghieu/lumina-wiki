@@ -22,21 +22,21 @@
 
 Render linked rows as buttons and call the existing app-level selection handler.
 
-Pros: smallest change, reuses note loading behavior, keeps one source of truth.  
+Pros: smallest change, reuses note loading behavior, keeps one source of truth.
 Cons: does not auto-center the graph viewport.
 
 ### B. Add inspector-local selection state
 
 Make the inspector choose a linked node without involving app-level graph state.
 
-Pros: isolated to one component.  
+Pros: isolated to one component.
 Cons: forks selection state and can desync graph highlight/note loading.
 
 ### C. Add a graph focus command
 
 Expose a richer selection/focus contract that selects and pans React Flow to a node.
 
-Pros: stronger navigation experience.  
+Pros: stronger navigation experience.
 Cons: needs React Flow instance plumbing and broader UI behavior; not needed for this slice.
 
 ## Recommendation

@@ -46,5 +46,5 @@ reuse the existing selection path.
 
 ## Risk Assessment
 
-Risk: scope expands into graph panning or tabbed inspector UI.  
+Risk: scope expands into graph panning or tabbed inspector UI.
 Mitigation: keep this slice to callback wiring and semantic linked-row buttons.

@@ -21,21 +21,21 @@
 
 Store the last successful `CheckResult` in app state and render it in the inspector.
 
-Pros: no backend changes, uses existing data, small blast radius.  
+Pros: no backend changes, uses existing data, small blast radius.
 Cons: only shows whatever `lint.mjs --summary` emits today.
 
 ### B. Backend runs full lint without `--summary`
 
 Expose a second backend method for verbose lint output.
 
-Pros: potentially richer report.  
+Pros: potentially richer report.
 Cons: unclear output contract, duplicates check runner, higher parsing risk.
 
 ### C. Parse stdout into structured diagnostics
 
 Interpret lint output into rule-level rows beyond `by_check`.
 
-Pros: richer UI.  
+Pros: richer UI.
 Cons: current stdout is JSON summary; deeper parsing would depend on unstable text.
 
 ## Recommendation

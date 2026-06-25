@@ -44,11 +44,11 @@ func (s *Service) RunCheck(root string) (CheckResult, error) {
 		return CheckResult{}, err
 	}
 
-	script, err := workspaceService.ResolveInside(validation.Root, "_lumina/scripts/lint.mjs")
+	script, err := desktopworkspace.ResolveExisting(validation.Root, "_lumina/scripts/lint.mjs")
 	if err != nil {
-		return CheckResult{}, err
+		return CheckResult{}, errors.New("Lumina check script not found")
 	}
-	if info, err := os.Stat(script); err != nil || info.IsDir() {
+	if info, err := os.Lstat(script); err != nil || !info.Mode().IsRegular() {
 		return CheckResult{}, errors.New("Lumina check script not found")
 	}
 

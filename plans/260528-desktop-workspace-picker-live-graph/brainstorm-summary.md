@@ -22,21 +22,21 @@
 
 Use `@wailsio/runtime` `OpenFile` from React to choose directories/files, then call generated backend bindings.
 
-Pros: smallest change, no new Go service, uses existing Wails runtime, keeps tests focused.  
+Pros: smallest change, no new Go service, uses existing Wails runtime, keeps tests focused.
 Cons: file dialog behavior is mostly integration-tested via build/dev run, not unit-tested deeply.
 
 ### B. New Go dialog service
 
 Add a backend service wrapping `application.Get().Dialog.OpenFile()`.
 
-Pros: Go-owned API shape, can centralize dialog options.  
+Pros: Go-owned API shape, can centralize dialog options.
 Cons: more framework coupling, harder to unit-test, extra generated bindings for no real domain logic.
 
 ### C. Manual path only + live graph button
 
 Keep text input, add a `Load Graph` button.
 
-Pros: simplest technically.  
+Pros: simplest technically.
 Cons: does not solve the main UX gap from the MVP and still feels like a debug panel.
 
 ## Recommendation

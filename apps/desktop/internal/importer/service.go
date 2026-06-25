@@ -41,11 +41,23 @@ func (s *Service) ImportToRawSources(root, sourcePath string) (ImportResult, err
 	}
 
 	name := filepath.Base(sourcePath)
-	destination, err := workspaceService.ResolveInside(validation.Root, filepath.Join("raw", "sources", name))
+	destinationDir, err := workspaceService.ResolveInside(validation.Root, filepath.Join("raw", "sources"))
 	if err != nil {
 		return ImportResult{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
+	if err := os.MkdirAll(destinationDir, 0o700); err != nil {
+		return ImportResult{}, err
+	}
+	destinationDir, err = desktopworkspace.ResolveExisting(validation.Root, filepath.Join("raw", "sources"))
+	if err != nil {
+		return ImportResult{}, err
+	}
+	destinationInfo, err := os.Lstat(destinationDir)
+	if err != nil || !destinationInfo.IsDir() {
+		return ImportResult{}, errors.New("raw sources must be a real directory")
+	}
+	destination, err := workspaceService.ResolveInside(validation.Root, filepath.Join("raw", "sources", name))
+	if err != nil {
 		return ImportResult{}, err
 	}
 
@@ -55,26 +67,36 @@ func (s *Service) ImportToRawSources(root, sourcePath string) (ImportResult, err
 	}
 	defer source.Close()
 
-	target, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	target, err := os.CreateTemp(destinationDir, ".lumina-import-*")
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return ImportResult{}, errors.New("raw source already exists")
-		}
 		return ImportResult{}, err
 	}
 	success := false
 	defer func() {
+		_ = target.Close()
 		if !success {
-			_ = os.Remove(destination)
+			_ = os.Remove(target.Name())
 		}
 	}()
-	defer target.Close()
 
 	written, err := io.Copy(target, source)
 	if err != nil {
 		return ImportResult{}, err
 	}
 	if err := target.Sync(); err != nil {
+		return ImportResult{}, err
+	}
+	if err := target.Close(); err != nil {
+		return ImportResult{}, err
+	}
+	if err := os.Link(target.Name(), destination); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return ImportResult{}, errors.New("raw source already exists")
+		}
+		return ImportResult{}, err
+	}
+	if err := os.Remove(target.Name()); err != nil {
+		_ = os.Remove(destination)
 		return ImportResult{}, err
 	}
 	success = true

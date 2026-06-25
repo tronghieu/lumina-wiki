@@ -25,8 +25,8 @@ source: skill
 
 Add a check details panel to the inspector. After `Run Check`, the app keeps the last `CheckResult` and displays status, exit code, summary counts, per-check counts, stdout, and stderr. This is frontend-only and uses the existing backend contract.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: auto-fix, backend changes, rule documentation, persistence, telemetry.

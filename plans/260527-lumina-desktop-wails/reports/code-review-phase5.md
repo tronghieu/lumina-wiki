@@ -5,15 +5,23 @@ Scope: Phase 1-5 desktop app changes on `feat/lumina-desktop-wails`.
 
 ## Findings
 
-No critical or important unresolved findings.
+The original review was superseded by the PR completion pass on 2026-06-24.
+That pass identified and fixed missing desktop CI plus symlink-mediated
+workspace boundary gaps in graph reads, check execution, and raw imports.
 
 ## Checks
 
-- Backend service boundaries reviewed: graph reads skip symlink notes and reject symlink graph files; import rejects symlink sources and refuses overwrite.
+- Backend service boundaries reviewed: graph reads reject symlink notes,
+  entity directories, graph directories, and graph files; import rejects
+  symlink sources/workspace paths and refuses overwrite.
 - Tool runner reviewed: uses `exec.CommandContext` with argv array, workspace cwd, timeout, and no shell interpolation.
 - Frontend reviewed: React Flow rendering, search filtering, selection state, and action result formatting covered by tests.
-- Root package impact reviewed: desktop dependencies remain under `apps/desktop/frontend`; `npm run ci:package` still reports 91 package files.
+- Root package impact reviewed: desktop dependencies remain under
+  `apps/desktop/frontend`; package validation explicitly rejects
+  `apps/desktop/` paths.
 
 ## Follow-up
 
-- Native workspace/file pickers are still deferred; current MVP uses manual path fields.
+- Recent workspace and settings persistence remain deferred.
+- CLI/skill parity remains tracked separately in
+  `plans/260604-desktop-cli-parity/`.

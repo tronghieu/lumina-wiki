@@ -27,8 +27,8 @@ Add linked-node navigation to the inspector. Each linked row becomes an
 accessible button that calls the existing app-level node selection handler, so
 the inspector, graph highlight, and note reader stay synchronized.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: graph auto-pan, inspector tabs, backend changes, persistence, new

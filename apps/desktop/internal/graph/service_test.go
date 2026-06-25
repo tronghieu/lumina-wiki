@@ -36,8 +36,11 @@ func TestLoadGraphRejectsMissingWiki(t *testing.T) {
 	}
 }
 
-func TestLoadGraphSkipsSymlinkedNotes(t *testing.T) {
+func TestLoadGraphRejectsSymlinkedNotes(t *testing.T) {
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
 	conceptDir := filepath.Join(root, "wiki", "concepts")
 	graphDir := filepath.Join(root, "wiki", "graph")
 	if err := os.MkdirAll(conceptDir, 0o700); err != nil {
@@ -55,17 +58,16 @@ func TestLoadGraphSkipsSymlinkedNotes(t *testing.T) {
 	}
 
 	service := NewService()
-	graph, err := service.Load(root)
-	if err != nil {
-		t.Fatalf("Load returned error: %v", err)
-	}
-	if len(graph.Nodes) != 0 {
-		t.Fatalf("expected symlinked note to be skipped, got %#v", graph.Nodes)
+	if _, err := service.Load(root); err == nil {
+		t.Fatal("expected symlinked note to be rejected")
 	}
 }
 
 func TestLoadGraphRejectsSymlinkedEdgeFile(t *testing.T) {
 	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
 	graphDir := filepath.Join(root, "wiki", "graph")
 	if err := os.MkdirAll(filepath.Join(root, "wiki", "concepts"), 0o700); err != nil {
 		t.Fatalf("create concepts dir: %v", err)
@@ -84,6 +86,40 @@ func TestLoadGraphRejectsSymlinkedEdgeFile(t *testing.T) {
 	service := NewService()
 	if _, err := service.Load(root); err == nil {
 		t.Fatal("expected symlinked edge file to be rejected")
+	}
+}
+
+func TestLoadGraphRejectsSymlinkedEntityDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "wiki"), 0o700); err != nil {
+		t.Fatalf("create wiki: %v", err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "wiki", "concepts")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := NewService().Load(root); err == nil {
+		t.Fatal("expected symlinked entity directory rejection")
+	}
+}
+
+func TestLoadGraphRejectsSymlinkedGraphDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "wiki"), 0o700); err != nil {
+		t.Fatalf("create wiki: %v", err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(root, "wiki", "graph")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := NewService().Load(root); err == nil {
+		t.Fatal("expected symlinked graph directory rejection")
 	}
 }
 

@@ -28,8 +28,8 @@ Add a `Refresh Graph` action to the desktop shell and reuse it after successful
 node when possible, reloads note content, and does not mutate Lumina workspace
 data.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: file watching, auto-ingest, linter auto-fix, backend API changes,

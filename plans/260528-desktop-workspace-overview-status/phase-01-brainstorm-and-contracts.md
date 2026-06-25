@@ -46,5 +46,5 @@ data. Frontend state remains app-level and is passed to shell/inspector views.
 
 ## Risk Assessment
 
-Risk: dashboard grows into quality scoring.  
+Risk: dashboard grows into quality scoring.
 Mitigation: keep this slice to inventory only.

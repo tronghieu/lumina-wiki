@@ -43,5 +43,5 @@ count formatting as workspace load.
 
 ## Risk Assessment
 
-Risk: duplicate count formatting.  
+Risk: duplicate count formatting.
 Mitigation: reuse existing private `formatCount`.

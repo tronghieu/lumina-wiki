@@ -53,5 +53,5 @@ the full desktop build.
 ## Risk Assessment
 
 Risk: Wails build takes longer than unit tests and can surface packaging issues
-unrelated to the narrow feature.  
+unrelated to the narrow feature.
 Mitigation: run it before commit and report any unrelated blocker with evidence.

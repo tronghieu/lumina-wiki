@@ -22,19 +22,19 @@ are missing until an action fails.
 
 ### Option A: Frontend-only summary from loaded graph
 
-Pros: smallest change, no binding regeneration.  
+Pros: smallest change, no binding regeneration.
 Cons: cannot show raw/source inventory or missing folders; weak fit for Lumina
 workspace contract.
 
 ### Option B: Backend workspace summary API
 
 Pros: one read-only source of truth for packs, raw sources, wiki notes, graph
-edges, citations, and missing optional folders. Matches existing service pattern.  
+edges, citations, and missing optional folders. Matches existing service pattern.
 Cons: requires Wails binding regeneration and Go tests.
 
 ### Option C: Run existing lint/check and derive dashboard
 
-Pros: uses existing Lumina tooling.  
+Pros: uses existing Lumina tooling.
 Cons: slower, conflates health checks with inventory, can fail for reasons not
 related to summary.
 

@@ -15,7 +15,7 @@ npm CLI package.
 ## Prerequisites
 
 - Node.js 20 or newer
-- Go toolchain compatible with Wails 3
+- Go 1.25 or newer
 - Wails 3 CLI: `wails3`
 - Platform WebView dependencies required by Wails
 
@@ -72,7 +72,8 @@ Current write-capable surface:
 - `Run Check` executes the installed workspace script at
   `_lumina/scripts/lint.mjs --summary` through Go `exec.CommandContext`.
 - `Import` copies one selected file into `raw/sources/`.
-- Import refuses overwrites and rejects symlink sources.
+- Import publishes the completed copy atomically, refuses overwrites, and
+  rejects symlink sources or workspace paths.
 
 Current read/navigation surface:
 
@@ -91,6 +92,13 @@ Current MVP limits:
 - No graph edge or wiki note editing.
 - Workspace and source paths are session-only; recent workspaces are not
   persisted yet.
+
+## Continuous Integration
+
+The repository CI runs the desktop frontend typecheck/tests/build and the Go
+test suite on Ubuntu 24.04. The desktop dependency trees remain separate from
+the root npm package, and the package-readiness gate rejects any accidental
+`apps/desktop/` files in the published CLI tarball.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:

@@ -26,8 +26,8 @@ source: skill
 
 Add a session-only workspace open flow to the existing Wails app. The user chooses a Lumina workspace with a native directory picker, the app validates it through the existing Go workspace service, loads real graph data through the existing graph service, and keeps check/import actions bound to that root.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: chat, wiki editing, direct graph writes, persistent recents, installer/root package changes.

@@ -45,5 +45,5 @@ Refresh composes existing frontend calls to `Validate`, `Load`, and `ReadNote`.
 
 ## Risk Assessment
 
-Risk: import refresh might imply ingestion happened.  
+Risk: import refresh might imply ingestion happened.
 Mitigation: keep action text focused on copied file and graph refresh only.

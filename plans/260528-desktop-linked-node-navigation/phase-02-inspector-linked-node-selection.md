@@ -51,5 +51,5 @@ the selection id for tests without adding a UI test framework.
 
 ## Risk Assessment
 
-Risk: CSS change causes visual regression in inspector cards.  
+Risk: CSS change causes visual regression in inspector cards.
 Mitigation: keep existing linked-list dimensions/colors and only adjust selector names for buttons.

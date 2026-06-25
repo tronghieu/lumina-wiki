@@ -25,8 +25,8 @@ source: skill
 
 Add a safe read-only note reader for selected graph nodes. The graph service reads Markdown files under `wiki/` using node paths from the loaded graph. The inspector displays full plain Markdown for the selected node once a workspace is loaded.
 
-Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)  
-Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)  
+Brainstorm: [brainstorm-summary.md](./brainstorm-summary.md)
+Red-team: [reports/red-team-brainstorm.md](./reports/red-team-brainstorm.md)
 Plan audit: [reports/plan-audit.md](./reports/plan-audit.md)
 
 Out of scope: Markdown HTML rendering, note editing, frontmatter mutation, raw file preview, persistent note cache.

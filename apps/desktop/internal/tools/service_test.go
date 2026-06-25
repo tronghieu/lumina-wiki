@@ -54,6 +54,30 @@ func TestRunCheckTimesOut(t *testing.T) {
 	}
 }
 
+func TestRunCheckRejectsSymlinkedScriptsDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspace")
+	if err := os.MkdirAll(filepath.Join(root, "wiki"), 0o700); err != nil {
+		t.Fatalf("create wiki: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# Test"), 0o600); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "lint.mjs"), []byte(`console.log("{}")`), 0o600); err != nil {
+		t.Fatalf("write outside script: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "_lumina"), 0o700); err != nil {
+		t.Fatalf("create _lumina: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "_lumina", "scripts")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := NewService().RunCheck(root); err == nil {
+		t.Fatal("expected symlinked scripts directory rejection")
+	}
+}
+
 func makeToolWorkspace(t *testing.T, script string) string {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "workspace")

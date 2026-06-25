@@ -22,21 +22,21 @@
 
 Add `ReadNote(root, notePath)` to graph service. It validates workspace, resolves `wiki/<notePath>`, rejects unsafe files, and returns content.
 
-Pros: small, testable, matches graph ownership, no new service.  
+Pros: small, testable, matches graph ownership, no new service.
 Cons: graph service grows beyond graph topology into note content reads.
 
 ### B. New notes service
 
 Create `internal/notes` with read-only note APIs.
 
-Pros: clean domain boundary if note features grow.  
+Pros: clean domain boundary if note features grow.
 Cons: overkill for one read-only method; more bindings and files.
 
 ### C. Frontend reads files directly
 
 Use Web APIs or runtime APIs to read selected files.
 
-Pros: no backend code.  
+Pros: no backend code.
 Cons: bypasses path safety and workspace validation, not acceptable.
 
 ## Recommendation

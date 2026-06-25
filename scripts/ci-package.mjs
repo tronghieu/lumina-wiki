@@ -64,6 +64,7 @@ const prohibitedPatterns = [
   /\.pyc$/,
   /(^|\/)_lumina\/_state\//,
   /^docs\/planning-artifacts\//,
+  /^apps\/desktop\//,
   /^\.github\//,
   /^scripts\/ci-/,
 ];
