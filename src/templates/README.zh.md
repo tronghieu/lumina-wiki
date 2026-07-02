@@ -130,6 +130,7 @@
 | `concepts/K` 写 `[[source-E]]`              | `sources/E` 将 K 追加到 `Related concepts`  |
 | `summary/S` 写 `[[concept-K]]`              | `concepts/K` 将 S 追加到 `Mentioned in`     |
 {{#if pack_research}}| `topics/T` 写 `[[concept-K]]`               | `concepts/K` 将 T 追加到 `Topics`           |
+| `topics/T` 写 `[[source-A]]`                | `sources/A` 将 T 追加到 `Topics`            |
 {{/if}}{{#if pack_reading}}| `chapters/Ch` 写 `[[character-X]]`          | `characters/X` 将 Ch 追加到 `Key chapters`  |
 | `chapters/Ch` 写 `[[theme-Y]]`              | `themes/Y` 将 Ch 追加到 `Traced in`         |
 {{/if}}

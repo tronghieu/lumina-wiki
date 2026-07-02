@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ENTITY_DIRS, EXEMPTION_GLOBS, REQUIRED_FRONTMATTER } from './schemas.mjs';
+import { ENTITY_DIRS, EDGE_TYPES, EXEMPTION_GLOBS, REQUIRED_FRONTMATTER } from './schemas.mjs';
 
 test('ENTITY_DIRS contains reflections entry with pack learning', () => {
   assert.ok('reflections' in ENTITY_DIRS, 'reflections key missing from ENTITY_DIRS');
@@ -53,6 +53,31 @@ test('REQUIRED_FRONTMATTER.reflections required fields are all marked required',
       field.required, true,
       `field ${field.key}: required must be true`,
     );
+  }
+});
+
+test('EDGE_TYPES defines topic organization edges with consistent reverse pairs', () => {
+  const byName = Object.fromEntries(EDGE_TYPES.map(e => [e.name, e]));
+  const pairs = [
+    ['includes_source', 'topics', 'sources', 'included_in_topic'],
+    ['included_in_topic', 'sources', 'topics', 'includes_source'],
+    ['covers_concept', 'topics', 'concepts', 'covered_by_topic'],
+    ['covered_by_topic', 'concepts', 'topics', 'covers_concept'],
+  ];
+  for (const [name, from, to, reverse] of pairs) {
+    const edge = byName[name];
+    assert.ok(edge, `EDGE_TYPES missing ${name}`);
+    assert.equal(edge.from, from, `${name}.from mismatch`);
+    assert.equal(edge.to, to, `${name}.to mismatch`);
+    assert.equal(edge.reverse, reverse, `${name}.reverse mismatch`);
+    assert.equal(edge.symmetric, false, `${name} must not be symmetric`);
+    assert.equal(edge.pack, 'research', `${name} must be pack: research`);
+    // Reverse pair must point back consistently.
+    const reverseEdge = byName[reverse];
+    assert.ok(reverseEdge, `EDGE_TYPES missing reverse ${reverse}`);
+    assert.equal(reverseEdge.reverse, name, `${reverse}.reverse must be ${name}`);
+    assert.equal(reverseEdge.from, to, `${reverse}.from must equal ${name}.to`);
+    assert.equal(reverseEdge.to, from, `${reverse}.to must equal ${name}.from`);
   }
 });
 

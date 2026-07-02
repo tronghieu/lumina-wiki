@@ -215,6 +215,12 @@ export const EDGE_TYPES = [
   { name: 'part_of',            from: 'concepts', to: 'concepts', reverse: 'has_part',        symmetric: false, pack: 'core' },
   { name: 'has_part',           from: 'concepts', to: 'concepts', reverse: 'part_of',         symmetric: false, pack: 'core' },
 
+  // --- research pack: topic organization edges -----------------------------
+  { name: 'includes_source',    from: 'topics',   to: 'sources',  reverse: 'included_in_topic', symmetric: false, pack: 'research' },
+  { name: 'included_in_topic',  from: 'sources',  to: 'topics',   reverse: 'includes_source',   symmetric: false, pack: 'research' },
+  { name: 'covers_concept',     from: 'topics',   to: 'concepts', reverse: 'covered_by_topic',  symmetric: false, pack: 'research' },
+  { name: 'covered_by_topic',   from: 'concepts', to: 'topics',   reverse: 'covers_concept',    symmetric: false, pack: 'research' },
+
   // --- terminal edges (no reverse) — exempt-only rule applies -------------
   // Any entity -> foundations/** (research pack)
   { name: 'grounded_in',        from: '*', to: 'foundations', reverse: null, terminal: true, pack: 'research' },

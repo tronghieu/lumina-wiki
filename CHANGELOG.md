@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `wiki.mjs init --pack learning` now creates `wiki/reflections/`, matching the
+  learning pack's entity schema. Valid `--pack` values are derived from the
+  schema instead of hardcoded, so future packs stay in sync automatically.
+
+### Fixed
+
+- `/lumi-research-topic` previously failed every `add-edge` call with "Unknown
+  edge type" because the topic-organization edges it relies on
+  (`includes_source`/`included_in_topic`, `covers_concept`/`covered_by_topic`)
+  were missing from the schema. Added all four to `EDGE_TYPES`.
+- Corrected skill-prompt and documentation drift: the reset skill's dry-run
+  output format, the internal lint-check reference table (was missing
+  L10-L12), and the documented behavior of ingest phase checkpoints (keyed
+  by file basename, not slug, since the checkpoint exists before slug
+  generation; the checkpoint JSON's `slug` field, written once the slug
+  phase completes, is now documented as the way other skills match a
+  checkpoint to its wiki entry).
+
 ## [1.7.0] - 2026-06-16
 
 ### Added

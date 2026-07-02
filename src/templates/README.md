@@ -129,6 +129,7 @@ When you write a forward link, **always write the reverse link in the same opera
 | `concepts/K` writes `[[source-E]]`          | `sources/E` appends K to `Related concepts`|
 | `summary/S` writes `[[concept-K]]`          | `concepts/K` appends S to `Mentioned in`   |
 {{#if pack_research}}| `topics/T` writes `[[concept-K]]`           | `concepts/K` appends T to `Topics`         |
+| `topics/T` writes `[[source-A]]`            | `sources/A` appends T to `Topics`          |
 {{/if}}{{#if pack_reading}}| `chapters/Ch` writes `[[character-X]]`      | `characters/X` appends Ch to `Key chapters`|
 | `chapters/Ch` writes `[[theme-Y]]`          | `themes/Y` appends Ch to `Traced in`       |
 {{/if}}

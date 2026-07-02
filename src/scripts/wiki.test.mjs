@@ -243,6 +243,26 @@ describe('init', () => {
     }
   });
 
+  test('creates learning pack directories with --pack learning', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init', '--pack', 'learning'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.created.includes('wiki/reflections'));
+      await access(join(tmp, 'wiki/reflections'), fsConstants.F_OK);
+
+      // Idempotency: second call reports the dir as skipped, not re-created.
+      const r2 = runWiki(['init', '--pack', 'learning'], { cwd: tmp });
+      assert.equal(r2.status, 0, `second init failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.ok(json2.skipped.includes('wiki/reflections'));
+      assert.ok(!json2.created.includes('wiki/reflections'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('rejects invalid --pack value', async () => {
     const tmp = await makeTmp();
     try {

@@ -1179,26 +1179,33 @@ const CORE_WIKI_DIRS = [
   'wiki/graph',
 ];
 
-/** Research pack additional wiki dirs */
-const RESEARCH_WIKI_DIRS = [
-  'wiki/foundations',
-  'wiki/topics',
-];
+/**
+ * Installable (non-core) pack names, derived from ENTITY_DIRS so a new pack
+ * added to schemas.mjs becomes selectable via `init --pack` without touching
+ * this file.
+ * @type {string[]}
+ */
+const INSTALLABLE_PACKS = [...new Set(Object.values(ENTITY_DIRS).map(e => e.pack))]
+  .filter(pack => pack !== 'core');
 
-/** Reading pack additional wiki dirs */
-const READING_WIKI_DIRS = [
-  'wiki/chapters',
-  'wiki/characters',
-  'wiki/themes',
-  'wiki/plot',
-];
+/**
+ * Additional wiki dirs owned by a given pack, derived from ENTITY_DIRS.
+ * Preserves ENTITY_DIRS declaration order.
+ * @param {string} pack
+ * @returns {string[]}
+ */
+function wikiDirsForPack(pack) {
+  return Object.values(ENTITY_DIRS)
+    .filter(e => e.pack === pack)
+    .map(e => `wiki/${e.dir}`.replace(/\/$/, ''));
+}
 
 /**
  * Initialize a workspace skeleton.
  * Idempotent: re-running on an existing workspace is a no-op.
  * @param {string} projectRoot
  * @param {object} [opts]
- * @param {string} [opts.pack] - 'research' | 'reading' | undefined
+ * @param {string} [opts.pack] - one of INSTALLABLE_PACKS | undefined
  * @returns {Promise<{created: string[], skipped: string[]}>}
  */
 async function initWorkspace(projectRoot, opts = {}) {
@@ -1206,10 +1213,8 @@ async function initWorkspace(projectRoot, opts = {}) {
   const skipped = [];
 
   let dirs = [...CORE_WIKI_DIRS];
-  if (opts.pack === 'research') {
-    dirs = [...dirs, ...RESEARCH_WIKI_DIRS];
-  } else if (opts.pack === 'reading') {
-    dirs = [...dirs, ...READING_WIKI_DIRS];
+  if (opts.pack && INSTALLABLE_PACKS.includes(opts.pack)) {
+    dirs = [...dirs, ...wikiDirsForPack(opts.pack)];
   }
 
   // Add _lumina/_state dir
@@ -1506,7 +1511,7 @@ async function main(argv) {
       'Usage: node wiki.mjs <subcommand> [flags]',
       '',
       'Subcommands:',
-      '  init [--pack research|reading]  Create workspace skeleton',
+      `  init [--pack ${INSTALLABLE_PACKS.join('|')}]  Create workspace skeleton`,
       '  slug <title>                    Emit kebab-case slug',
       '  log <skill> <details...>        Append to wiki/log.md',
       '  read-meta <slug>                Read entity frontmatter as JSON',
@@ -1539,8 +1544,8 @@ async function main(argv) {
         // init does not require an existing workspace; it creates one
         const projectRoot = process.cwd();
         const pack = flags.pack && typeof flags.pack === 'string' ? flags.pack : undefined;
-        if (pack && pack !== 'research' && pack !== 'reading') {
-          emitError(`Invalid --pack value: ${pack}. Must be research or reading.`, 2);
+        if (pack && !INSTALLABLE_PACKS.includes(pack)) {
+          emitError(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
           process.exit(2);
         }
         const result = await initWorkspace(projectRoot, { pack });
