@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-02
+
 ### Added
 
 - `wiki.mjs init --pack learning` now creates `wiki/reflections/`, matching the
