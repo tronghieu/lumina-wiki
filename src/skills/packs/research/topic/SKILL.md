@@ -66,14 +66,17 @@ node _lumina/scripts/wiki.mjs list-entities --type sources
 node _lumina/scripts/wiki.mjs list-entities --type concepts
 ```
 
-   If the user named a seed concept, also fetch its immediate neighbours:
+   If the user named a seed concept that already exists as a concept page, also
+   fetch its immediate neighbours (the topic title itself is never a seed slug —
+   the topic page does not exist yet, so do not run read-edges against it):
 
 ```bash
 node _lumina/scripts/wiki.mjs read-edges concepts/<seed-slug>
 ```
 
    From the combined output, select 5-10 candidate sources and 5-10 candidate
-   concepts most relevant to the topic. Present them as a numbered list with a
+   concepts most relevant to the topic. On a small wiki with fewer than 5 of
+   either, propose all relevant ones — a shorter list is fine. Present them as a numbered list with a
    one-line reason for each. Group sources and concepts separately. Explain that
    the user can:
    - confirm the list as shown,
@@ -124,29 +127,24 @@ node _lumina/scripts/wiki.mjs read-edges concepts/<seed-slug>
         Leave blank if none are obvious; the user can fill this in later. -->
    ```
 
-5. Write bidirectional edges for every approved source and concept. For each
-   approved source, add both directions:
+5. Write edges for every approved source and concept. Call `add-edge` once for
+   the forward relationship from the topic page — the engine writes the
+   reverse edge automatically. For each approved source:
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge topics/<slug> includes_source sources/<source-slug>
-node _lumina/scripts/wiki.mjs add-edge sources/<source-slug> included_in_topic topics/<slug>
 ```
 
-   For each approved concept, add both directions:
+   For each approved concept:
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge topics/<slug> covers_concept concepts/<concept-slug>
-node _lumina/scripts/wiki.mjs add-edge concepts/<concept-slug> covered_by_topic topics/<slug>
 ```
-
-   If `add-edge` is not the correct subcommand, check available subcommands with
-   `node _lumina/scripts/wiki.mjs --help` and use the correct one before
-   proceeding.
 
 6. Log the operation:
 
 ```bash
-node _lumina/scripts/wiki.mjs log lumi-research-topic "created topic <slug> covering <N> sources, <M> concepts"
+node _lumina/scripts/wiki.mjs log research-topic "created topic <slug> covering <N> sources, <M> concepts"
 ```
 
    On a refresh, write `"refreshed topic <slug> ..."` instead.
@@ -160,15 +158,19 @@ node _lumina/scripts/lint.mjs --fix --json
    If `summary.errors > 0`, read the lint output, address each error, and re-run
    before telling the user the skill is done.
 
+8. Suggest `/lumi-check` in a fresh session or via a subagent after this run. A
+   blank context catches bias from the reasoning chain that just built the
+   topic page.
+
 ## Constraints
 
 - Do not read `raw/` files at any point. All information comes from already-ingested
   wiki pages and graph edges.
 - Do not create concept or source pages from this skill. If a candidate the user
   wants does not have a wiki page, tell them to run `/lumi-ingest` first.
-- Every forward link from the topic page to a concept or source must have a
-  reverse edge written in the same operation. This is a hard graph rule — do not
-  skip it.
+- Every forward link from the topic page to a concept or source needs a
+  reverse edge — the engine writes the reverse edge in the same operation.
+  Never add reverse edges manually.
 - When refreshing an existing topic, preserve the original `created` date and any
   `<!-- user-edited -->` sections verbatim. Only `updated`, `key_sources`, and
   non-marked sections may change.
@@ -183,9 +185,10 @@ node _lumina/scripts/lint.mjs --fix --json
   entry) and all four standard sections (Description / Key sources / Key
   concepts / Open questions).
 - Bidirectional edges exist for every linked source and concept — forward from
-  the topic page and reverse on each source and concept page.
+  the topic page, written once via `add-edge`, with the reverse edge on each
+  source and concept page written automatically by the engine.
 - `node _lumina/scripts/lint.mjs --fix --json` leaves `summary.errors === 0`.
-- `wiki/log.md` has an append-only `lumi-research-topic` entry recording the
+- `wiki/log.md` has an append-only `research-topic` entry recording the
   slug, source count, and concept count.
 - If the page already existed, the user's choice (skip / refresh / abort) is
   logged in `wiki/log.md` with the actual decision taken.

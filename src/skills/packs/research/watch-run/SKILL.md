@@ -30,11 +30,14 @@ with the research pack and depends on:
 - `_lumina/tools/fetch_rss.py` — used by the runner for `type: feed` items.
 
 The runner is **manual** — Lumina does not poll feeds in the background. The
-user (or their scheduler) decides when to trigger this skill. See
-`docs/user-guide/advanced-scheduled-discovery.{en,vi,zh}.md` for cron /
-launchd / Task Scheduler templates (trilingual), and
-`docs/user-guide/research-watch.md` for the v1.4 feed schema, etag /
-XXE / per-feed-state deep-dive (English).
+user (or their scheduler) decides when to trigger this skill. See the online
+guide at
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/advanced-scheduled-discovery.en.md
+(also in Vietnamese at .../advanced-scheduled-discovery.vi.md and Simplified
+Chinese at .../advanced-scheduled-discovery.zh.md) for cron / launchd / Task
+Scheduler templates, and the online guide at
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/research-watch.md
+for the v1.4 feed schema, etag / XXE / per-feed-state deep-dive (English).
 
 ## Instructions
 
@@ -79,12 +82,16 @@ Never dump raw JSON or stack traces to the user — keep it conversational.
 
 ### 4. If the user asks about scheduling
 
-Point them at `docs/user-guide/advanced-scheduled-discovery.{en,vi,zh}.md`
-(trilingual cron / launchd / Task Scheduler patterns) and the included
-wrapper `_lumina/scripts/scheduler-samples/cron-daily.sh`. For v1.4 feed
-schema / etag / XXE specifics, the deep-dive lives at
-`docs/user-guide/research-watch.md` (English). Do not edit their crontab
-or launchd files; explain the snippets and let them paste.
+Point them at the online guide (trilingual cron / launchd / Task Scheduler
+patterns) at
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/advanced-scheduled-discovery.en.md
+(.vi.md and .zh.md for Vietnamese and Simplified Chinese) and the included
+wrapper `_lumina/scripts/scheduler-samples/cron-daily.sh` — that file is a
+local path, shipped with the workspace. For v1.4 feed schema / etag / XXE
+specifics, the deep-dive lives at the online guide
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/research-watch.md
+(English). Do not edit their crontab or launchd files; explain the snippets
+and let them paste.
 
 ## Constraints
 

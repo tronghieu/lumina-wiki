@@ -127,6 +127,16 @@ Do not ingest the file yourself. The user decides whether to proceed.
 
 If the user asks to save the answer:
 
+First check whether the target page already exists:
+
+```bash
+node _lumina/scripts/wiki.mjs read-meta outputs/<slug>
+```
+
+Exit 0 means the page exists. If it does, ask the user whether to overwrite
+it or pick a new slug — do not silently overwrite. Exit 2 ("Entity not
+found") means the slug is free; proceed.
+
 Ask for confirmation before writing. Then write
 `wiki/outputs/<slug>.md` or `wiki/summary/<slug>.md` with:
 ```yaml
@@ -232,5 +242,6 @@ Before reporting done, verify:
 
 (a) Every cited page in the answer exists in `wiki/` (readable)
 (b) If a page was filed: `wiki/log.md` has a new `## [YYYY-MM-DD] ask | ...` entry
-(c) If a page was filed: running `/lumi-ask` again with the same question does not
-    create a second output page (confirm with user or check for existing slug)
+(c) If a page was filed: the Step 6 existence check (`read-meta outputs/<slug>`)
+    ran before writing, so running `/lumi-ask` again with the same question
+    does not silently create or overwrite a second output page

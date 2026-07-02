@@ -123,6 +123,10 @@ manual follow-up.
 node _lumina/scripts/wiki.mjs log edit "Updated <slug>: <brief description>"
 ```
 
+After logging, suggest the user run `/lumi-check` in a fresh session or via a
+sub-agent. Blank context catches bias from the reasoning chain that just made
+this edit.
+
 ## Output Format
 
 Report to the user:
@@ -135,7 +139,7 @@ Example:
 Edited concepts/softmax-temperature.md:
 - Added definition paragraph in ## Overview
 - Linked back to sources/attention-revisited (used_in edge added)
-Lint: 0 errors, 1 warning (L04: orphan page — advisory)
+Links check out — one advisory note: this page has no inbound links yet (L04)
 ```
 
 ## Examples

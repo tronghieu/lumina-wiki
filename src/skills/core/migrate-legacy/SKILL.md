@@ -178,11 +178,22 @@ Use the following inference order. Stop at the first tier that yields a result.
 
 **Tier 1 (authoritative): read the ingest checkpoint.**
 
+Ingest checkpoints are keyed by the source file's basename
+(`_lumina/_state/ingest-<file-basename>.json`), not by slug — there is no
+direct `<slug>` lookup. List every ingest checkpoint and match by content:
+
 ```bash
-node _lumina/scripts/wiki.mjs checkpoint-read ingest <slug>
+ls _lumina/_state/ingest-*.json 2>/dev/null
 ```
 
-If a checkpoint exists with a `source_path` field:
+Read each match with the Read tool and check its `slug` field. Newer ingests
+(post-checkpoint-slug-merge) store `"slug": "sources/<slug>"` directly in the
+checkpoint — match the checkpoint whose `slug` equals the entry being
+migrated. Older checkpoints predate this field and won't have it; if no
+checkpoint's `slug` matches (including the case where none carry the field at
+all), fall through to Tier 2.
+
+If a matching checkpoint is found and has a `source_path` field:
 - If `source_path` is under `raw/tmp/*`: do NOT write `raw_paths`. Tell the user:
   "`<slug>` was ingested from a transient location (`<source_path>`). Move the
   file to `raw/sources/` or `raw/download/<resource>/` and re-run
@@ -308,13 +319,14 @@ URL=$(node _lumina/scripts/wiki.mjs read-meta sources/<slug> | node -e "process.
 
 # Step 2 — write urls array
 node _lumina/scripts/wiki.mjs set-meta sources/<slug> urls "[\"$URL\"]" --json-value
-
-# Step 3 — remove legacy url key (set-meta with empty string removes the key)
-node _lumina/scripts/wiki.mjs set-meta sources/<slug> url --remove
 ```
 
-If `set-meta --remove` is not supported by the installed wiki.mjs version, use `Edit` to
-remove the `url:` line directly after confirming `urls:` was written successfully.
+`set-meta` cannot remove a frontmatter key today — there is no `--remove`
+flag. After confirming `urls:` was written successfully, remove the legacy
+`url:` line with the `Edit` tool directly. This is the one sanctioned
+exception to "never hand-edit wiki frontmatter" in this skill, and it is
+limited strictly to deleting the obsolete `url:` key — do not use `Edit` for
+any other frontmatter change.
 
 After backfilling all entries, proceed immediately to Phase 4.
 
@@ -402,7 +414,7 @@ Report to the user:
 2. Entries updated — count and slugs grouped by field.
 3. Inferred values — the inference table from Phase 2 (so the user can review).
 4. Lint result after backfill — must show 0 errors.
-5. Whether `legacyMigrationNeeded` was cleared in the manifest.
+5. Whether the upgrade cleanup is finished.
 
 ## Examples
 
@@ -464,7 +476,10 @@ Re-running this skill on a clean wiki produces zero file changes.
 - Never modify files in `raw/`. Read-only.
 - Never hand-edit `wiki/graph/edges.jsonl` or `wiki/graph/citations.jsonl`.
 - `set-meta` is the only permitted write path for frontmatter changes in this
-  skill. Do not use Edit or Write on wiki pages directly.
+  skill, with one sanctioned exception: deleting the obsolete `url:` key
+  during the `url` → `urls` schema-shape upgrade (Phase 3), since `set-meta`
+  has no key-removal flag. Do not use Edit or Write on wiki pages for
+  anything else.
 - Do not clear `legacyMigrationNeeded` until lint confirms 0 errors.
 - If the CHANGELOG has no `### Migration` section for the detected version gap,
   rely entirely on the L01/L11 finding messages to identify which fields need

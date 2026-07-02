@@ -99,7 +99,9 @@ node _lumina/scripts/lint.mjs --fix --json
 
 The `--fix` pass:
 - Applies the supported auto-fixes listed in `references/lint-checks.md`
-- Leaves L02, L05, and L08 for manual correction
+  (L01, L03, L06, L07, L09)
+- Leaves every other check (L02, L04, L05, L08, L10, L11, L12, L13, L14, L16)
+  for manual correction
 
 ### Step 4 — Self-check re-run
 
@@ -117,8 +119,10 @@ If errors remain, do not report done. Address each remaining error specifically:
   ```bash
   node _lumina/scripts/wiki.mjs set-meta <slug> <key> "<value>"
   ```
-- If L02, L05, or L08 remain, report the exact fields, wikilinks, or edges that
-  need manual correction.
+- If L02, L05, L08, or L10 remain, report the exact fields, wikilinks, edges,
+  or alias conflicts that need manual correction.
+- If L13 or L16 persist, suggest `/lumi-migrate-legacy --backfill-ids` — these
+  are not fixed by `lint.mjs --fix`.
 
 Repeat until `summary.errors === 0`. Do not loop more than 3 times — if errors
 persist, surface them to the user as needing manual attention.
@@ -137,12 +141,12 @@ Present findings in a structured list. Group errors first, then warnings.
 Lint check: <scanned_files> files scanned
 
 Errors (N):
-  [L06] concepts/positional-encoding.md:18 — Missing reverse edge to sources/attention-revisited
-  [L05] summary/transformers-overview.md:42 — Broken link [[flash-decoding]] (page not found)
+  concepts/positional-encoding.md:18 — a return link is missing, pointing back to sources/attention-revisited (L06)
+  summary/transformers-overview.md:42 — a link points to a page that does not exist: [[flash-decoding]] (L05)
 
 Warnings (M, advisory):
-  [L04] concepts/rotary-embeddings.md — Orphan page (no inbound links)
-  [L09] wiki/index.md — Index catalog is stale
+  concepts/rotary-embeddings.md — this page has no inbound or outbound links yet (L04)
+  wiki/index.md — the page catalog is out of date (L09)
 
 Fixes available: L06, L09 (N total). Apply? [yes/no]
 ```

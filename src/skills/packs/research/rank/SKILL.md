@@ -150,7 +150,7 @@ References:
 8. **Log the activity.**
 
    ```bash
-   node _lumina/scripts/wiki.mjs log lumi-research-rank "ranked <slug>: infl=<n>, 4C=<c/c/c/c>"
+   node _lumina/scripts/wiki.mjs log research-rank "ranked <slug>: infl=<n>, 4C=<c/c/c/c>"
    ```
 
 9. **Report to the user in plain language.** Summarize what you found — how

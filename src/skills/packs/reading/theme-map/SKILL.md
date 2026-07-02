@@ -126,7 +126,7 @@ one, it was promoted prematurely — revert to stub status and note in the repor
 Then update `wiki/index.md` if new theme pages were created, append the activity via:
 
 ```bash
-node _lumina/scripts/wiki.mjs log theme-map "<book-slug> -> <K> themes promoted, <M> stubs pending"
+node _lumina/scripts/wiki.mjs log reading-theme-map "<book-slug> -> <K> themes promoted, <M> stubs pending"
 ```
 
 Run `node _lumina/scripts/lint.mjs --json` when available; use `--fix` only for
@@ -140,7 +140,7 @@ index/frontmatter fixes within this skill's scope.
 - Theme stubs for single-chapter tags remain as stubs (not promoted).
 - `wiki/index.md` updated when pages were created or promoted.
 - `wiki/log.md` has a new entry:
-  `## [YYYY-MM-DD] theme-map | <book-slug> → <K> themes promoted, <M> stubs pending`
+  `## [YYYY-MM-DD] reading-theme-map | <book-slug> → <K> themes promoted, <M> stubs pending`
 - Lint/check run where available; unresolved issues are reported with exact slugs.
 
 ## Guardrails

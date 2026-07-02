@@ -113,7 +113,7 @@ python3 _lumina/tools/fetch_wikipedia.py page "<title>"
 6. Log the addition:
 
 ```bash
-node _lumina/scripts/wiki.mjs log lumi-research-prefill "prefilled foundation <slug>"
+node _lumina/scripts/wiki.mjs log research-prefill "prefilled foundation <slug>"
 ```
 
 7. Run lint with fix so `wiki/index.md` and structural checks stay current:
@@ -121,6 +121,10 @@ node _lumina/scripts/wiki.mjs log lumi-research-prefill "prefilled foundation <s
 ```bash
 node _lumina/scripts/lint.mjs --fix --json
 ```
+
+8. Suggest `/lumi-check` in a fresh session or via a subagent after this run.
+   A blank context catches bias from the reasoning chain that just wrote the
+   foundation page.
 
 ## Constraints
 
@@ -140,6 +144,6 @@ node _lumina/scripts/lint.mjs --fix --json
 - Foundation page exists with valid frontmatter and concise source-backed body.
 - `node _lumina/scripts/lint.mjs --fix --json` has updated `wiki/index.md` if
   needed and leaves `summary.errors === 0`.
-- `wiki/log.md` has an append-only `lumi-research-prefill` entry.
+- `wiki/log.md` has an append-only `research-prefill` entry.
 - If the page already existed, the user's choice (skip / refresh / abort) is logged
   in `wiki/log.md` with the actual decision taken.

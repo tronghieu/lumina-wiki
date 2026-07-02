@@ -76,10 +76,10 @@ re-running against the same chapter slug produces byte-identical output.
    graph files by hand.
 8. Append one line through the wiki engine:
    ```bash
-   node _lumina/scripts/wiki.mjs log chapter-ingest "<book-slug> ch<N> \"<chapter-title>\" -> <K> characters, <M> themes"
+   node _lumina/scripts/wiki.mjs log reading-chapter-ingest "<book-slug> ch<N> \"<chapter-title>\" -> <K> characters, <M> themes"
    ```
    Log entry text:
-   `## [YYYY-MM-DD] chapter-ingest | <book-slug> ch<N> "<chapter-title>" → <K> characters, <M> themes`
+   `## [YYYY-MM-DD] reading-chapter-ingest | <book-slug> ch<N> "<chapter-title>" → <K> characters, <M> themes`
 9. Self-verification: run `node _lumina/scripts/wiki.mjs read-edges chapters/<book-slug>/<chapter-slug> --json`
    and confirm that at least one `features` edge and one `tagged_with` edge are present.
    If either is missing, add the missing edges before finishing.

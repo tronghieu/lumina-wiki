@@ -47,12 +47,14 @@ Key workspace paths:
 |-------|----------------|-------------|
 | `wiki` | All files under `wiki/` (keeps directory structure) | Only from git |
 | `raw` | All files under `raw/sources/`, `raw/notes/`, `raw/assets/` | Not from wiki |
-| `state` | `_lumina/_state/*.json` checkpoint files | Yes — re-ingest regenerates |
-| `checkpoints` | `_lumina/_state/ingest-*.json` only | Yes — re-ingest regenerates |
+| `state` | Everything under `_lumina/_state/`, including subfolders (saved reviewer prompts, feed state) | Yes — re-ingest regenerates |
+| `checkpoints` | Every `<skill>-<phase>.json` file directly under `_lumina/_state/` — this is ANY checkpoint, not just ingest: resume points, research-discover shortlists, discovery-phase checkpoints, and saved `/lumi-verify` report files (`lumi-verify-<ts>.json`) | Yes for ingest/discover checkpoints — re-run regenerates. **No** for saved `/lumi-verify` reports — those are deleted too and are not regenerated automatically. |
 | `all` | `wiki` + `state` — leaves `raw/` untouched | Only wiki from git |
 
-The `checkpoints` scope is the safest reset — it only clears in-progress ingest
-state. Use it when an ingest got stuck and you want a clean restart.
+The `checkpoints` scope is the lowest-risk reset in terms of what it targets
+(no wiki content), but it is not scoped to "ingest only" — warn the user that
+any saved `/lumi-verify` reports under `_lumina/_state/` are removed along with
+stuck ingest checkpoints.
 
 ## Instructions
 
@@ -73,18 +75,37 @@ node _lumina/scripts/reset.mjs --scope <scope> --dry-run
 ```
 
 The `--dry-run` flag makes `reset.mjs` print the deletion plan without deleting
-anything and does not require `--yes`. Example output:
+anything and does not require `--yes`. `reset.mjs` reports aggregate
+per-directory counts, not a per-file list. Example output:
 
 ```
-[DRY RUN] Scope: wiki
-  Would delete: wiki/sources/lora.md
-  Would delete: wiki/concepts/lora-adapter.md
-  Would delete: wiki/log.md
-  ...
-  Total: 23 files
+Plan: --scope wiki --yes
+Would delete:
+  wiki/  (23 files, 45.2 KB)
+Would recreate:
+  wiki/index.md  (empty)
+  wiki/log.md  (empty)
+Total: 23 files, 45.2 KB
 ```
 
-Present this list to the user verbatim.
+For the `checkpoints` scope, the deleted directory is labeled to make clear
+only checkpoint files count toward the total, e.g.:
+
+```
+Plan: --scope checkpoints --yes
+Would delete:
+  _lumina/_state/ (checkpoints only)  (3 files, 1.8 KB)
+Total: 3 files, 1.8 KB
+```
+
+Present the real aggregate plan to the user, and also translate it into one
+plain sentence so a non-technical reader gets the point immediately, e.g.
+"This will permanently delete 23 files under wiki/ — about 45 KB."
+
+If the plan's final line reads `Total: 0 files, 0 B`, there is nothing to
+delete. Skip Step 3 (confirmation) entirely — report "Nothing to delete for
+scope `<scope>`; already clean." and stop. Do not ask for a "yes" that has
+nothing to confirm.
 
 ### Step 3 — Require explicit confirmation
 
@@ -139,13 +160,15 @@ re-verify directory structure).
 
 **Before execution:**
 ```
-Reset plan for scope: <scope>
-Files to delete:
-  wiki/sources/lora.md
-  wiki/concepts/lora-adapter.md
-  (N more...)
-Total: <N> files
+Plan: --scope <scope> --yes
+Would delete:
+  wiki/  (23 files, 45.2 KB)
+Would recreate:
+  wiki/index.md  (empty)
+  wiki/log.md  (empty)
+Total: 23 files, 45.2 KB
 
+This will permanently delete 23 files under wiki/ — about 45 KB.
 Type yes to confirm, anything else to cancel.
 ```
 
@@ -161,16 +184,25 @@ Next: run /lumi-init to re-seed the wiki, then /lumi-ingest to rebuild content.
 <example>
 User: "The ingest for attention-revisited got killed. Start it over."
 
-Safest reset — clear a single stuck checkpoint:
+Safest reset — clear a single stuck checkpoint. `--scope checkpoints` deletes
+every checkpoint file under `_lumina/_state/`, not just this one — check the
+count before confirming:
 ```bash
 node _lumina/scripts/reset.mjs --scope checkpoints --dry-run
-# shows: Would delete: _lumina/_state/ingest-attention-revisited-2026.json
+# shows:
+#   Plan: --scope checkpoints --yes
+#   Would delete:
+#     _lumina/_state/ (checkpoints only)  (1 files, 0.4 KB)
+#   Total: 1 files, 0.4 KB
+# Only one checkpoint exists right now, so this is safe.
 # User confirms: yes
 node _lumina/scripts/reset.mjs --scope checkpoints --yes
 node _lumina/scripts/wiki.mjs log reset "Scope: checkpoints. 1 file deleted."
 ```
 Suggest: "Now run `/lumi-ingest raw/sources/attention-revisited.pdf` to restart."
-Checkpoint scope is the lowest-risk reset — only in-progress state is removed.
+Checkpoint scope is lower-risk than `wiki` or `raw` (no wiki content touched),
+but if other checkpoints exist (other stuck ingests, saved `/lumi-verify`
+reports) they are deleted too — the dry-run count is the only way to know.
 </example>
 
 <example>
@@ -189,9 +221,10 @@ After reset, log.md is gone — recreate it with the reset entry, then suggest
 User: "Reset everything." (then reconsiders after seeing the plan)
 
 Escalation / reconsideration — user sees the dry-run plan for `all` scope:
-Show the deletion tree for wiki/ and state only. Explicitly state: "`all` does
-not delete raw/; use `--scope raw` only when you intend to remove user-owned
-sources." User replies "cancel". Report: "Reset cancelled. No files were deleted."
+Show the aggregate deletion plan for `wiki/` and `_lumina/_state/` only.
+Explicitly state: "`all` does not delete raw/; use `--scope raw` only when you
+intend to remove user-owned sources." User replies "cancel". Report: "Reset
+cancelled. No files were deleted."
 Never execute without the
 literal word "yes" — ambiguous confirmations like "ok" or "sure" do not count.
 </example>

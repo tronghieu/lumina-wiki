@@ -58,7 +58,7 @@ This is the only logic in this body — everything else lives in step files. The
    | `drafted` | → `./references/step-02-lint.md` |
    | `linted` | → `./references/step-03-verify.md` |
    | `verified` | → `./references/step-04-finalize.md` |
-   | `finalized` | HALT, ask "this entry is already finalized; restart from scratch?" On `[Q]` (decline): exit cleanly, exit 0 — declining is not an error. On confirm, do these in order before re-entering step-01: (1) `set-meta sources/<slug> ingest_status drafted` (so a session crash mid-restart leaves the entry in a coherent stage, not a stale-finalized one), (2) delete the phase checkpoint at `_lumina/_state/ingest-<file-basename>.json`, (3) → `./references/step-01-draft.md`. |
+   | `finalized` | HALT, ask "this entry is already finalized; restart from scratch?" On `[Q]` (decline): exit cleanly, exit 0 — declining is not an error. On confirm, do these in order before re-entering step-01: (1) `set-meta sources/<slug> ingest_status drafted` (so a session crash mid-restart leaves the entry in a coherent stage, not a stale-finalized one), (2) delete the phase checkpoint at `_lumina/_state/ingest-<file-basename>.json` — at this point you may only know the slug, not the file basename, so derive it first: read `raw_paths[0]` via `read-meta sources/<slug>` and take its basename; if `raw_paths` is empty or unavailable, list `_lumina/_state/ingest-*.json` and read each one to find the checkpoint whose `slug` field equals `sources/<slug>`; if no checkpoint matches either way, there is nothing to delete — simply proceed, (3) → `./references/step-01-draft.md`. |
 
 ## Examples
 

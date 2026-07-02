@@ -88,7 +88,22 @@ node _lumina/scripts/wiki.mjs slug "<Title>"
 
 If `wiki/sources/<slug>.md` already exists: re-ingest — confirm with user before overwriting.
 
-Write checkpoint: `phase: "slug"`.
+The phase checkpoint is keyed by file basename (`ingest-<file-basename>.json`)
+because it is written before the slug exists. Now that the slug is known,
+merge it into the checkpoint so later skills (e.g. `/lumi-migrate-legacy`) can
+match a checkpoint to a wiki entry by reading its content instead of guessing
+the filename:
+
+```bash
+# 1) Read current state
+node _lumina/scripts/wiki.mjs checkpoint-read ingest <file-basename>
+# 2) Merge {"phase":"slug","slug":"sources/<slug>","source_basename":"<file-basename>"}
+#    into the JSON above (preserve all other fields).
+# 3) Write back via stdin:
+echo '<merged-json>' | node _lumina/scripts/wiki.mjs checkpoint-write ingest <file-basename>
+```
+
+Write checkpoint: `phase: "slug"` (already included in the merge above).
 
 ### Phase 3 — Write source page
 
