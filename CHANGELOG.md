@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-07-05
+
+### Fixed
+
+- `/lumi-ingest` step-03-verify referenced `src/skills/core/verify/` — the
+  repo source tree — instead of the installed workspace path. On any
+  non-Claude-Code IDE target (Codex, Gemini, Cursor, generic), the file
+  never existed post-install, so grounding verification silently had
+  nothing to follow. Fixed all three references to
+  `.agents/skills/lumi-verify/`, which the installer copies unconditionally
+  for every IDE target.
+- Added an `ingest_status` handler for the `not_applicable` verify verdict,
+  which was previously unhandled during ingest.
+
+### Added
+
+- `/lumi-ingest` now checks external identifiers (DOI/arxiv/S2) for an
+  existing source page before generating a slug, so the same paper
+  ingested under a different title no longer creates a duplicate page.
+- Concept stub creation now scans existing concepts for acronym/expansion
+  and singular/plural variants before creating a new one.
+- Key Claims in drafted source pages now require a source locator
+  (section/page/heading), so the grounding reviewer in step-03 no longer
+  has to re-scan the whole raw file to check a claim.
+- A concept-count rubric (roughly 3-7 per source) to keep the graph from
+  being diluted by over-extracted keyword stubs.
+- PDF preprocessing now runs before type detection in step-01, so runtimes
+  without native PDF reading don't fail attempting to read the raw binary.
+
 ## [1.7.1] - 2026-07-02
 
 ### Added
