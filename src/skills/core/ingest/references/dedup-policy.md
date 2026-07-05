@@ -3,6 +3,31 @@
 Use this reference before creating or updating source, concept, person, and graph
 records during `/lumi-ingest`.
 
+## Identifier Dedup (Before Slug Generation)
+
+Slug comparison alone misses duplicates: the same paper ingested under two title
+variants (with/without subtitle, arxiv version suffix, translated title) produces
+two different slugs. External identifiers are the stronger key, so check them
+first whenever one is known (from `resolve_pdf.py` output, or parsed from the
+input URL).
+
+```bash
+# One grep per known identifier, over source-page frontmatter.
+# Use the normalized value: bare DOI (10.x/y), bare arxiv id (2604.03501 — no version suffix).
+grep -rln "10.48550/arxiv.2604.03501" wiki/sources/
+grep -rln "2604.03501" wiki/sources/
+```
+
+- **Hit** — an existing page carries the same identifier. This run is a re-ingest
+  of that page's slug, regardless of what slug the current title would generate.
+  Confirm with the user, then follow the re-ingest path below; do not create a
+  second page.
+- **No hit** — proceed to slug generation.
+
+A plain substring grep is deliberate: identifiers are unique enough that false
+positives are rare, and a rare false positive only costs one confirmation
+question. A false negative (skipping the check) costs a duplicate source page.
+
 ## Source Pages
 
 Generate the source slug with:
@@ -47,7 +72,22 @@ making any `add-edge concepts/<slug>` calls.
 
 ## Concept And Person Stubs
 
-Before creating a concept or person page, check metadata:
+Exact-slug lookup only catches exact matches — `rlhf` and
+`reinforcement-learning-from-human-feedback` would become two pages. Once per
+ingest run, list the existing concepts and hold the list in mind while creating
+stubs:
+
+```bash
+node _lumina/scripts/wiki.mjs list-entities --type concept
+```
+
+For each candidate concept, scan that list for variants of the same term:
+acronym vs expansion, singular vs plural, hyphenation or word-order differences.
+If a variant exists, link to the existing slug instead of creating a new stub —
+and if unsure whether two terms are the same concept, ask the user rather than
+guessing.
+
+Then, before creating a concept or person page, check metadata:
 
 ```bash
 node _lumina/scripts/wiki.mjs read-meta concepts/<slug>

@@ -6,7 +6,7 @@
 - Never modify files in `raw/`. Read-only.
 - Never hand-edit `wiki/graph/edges.jsonl` or `wiki/graph/citations.jsonl`; use `wiki.mjs add-edge` and `wiki.mjs add-citation`.
 - Never overwrite an existing wiki page without user confirmation.
-- All frontmatter writes go through `wiki.mjs set-meta`. Never write to `wiki/*.md` directly. (Body text goes through Write tool atomically; finalizing frontmatter still uses `set-meta`.)
+- Frontmatter discipline, two cases: (a) **initial creation** of a page that does not exist yet — Write the whole file (frontmatter + body) in one shot from the template; (b) **any change to an existing page's frontmatter** — always `wiki.mjs set-meta`, never Write/Edit on the frontmatter block. Body text of an existing page may be edited with Write/Edit; the frontmatter block may not.
 - `raw/tmp/` accepts additions only; never overwrite a file there.
 - `raw_paths` must list permanent artifacts only. Reject `raw/tmp/*` entries.
 - Keep a phase-level checkpoint after every phase — an interrupted run must resume cleanly.
@@ -69,9 +69,13 @@ node _lumina/scripts/wiki.mjs checkpoint-read research-discover shortlist
 
 Match title to a shortlist entry, extract URL, fall through to Mode B.
 
+Fallback: if the checkpoint does not exist (research pack not installed, or no discover run yet) or no shortlist entry matches the title, do not guess. Ask the user for a URL or identifier (arxiv ID / DOI), then fall through to Mode B with their answer.
+
 ### Phase 1 — Detect type
 
-Read first ~200 lines of the source. Classify:
+If the source is a PDF or too large to read comfortably in one pass, follow `pdf-preprocessing.md` **before reading anything** — on runtimes without native PDF reading, a direct Read of the binary fails here, not in Phase 3.
+
+Read first ~200 lines of the source (or of the extracted text). Classify:
 - "Abstract", "Introduction", "References" → `paper`
 - Chapter structure → `book`
 - Web byline + publication → `article`
@@ -81,6 +85,8 @@ Read first ~200 lines of the source. Classify:
 Write checkpoint: `phase: "detect"`.
 
 ### Phase 2 — Generate slug
+
+**Identifier dedup comes first.** If any external identifier is known at this point (DOI / arxiv ID / S2 ID — from Mode B resolution or parsed from the input URL), check for an existing source page carrying the same identifier BEFORE generating a slug — title variants produce different slugs, so slug comparison alone misses duplicates. See `dedup-policy.md` § Identifier Dedup. On a hit, this run is a re-ingest of the matched slug: confirm with the user and skip new-page creation.
 
 ```bash
 node _lumina/scripts/wiki.mjs slug "<Title>"
@@ -107,7 +113,7 @@ Write checkpoint: `phase: "slug"` (already included in the merge above).
 
 ### Phase 3 — Write source page
 
-For PDFs / large sources, follow `pdf-preprocessing.md` first.
+For PDFs / large sources, the extraction from Phase 1 (`pdf-preprocessing.md`) applies here too — draft from the extracted text, section by section for long sources.
 
 Draft `wiki/sources/<slug>.md` from `_lumina/schema/page-templates.md` Source template. Required frontmatter: `id`, `title`, `type`, `created`, `updated`, `authors`, `year`, `importance`, `provenance`. Optional but encouraged: `urls`, `raw_paths`, `confidence`, `external_ids`.
 
@@ -130,6 +136,10 @@ node _lumina/scripts/wiki.mjs set-meta sources/<slug> sources "[$entry]" --json-
 `<provider>` is the fetcher slug used in this run: `arxiv`, `s2`, `pdf`, `wikipedia`. Omit `<canonical-url>` if there isn't one (Mode A — local file). On re-ingest of an existing page, read existing `sources` first and append the new entry; do not replace.
 
 Required body sections: `## Summary` (2–4 sentences), `## Key Claims` (bulleted, with confidence), `## Concepts` (`[[concept-slug]]` links), `## People` (`[[person-slug]]` links), `## Open Questions`.
+
+`## Key Claims` — each claim ends with a locator pointing at where the source supports it: a section anchor, page, or heading, e.g. `(§3.2)`, `(p. 5)`, `(Table 1)`. The grounding check in step-03 reads these locators to find evidence; a claim without one forces the reviewer to re-read the whole raw file and weakens the check. If a claim synthesizes multiple places, list the primary locator.
+
+`## Concepts` — be selective, not exhaustive. A term earns a concept link only if (a) it is central to this source's contribution, or (b) it is likely to recur across other sources in this wiki. Aim for roughly 3–7 concepts per source; minor keywords belong in body prose, not as concept links. Every linked concept implies a stub + edges in Phases 4–5, so over-extraction dilutes the graph.
 
 Provenance rubric (raw-centric):
 - `replayable` — `raw_paths` non-empty, every entry resolves to existing file
@@ -156,7 +166,7 @@ node _lumina/scripts/wiki.mjs resolve-alias "<concept-name>"
 
 If it resolves to a foundation, link via `[[foundations/<slug>]]` and add `grounded_in` edge instead of creating a stub. See `dedup-policy.md` § Foundation Resolution.
 
-Apply `dedup-policy.md` before creating/updating stubs. Existing pages are updated conservatively.
+Apply `dedup-policy.md` before creating/updating stubs — including the concept variant scan (acronym vs expansion, singular vs plural), which catches duplicates that exact-slug lookup misses. Existing pages are updated conservatively.
 
 New stubs use the templates in `_lumina/schema/page-templates.md`.
 
@@ -187,9 +197,13 @@ node _lumina/scripts/wiki.mjs add-citation sources/<slug> sources/<cited-slug>
 
 Do not create stubs for cited sources not yet ingested — note them in `## Open Questions`.
 
+Write checkpoint: `phase: "citations"`.
+
 ### Phase 7 — Update wiki/index.md
 
 Add the new source page (and any new concept/person pages) to the catalog between `<!-- lumina:index -->` markers. Format: `- [[sources/<slug>]] — <one-line description>`.
+
+Write checkpoint: `phase: "index"`.
 
 ## Draft Gate
 
@@ -211,7 +225,7 @@ Use the user's configured communication language. Explain "provenance", "edges",
   ```
   → NEXT
 - **E**: Take the user's revision instructions. Re-edit the affected files (source page, stubs, or edges as instructed). Re-present the draft summary. Loop back to "HALT and ask human" — do not advance.
-- **Q**: Leave the phase-level checkpoint in place; do not write `ingest_status`. **STOP — do not read the NEXT directive below.** Exit cleanly with no further action this run. The next `/lumi-ingest <slug>` invocation resumes from this point.
+- **Q**: Leave the phase-level checkpoint in place; do not write `ingest_status`. Before exiting, tell the user in plain language that the draft pages and links written so far stay in the wiki as work-in-progress — coming back to `/lumi-ingest <slug>` continues from here, and `/lumi-reset` can clean up if they decide not to keep this source at all. **STOP — do not read the NEXT directive below.** Exit cleanly with no further action this run.
 
 ## NEXT
 
