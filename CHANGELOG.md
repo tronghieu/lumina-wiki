@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-07-05
+
+### Fixed
+
+- `/lumi-ask` was missing `Write` in `allowed-tools`, so Step 6 ("file the
+  answer as an output page") could not actually create the page.
+- `/lumi-ask` Step 6 filed a new `outputs/`/`summary/` page without adding it
+  to `wiki/index.md`, leaving a stale-index warning (L09) after every filed
+  answer.
+- `/lumi-ask` subgraph traversal (Step 3) could silently miss half of a
+  symmetric edge (`related_to`/`same_problem_as`/`appears_with`): these are
+  stored once with sorted endpoints, so a page whose slug sorts later only
+  ever saw the edge under `inbound`, never `outbound`.
+
+### Added
+
+- `/lumi-ask` now lists the matching `raw/sources/` filenames (names only,
+  contents unread) when a question can't be answered from the wiki, so the
+  user can open them directly instead of only being pointed at
+  `/lumi-ingest`.
+- `/lumi-ask` confidence calibration now reads each cited page's
+  `confidence` and `verify_status` frontmatter and downgrades or flags the
+  answer when a source is `low`/`unverified` confidence or has
+  `findings_pending`/`drift_detected` verify status, suggesting
+  `/lumi-verify <slug>`.
+
 ## [1.7.2] - 2026-07-05
 
 ### Fixed
