@@ -1,20 +1,21 @@
 ---
 name: lumi-ask
 description: >
-  Answer questions by traversing the wiki graph: pull a relevant subgraph,
-  synthesize a cited answer, and optionally file it as an output page.
-  Read-only by default — no raw source re-derivation, no wiki mutations without
-  explicit user confirmation.
+  Answer questions from what the wiki already knows, citing the wiki pages
+  behind every claim so the user can open and verify them. Reads only — never
+  changes the wiki unless the user explicitly asks to save the answer as a page.
   Use this whenever the user asks a question whose answer should come from the
   wiki — even if they don't say "ask". Also fires for: "what does the wiki say
   about X", "compare X and Y from what we've ingested", "summarize the wiki's
   coverage of X", "what concepts relate to Y", "find all sources that mention Z",
   "what have we learned about X", or any synthesis or retrieval request over
   accumulated wiki content. If a question could be answered from raw/ but isn't
-  in the wiki yet, surface the gap and suggest /lumi-ingest instead of reading raw/.
+  in the wiki yet, surface the gap, list the matching raw/ files so the user
+  can open them directly, and suggest /lumi-ingest instead of reading raw/.
 allowed-tools:
   - Bash
   - Read
+  - Write
 ---
 
 # /lumi-ask
@@ -41,6 +42,9 @@ Key workspace paths:
 - `wiki/log.md` — tells you what was recently ingested
 - `_lumina/scripts/wiki.mjs` — read-only subcommands: list-entities, read-meta,
   read-edges, read-citations
+- On large wikis, narrow output: `read-edges <slug> --type <edge-type>` or
+  `--direction outbound|inbound`; `list-entities <dir-prefix>` (for example
+  `list-entities concepts`) limits the scan to one directory
 
 ## Instructions
 
@@ -57,10 +61,8 @@ before reading.
 
 ### Step 2 — Read the index and log
 
-```bash
-# Read wiki/index.md for the catalog
-# Read the last 20 lines of wiki/log.md for recent activity
-```
+- Read `wiki/index.md` for the catalog of existing pages
+- Read the tail of `wiki/log.md` for recent activity
 
 Use the Read tool. Do not shell out for these — they are markdown files you can
 read directly.
@@ -89,6 +91,12 @@ entry has `{ from, type, to, confidence }`. Follow edges to discover connected
 pages. Stop expanding when the subgraph covers the question adequately or when
 further pages do not add new information.
 
+Note on symmetric edges: `related_to`, `same_problem_as`, and `appears_with`
+are stored once with endpoints sorted alphabetically. A page whose slug sorts
+later sees such an edge only under `inbound`, never `outbound`. Always scan
+both `outbound` and `inbound` when collecting a page's neighbors, or
+connections will be missed.
+
 Read the full page body (not just frontmatter) for each page in the subgraph.
 Use the Read tool with the `filePath` from `read-meta`.
 
@@ -110,6 +118,14 @@ Confidence calibration:
 - Low confidence: state explicitly; link the relevant source page rather than
   asserting the claim directly
 
+Per-page trust signals: source pages may carry `confidence`
+(high|medium|low|unverified) and `verify_status`
+(passed|findings_pending|drift_detected|skipped|not_applicable) in
+frontmatter — `read-meta` returns both. Downgrade by one level any claim
+that rests on a page with `confidence: low` or `unverified`, or
+`verify_status: findings_pending` or `drift_detected`, and say so in the
+answer. Suggest `/lumi-verify <slug>` for such pages.
+
 Never answer from training data when the wiki has a contradicting page. The wiki
 is the ground truth for this workspace.
 
@@ -118,10 +134,16 @@ is the ground truth for this workspace.
 If the question cannot be fully answered from the wiki:
 
 1. State what part is covered and what is missing
-2. Identify which `raw/sources/` files (if any) are likely to contain the answer
-3. Suggest: "To fill this gap, run `/lumi-ingest raw/sources/<file>`"
+2. List the raw source files by name only — `ls raw/sources/` via Bash. Never
+   read file contents in this step.
+3. Pick the files whose names plausibly match the question keywords and show
+   them as paths the user can open directly
+4. Suggest: "To fill this gap, run `/lumi-ingest raw/sources/<file>`"
+5. If nothing in `raw/sources/` matches, say so — the user may need to add a
+   source file first
 
-Do not ingest the file yourself. The user decides whether to proceed.
+Do not read or ingest the raw files yourself. The user decides whether to
+open them directly or ingest them into the wiki.
 
 ### Step 6 — Optionally file as an output page
 
@@ -134,8 +156,11 @@ node _lumina/scripts/wiki.mjs read-meta outputs/<slug>
 ```
 
 Exit 0 means the page exists. If it does, ask the user whether to overwrite
-it or pick a new slug — do not silently overwrite. Exit 2 ("Entity not
-found") means the slug is free; proceed.
+it or pick a new slug — do not silently overwrite. On exit 2, check the
+stderr message: `Entity not found` means the slug is free — proceed. Any
+other exit-2 message (for example `Unsafe slug` or a missing `wiki/`
+directory) means something else is wrong — stop and fix that first; do not
+treat it as a free slug.
 
 Ask for confirmation before writing. Then write
 `wiki/outputs/<slug>.md` or `wiki/summary/<slug>.md` with:
@@ -160,6 +185,11 @@ node _lumina/scripts/wiki.mjs add-edge sources/<slug> produced outputs/<answer-s
 (The `produced` edge type is terminal — `outputs/**` is exempt from requiring a
 reverse, per README.md Cross-Reference Rules.)
 
+Update `wiki/index.md`: add one line for the new page between the
+`<!-- lumina:index -->` and `<!-- /lumina:index -->` markers, matching the
+existing format: `- [[outputs/<slug>]] — <one-line description>`. Every new
+page must be cataloged immediately (lint L09 flags a stale index).
+
 Log the operation:
 ```bash
 node _lumina/scripts/wiki.mjs log ask "<question summary> -> outputs/<slug>.md"
@@ -174,8 +204,10 @@ node _lumina/scripts/wiki.mjs log ask "<question summary> -> outputs/<slug>.md"
 - [[sources/attention-revisited-2026]] — <one-line relevance note>
 - [[concepts/flash-attention]] — <one-line relevance note>
 
-**Gaps**: The wiki does not yet cover <X>. Suggested next step:
-`/lumi-ingest raw/sources/<file>`
+**Gaps**: The wiki does not yet cover <X>.
+Raw documents that may contain the answer — you can open these directly:
+- `raw/sources/<file>`
+To add one to the wiki: `/lumi-ingest raw/sources/<file>`
 ```
 
 If filing as a page, append:
@@ -220,17 +252,20 @@ User: "What does the wiki say about state-space models?"
 Gap case — question the wiki cannot yet answer:
 Search `list-entities` and index.md for "state-space", "SSM", "Mamba". If no
 pages match, state the gap clearly: "The wiki does not yet have coverage of
-state-space models." Check if `raw/sources/` has a relevant file (Read tool,
-directory listing). If found, suggest: "Run `/lumi-ingest raw/sources/mamba-2023.pdf`
-to add this topic." Do not read the raw file yourself to answer the question.
+state-space models." List `raw/sources/` by filename (Bash `ls raw/sources/` —
+names only). If a file matches, show it so the user can open it directly, and
+suggest: "Run `/lumi-ingest raw/sources/mamba-2023.pdf` to add this topic."
+Do not read the raw file's contents yourself to answer the question.
 </example>
 
 ## Guardrails
 
 - Never write to `wiki/` during the reading phase (Steps 1–5). Mutations only
   happen in Step 6, with explicit user confirmation.
-- Never read files in `raw/` to answer a question. The wiki is the answer surface.
-  If raw/ would help but wiki/ does not have the answer, propose an ingest instead.
+- Never read the contents of files in `raw/` to answer a question. The wiki is
+  the answer surface. Listing `raw/sources/` filenames to point the user at
+  candidates is allowed; opening them is not. If raw/ would help but wiki/
+  does not have the answer, propose an ingest instead.
 - Do not fabricate citations. Every claim in the answer must trace to a wiki page
   the user can open and verify.
 - If `wiki/index.md` is empty (wiki not yet initialized), stop and ask the user to
@@ -245,3 +280,5 @@ Before reporting done, verify:
 (c) If a page was filed: the Step 6 existence check (`read-meta outputs/<slug>`)
     ran before writing, so running `/lumi-ask` again with the same question
     does not silently create or overwrite a second output page
+(d) If a page was filed: `wiki/index.md` lists the new page between the
+    `<!-- lumina:index -->` markers

@@ -1,7 +1,7 @@
 id,menu,pack,phase,after,before,required,args,outputs,description
 lumi-init,IN,core,1-bootstrap,,lumi-ingest,true,,_lumina/manifest.json;wiki/index.md,bootstrap a wiki from existing raw/ content
 lumi-ingest,IG,core,2-ingest,lumi-init,lumi-ask,true,[path/to/file],wiki/sources/**;wiki/log.md,"read a source and write a wiki page (drafts shown for review, then continues unless judgment is needed)"
-lumi-ask,AS,core,3-query,lumi-ingest,,false,[your question],wiki/outputs/**;wiki/summary/**,"query the wiki, synthesize an answer, optionally file a page"
+lumi-ask,AS,core,3-query,lumi-ingest,,false,[your question],wiki/outputs/**;wiki/summary/**,"answer from what the wiki already knows, citing sources (points to matching raw/sources/ files if something's missing), optionally file a page"
 lumi-edit,ED,core,anytime,,,false,[path/to/wiki/page],,"add, remove, or revise wiki content"
 lumi-check,CH,core,anytime,,,false,,,"lint — broken links, orphans, missing reverse links"
 lumi-reset,RS,core,anytime,,,false,,,scoped destructive cleanup (never touches raw/)

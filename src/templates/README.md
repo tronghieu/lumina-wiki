@@ -189,7 +189,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 |---------------|---------------|-------------------------------------------------------|
 | `/lumi-init`   | manual, first  | Bootstrap wiki from existing `raw/` content          |
 | `/lumi-ingest` | manual         | Read a source and write a wiki page. It asks you to review the draft, then continues on its own unless something needs your judgment |
-| `/lumi-ask`    | manual         | Query wiki, synthesize answer, optionally file page   |
+| `/lumi-ask`    | manual         | Answer from what the wiki already knows, citing the source pages; if something's missing, lists matching raw/sources/ files and suggests /lumi-ingest; optionally files the answer as a page |
 | `/lumi-edit`   | manual         | Add/remove/revise wiki content per user request       |
 | `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
 | `/lumi-reset`  | manual         | Scoped destructive cleanup                            |

@@ -353,7 +353,7 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | --- | --- |
 | `/lumi-init` | Prepare the initial wiki structure and scan what is already in `raw/`. |
 | `/lumi-ingest <file or source>` | Add a document to the wiki. This is the command you will use very often. |
-| `/lumi-ask <question>` | Ask the knowledge base created in `wiki/`. |
+| `/lumi-ask <question>` | Ask the knowledge base in `wiki/`. It always shows which pages back up the answer, and points you to files in `raw/sources/` if something is missing. |
 | `/lumi-edit <wiki page>` | Ask AI to edit or update a specific wiki page. |
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
@@ -540,7 +540,7 @@ You can, but be careful. `wiki/` is the knowledge area where AI maintains struct
 
 ### I just added a document to `raw/`. Why does `/lumi-ask` not know it yet?
 
-Because the original document is only in `raw/`. Add it to the wiki with:
+Because the original document is only in `raw/`. If you ask about it before adding it to the wiki, `/lumi-ask` will tell you the wiki doesn't cover it yet and point out which files in `raw/sources/` look like they might have the answer — so you can open and read them yourself right away. To let AI use it too, add it to the wiki with:
 
 ```text
 /lumi-ingest raw/sources/<file-name>
