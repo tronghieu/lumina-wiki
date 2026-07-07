@@ -8,6 +8,16 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 
 ---
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Video hướng dẫn Lumina-Wiki" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Xem video hướng dẫn</a>
+</p>
+
+---
+
 **Tham gia cộng đồng Lumina Wiki trên Zalo** — hỏi đáp, chia sẻ cách dùng, và nhận thông báo cập nhật sớm nhất. Quét mã QR bằng ứng dụng Zalo để vào nhóm:
 
 <p align="center">

@@ -6,6 +6,18 @@ You can think of Lumina-Wiki as a "second brain" for reading and research. The d
 
 Your role is to choose sources, ask questions, check the direction of the analysis, and decide what matters. The AI's role is to take care of the knowledge area in `wiki/`: writing new pages, updating old pages, keeping links, updating the index, writing the log, and helping the wiki stay consistent as it grows.
 
+---
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Lumina-Wiki video walkthrough" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Watch the video walkthrough (Vietnamese)</a>
+</p>
+
+---
+
 ## Contents
 
 - [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)

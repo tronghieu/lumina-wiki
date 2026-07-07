@@ -28,6 +28,14 @@
   <a href="docs/user-guide/vi.md">Hướng dẫn sử dụng</a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Video hướng dẫn Lumina-Wiki" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Xem video hướng dẫn</a>
+</p>
+
 ## Menu
 
 - [Bắt đầu & Cài đặt](#2-bắt-đầu)
