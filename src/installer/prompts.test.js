@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPromptList, defaultAnswers, LOCALE_LANGUAGE_NAME, LOCALE_LABELS } from './prompts.js';
+import {
+  buildPromptList,
+  defaultAnswers,
+  LOCALE_LANGUAGE_NAME,
+  LOCALE_LABELS,
+  runInstallPrompts,
+  runUpgradeModePrompt,
+} from './prompts.js';
 
 test('buildPromptList: locale is FIRST prompt', () => {
   const list = buildPromptList(null, 'en');
@@ -52,4 +59,22 @@ test('defaultAnswers default locale en', () => {
   const a = defaultAnswers();
   assert.equal(a.locale, 'en');
   assert.equal(a.communicationLang, 'English');
+});
+
+// ── Upgrade menu (BMAD-style) ────────────────────────────────────────────────
+
+test('runInstallPrompts acceptDefaults=true still returns defaults (regression: modifyAnswers must not short-circuit this)', async () => {
+  const a = await runInstallPrompts({ acceptDefaults: true, cwd: '/tmp/some-project', defaultLocale: 'vi' });
+  assert.equal(a.locale, 'vi');
+  assert.deepEqual(a.packs, ['core']);
+  assert.deepEqual(a.ideTargets, ['claude_code']);
+  assert.equal(a.communicationLang, 'Vietnamese');
+  assert.equal(a.documentOutputLang, 'Vietnamese');
+});
+
+test('runUpgradeModePrompt is exported as a function', () => {
+  // Cannot drive it end-to-end without mocking @clack/prompts (no such
+  // harness exists in this suite yet) — this guards against the export
+  // being accidentally removed or renamed.
+  assert.equal(typeof runUpgradeModePrompt, 'function');
 });

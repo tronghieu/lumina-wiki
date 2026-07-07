@@ -390,6 +390,146 @@ describe('installCommand', () => {
     }
   });
 
+  // ── Upgrade menu (BMAD-style) ──────────────────────────────────────────────
+
+  test('fresh install with default (core-only) packs prints hint about available packs', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'hint-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /more packs are available/);
+      assert.match(result.stdout, /research/);
+      assert.match(result.stdout, /reading/);
+      assert.match(result.stdout, /learning/);
+      assert.match(result.stdout, /Modify installation/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('fresh install with every pack does not print the packs-available hint', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'full-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core,research,reading,learning'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.ok(!result.stdout.includes('more packs are available'), 'hint should not print once every pack is installed');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade with --yes: quick update semantics keep existing packs and print the packs-available hint', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeManifest(tmp, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: '0.1.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: { core: { version: '0.1.0', source: 'built-in' } },
+        ideTargets: ['claude_code'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: tmp },
+      });
+      await writeFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: Core Only Wiki',
+        'communication_language: English',
+        'document_output_language: English',
+        'ide_targets:',
+        '  claude_code: true',
+        'packs:',
+        '  core: true',
+        '',
+      ].join('\n'), 'utf8');
+
+      const captured = [];
+      const origWrite = process.stdout.write.bind(process.stdout);
+      process.stdout.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+      try {
+        await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      } finally {
+        process.stdout.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.match(output, /more packs are available/);
+      assert.match(output, /research/);
+      assert.match(output, /reading/);
+      assert.match(output, /learning/);
+
+      // Quick update semantics: --yes on an upgrade never adds packs the user
+      // didn't already request — it only preserves the prior config.
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /research: false/);
+      assert.match(config, /reading: false/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade without --yes over a non-TTY pipe skips the interactive upgrade menu (behaves like quick update)', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeManifest(tmp, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: '0.1.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: {
+          core: { version: '0.1.0', source: 'built-in' },
+          research: { version: '0.1.0', source: 'built-in' },
+        },
+        ideTargets: ['codex'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: tmp },
+      });
+      await writeFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: Piped Wiki',
+        'communication_language: English',
+        'document_output_language: English',
+        'ide_targets:',
+        '  codex: true',
+        'packs:',
+        '  core: true',
+        '  research: true',
+        '',
+      ].join('\n'), 'utf8');
+
+      // No --yes flag: spawnSync's default stdio is piped, not a TTY, so the
+      // interactive upgrade menu's TTY guard must skip the prompt rather than
+      // block waiting for input that will never arrive.
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--no-update', '--directory', tmp],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /project_name: Piped Wiki/);
+      assert.match(config, /research: true/);
+      assert.match(config, /codex: true/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('CLI install from a nested directory upgrades the enclosing workspace', async () => {
     const tmp = await makeTmpDir();
     const nested = join(tmp, 'docs', 'notes');

@@ -66,6 +66,13 @@ export default {
   'prompt.readme_merge.option.abort.label':    '中止安装',
   'prompt.readme_merge.option.abort.hint':     '退出且不做更改',
 
+  // ── Upgrade mode prompt ────────────────────────────────────────────────────
+  'prompt.upgrade_mode.message':               '检测到已有安装。您想如何继续?',
+  'prompt.upgrade_mode.option.quick.label':    '快速更新',
+  'prompt.upgrade_mode.option.quick.hint':     '保留当前的包、IDE 目标和语言设置',
+  'prompt.upgrade_mode.option.modify.label':   '修改安装',
+  'prompt.upgrade_mode.option.modify.hint':    '添加或移除包和 IDE 目标,更改语言',
+
   // ── Progress ───────────────────────────────────────────────────────────────
   'progress.installing':                       '正在安装 Lumina Wiki 至: {dir}',
   'progress.upgrading':                        '正在升级 Lumina Wiki 至: {dir}',
@@ -76,6 +83,7 @@ export default {
   'success.summary.packs':                     '  包:      {packs}',
   'success.summary.ide':                       '  IDE:      {ide}',
   'success.summary.skills':                    '  技能:    已安装 {count} 个',
+  'hint.packs_available':                      '  提示: 还有未安装的包: {packs}。再次运行 "npx lumina-wiki install" 并选择「修改安装」即可添加。',
 
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[警告] 无法读取现有 manifest: {message}。视为全新安装。',

@@ -61,6 +61,13 @@ export default {
   'prompt.readme_merge.option.abort.label':    'Abort install',
   'prompt.readme_merge.option.abort.hint':     'Exit without changes',
 
+  // ── Upgrade mode prompt ────────────────────────────────────────────────────
+  'prompt.upgrade_mode.message':               'Existing installation found. How would you like to proceed?',
+  'prompt.upgrade_mode.option.quick.label':    'Quick update',
+  'prompt.upgrade_mode.option.quick.hint':     'keep current packs, IDE targets, and languages',
+  'prompt.upgrade_mode.option.modify.label':   'Modify installation',
+  'prompt.upgrade_mode.option.modify.hint':    'add or remove packs and IDE targets, change languages',
+
   // ── Progress ───────────────────────────────────────────────────────────────
   'progress.installing':                       'Installing Lumina Wiki in: {dir}',
   'progress.upgrading':                        'Upgrading Lumina Wiki in: {dir}',
@@ -71,6 +78,7 @@ export default {
   'success.summary.packs':                     '  Packs:    {packs}',
   'success.summary.ide':                       '  IDE:      {ide}',
   'success.summary.skills':                    '  Skills:   {count} installed',
+  'hint.packs_available':                      '  Tip: more packs are available: {packs}. Run "npx lumina-wiki install" again and choose "Modify installation" to add them.',
 
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[warn] Could not read existing manifest: {message}. Treating as fresh install.',

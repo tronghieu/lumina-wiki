@@ -50,6 +50,7 @@ import {
   runInstallPrompts,
   runUninstallConfirm,
   runReadmeMergePrompt,
+  runUpgradeModePrompt,
   LOCALE_LANGUAGE_NAME,
 } from './prompts.js';
 import { VALID_LOCALES, loadLocale } from './locales.js';
@@ -196,10 +197,36 @@ export async function installCommand(opts = {}) {
 
   // 2. Collect answers (locale not yet loaded; prompts use EN fallback literals)
   let answers;
+  let sawPackPrompt = false; // suppresses the "more packs available" hint
   if (isUpgrade) {
     // Upgrade/reinstall: preserve existing choices, including --yes runs.
     answers = await readAnswersFromConfig(projectRoot, existingManifest);
+    // Interactive upgrade menu: quick update (keep choices, the default) vs
+    // modify installation (re-run setup prompts prefilled with the current
+    // choices — the only discoverable way to add packs/IDE targets that were
+    // released after the original install). Skipped when headless (--yes or
+    // no TTY) and when explicit override flags already state the intent.
+    const hasOverrideFlags = Boolean(opts.packs || opts.ideTargets || opts.lang);
+    if (!yes && !hasOverrideFlags && process.stdin.isTTY && process.stdout.isTTY) {
+      // Menu renders in the installed locale; EN literals if loading fails.
+      let menuT = null;
+      try {
+        menuT = (await loadLocale(answers.locale ?? 'en')).t;
+      } catch { /* keep EN fallback literals */ }
+      const mode = await runUpgradeModePrompt({ t: menuT });
+      if (mode === 'modify') {
+        answers = await runInstallPrompts({
+          cwd: projectRoot,
+          existingManifest,
+          defaultLocale: answers.locale ?? 'en',
+          t: menuT,
+          modifyAnswers: answers,
+        });
+        sawPackPrompt = true;
+      }
+    }
   } else {
+    sawPackPrompt = !yes;
     answers = await runInstallPrompts({
       acceptDefaults: yes,
       cwd: projectRoot,
@@ -442,6 +469,12 @@ export async function installCommand(opts = {}) {
   console.log(t('success.summary.skills', { count: skillRows.length }));
   if (Object.values(symlinkStrategies).some(s => s === 'copy')) {
     console.log(colors.yellow(t('warn.copied_skills')));
+  }
+  // Surface packs the user has not installed (e.g. added in a newer release).
+  // Suppressed when the user just went through the pack picker this run.
+  const uninstalledPacks = [...VALID_PACKS].filter(p => !packs.includes(p));
+  if (!sawPackPrompt && uninstalledPacks.length > 0) {
+    console.log(t('hint.packs_available', { packs: uninstalledPacks.join(', ') }));
   }
 }
 
