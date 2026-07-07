@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-07
+
+### Added
+
+- `npx lumina-wiki install` run again over an existing installation now
+  offers a "Quick update" vs "Modify installation" menu (interactive
+  terminals only, skipped when `--yes` or `--packs`/`--ide-targets`/`--lang`
+  are passed). Quick update keeps the current configuration exactly as
+  before; Modify installation re-runs the pack, IDE-target, and language
+  prompts prefilled with the current config, without re-asking for the
+  install directory or research purpose.
+- After every install/upgrade, if packs exist that aren't installed yet
+  (e.g. one added in a newer release), a one-line hint now points at
+  "Modify installation" so they stay discoverable instead of silently
+  skipped on `--yes`/headless upgrades.
+
+### Fixed
+
+- The interactive locale-switch confirmation during install prompts didn't
+  propagate the user's confirmation, so the `LOCALE_SWITCH_REFUSED` safety
+  gate could incorrectly abort an upgrade the user had just approved.
+
 ## [1.7.3] - 2026-07-05
 
 ### Fixed
