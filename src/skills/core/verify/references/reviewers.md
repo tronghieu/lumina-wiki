@@ -71,6 +71,13 @@ material. For each claim:
 3. Check that edge types used in the graph excerpt match the actual relationship
    in the raw text (e.g. `introduces_concept` vs `mentions`).
 
+For long sources, use the claim's page/section locator (`(p. N)`, `(§2.3)`) to
+jump to the right part of the raw artifact instead of scanning it end to end.
+If `wiki/readings/<slug>/` note pages exist for this entry, they map claims to
+pages — use them to locate evidence, but the verdict must rest on the raw text
+itself, not on the notes (they were written by the same pipeline you are
+checking).
+
 For each discrepancy found, produce a finding object:
 ```json
 {

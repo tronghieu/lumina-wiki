@@ -71,6 +71,12 @@ import {
 const INDEX_MARKER_OPEN = '<!-- lumina:index -->';
 const INDEX_MARKER_CLOSE = '<!-- /lumina:index -->';
 
+// Entity dirs whose pages are not required in wiki/index.md (L09): reflections
+// are a personal overlay; readings are subsidiary notes reached from their
+// source page via annotated_by edges (a long book can produce dozens).
+const INDEX_EXEMPT_PREFIXES = ['reflections/', 'readings/'];
+const isIndexExempt = (f) => INDEX_EXEMPT_PREFIXES.some(p => f.startsWith(p));
+
 /** All check IDs in run order.
  *  L15 is intentionally absent — collision check was deferred as premature
  *  for typical wiki size. Adding L15 later is the natural next slot. */
@@ -1178,7 +1184,7 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL08(edges));
 
   if (indexContent !== undefined) {
-    const indexEntityFiles = entityFiles.filter(f => !f.startsWith('reflections/'));
+    const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
     allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
   }
 
@@ -1285,7 +1291,7 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
   // Fix L09.
   const l09findings = findings.filter(f => f.id === 'L09-index-stale');
   if (l09findings.length > 0) {
-    const { newContent, preview } = fixL09(indexContent, entityFiles.filter(f => !f.startsWith('reflections/')));
+    const { newContent, preview } = fixL09(indexContent, entityFiles.filter(f => !isIndexExempt(f)));
     if (newContent !== indexContent) {
       if (opts.dryRun) {
         for (const f of l09findings) { f.proposed_fix = preview; }

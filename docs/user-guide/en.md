@@ -457,6 +457,14 @@ If you quit at any point, progress is preserved. Running `/lumi-ingest` again on
 - A record in the wiki log showing when the document was added and how the check went.
 - A low-confidence mark on the page if you chose to save it with reservations, so you know to return to it.
 
+### Long documents and whole books
+
+When a document is very long — a whole book, a thesis, anything around 50 pages or more — the AI changes how it reads. Instead of skimming once and summarizing, it first maps out the structure, then reads chapter by chapter, writing a note for each part with page numbers next to every important point. The summary page is then written from those notes, and every quotation is checked against the original pages so nothing gets invented.
+
+You get the same summary page as usual, plus a folder of reading notes in `wiki/readings/` — one note per chapter. Later questions about the book are answered from these notes, so the AI does not re-read the whole book, and you can trace any answer back to the exact page. If the reading is interrupted partway, running `/lumi-ingest` again continues from the last finished chapter.
+
+One thing to watch: if you are still reading a novel yourself and do not want the ending revealed, do not add the whole book this way — use the Reading Pack's chapter-by-chapter command instead, which only ever knows as much of the story as you do.
+
 ## Using OpenAI CodexApp (ChatGPT), Claude Code, and Gemini CLI
 
 Lumina-Wiki is not a separate chat app. It is a folder structure, scripts, and commands that let an AI agent work inside your project.

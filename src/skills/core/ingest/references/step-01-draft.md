@@ -82,6 +82,13 @@ Read first ~200 lines of the source (or of the extracted text). Classify:
 - Speaker turns / transcript → `podcast`
 - Else → `note`
 
+**Long-source check.** Size the document (`extract_pdf.py --info` for PDFs;
+estimate from file size/word count otherwise). If it is 50+ pages or ~50k+
+tokens, read fully and follow `./long-source.md` — it wraps Phase 3 in a
+multi-pass reading pipeline (structure map → per-unit notes under
+`wiki/readings/` → synthesis from notes) and then hands control back to
+Phase 4. Do not attempt a single-pass summary of a source that size.
+
 Write checkpoint: `phase: "detect"`.
 
 ### Phase 2 — Generate slug
@@ -113,7 +120,7 @@ Write checkpoint: `phase: "slug"` (already included in the merge above).
 
 ### Phase 3 — Write source page
 
-For PDFs / large sources, the extraction from Phase 1 (`pdf-preprocessing.md`) applies here too — draft from the extracted text, section by section for long sources.
+For PDFs / large sources, the extraction from Phase 1 (`pdf-preprocessing.md`) applies here too — draft from the extracted text, section by section for long sources. If Phase 1 routed to `long-source.md`, this phase writes only the source-page skeleton; `## Summary` and `## Key Claims` are drafted from the reading notes in its Phase L3, never from the raw text in one pass.
 
 Draft `wiki/sources/<slug>.md` from `_lumina/schema/page-templates.md` Source template. Required frontmatter: `id`, `title`, `type`, `created`, `updated`, `authors`, `year`, `importance`, `provenance`. Optional but encouraged: `urls`, `raw_paths`, `confidence`, `external_ids`.
 
@@ -209,7 +216,7 @@ Write checkpoint: `phase: "index"`.
 
 Present a draft summary to the user:
 - Source slug, type, provenance
-- Pages written / updated (counts: 1 source, N concepts, M people)
+- Pages written / updated (counts: 1 source, N concepts, M people; long sources: K reading notes under `wiki/readings/<slug>/`)
 - Edges added
 - Citations added
 - Index updated: yes/no

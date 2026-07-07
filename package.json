@@ -72,6 +72,7 @@
     "src/tools/fetch_scite.py",
     "src/tools/fetch_altmetric.py",
     "src/tools/id_utils.py",
+    "src/tools/verify_quotes.py",
     "src/tools/requirements.txt",
     "CHANGELOG.md",
     "README.md",

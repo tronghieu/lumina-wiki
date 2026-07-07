@@ -18,6 +18,29 @@ When speaking to the user, call this "checking against the source" or the equiva
 
 ## INSTRUCTIONS
 
+### Phase 8.4 — Mechanical quote check (long sources only)
+
+If `wiki/readings/<slug>/` exists and the entry's first `raw_paths` file is a
+PDF, run the quote checker before spawning the grounding reviewer:
+
+```bash
+python3 _lumina/tools/verify_quotes.py --source <raw-pdf-path> wiki/sources/<slug>.md wiki/readings/<slug>/
+```
+
+- `fail: 0, near: 0` → mention nothing; proceed to Phase 8.5.
+- Any `NEAR` → fix the page number in the cited file yourself (the quote is
+  real, the citation is one page off), re-run, then proceed.
+- Any `FAIL` → fix what you can by re-reading the cited pages
+  (`extract_pdf.py --pages <n>-<n> --markers`). A FAIL you cannot resolve is
+  a finding: carry it into the Phase 8.6 findings presentation alongside the
+  grounding results (claim = the quote head, evidence = "quote not found on
+  cited page", action = re-quote or drop).
+
+This is cheap and mechanical; it only checks verbatim quotes. Paraphrased
+claims are the grounding reviewer's job — never skip Phase 8.5 because this
+check passed. Skip this phase entirely when there is no readings directory or
+no PDF raw file.
+
 ### Phase 8.5 — Run grounding verification
 
 Invoke `/lumi-verify` on the entry restricted to the grounding reviewer. Three runtime tiers, in order of preference:

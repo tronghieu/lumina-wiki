@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Long-source ingest pipeline: `/lumi-ingest` now detects 50+ page / ~50k+
+  token sources (whole books, theses) and switches to a multi-pass reading
+  workflow (`references/long-source.md`) — structure map first, then one
+  page-anchored reading note per chapter/part under
+  `wiki/readings/<source-slug>/`, then a source page synthesized from the
+  notes instead of a single-pass summary. Resumable per unit via the
+  existing ingest checkpoint.
+- New core page type `readings` (Reading note) with `annotates`/`annotated_by`
+  edge pair linking notes to their source page. Reading notes are exempt
+  from the `wiki/index.md` catalog (like `reflections/`); the source page is
+  their entry point.
+- New core tool `_lumina/tools/verify_quotes.py` — mechanically checks
+  page-cited quotes (`(p. N)`, `(pp. A-B)`, `(tr. N)`) in reading notes and
+  source pages against the source PDF (OK / NEAR / FAIL verdicts, JSON
+  output). Wired into ingest step-03 as a pre-check before grounding
+  verification.
+- `extract_pdf.py` gains `--markers` (emit `[[page N]]` page markers with
+  absolute page numbers) and `--info` (JSON page/char/token size summary).
+
+### Changed
+
+- `/lumi-reading-chapter-ingest` and `/lumi-ingest` now route between each
+  other: a finished book ingested whole goes to `/lumi-ingest`; a novel the
+  user is still reading stays chapter-by-chapter so plot recaps remain
+  spoiler-safe.
+
 ## [1.8.0] - 2026-07-07
 
 ### Added

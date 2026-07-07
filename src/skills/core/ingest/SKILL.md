@@ -15,6 +15,11 @@ description: >
   file path. Examples: "ingest paper 2604.03501v2", "ingest arxiv:2604.03501",
   "ingest https://arxiv.org/abs/2604.03501". The skill fetches the PDF
   automatically in that case.
+  Also handles whole books, theses, and other 50+ page documents — "ingest
+  this book", "add this textbook to the wiki", "đưa cả cuốn sách này vào
+  wiki" — via a multi-pass reading pipeline (references/long-source.md) that
+  writes page-anchored reading notes instead of a one-pass summary. (A novel
+  the user is still reading belongs to /lumi-reading-chapter-ingest instead.)
   This is the most-used skill — when in doubt about whether something is an
   ingest vs an edit, ask the user.
 allowed-tools:

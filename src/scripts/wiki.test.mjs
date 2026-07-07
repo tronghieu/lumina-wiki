@@ -664,6 +664,27 @@ describe('add-edge', () => {
     }
   });
 
+  test('annotates edge from a nested readings slug writes annotated_by reverse', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(
+        ['add-edge', 'readings/deep-work/01-focus', 'annotates', 'sources/deep-work'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `add-edge failed: ${r.stderr}`);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().split('\n').map(l => JSON.parse(l));
+      const fwd = edges.find(e => e.from === 'readings/deep-work/01-focus' && e.type === 'annotates' && e.to === 'sources/deep-work');
+      const rev = edges.find(e => e.from === 'sources/deep-work' && e.type === 'annotated_by' && e.to === 'readings/deep-work/01-focus');
+      assert.ok(fwd, 'forward annotates edge present');
+      assert.ok(rev, 'reverse annotated_by edge present');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('exempt: add-edge with foundations target writes only forward edge', async () => {
     const tmp = await makeTmp();
     try {
@@ -1216,6 +1237,24 @@ describe('list-entities', () => {
       assert.equal(json.count, 1);
       assert.equal(json.entities[0].slug, 'chapters/great-gatsby/chapter-1');
       assert.equal(json.entities[0].path, 'chapters/great-gatsby/chapter-1');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('lists nested readings entities with --type readings', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await mkdir(join(tmp, 'wiki', 'readings', 'deep-work'), { recursive: true });
+      await writeFile(join(tmp, 'wiki', 'readings', 'deep-work', '01-focus.md'), '---\nid: readings/deep-work/01-focus\ntitle: Part 1 - Focus\ntype: reading\ncreated: 2026-01-01\nupdated: 2026-01-01\nsource: deep-work\npart: 1\n---\n', 'utf8');
+
+      const r = runWiki(['list-entities', '--type', 'readings'], { cwd: tmp });
+      assert.equal(r.status, 0, `list-entities failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.count, 1);
+      assert.equal(json.entities[0].slug, 'readings/deep-work/01-focus');
+      assert.equal(json.entities[0].type, 'readings');
     } finally {
       await cleanTmp(tmp);
     }

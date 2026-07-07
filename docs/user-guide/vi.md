@@ -513,6 +513,14 @@ Nếu dừng giữa chừng, tiến độ được giữ lại; chạy lại `/l
 - Một ghi nhận trong log, để bạn biết tài liệu đó đã được đưa vào wiki khi nào và kết quả ra sao.
 - Một dấu độ tin cậy thấp trên trang nếu bạn chọn lưu kèm điểm còn nghi ngờ, để sau này quay lại xem.
 
+### Tài liệu dài và sách nguyên cuốn
+
+Khi tài liệu rất dài — cả một cuốn sách, một luận án, hay bất cứ thứ gì từ khoảng 50 trang trở lên — AI sẽ đổi cách đọc. Thay vì lướt một lần rồi tóm tắt, nó lập dàn ý cấu trúc trước, rồi đọc theo từng chương, viết một ghi chú cho mỗi phần kèm số trang bên cạnh mọi ý quan trọng. Trang tóm tắt sau đó được viết từ chính các ghi chú này, và mọi câu trích dẫn đều được đối chiếu với trang gốc để không có gì bị bịa ra.
+
+Bạn vẫn nhận được trang tóm tắt như bình thường, cộng thêm một thư mục ghi chú đọc trong `wiki/readings/` — mỗi chương một ghi chú. Những câu hỏi sau này về cuốn sách sẽ được trả lời từ các ghi chú đó, nên AI không phải đọc lại cả cuốn, và bạn luôn truy được câu trả lời về đúng trang gốc. Nếu việc đọc bị gián đoạn giữa chừng, chạy lại `/lumi-ingest` sẽ tiếp tục từ chương đã đọc xong gần nhất.
+
+Một điều cần lưu ý: nếu bạn đang tự đọc dở một cuốn tiểu thuyết và không muốn bị lộ kết truyện, đừng đưa cả cuốn vào theo cách này — hãy dùng lệnh đọc theo từng chương của Reading Pack, vốn chỉ biết đúng phần truyện mà bạn đã đọc.
+
 ## Dùng Với OpenAI CodexApp (ChatGPT), Claude Code, Gemini CLI
 
 Lumina-Wiki không phải một ứng dụng chat riêng. Nó là một bộ cấu trúc thư mục, script và lệnh để AI agent làm việc trong project của bạn.

@@ -6,14 +6,23 @@ Used by /lumi-ingest and /lumi-chapter-ingest in IDEs whose Read tool cannot
 parse PDFs natively (Codex, Gemini CLI, Cursor, generic AGENTS.md hosts).
 
 CLI:
-    python extract_pdf.py <file> [--pages START-END] [--page N]
+    python extract_pdf.py <file> [--pages START-END] [--page N] [--markers]
+    python extract_pdf.py <file> --info
 
 Options:
     --pages START-END   1-based inclusive range, e.g. --pages 12-34
     --page N            Single page (alias for --pages N-N)
+    --markers           Prefix each page with a [[page N]] marker line (N is the
+                        absolute 1-based page number, respecting --pages offset)
+                        instead of joining pages with form-feed. Used by
+                        /lumi-ingest long-source reading and verify_quotes.py.
+    --info              Print a JSON size summary {"pages", "chars", "est_tokens"}
+                        instead of the text. Cannot be combined with --pages/--page.
 
 Output:
-    stdout — extracted plain text, pages separated by a form-feed (\\f).
+    stdout — extracted plain text, pages separated by a form-feed (\\f);
+             with --markers, pages prefixed by [[page N]] lines;
+             with --info, a single JSON object.
     stderr — warnings (missing libs, scanned-PDF heuristic, etc.)
 
 Exit codes:
@@ -33,6 +42,7 @@ If none are importable, exit 3 with the install hint:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -129,9 +139,7 @@ def _try_extractors(path: Path, page_range: tuple[int, int] | None) -> list[str]
     raise RuntimeError(msg)
 
 
-def extract(path: Path, page_range: tuple[int, int] | None) -> str:
-    pages = _try_extractors(path, page_range)
-    text = PAGE_SEPARATOR.join(pages)
+def _warn_if_scanned(pages: list[str]) -> None:
     total_chars = sum(len(p) for p in pages)
     if pages and total_chars / max(len(pages), 1) < SCANNED_THRESHOLD_CHARS_PER_PAGE:
         print(
@@ -139,7 +147,30 @@ def extract(path: Path, page_range: tuple[int, int] | None) -> str:
             "PDF may be scanned/image-based — paste the text manually if needed.",
             file=sys.stderr,
         )
-    return text
+
+
+def extract(path: Path, page_range: tuple[int, int] | None, markers: bool = False) -> str:
+    pages = _try_extractors(path, page_range)
+    _warn_if_scanned(pages)
+    if not markers:
+        return PAGE_SEPARATOR.join(pages)
+
+    start = page_range[0] if page_range else 1
+    if page_range and page_range[1] > page_range[0] and len(pages) == 1:
+        # pdfminer fallback returns one joined blob; page boundaries are lost.
+        print(
+            "warning: page boundaries unavailable (pdfminer fallback); "
+            f"emitting a single [[page {start}]] marker for the whole range.",
+            file=sys.stderr,
+        )
+    return "\n".join(f"[[page {start + i}]]\n{p}" for i, p in enumerate(pages))
+
+
+def info(path: Path) -> dict:
+    pages = _try_extractors(path, None)
+    _warn_if_scanned(pages)
+    chars = sum(len(p) for p in pages)
+    return {"pages": len(pages), "chars": chars, "est_tokens": chars // 4}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,7 +181,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("file", help="path to the PDF file")
     parser.add_argument("--pages", help="1-based inclusive range, e.g. 12-34")
     parser.add_argument("--page", type=int, help="single page number (1-based)")
+    parser.add_argument("--markers", action="store_true",
+                        help="prefix each page with a [[page N]] marker line")
+    parser.add_argument("--info", action="store_true",
+                        help="print JSON size summary instead of text")
     args = parser.parse_args(argv)
+
+    if args.info and (args.pages or args.page is not None or args.markers):
+        print("error: --info reads the whole document; do not combine with --pages/--page/--markers",
+              file=sys.stderr)
+        return 2
 
     try:
         page_range = _parse_pages(args.pages, args.page)
@@ -169,7 +209,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        text = extract(path, page_range)
+        if args.info:
+            print(json.dumps(info(path)))
+            return 0
+        text = extract(path, page_range, markers=args.markers)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

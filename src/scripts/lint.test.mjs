@@ -203,6 +203,25 @@ describe('L01 frontmatter-required', () => {
     const result = checkL01('index.md', {});
     assert.equal(result.length, 0);
   });
+
+  test('readings page: clean with all required keys, violation when source missing', () => {
+    const fm = {
+      id: 'readings/deep-work/01-focus',
+      title: 'Part 1 - Focus',
+      type: 'reading',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      source: 'deep-work',
+      part: 1,
+    };
+    assert.equal(checkL01('readings/deep-work/01-focus.md', fm).length, 0);
+
+    const missing = { ...fm };
+    delete missing.source;
+    const result = checkL01('readings/deep-work/01-focus.md', missing);
+    assert.ok(result.length > 0);
+    assert.equal(result[0].id, 'L01-frontmatter-required');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -776,6 +795,36 @@ describe('runLint L09 fix idempotency', () => {
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
     const l09Again = r2.findings.filter(f => f.id === 'L09-index-stale');
     assert.equal(l09Again.length, 0, 'L09 violations should be gone after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: L09 does not require readings/ pages in the index
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L09 readings exemption', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('a readings page absent from index.md raises no L09 finding', async () => {
+    await makeWiki(tmpDir);
+    const readingDir = join(tmpDir, 'wiki', 'readings', 'deep-work');
+    await mkdir(readingDir, { recursive: true });
+    const fm = renderFm({
+      id: 'readings/deep-work/01-focus',
+      title: 'Part 1 - Focus',
+      type: 'reading',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      source: 'deep-work',
+      part: 1,
+    });
+    await writeFile(join(readingDir, '01-focus.md'), fm + 'Body. [[sources/deep-work]]\n');
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l09 = findings.filter(f => f.id === 'L09-index-stale');
+    assert.equal(l09.length, 0, `readings page must be exempt from index, got: ${JSON.stringify(l09)}`);
   });
 });
 

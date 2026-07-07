@@ -41,6 +41,7 @@ Keep this mental map in immediate context:
 - `wiki/people/` — people referenced across sources
 - `wiki/summary/` — area-level syntheses
 - `wiki/outputs/` — generated artifacts (comparisons, exports)
+- `wiki/readings/` — page-anchored reading notes for long sources (books, theses), one folder per source; created by `/lumi-ingest`, reached from the source page rather than the index
 - `wiki/graph/` — derived state; never edit manually
 {{#if pack_research}}
 - `wiki/topics/`, `wiki/foundations/` (pack: research)
@@ -77,7 +78,7 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs; open when this file points you there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
-- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
+- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `verify_quotes.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
 - `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer state; never edit by hand
 
@@ -93,6 +94,7 @@ Every wiki page has a defined type, frontmatter, and section structure. **Open `
 | Concept    | `concepts/`   | Cross-source idea or technique with variants and comparisons         |
 | Person     | `people/`     | Profile of a referenced person with key sources and relationships    |
 | Summary    | `summary/`    | Area-level synthesis spanning multiple sources and concepts          |
+| Reading note | `readings/` | Per-chapter notes for a long source, page-cited; written during long-source ingest |
 {{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources; created via `/lumi-research-topic` (research) |
 | Foundation | `foundations/`| Prerequisite/background knowledge; terminal page (research)          |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Per-chapter notes for a book or long-form work (reading)             |
@@ -219,6 +221,7 @@ Adds `/lumi-learning-reflect` (guide a self-reflection session; creates or updat
 {{#if pack_research}}- **`_lumina/scripts/discover-runner.mjs`** — one-shot scheduled discovery runner; collects scored candidates but does not ingest or download papers.
 {{/if}}
 - **`_lumina/tools/extract_pdf.py`** — PDF text extractor (pypdf-based); used by `/lumi-ingest` and `/lumi-reading-chapter-ingest` when the host IDE cannot read PDFs natively.
+- **`_lumina/tools/verify_quotes.py`** — checks page-cited quotes in reading notes and source pages against the source PDF; used by `/lumi-ingest` for long sources.
 - **`_lumina/tools/fetch_pdf.py`** — URL → `raw/download/<resource>/` PDF downloader (streaming, atomic, idempotent); used by `/lumi-ingest` Mode B when the input is a URL or paper identifier.
 - **`_lumina/tools/requirements.txt`** — Python dependencies for bundled tools. Run `pip install -r _lumina/tools/requirements.txt` when a tool reports a missing package.
 {{#if pack_research}}- **`_lumina/tools/_env.py`** — shared `.env` loader for research tools.

@@ -81,6 +81,46 @@ test('EDGE_TYPES defines topic organization edges with consistent reverse pairs'
   }
 });
 
+test('ENTITY_DIRS contains readings entry with pack core', () => {
+  assert.ok('readings' in ENTITY_DIRS, 'readings key missing from ENTITY_DIRS');
+  assert.equal(ENTITY_DIRS.readings.pack, 'core', 'readings pack must be core');
+  assert.equal(ENTITY_DIRS.readings.dir, 'readings/', 'readings dir must be readings/');
+});
+
+test('EDGE_TYPES defines annotates/annotated_by as a consistent core reverse pair', () => {
+  const byName = Object.fromEntries(EDGE_TYPES.map(e => [e.name, e]));
+  const annotates = byName.annotates;
+  const annotatedBy = byName.annotated_by;
+  assert.ok(annotates, 'EDGE_TYPES missing annotates');
+  assert.ok(annotatedBy, 'EDGE_TYPES missing annotated_by');
+  assert.equal(annotates.from, 'readings');
+  assert.equal(annotates.to, 'sources');
+  assert.equal(annotates.reverse, 'annotated_by');
+  assert.equal(annotates.symmetric, false);
+  assert.equal(annotates.pack, 'core');
+  assert.equal(annotatedBy.from, 'sources');
+  assert.equal(annotatedBy.to, 'readings');
+  assert.equal(annotatedBy.reverse, 'annotates');
+  assert.equal(annotatedBy.pack, 'core');
+});
+
+test('REQUIRED_FRONTMATTER.readings has base keys plus source and part', () => {
+  assert.ok(Array.isArray(REQUIRED_FRONTMATTER.readings), 'REQUIRED_FRONTMATTER.readings must be an array');
+  const definedKeys = REQUIRED_FRONTMATTER.readings.map(f => f.key);
+  for (const key of ['id', 'title', 'type', 'created', 'updated', 'source', 'part']) {
+    assert.ok(definedKeys.includes(key), `REQUIRED_FRONTMATTER.readings missing key: ${key}`);
+  }
+  const source = REQUIRED_FRONTMATTER.readings.find(f => f.key === 'source');
+  assert.equal(source.type, 'string');
+  assert.equal(source.required, true);
+  const part = REQUIRED_FRONTMATTER.readings.find(f => f.key === 'part');
+  assert.equal(part.type, 'number');
+  assert.equal(part.required, true);
+  const pages = REQUIRED_FRONTMATTER.readings.find(f => f.key === 'pages');
+  assert.ok(pages, 'readings must define optional pages field');
+  assert.equal(pages.required, false);
+});
+
 test('REQUIRED_FRONTMATTER.sources has optional ranking object field', () => {
   const ranking = REQUIRED_FRONTMATTER.sources.find(f => f.key === 'ranking');
   assert.ok(ranking, 'sources must define a ranking field');

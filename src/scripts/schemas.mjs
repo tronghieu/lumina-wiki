@@ -107,6 +107,10 @@ export const ENTITY_DIRS = {
   summary:     { dir: 'summary/',     pack: 'core' },
   outputs:     { dir: 'outputs/',     pack: 'core' },
   graph:       { dir: 'graph/',       pack: 'core' },
+  // Per-unit reading notes for long sources (books, theses); nested as
+  // readings/<source-slug>/<nn>-<unit-slug>.md. Named "readings" (not "notes")
+  // to avoid colliding with the raw/notes/ user drop zone.
+  readings:    { dir: 'readings/',    pack: 'core' },
 
   // research pack
   foundations: { dir: 'foundations/', pack: 'research' },
@@ -209,6 +213,10 @@ export const EDGE_TYPES = [
   // --- source <-> person ---------------------------------------------------
   { name: 'authored_by',        from: 'sources', to: 'people',   reverse: 'authored',        symmetric: false, pack: 'core' },
   { name: 'authored',           from: 'people',  to: 'sources',  reverse: 'authored_by',     symmetric: false, pack: 'core' },
+
+  // --- reading note <-> source ---------------------------------------------
+  { name: 'annotates',          from: 'readings', to: 'sources',  reverse: 'annotated_by',    symmetric: false, pack: 'core' },
+  { name: 'annotated_by',       from: 'sources',  to: 'readings', reverse: 'annotates',       symmetric: false, pack: 'core' },
 
   // --- concept <-> concept -------------------------------------------------
   { name: 'related_to',         from: 'concepts', to: 'concepts', reverse: 'related_to',     symmetric: true,  pack: 'core' },
@@ -323,6 +331,19 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'created', type: 'iso-date', required: true  },
     { key: 'updated', type: 'iso-date', required: true  },
     { key: 'covers',  type: 'array',    required: true  },
+  ],
+
+  // Reading-note page (core) — per-unit analytical notes for a long source.
+  // `source` is the parent source slug; `part` orders units within the source.
+  readings: [
+    { key: 'id',      type: 'string',   required: true  },
+    { key: 'title',   type: 'string',   required: true  },
+    { key: 'type',    type: 'string',   required: true  },
+    { key: 'created', type: 'iso-date', required: true  },
+    { key: 'updated', type: 'iso-date', required: true  },
+    { key: 'source',  type: 'string',   required: true  },
+    { key: 'part',    type: 'number',   required: true  },
+    { key: 'pages',   type: 'string',   required: false },
   ],
 
   // Research pack: foundation page (terminal — no back-links required)

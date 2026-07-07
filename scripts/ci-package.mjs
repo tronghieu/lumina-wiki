@@ -98,6 +98,7 @@ const requiredFiles = [
   'src/tools/fetch_wikipedia.py',
   'src/tools/id_utils.py',
   'src/tools/resolve_pdf.py',
+  'src/tools/verify_quotes.py',
   'src/tools/requirements.txt',
   'README.md',
   'LICENSE',

@@ -28,6 +28,14 @@ automatically except terminal/symmetric cases.
 
 Invoke when the user hands you a book chapter — either as raw text pasted inline, a
 file path under `raw/`, or a PDF with a page range (e.g. `raw/sources/gatsby.pdf 12-34`).
+
+This skill follows the reader chapter by chapter, so the wiki never knows more of the
+book than the user does — that is what keeps `/lumi-reading-plot-recap` spoiler-safe.
+If the user instead wants a **finished** book absorbed whole ("ingest this book",
+"add the whole book to the wiki"), route to `/lumi-ingest` — its long-source pipeline
+reads the entire document and writes page-anchored reading notes. Do not run this
+skill dozens of times as a substitute, and do not let `/lumi-ingest` deep-read a novel
+the user is still reading.
 This skill writes the chapter page, seeds character stubs, records theme tags, and
 registers plot beats. It is designed to be run once per chapter and is fully idempotent:
 re-running against the same chapter slug produces byte-identical output.

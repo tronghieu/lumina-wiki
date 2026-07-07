@@ -326,7 +326,7 @@ All tools follow these contracts:
 
 ## 5. Wiki schema contract
 
-**4 core page types:**
+**5 core page types:**
 
 | Type | Directory | Purpose |
 |---|---|---|
@@ -334,6 +334,7 @@ All tools follow these contracts:
 | Concept | `concepts/` | Cross-source idea or technique |
 | Person | `people/` | Profile of referenced person |
 | Summary | `summary/` | Area-level synthesis |
+| Reading note | `readings/` | Per-unit page-anchored notes for long sources (books, theses); written by `/lumi-ingest` long-source pipeline, linked to the source via `annotates`/`annotated_by`, exempt from `wiki/index.md` (L09) like `reflections/` |
 
 **Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 

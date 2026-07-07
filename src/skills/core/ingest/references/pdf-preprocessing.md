@@ -16,6 +16,15 @@ python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf --pages 1-20
 Claude Code can read PDFs natively; use the extractor when native PDF reading is
 unavailable, unreliable, or when a page range is safer.
 
+Two extra flags support the long-source pipeline:
+
+```bash
+python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf --info
+# → {"pages": N, "chars": M, "est_tokens": K} — size check, no text dump
+python3 _lumina/tools/extract_pdf.py raw/sources/<file>.pdf --pages 9-34 --markers
+# → page text prefixed with [[page N]] marker lines (absolute page numbers)
+```
+
 ## Failures
 
 - Exit 2 means an actionable user/input problem; report the message and stop.
@@ -26,5 +35,7 @@ unavailable, unreliable, or when a page range is safer.
 
 ## Large Sources
 
-For long PDFs, extract and ingest in sections. Checkpoint after each major phase
-so a later interruption can resume without rereading the whole file.
+If `--info` reports `pages >= 50` or `est_tokens >= 50000`, do not summarize in
+one pass — read fully and follow `./long-source.md` (multi-pass reading with
+page-anchored notes under `wiki/readings/`). Smaller sources that still exceed
+one comfortable read: extract in sections and checkpoint after each phase.

@@ -108,7 +108,7 @@ async function getColorFns() {
 /** Directories always created (core pack) */
 const CORE_WIKI_DIRS = [
   'wiki/sources', 'wiki/concepts', 'wiki/people', 'wiki/summary',
-  'wiki/outputs', 'wiki/graph',
+  'wiki/outputs', 'wiki/graph', 'wiki/readings',
 ];
 
 const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
@@ -1302,7 +1302,7 @@ function getSkillDefs(packs) {
 
 async function copyTools(projectRoot, { research }) {
   const destDir = join(projectRoot, '_lumina', 'tools');
-  const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py'];
+  const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py', 'verify_quotes.py'];
   const toolFiles = research ? [...coreTools, ...RESEARCH_TOOL_FILES] : coreTools;
   // Parallelize: each copy is independent and destDir already exists.
   // Sequential awaits were the main Windows cold-start regression in v1.4

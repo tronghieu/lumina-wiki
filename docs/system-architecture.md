@@ -47,7 +47,7 @@
 │    - .agents/ or .claude/ (skill symlinks)                │
 │                                                          │
 │  • Single source of truth: schemas.mjs                   │
-│    (entity types, 28 edge types, frontmatter spec,       │
+│    (entity types, 42 edge types, frontmatter spec,       │
 │     exemption globs; consumed by wiki.mjs + lint.mjs)    │
 └─────────────────────────────────────────────────────────┘
 ```

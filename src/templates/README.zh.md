@@ -42,6 +42,7 @@
 - `wiki/people/` — 在来源中被引用的人物
 - `wiki/summary/` — 跨多来源和概念的区域级综合
 - `wiki/outputs/` — 生成的工件（比较、导出）
+- `wiki/readings/` — 长篇来源（书籍、论文集）的页码锚定阅读笔记，每个来源一个文件夹；由 `/lumi-ingest` 创建，从来源页面而非目录访问
 - `wiki/graph/` — 派生状态；绝不手动编辑
 {{#if pack_research}}
 - `wiki/topics/`、`wiki/foundations/`（包：research）
@@ -78,7 +79,7 @@
 - `_lumina/config/lumina.config.yaml` — 工作空间配置；可编辑
 - `_lumina/schema/` — 更深层的参考文档；当此文件指向时打开
 - `_lumina/scripts/` — Node 引擎（`wiki.mjs`、`lint.mjs`、`reset.mjs`、`schemas.mjs`）
-- `_lumina/tools/` — Python 工具（始终包含：`extract_pdf.py`、`fetch_pdf.py`、`requirements.txt`{{#if pack_research}}；research 包添加 `_env.py`、`prepare_source.py`、`init_discovery.py`、`discover.py` 和各 fetcher 工具{{/if}}）
+- `_lumina/tools/` — Python 工具（始终包含：`extract_pdf.py`、`fetch_pdf.py`、`verify_quotes.py`、`requirements.txt`{{#if pack_research}}；research 包添加 `_env.py`、`prepare_source.py`、`init_discovery.py`、`discover.py` 和各 fetcher 工具{{/if}}）
 - `_lumina/_state/` — 安装程序/技能检查点状态；已 gitignore
 - `_lumina/manifest.json` — 安装程序状态；绝不手动编辑
 
@@ -94,6 +95,7 @@
 | Concept    | `concepts/`  | 跨来源的想法或技术，包含变体和比较                                    |
 | Person     | `people/`    | 被引用人物的档案，包含关键来源和关系                                  |
 | Summary    | `summary/`   | 跨多个来源和概念的区域级综合                                          |
+| Reading note | `readings/` | 长篇来源的逐章笔记，附页码引用；在长篇来源导入过程中写入 |
 {{#if pack_research}}| Topic      | `topics/`     | 将相关概念和来源分组的主题集群；通过 `/lumi-research-topic` 创建（research） |
 | Foundation | `foundations/`| 先决条件/背景知识；终端页面（research）                              |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | 书籍或长篇作品的逐章笔记（reading）                                  |
@@ -219,6 +221,7 @@
 {{#if pack_research}}- **`_lumina/scripts/discover-runner.mjs`** — 一次性计划发现运行器；收集评分候选项但不导入或下载论文。
 {{/if}}
 - **`_lumina/tools/extract_pdf.py`** — PDF 文本提取器（基于 pypdf）；当宿主 IDE 无法原生读取 PDF 时，由 `/lumi-ingest` 和 `/lumi-reading-chapter-ingest` 使用。
+- **`_lumina/tools/verify_quotes.py`** — 将阅读笔记和来源页面中带页码的引文与源 PDF 核对；由 `/lumi-ingest` 用于长篇来源。
 - **`_lumina/tools/fetch_pdf.py`** — URL → `raw/download/<resource>/` PDF 下载器（流式、原子性、幂等）；当输入为 URL 或论文标识符时，由 `/lumi-ingest` 模式 B 使用。
 - **`_lumina/tools/requirements.txt`** — 捆绑工具的 Python 依赖项。当工具报告缺少包时运行 `pip install -r _lumina/tools/requirements.txt`。
 {{#if pack_research}}- **`_lumina/tools/_env.py`** — research 工具的共享 `.env` 加载器。

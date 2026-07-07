@@ -121,6 +121,38 @@ tags: []
 - `## Key concepts` — wikilinks
 - `## Open questions` — synthesis-level questions
 - `## Notes`
+
+---
+
+## Reading note — `wiki/readings/<source-slug>/<nn>-<unit-slug>.md`
+
+Written by `/lumi-ingest` for long sources (books, theses, 50+ page documents),
+one note per chapter/part. The source page links to its notes through
+`annotated_by` connections; notes are not listed in `wiki/index.md`.
+
+```yaml
+---
+id: readings/<source-slug>/<nn>-<unit-slug>
+title: "Part N: Title (pp. from–to)"
+type: reading
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+source: source-slug
+part: N
+pages: "from-to"     # optional; omit for sources without page numbers
+---
+```
+
+**Sections:**
+- Opening line (before any heading): `Part N of [[sources/<source-slug>]] (pp. from–to).` — the body wikilink keeps the note reachable and non-orphaned
+- `## Question this unit answers` — the one question the chapter/part addresses
+- `## Key terms` — terms the author defines or uses in a special sense, with page cites
+- `## Propositions` — the unit's leading claims, each with a page cite
+- `## Arguments` — premises → conclusion, page-cited
+- `## Evidence` — data, examples, or experiments offered
+- `## Quotes` — verbatim quotes only, each as `"exact words" (p. N)` — these are machine-checked against the source
+- `## Tensions and links` — where this unit contradicts, extends, or depends on other units
+- `## Open questions`
 {{#if pack_research}}
 
 ---
