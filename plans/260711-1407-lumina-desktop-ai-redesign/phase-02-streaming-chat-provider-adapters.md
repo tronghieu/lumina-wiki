@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Streaming chat provider adapters"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [1]
@@ -70,11 +70,11 @@ type ProviderEvent struct { Kind EventKind; Text string; Usage Usage }
 
 ## Interface and Function Checklist
 
-- [ ] `ChatProvider.Stream`, `StreamSink.Emit`, `HTTPDoer.Do`, injected resolver/clock/backoff.
-- [ ] `ParseSSE(io.Reader, Limits, callback)` handles CRLF, fragmentation, multiline `data`, comments, EOF.
-- [ ] `EndpointPolicy.Validate` returns approved IPs; `PinnedTransport.DialContext` binds the dial to them while preserving SNI/Host; redirect callback repeats both steps and binds credentials to origin.
-- [ ] Adapter constructors accept validated profile plus `SecretStore`; they never retain a frontend key field.
-- [ ] `MapProviderError` returns stable code/message without body, prompt, transcript, or header data.
+- [x] `ChatProvider.Stream`, `StreamSink.Emit`, `HTTPDoer.Do`, injected resolver/clock/backoff.
+- [x] Bounded `ParseSSE` handles CRLF, fragmentation, multiline `data`, comments, EOF, cancellation, persistent IDs, and zero-progress readers.
+- [x] Endpoint policy returns approved IPs; pinned transport binds the dial while preserving SNI/Host; redirects revalidate/re-pin and strip cross-origin credentials.
+- [x] Adapter factory accepts validated profiles plus a backend credential resolver; adapters never retain a frontend key field.
+- [x] Provider/status errors return stable codes without body, prompt, transcript, URL/IP, header, or credential data.
 
 ## Dependency Map
 
@@ -98,20 +98,27 @@ Keep shared parsing, endpoint policy, retry, and errors provider-neutral. Keep e
 
 ## Implementation Steps
 
-- [ ] Write SSE fragmentation/size/cancel tests; run RED; implement bounded parser; run GREEN.
-- [ ] Write endpoint redirect/DNS/private-range/rebinding/proxy/SNI tests; run RED; implement resolver policy plus approved-IP pinned transport; run GREEN.
-- [ ] Commit: `feat(desktop): add secure streaming transport`.
-- [ ] Write OpenAI and Anthropic request/header/event tests; run RED; implement adapters; run GREEN.
-- [ ] Write Gemini and compatible/Ollama tests; run RED; implement adapters; run GREEN.
-- [ ] Commit: `feat(desktop): add chat provider adapters`.
-- [ ] Write status/retry-after-delta/redaction tests; run RED; implement stable mapping and pre-delta retry; run GREEN/race/full regression.
-- [ ] Commit: `test(desktop): harden provider stream failures`.
+- [x] Write SSE fragmentation/size/cancel tests; run RED; implement bounded parser; run GREEN.
+- [x] Write endpoint redirect/DNS/private-range/rebinding/proxy/SNI tests; implement approved-IP pinned transport; pass spec and quality review.
+- [x] Commit: `feat(desktop): add secure streaming transport` (`5520a252`).
+- [x] Write OpenAI and Anthropic request/header/event tests; implement adapters; run GREEN.
+- [x] Write Gemini and compatible/Ollama request/lifecycle/usage/refusal tests; implement adapters; run GREEN.
+- [x] Commit: `feat(desktop): add chat provider adapters` (`059d53f5`).
+- [x] Write status/retry-after-event/redaction/timeout tests; implement stable mapping and two-attempt pre-event retry; run GREEN/race/full regression.
+- [x] Commit: `test(desktop): harden provider stream failures` (`dc927b46`).
 
 ## Success Criteria
 
-- [ ] All adapters satisfy one event contract and never use paid/live APIs in tests.
-- [ ] Cancellation reaches `http.NewRequestWithContext`; late bytes do not emit after terminal state.
-- [ ] Credential forwarding, error redaction, limits, and retry rules are empirically covered.
+- [x] All adapters satisfy one event contract and never use paid/live APIs in tests.
+- [x] Cancellation reaches request/body/credential resolution; late or malformed bytes do not emit after terminal state.
+- [x] Credential forwarding, error redaction, endpoint/DNS pinning, limits, lifecycle, usage, and retry rules are empirically covered.
+
+## Completion Evidence
+
+- Completed: 2026-07-12.
+- Reviews: transport, adapters, and retry/error slices each passed spec-compliance and code-quality review after every finding was fixed and re-reviewed.
+- Gates: focused/full provider tests, race detector, vet, full desktop regression, diff checks, and Windows/Linux/Darwin/FreeBSD package cross-compilation passed.
+- Protocol sources: official OpenAI Responses streaming reference, Anthropic Messages event contract, and Google Gemini `streamGenerateContent` documentation; all tests use local fixtures/fakes.
 
 ## Security, Risks, and Rollback
 

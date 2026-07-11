@@ -34,7 +34,7 @@ Production-port `Lumina Desktop.dc.html` tokens and hierarchy while preserving r
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | [Local settings secrets and history foundation](./phase-01-local-settings-secrets-and-history-foundation.md) | Completed |
-| 2 | [Streaming chat provider adapters](./phase-02-streaming-chat-provider-adapters.md) | Pending |
+| 2 | [Streaming chat provider adapters](./phase-02-streaming-chat-provider-adapters.md) | Completed |
 | 3 | [Workspace corpus and lexical retrieval](./phase-03-workspace-corpus-and-lexical-retrieval.md) | Pending |
 | 4 | [Semantic embeddings and hybrid index](./phase-04-semantic-embeddings-and-hybrid-index.md) | Pending |
 | 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Pending |
