@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Workspace corpus and lexical retrieval"
-status: pending
+status: completed
 priority: P1
 effort: "3d"
 dependencies: [1]
@@ -76,12 +76,12 @@ Traversal emits normalized relative paths; chunk IDs are path-aware for citation
 
 ## Interface and Function Checklist
 
-- [ ] `DefaultCorpusPolicy`, `Corpus.Scan`, `Corpus.ReadCurrent`.
-- [ ] `OpenRegularContained` rejects symlink components and validates opened-file identity/size before and after read.
-- [ ] `StripFrontmatter`, `ChunkMarkdown`, `ChunkID`, `ContentHash`.
-- [ ] `BuildLexical`, `Lexical.Search` with fixed BM25 constants and stable tie-break.
-- [ ] `workspace.Service.Tree` returns bounded real hierarchy metadata; `CitationReader.ReadCitationNote` accepts only current session allowlist IDs.
-- [ ] Warnings contain relative path and stable code only, never note text or raw OS details.
+- [x] `Corpus.Snapshot` provides the bounded current corpus generation; `Lexical.ValidateChunk` safely rehydrates persisted chunk IDs.
+- [x] Retrieval safe-open logic rejects symlink components and validates opened-file/root identity, size, time, and content before acceptance.
+- [x] `StripFrontmatter`, `ChunkMarkdown`, `ChunkID`, `ContentHash`.
+- [x] `BuildLexical`, `Lexical.Search` with fixed BM25 constants and stable tie-break.
+- [x] `workspace.TreeBuilder.Build` returns bounded real hierarchy metadata; `CitationReader.ReadCitationNote` accepts only current sealed allowlist IDs.
+- [x] Warnings contain relative path and stable code only, never note text or raw OS details.
 
 ## Dependency Map
 
@@ -105,20 +105,20 @@ Extract only pure Markdown body parsing shared with graph; do not couple retriev
 
 ## Implementation Steps
 
-- [ ] Write corpus include/exclude/size/warning tests; run RED; implement policy traversal; run GREEN.
-- [ ] Write symlink/replace/snapshot tests; run RED; implement contained regular reads and one retry; run GREEN/race.
-- [ ] Write bounded real-tree and opaque broad-citation read tests; run RED; implement tree snapshot and current-hash citation reader; run GREEN.
-- [ ] Commit: `feat(desktop): add safe workspace corpus`.
-- [ ] Write chunker golden tests for frontmatter/headings/Unicode/overlap; run RED; implement chunker/hashes; run GREEN.
-- [ ] Write BM25/boost/tie/stale tests; run RED; implement lexical index and current-hash check; run GREEN.
-- [ ] Commit: `feat(desktop): add lexical workspace retrieval`.
-- [ ] Run graph/workspace/full regression and commit any pure parser extraction with `refactor(desktop): share markdown body parsing`.
+- [x] Write corpus include/exclude/size/warning tests; run RED; implement policy traversal; run GREEN.
+- [x] Write symlink/replace/snapshot tests; run RED; implement contained regular reads and one retry; run GREEN/race.
+- [x] Write bounded real-tree and opaque broad-citation read tests; run RED; implement tree snapshot and current-hash citation reader; run GREEN.
+- [x] Commit: `feat(desktop): add safe workspace corpus and tree` (`8fb8337a`).
+- [x] Write chunker golden tests for frontmatter/headings/Unicode/overlap; run RED; implement chunker/hashes; run GREEN.
+- [x] Write BM25/boost/tie/stale tests; run RED; implement lexical index and current-generation checks; run GREEN.
+- [x] Commit: `feat(desktop): add lexical workspace retrieval` (`f758407b`).
+- [x] Run graph/workspace/full regression; no graph parser extraction was needed because retrieval semantics remain intentionally isolated.
 
 ## Success Criteria
 
-- [ ] Corpus exactly matches approved include/exclude policy across OS fixtures.
-- [ ] Same corpus produces byte-identical chunk IDs, hashes, and lexical ranks.
-- [ ] No scan/search writes beneath workspace or exposes skipped-note content.
+- [x] Corpus exactly matches approved include/exclude policy across OS fixtures.
+- [x] Same corpus produces byte-identical chunk IDs, hashes, and lexical ranks.
+- [x] No scan/search writes beneath workspace or exposes skipped-note content.
 
 ## Security, Risks, and Rollback
 
