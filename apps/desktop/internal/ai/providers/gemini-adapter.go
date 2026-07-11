@@ -60,7 +60,7 @@ func (a *geminiAdapter) Stream(ctx context.Context, request ProviderRequest, sin
 		return err
 	}
 	state := geminiState{ctx: ctx, sink: sink}
-	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, true)
+	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, true, a.config.now)
 	if err != nil {
 		return err
 	}

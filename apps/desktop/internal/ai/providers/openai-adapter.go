@@ -43,7 +43,7 @@ func (a *openAIAdapter) Stream(ctx context.Context, request ProviderRequest, sin
 		return err
 	}
 	state := openAIState{ctx: ctx, sink: sink, sequence: -1}
-	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false)
+	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false, a.config.now)
 	if err != nil {
 		return err
 	}

@@ -44,7 +44,7 @@ func (a *anthropicAdapter) Stream(ctx context.Context, request ProviderRequest, 
 	httpRequest.Header.Set("Anthropic-Version", "2023-06-01")
 	httpRequest.Header.Del("Anthropic-Beta")
 	state := anthropicState{ctx: ctx, sink: sink, blocks: map[int]bool{}}
-	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false)
+	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false, a.config.now)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 	"unicode/utf8"
 )
 
@@ -111,9 +112,12 @@ type HTTPDoer interface {
 }
 
 type SafeError struct {
-	Code    string
-	Message string
-	cause   error
+	Code          string
+	Message       string
+	cause         error
+	retryable     bool
+	retryAfter    time.Duration
+	hasRetryAfter bool
 }
 
 func NewSafeError(code, message string, cause error) *SafeError {
@@ -133,7 +137,15 @@ func NewSafeError(code, message string, cause error) *SafeError {
 	if errors.Is(cause, io.ErrNoProgress) {
 		safeCause = io.ErrNoProgress
 	}
-	return &SafeError{Code: code, Message: message, cause: safeCause}
+	retryable := code == "endpoint_connect" || code == "provider_request" || code == "transport_unavailable"
+	return &SafeError{Code: code, Message: message, cause: safeCause, retryable: retryable}
+}
+
+func newClassifiedSafeError(code, message string, cause error, retryable bool, retryAfter time.Duration) *SafeError {
+	err := NewSafeError(code, message, cause)
+	err.retryable, err.retryAfter = retryable, retryAfter
+	err.hasRetryAfter = retryAfter > 0
+	return err
 }
 func (e *SafeError) Error() string { return e.Code + ": " + e.Message }
 func (e *SafeError) Unwrap() error { return e.cause }

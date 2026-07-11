@@ -21,9 +21,14 @@ type adapterConfig struct {
 	profile settings.Profile
 	client  SafeClient
 	secrets credentialResolver
+	now     func() time.Time
 }
 
 func NewProvider(profile settings.Profile, client SafeClient, secrets credentialResolver) (ChatProvider, error) {
+	return NewProviderWithRetryOptions(profile, client, secrets, RetryOptions{})
+}
+
+func NewProviderWithRetryOptions(profile settings.Profile, client SafeClient, secrets credentialResolver, retryOptions RetryOptions) (ChatProvider, error) {
 	normalized, err := profile.Normalized()
 	if err != nil || normalized.Role != settings.RoleChat {
 		return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
@@ -32,31 +37,37 @@ func NewProvider(profile settings.Profile, client SafeClient, secrets credential
 	if err != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 		return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
 	}
-	config := adapterConfig{profile: normalized, client: client, secrets: secrets}
+	if retryOptions.Timeout <= 0 {
+		retryOptions.Timeout = time.Duration(normalized.TimeoutMS) * time.Millisecond
+	}
+	retryOptions = normalizeRetryOptions(retryOptions)
+	config := adapterConfig{profile: normalized, client: client, secrets: secrets, now: retryOptions.Clock}
+	var provider ChatProvider
 	switch normalized.Kind {
 	case settings.ProviderOpenAI:
 		if normalized.CredentialRef == "" || secrets == nil {
 			return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
 		}
-		return &openAIAdapter{config: config}, nil
+		provider = &openAIAdapter{config: config}
 	case settings.ProviderAnthropic:
 		if normalized.CredentialRef == "" || secrets == nil {
 			return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
 		}
-		return &anthropicAdapter{config: config}, nil
+		provider = &anthropicAdapter{config: config}
 	case settings.ProviderGemini:
 		if normalized.CredentialRef == "" || secrets == nil {
 			return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
 		}
-		return &geminiAdapter{config: config}, nil
+		provider = &geminiAdapter{config: config}
 	case settings.ProviderOpenAICompatible, settings.ProviderOllama:
 		if normalized.CredentialRef != "" && secrets == nil {
 			return nil, NewSafeError("invalid_profile", "The provider profile is invalid.", nil)
 		}
-		return &compatibleAdapter{config: config}, nil
+		provider = &compatibleAdapter{config: config}
 	default:
 		return nil, NewSafeError("unsupported_provider", "The provider is not supported.", nil)
 	}
+	return NewRetryingProvider(provider, retryOptions), nil
 }
 
 func (c adapterConfig) streamContext(parent context.Context) (context.Context, context.CancelFunc, error) {

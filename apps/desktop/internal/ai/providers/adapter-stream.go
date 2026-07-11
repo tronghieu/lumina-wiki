@@ -8,11 +8,12 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const MaxUsageTokens = 1_000_000_000
 
-func streamResponse(ctx context.Context, client SafeClient, request *http.Request, sink StreamSink, callback func(SSEEvent) error, gemini bool) error {
+func streamResponse(ctx context.Context, client SafeClient, request *http.Request, sink StreamSink, callback func(SSEEvent) error, gemini bool, now func() time.Time) error {
 	if sink == nil {
 		return NewSafeError("invalid_sink", "The provider stream sink is invalid.", nil)
 	}
@@ -26,10 +27,14 @@ func streamResponse(ctx context.Context, client SafeClient, request *http.Reques
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return statusError(response.StatusCode)
+		drainAndClose(response.Body)
+		if now == nil {
+			now = time.Now
+		}
+		return statusErrorAt(response.StatusCode, response.Header.Get("Retry-After"), now())
 	}
+	defer response.Body.Close()
 	mediaType, _, parseErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if parseErr != nil || !strings.EqualFold(mediaType, "text/event-stream") {
 		return NewSafeError("invalid_content_type", "The provider returned an invalid stream response.", nil)
@@ -45,23 +50,6 @@ func emit(ctx context.Context, sink StreamSink, event StreamEvent) error {
 		return err
 	}
 	return ctx.Err()
-}
-
-func statusError(status int) error {
-	code := "provider_status"
-	switch status {
-	case 401:
-		code = "unauthorized"
-	case 403:
-		code = "forbidden"
-	case 404:
-		code = "not_found"
-	case 429:
-		code = "rate_limited"
-	case 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511:
-		code = "provider_unavailable"
-	}
-	return NewSafeError(code, "The provider rejected the request.", nil)
 }
 
 func malformed() error {

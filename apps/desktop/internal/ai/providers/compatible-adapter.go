@@ -48,7 +48,7 @@ func (a *compatibleAdapter) Stream(ctx context.Context, request ProviderRequest,
 		return err
 	}
 	state := compatibleState{ctx: ctx, sink: sink}
-	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false)
+	err = streamResponse(ctx, a.config.client, httpRequest, sink, state.accept, false, a.config.now)
 	if err != nil {
 		return err
 	}
