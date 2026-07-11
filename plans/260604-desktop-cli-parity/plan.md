@@ -5,7 +5,7 @@ status: in-progress
 priority: P2
 branch: "feat/lumina-desktop-wails"
 tags: []
-blockedBy: []
+blockedBy: [260711-1407-lumina-desktop-ai-redesign]
 blocks: []
 created: "2026-06-03T18:31:12.992Z"
 createdBy: "ck:plan"
