@@ -61,6 +61,11 @@ func (corpus *Corpus) Snapshot(ctx context.Context, rootPath string) (Snapshot, 
 		if err != nil {
 			return Snapshot{}, err
 		}
+		openedRoot, err := root.Stat(".")
+		if err != nil {
+			_ = root.Close()
+			return Snapshot{}, errChanged
+		}
 		snapshot, changed, err := corpus.scan(ctx, root, attempt)
 		rootChanged := !rootCurrent(root)
 		if rootChanged {
@@ -81,6 +86,7 @@ func (corpus *Corpus) Snapshot(ctx context.Context, rootPath string) (Snapshot, 
 			})
 		}
 		if !changed || attempt == 1 {
+			snapshot.rootIdentity = openedRoot
 			snapshot.SnapshotHash = hashSnapshot(snapshot.Documents)
 			return snapshot, nil
 		}
