@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Local settings secrets and history foundation"
-status: pending
+status: completed
 priority: P1
 effort: "3d"
 dependencies: []
@@ -76,12 +76,12 @@ type SessionChallenge struct { Nonce string; ExpiresAt time.Time }
 
 ## Interface and Function Checklist
 
-- [ ] `settings.ValidateProfile`, `settings.Profile.Fingerprint`, `ConfigStore.Load/Save`.
-- [ ] `SecretStore.Put/Get/Delete/Status`; phase-5 facade exposes status/write/delete plus `BeginSessionCredential` and nonce-consuming `ConfirmSessionCredential`, never a getter.
-- [ ] `HistoryStore.Append/List/Load/Delete/DeleteAll/SetEnabled` with injected clock and ID generator.
-- [ ] `HistoryCoordinator.WithWorkspace` owns all mutations with one lock order and explicit cross-process busy policy.
-- [ ] `workspaceid.Resolve` plus `Registry.Attach` record signatures and require confirmation for ambiguous rename/path reuse.
-- [ ] Atomic writer fsyncs temp file, renames, and enforces best-effort user-only modes.
+- [x] `settings.ValidateProfile`, `settings.Profile.Fingerprint`, `ConfigStore.Load/Save`.
+- [x] `SecretStore.Put/Get/Delete/Status`; phase-5 facade exposes status/write/delete plus `BeginSessionCredential` and nonce-consuming `ConfirmSessionCredential`, never a getter.
+- [x] `HistoryStore.Append/List/Load/Delete/DeleteAll/SetEnabled` with injected clock and ID generator.
+- [x] History coordinator owns all reads/mutations with process gates, kernel advisory locks, and documented lock ordering.
+- [x] Workspace identity manager records durable evidence and requires explicit confirmation across restart/rename/path reuse ambiguity.
+- [x] Atomic writers fsync temp files, rename, and enforce user-only Unix modes plus owner/SYSTEM Windows DACL for private history.
 
 ## Dependency Map
 
@@ -105,21 +105,29 @@ No frontend migration yet. Keep `workspace.Service.Validate/ResolveInside`, grap
 
 ## Implementation Steps
 
-- [ ] Write profile validation/fingerprint tests; run the focused RED command and record the missing-symbol failure.
-- [ ] Implement `types.go` minimum schema/version/base-URL/model/budget validation; rerun focused tests GREEN.
-- [ ] Commit: `feat(desktop): add versioned AI profile settings`.
-- [ ] Write atomic store/permission/migration tests; run RED; implement temp-fsync-rename storage; run GREEN.
-- [ ] Write keyring status/session-challenge tests; run RED; add nonce expiry/single-use/restart-invalidated flow without a secret-returning API; run GREEN.
-- [ ] Commit: `feat(desktop): secure provider credentials`.
-- [ ] Write workspace alias/reuse/registry and history lifecycle/concurrency/cross-process tests; run RED; implement identity registry, coordinator, and history records; run GREEN and race gate.
-- [ ] Commit: `feat(desktop): add workspace scoped chat history`.
-- [ ] Export constructor-ready stores/interfaces only; do not create/register a Wails facade in this phase; run full Go regression.
+- [x] Write profile validation/fingerprint tests; run the focused RED command and record the missing-symbol failure.
+- [x] Implement version/base-URL/model/budget validation; rerun focused tests GREEN.
+- [x] Commit: `feat(desktop): add versioned AI profile settings` (`4f506d41`).
+- [x] Write atomic store/permission/migration tests; implement bounded temp-fsync-rename storage; run GREEN/race/vet.
+- [x] Write keyring status/session-challenge tests; add nonce expiry/single-use/restart-invalidated flow without a secret-returning API; run GREEN/race/vet.
+- [x] Commit: `feat(desktop): secure provider credentials` (`7cfb51ca`).
+- [x] Write workspace identity/registry and history lifecycle/concurrency/cross-process tests; implement and pass RED/GREEN/race gates.
+- [x] Commit identity: `feat(desktop): add durable workspace identity` (`45567649`).
+- [x] Commit history: `feat(desktop): add workspace scoped chat history` (`397d578c`).
+- [x] Export constructor-ready stores/interfaces only; no Wails facade or `main.go` registration; run full Go regression.
 
 ## Success Criteria
 
-- [ ] All storage and identity matrix cases pass on supported CI OSes.
-- [ ] Secret bytes never serialize, log, enter errors, or persist outside OS/session storage.
-- [ ] Config/history writes are atomic and workspace files remain byte-identical.
+- [x] All storage and identity matrix cases pass locally, under race/vet, and package cross-compilation for Windows/Linux/Darwin/FreeBSD.
+- [x] Secret bytes never serialize, log, enter errors, or persist outside OS/session storage.
+- [x] Config/history writes are atomic and workspace files remain byte-identical.
+
+## Completion Evidence
+
+- Completed: 2026-07-11.
+- Reviews: per-slice spec compliance and code quality approved after all findings were fixed and re-reviewed.
+- Final phase gate: settings, secrets, workspace identity, history, full desktop tests, race tests, vet, diff checks, and four-platform package cross-compilation passed.
+- Platform note: Windows protected-DACL runtime test is build-tagged and cross-compiles here; it runs on Windows CI. Native macOS tests emit pre-existing linker target-version warnings with exit status zero.
 
 ## Security, Risks, and Rollback
 
