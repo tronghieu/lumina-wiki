@@ -29,6 +29,7 @@ const (
 	MaxModelBytes               = 200
 	MaxBaseURLBytes             = 4_096
 	MaxCredentialRefBytes       = 1_024
+	MaxEmbeddingDimensions      = 4_096
 )
 
 type ProfileRole string
@@ -62,13 +63,15 @@ type Profile struct {
 	MaxHistoryChars  int          `json:"maxHistoryChars"`
 	MaxEvidenceChars int          `json:"maxEvidenceChars"`
 	MaxOutputTokens  int          `json:"maxOutputTokens"`
+	Dimensions       int          `json:"dimensions,omitempty"`
 }
 
 type Config struct {
 	// Fixed role slots cap the aggregate profile count at two.
-	SchemaVersion int      `json:"schemaVersion"`
-	Chat          *Profile `json:"chat,omitempty"`
-	Embedding     *Profile `json:"embedding,omitempty"`
+	SchemaVersion     int                     `json:"schemaVersion"`
+	Chat              *Profile                `json:"chat,omitempty"`
+	Embedding         *Profile                `json:"embedding,omitempty"`
+	EmbeddingConsents []EmbeddingConsentGrant `json:"embeddingConsents,omitempty"`
 }
 
 func DefaultConfig() Config { return Config{SchemaVersion: CurrentSchemaVersion} }
@@ -88,6 +91,9 @@ func (c Config) Normalized() (Config, error) {
 		return Config{}, err
 	}
 	if result.Embedding, err = normalizeSlot(c.Embedding, RoleEmbedding); err != nil {
+		return Config{}, err
+	}
+	if result.EmbeddingConsents, err = normalizeEmbeddingConsents(c.EmbeddingConsents); err != nil {
 		return Config{}, err
 	}
 	return result, nil
@@ -133,6 +139,9 @@ func (p Profile) Normalized() (Profile, error) {
 	if err := validateCompatibility(p.Role, p.Kind); err != nil {
 		return Profile{}, err
 	}
+	if p.Role == RoleChat && p.Dimensions != 0 || p.Role == RoleEmbedding && (p.Dimensions < 0 || p.Dimensions > MaxEmbeddingDimensions) {
+		return Profile{}, fmt.Errorf("dimensions must be zero for chat or between 0 and %d for embeddings", MaxEmbeddingDimensions)
+	}
 	baseURL, err := normalizeBaseURL(p.BaseURL)
 	if err != nil {
 		return Profile{}, err
@@ -161,7 +170,7 @@ func (p Profile) Fingerprint() (string, error) {
 		return "", err
 	}
 	// CredentialRef, ID, and label do not affect provider semantics.
-	effective := []any{p.Role, p.Kind, p.Model, p.BaseURL, p.TimeoutMS, p.MaxInputChars, p.MaxHistoryChars, p.MaxEvidenceChars, p.MaxOutputTokens}
+	effective := []any{p.Role, p.Kind, p.Model, p.BaseURL, p.TimeoutMS, p.MaxInputChars, p.MaxHistoryChars, p.MaxEvidenceChars, p.MaxOutputTokens, p.Dimensions}
 	raw, _ := json.Marshal(effective)
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:]), nil
