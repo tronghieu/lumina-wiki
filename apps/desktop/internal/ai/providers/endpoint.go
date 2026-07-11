@@ -39,7 +39,15 @@ type EndpointPolicy struct {
 }
 
 func (p EndpointPolicy) Approve(ctx context.Context, raw string) (ApprovedEndpoint, error) {
-	u, err := parseEndpoint(raw)
+	return p.approve(ctx, raw, false)
+}
+
+func (p EndpointPolicy) approveGeminiSSE(ctx context.Context, raw string) (ApprovedEndpoint, error) {
+	return p.approve(ctx, raw, true)
+}
+
+func (p EndpointPolicy) approve(ctx context.Context, raw string, geminiSSE bool) (ApprovedEndpoint, error) {
+	u, err := parseEndpoint(raw, geminiSSE)
 	if err != nil {
 		return ApprovedEndpoint{}, err
 	}
@@ -107,7 +115,7 @@ func approved(u *url.URL, host, port string, addrs []netip.Addr) ApprovedEndpoin
 	return ApprovedEndpoint{normalized: *u, origin: origin, serverName: host, port: port, addrs: append([]netip.Addr(nil), addrs...)}
 }
 
-func parseEndpoint(raw string) (*url.URL, error) {
+func parseEndpoint(raw string, geminiSSE bool) (*url.URL, error) {
 	if raw == "" || raw != strings.TrimSpace(raw) {
 		return nil, endpointRejected()
 	}
@@ -118,11 +126,22 @@ func parseEndpoint(raw string) (*url.URL, error) {
 	if err := validPort(u); err != nil {
 		return nil, endpointRejected()
 	}
-	if u.RawQuery != "" || u.ForceQuery {
+	if !validControlledQuery(u, geminiSSE) {
 		return nil, endpointRejected()
 	}
 	u.Scheme = strings.ToLower(u.Scheme)
 	return u, nil
+}
+
+func validControlledQuery(u *url.URL, geminiSSE bool) bool {
+	if !geminiSSE {
+		return u.RawQuery == "" && !u.ForceQuery
+	}
+	if u.ForceQuery || u.RawQuery != "alt=sse" {
+		return false
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	return err == nil && len(query) == 1 && len(query["alt"]) == 1 && query.Get("alt") == "sse"
 }
 func validPort(u *url.URL) error {
 	host := u.Host

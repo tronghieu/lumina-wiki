@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"unicode/utf8"
 )
 
 type EventKind string
@@ -17,7 +18,7 @@ const (
 )
 
 type Delta struct{ Text string }
-type Usage struct{ InputTokens, OutputTokens int }
+type Usage struct{ InputTokens, OutputTokens, TotalTokens int }
 type Refusal struct{ Message string }
 
 type StreamEvent struct {
@@ -29,11 +30,71 @@ type StreamEvent struct {
 }
 
 type ChatMessage struct{ Role, Content string }
-type ChatRequest struct {
-	Model     string
-	Messages  []ChatMessage
-	MaxTokens int
+type ProviderRequest struct {
+	Model           string
+	System          string
+	Turns           []ChatMessage
+	MaxOutputTokens int
 }
+
+const maxProviderTextBytes = 4 << 20
+
+const (
+	MaxProviderTurns        = 256
+	MaxProviderTurnChars    = 1 << 20
+	MaxProviderRequestChars = 8 << 20
+	MaxProviderRequestBytes = 8 << 20
+)
+
+func (r ProviderRequest) Validate() error {
+	if !validProviderText(r.Model, false) || !validProviderText(r.System, true) || len(r.Turns) == 0 || len(r.Turns) > MaxProviderTurns || r.MaxOutputTokens < 0 || r.MaxOutputTokens > 100_000 {
+		return NewSafeError("invalid_request", "The provider request is invalid.", nil)
+	}
+	chars, estimatedBytes := 0, 512
+	if !addWithin(&chars, utf8.RuneCountInString(r.Model), MaxProviderRequestChars) || !addWithin(&chars, utf8.RuneCountInString(r.System), MaxProviderRequestChars) || !addJSONEstimate(&estimatedBytes, r.Model) || !addJSONEstimate(&estimatedBytes, r.System) {
+		return NewSafeError("invalid_request", "The provider request is invalid.", nil)
+	}
+	for _, turn := range r.Turns {
+		turnChars := utf8.RuneCountInString(turn.Content)
+		if (turn.Role != "user" && turn.Role != "assistant") || !validProviderText(turn.Content, false) || turnChars > MaxProviderTurnChars || !addWithin(&chars, turnChars, MaxProviderRequestChars) || !addWithin(&estimatedBytes, 64, MaxProviderRequestBytes) || !addJSONEstimate(&estimatedBytes, turn.Content) {
+			return NewSafeError("invalid_request", "The provider request is invalid.", nil)
+		}
+	}
+	if r.Turns[len(r.Turns)-1].Role != "user" {
+		return NewSafeError("invalid_request", "The provider request must end with a user message.", nil)
+	}
+	return nil
+}
+
+func addWithin(total *int, value, limit int) bool {
+	if value < 0 || *total > limit-value {
+		return false
+	}
+	*total += value
+	return true
+}
+
+func addJSONEstimate(total *int, value string) bool {
+	encoded := 2
+	for _, r := range value {
+		n := utf8.RuneLen(r)
+		if r < 0x20 || r == '<' || r == '>' || r == '&' || r == '\u2028' || r == '\u2029' {
+			n = 6
+		} else if r == '"' || r == '\\' {
+			n = 2
+		}
+		if !addWithin(&encoded, n, MaxProviderRequestBytes) {
+			return false
+		}
+	}
+	return addWithin(total, encoded, MaxProviderRequestBytes)
+}
+
+func validProviderText(value string, empty bool) bool {
+	return (empty || value != "") && len(value) <= maxProviderTextBytes && utf8.ValidString(value)
+}
+
+type ChatRequest = ProviderRequest
 
 type StreamSink interface {
 	OnEvent(context.Context, StreamEvent) error

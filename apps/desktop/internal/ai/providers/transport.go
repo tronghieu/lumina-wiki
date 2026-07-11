@@ -89,7 +89,7 @@ type SafeClient struct {
 	NewRoundTripper   func(ApprovedEndpoint) http.RoundTripper
 }
 
-func (c SafeClient) Do(original *http.Request) (*http.Response, error) {
+func (c SafeClient) do(original *http.Request, geminiSSE bool) (*http.Response, error) {
 	if original == nil {
 		return nil, NewSafeError("invalid_request", "The provider request is invalid.", nil)
 	}
@@ -105,7 +105,13 @@ func (c SafeClient) Do(original *http.Request) (*http.Response, error) {
 	current := original.Clone(original.Context())
 	needsReplay := false
 	for redirects := 0; ; redirects++ {
-		approved, err := c.Policy.Approve(current.Context(), current.URL.String())
+		var approved ApprovedEndpoint
+		var err error
+		if geminiSSE {
+			approved, err = c.Policy.approveGeminiSSE(current.Context(), current.URL.String())
+		} else {
+			approved, err = c.Policy.Approve(current.Context(), current.URL.String())
+		}
 		if err != nil {
 			closeRequestBody(current)
 			return nil, err
