@@ -5,11 +5,12 @@ import "os"
 func (m *Manager) isTrusted(id WorkspaceID, candidate ownedCandidate) bool {
 	m.mu.Lock()
 	trusted, exists := m.trusted[pathKey(candidate.CanonicalPath)]
-	m.mu.Unlock()
 	if !exists || trusted.id != id {
+		m.mu.Unlock()
 		return false
 	}
 	trustedInfo, err := trusted.handle.Stat()
+	m.mu.Unlock()
 	if err != nil {
 		return false
 	}
@@ -41,14 +42,38 @@ func (m *Manager) Close() error {
 		return nil
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
+	var handles []DirectoryHandle
 	for token, pending := range m.pending {
-		_ = pending.candidate.handle.Close()
+		handles = append(handles, pending.candidate.handle)
 		delete(m.pending, token)
 	}
 	for key, trusted := range m.trusted {
-		_ = trusted.handle.Close()
+		handles = append(handles, trusted.handle)
 		delete(m.trusted, key)
 	}
+	m.mu.Unlock()
+	for _, handle := range handles {
+		_ = handle.Close()
+	}
 	return nil
+}
+
+func (m *Manager) TrustedRootIdentity(id WorkspaceID, canonicalPath string) (os.FileInfo, error) {
+	if m == nil || !id.Valid() || !validCanonicalPath(canonicalPath) {
+		return nil, ErrTrustedWorkspaceUnavailable
+	}
+	if err := m.validate(); err != nil {
+		return nil, ErrTrustedWorkspaceUnavailable
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	trusted, exists := m.trusted[pathKey(canonicalPath)]
+	if !exists || trusted.id != id || trusted.handle == nil {
+		return nil, ErrTrustedWorkspaceUnavailable
+	}
+	info, err := trusted.handle.Stat()
+	if err != nil || info == nil || !info.IsDir() {
+		return nil, ErrTrustedWorkspaceUnavailable
+	}
+	return info, nil
 }

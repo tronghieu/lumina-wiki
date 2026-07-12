@@ -17,11 +17,12 @@ const (
 )
 
 var (
-	ErrInvalidDecisionToken = errors.New("workspace confirmation is invalid or expired")
-	ErrRegistryBusy         = errors.New("workspace registry is busy")
-	ErrRegistryConflict     = errors.New("workspace registry changed; try again")
-	ErrCandidateChanged     = errors.New("workspace changed during confirmation")
-	workspaceIDPattern      = regexp.MustCompile(`^ws_[a-f0-9]{32}$`)
+	ErrInvalidDecisionToken        = errors.New("workspace confirmation is invalid or expired")
+	ErrRegistryBusy                = errors.New("workspace registry is busy")
+	ErrRegistryConflict            = errors.New("workspace registry changed; try again")
+	ErrCandidateChanged            = errors.New("workspace changed during confirmation")
+	ErrTrustedWorkspaceUnavailable = errors.New("trusted workspace is unavailable")
+	workspaceIDPattern             = regexp.MustCompile(`^ws_[a-f0-9]{32}$`)
 )
 
 type WorkspaceID string

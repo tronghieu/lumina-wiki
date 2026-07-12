@@ -33,6 +33,10 @@ type Lexical struct {
 }
 
 func BuildLexical(ctx context.Context, corpus *Corpus, root string) (*Lexical, error) {
+	return buildLexical(ctx, corpus, root, nil, false)
+}
+
+func buildLexical(ctx context.Context, corpus *Corpus, root string, expected os.FileInfo, trusted bool) (*Lexical, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -42,6 +46,12 @@ func BuildLexical(ctx context.Context, corpus *Corpus, root string) (*Lexical, e
 	snapshot, err := corpus.Snapshot(ctx, root)
 	if err != nil {
 		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if trusted && (!snapshot.rootCurrent || !sameSnapshotRoot(expected, snapshot.rootIdentity)) {
+		return nil, ErrWorkspaceIdentityChanged
 	}
 	if snapshot.Truncated {
 		return nil, ErrLimitReached

@@ -71,6 +71,7 @@ type Snapshot struct {
 	Warnings     []Warning  `json:"warnings"`
 	Truncated    bool       `json:"truncated"`
 	rootIdentity os.FileInfo
+	rootCurrent  bool
 }
 
 type Chunk struct {

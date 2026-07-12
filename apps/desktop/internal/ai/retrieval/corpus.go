@@ -87,6 +87,7 @@ func (corpus *Corpus) Snapshot(ctx context.Context, rootPath string) (Snapshot, 
 		}
 		if !changed || attempt == 1 {
 			snapshot.rootIdentity = openedRoot
+			snapshot.rootCurrent = !rootChanged
 			snapshot.SnapshotHash = hashSnapshot(snapshot.Documents)
 			return snapshot, nil
 		}
