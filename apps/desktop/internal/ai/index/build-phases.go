@@ -64,7 +64,7 @@ func (store *Store) prepareBuild(root *os.Root, request BuildRequest, chunks []r
 }
 
 func (store *Store) requireRevision(root *os.Root, expected string) error {
-	raw, missing, err := readIndexFile(root, manifestName, MaxManifestBytes)
+	raw, missing, err := store.readIndexFile(root, manifestName, MaxManifestBytes)
 	if err != nil {
 		return ErrIndexConflict
 	}

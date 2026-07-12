@@ -50,23 +50,43 @@ func releaseIndexGateRef(key string, gate *indexGate) {
 
 // Lock order: process workspace gate, advisory kernel lock, workspace root I/O.
 func (store *Store) withLocked(ctx context.Context, action func(*os.Root) error) error {
+	return store.withIndexLock(ctx, true, action)
+}
+
+func (store *Store) withReadLocked(ctx context.Context, action func(*os.Root) error) error {
+	return store.withIndexLock(ctx, false, action)
+}
+
+func (store *Store) withIndexLock(ctx context.Context, cleanup bool, action func(*os.Root) error) error {
 	releaseGate, err := acquireIndexGate(ctx, store.key)
 	if err != nil {
 		return err
 	}
 	defer releaseGate()
-	root, err := store.openRoot()
+	var root *os.Root
+	if cleanup {
+		root, err = store.openRoot()
+	} else {
+		root, err = store.openRootReadOnly()
+	}
 	if err != nil {
 		return err
 	}
 	defer root.Close()
-	releaseLock, err := store.acquireLock(ctx, root)
+	var releaseLock func()
+	if cleanup {
+		releaseLock, err = store.acquireLock(ctx, root)
+	} else {
+		releaseLock, err = store.acquireReadLock(ctx, root)
+	}
 	if err != nil {
 		return err
 	}
 	defer releaseLock()
-	if err := store.cleanupTemps(root); err != nil {
-		return err
+	if cleanup {
+		if err := store.cleanupTemps(root); err != nil {
+			return err
+		}
 	}
 	if err := validateIndexEntries(root); err != nil {
 		return err

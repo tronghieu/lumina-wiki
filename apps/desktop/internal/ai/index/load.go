@@ -13,7 +13,7 @@ type loadedGeneration struct {
 	vectors  map[string][]float32
 }
 
-func readIndexFile(root *os.Root, name string, limit int64) ([]byte, bool, error) {
+func (store *Store) readIndexFile(root *os.Root, name string, limit int64) ([]byte, bool, error) {
 	info, err := root.Lstat(name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, true, nil
@@ -26,8 +26,8 @@ func readIndexFile(root *os.Root, name string, limit int64) ([]byte, bool, error
 		return nil, false, errors.New("open semantic index file failed")
 	}
 	defer file.Close()
-	if platformEnsureIndexProtectedHandle(file) != nil {
-		return nil, false, errors.New("protect semantic index file failed")
+	if store.validate(file) != nil {
+		return nil, false, errors.New("validate semantic index file failed")
 	}
 	opened, err := file.Stat()
 	if err != nil || !os.SameFile(info, opened) {
@@ -41,7 +41,7 @@ func readIndexFile(root *os.Root, name string, limit int64) ([]byte, bool, error
 }
 
 func (store *Store) load(root *os.Root) (*loadedGeneration, bool, error) {
-	raw, missing, err := readIndexFile(root, manifestName, MaxManifestBytes)
+	raw, missing, err := store.readIndexFile(root, manifestName, MaxManifestBytes)
 	if err != nil || missing {
 		return nil, missing, err
 	}
@@ -51,11 +51,11 @@ func (store *Store) load(root *os.Root) (*loadedGeneration, bool, error) {
 	}
 	metadataName := "chunks." + manifest.Generation + ".jsonl"
 	vectorsName := "vectors." + manifest.Generation + ".f32"
-	metadata, missing, err := readIndexFile(root, metadataName, MaxMetadataBytes)
+	metadata, missing, err := store.readIndexFile(root, metadataName, MaxMetadataBytes)
 	if err != nil || missing {
 		return nil, false, errors.New("semantic index generation is incomplete")
 	}
-	vectorsRaw, missing, err := readIndexFile(root, vectorsName, MaxVectorBytes)
+	vectorsRaw, missing, err := store.readIndexFile(root, vectorsName, MaxVectorBytes)
 	if err != nil || missing {
 		return nil, false, errors.New("semantic index generation is incomplete")
 	}

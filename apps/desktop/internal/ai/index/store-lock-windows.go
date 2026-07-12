@@ -13,9 +13,13 @@ var indexKernel32 = syscall.NewLazyDLL("kernel32.dll")
 var indexLockFileEx = indexKernel32.NewProc("LockFileEx")
 var indexUnlockFileEx = indexKernel32.NewProc("UnlockFileEx")
 
-func platformTryIndexLock(file *os.File) (bool, error) {
+func platformTryIndexLock(file *os.File, exclusive bool) (bool, error) {
 	var overlapped syscall.Overlapped
-	result, _, callErr := indexLockFileEx.Call(file.Fd(), 0x3, 0, 0xffffffff, 0xffffffff, uintptr(unsafe.Pointer(&overlapped)))
+	flags := uintptr(0x1)
+	if exclusive {
+		flags |= 0x2
+	}
+	result, _, callErr := indexLockFileEx.Call(file.Fd(), flags, 0, 0xffffffff, 0xffffffff, uintptr(unsafe.Pointer(&overlapped)))
 	if result != 0 {
 		return false, nil
 	}

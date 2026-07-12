@@ -9,9 +9,22 @@ import (
 )
 
 var (
-	ErrIndexConflict   = errors.New("semantic index changed; try again")
-	ErrEmbeddingFailed = errors.New("semantic embedding failed")
+	ErrIndexConflict       = errors.New("semantic index changed; try again")
+	ErrEmbeddingFailed     = errors.New("semantic embedding failed")
+	ErrSemanticEmpty       = retrieval.ErrSemanticEmpty
+	ErrSemanticStale       = retrieval.ErrSemanticStale
+	ErrSemanticCorrupt     = retrieval.ErrSemanticCorrupt
+	ErrSemanticUnavailable = retrieval.ErrSemanticUnavailable
 )
+
+type SemanticSearchRequest struct {
+	Query              []float32
+	Limit              int
+	SnapshotHash       string
+	ChunkerVersion     string
+	ProfileFingerprint string
+	Dimensions         int
+}
 
 type IndexState string
 

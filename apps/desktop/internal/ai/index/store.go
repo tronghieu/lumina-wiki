@@ -24,7 +24,10 @@ type Store struct {
 	rename                                                            func(*os.Root, string, string) error
 	syncRoot                                                          func(*os.Root) error
 	protect                                                           func(*os.File, os.FileMode) error
+	validate                                                          func(*os.File) error
+	openLock                                                          func(*os.Root, string, int, os.FileMode) (*os.File, error)
 	remove                                                            func(*os.Root, string) error
+	searchAfterOpen                                                   func()
 }
 
 func NewStore(id workspaceid.WorkspaceID) (*Store, error) {
@@ -54,6 +57,10 @@ func newStoreAt(base string, id workspaceid.WorkspaceID) (*Store, error) {
 	dir := filepath.Join(base, ownedCacheLeaf, indexesLeaf, string(id))
 	store := &Store{baseDir: base, workspaceDir: dir, workspaceID: string(id), key: dir, baseIdentity: info,
 		rename: platformReplaceIndexFile, syncRoot: platformSyncIndexRoot, protect: platformProtectIndexHandle,
+		validate: platformValidateIndexProtectedHandle,
+		openLock: func(root *os.Root, name string, flag int, mode os.FileMode) (*os.File, error) {
+			return root.OpenFile(name, flag, mode)
+		},
 		remove: func(root *os.Root, name string) error { return root.Remove(name) }}
 	root, err := store.openRoot()
 	if err != nil {

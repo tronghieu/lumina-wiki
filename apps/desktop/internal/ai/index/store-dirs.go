@@ -30,6 +30,48 @@ func (store *Store) openRoot() (*os.Root, error) {
 	return store.openChild(indexes, store.workspaceID, &store.workspaceIdentity)
 }
 
+func (store *Store) openRootReadOnly() (*os.Root, error) {
+	base, err := os.OpenRoot(store.baseDir)
+	if err != nil {
+		return nil, errors.New("open semantic index cache failed")
+	}
+	defer base.Close()
+	opened, err := base.Stat(".")
+	current, currentErr := os.Lstat(store.baseDir)
+	if err != nil || currentErr != nil || !os.SameFile(store.baseIdentity, opened) || !os.SameFile(store.baseIdentity, current) {
+		return nil, errors.New("semantic index cache base changed")
+	}
+	desktop, err := store.openExistingChild(base, ownedCacheLeaf, store.desktopIdentity)
+	if err != nil {
+		return nil, err
+	}
+	defer desktop.Close()
+	indexes, err := store.openExistingChild(desktop, indexesLeaf, store.indexesIdentity)
+	if err != nil {
+		return nil, err
+	}
+	defer indexes.Close()
+	return store.openExistingChild(indexes, store.workspaceID, store.workspaceIdentity)
+}
+
+func (store *Store) openExistingChild(parent *os.Root, name string, expected os.FileInfo) (*os.Root, error) {
+	current, err := parent.Lstat(name)
+	if err != nil || expected == nil || current.Mode()&fs.ModeSymlink != 0 || !current.IsDir() ||
+		!privateIndexDirectory(current) || !os.SameFile(expected, current) {
+		return nil, errors.New("semantic index directory changed")
+	}
+	child, err := parent.OpenRoot(name)
+	if err != nil {
+		return nil, errors.New("open semantic index directory failed")
+	}
+	opened, statErr := child.Stat(".")
+	if statErr != nil || !os.SameFile(current, opened) {
+		child.Close()
+		return nil, errors.New("semantic index directory changed")
+	}
+	return child, nil
+}
+
 func (store *Store) openChild(parent *os.Root, name string, pinned *os.FileInfo) (*os.Root, error) {
 	expected, err := parent.Lstat(name)
 	created := false

@@ -12,7 +12,7 @@ const (
 )
 
 func EncodeFloat32LE(vector []float32) ([]byte, error) {
-	if len(vector) == 0 || len(vector) > MaxVectorDimensions {
+	if !validVector(vector) {
 		return nil, errors.New("vector dimensions are invalid")
 	}
 	raw := make([]byte, len(vector)*4)
@@ -36,6 +36,9 @@ func DecodeFloat32LE(raw []byte, dimensions int) ([]float32, error) {
 			return nil, errors.New("vector contains an invalid value")
 		}
 		vector[i] = value
+	}
+	if !validVector(vector) {
+		return nil, errors.New("vector contains an invalid value")
 	}
 	return vector, nil
 }
