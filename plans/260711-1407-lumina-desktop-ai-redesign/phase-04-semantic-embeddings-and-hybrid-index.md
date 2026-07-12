@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Semantic embeddings and hybrid index"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [2, 3]
@@ -69,11 +69,11 @@ func FuseRanks(lexical []Hit, semantic []SemanticHit, k float64, limit int) []Hi
 
 ## Interface and Function Checklist
 
-- [ ] Embedding adapters reuse phase-2 endpoint/redaction policy and never depend on chat selection.
-- [ ] `ConsentFingerprint`, `RequireConsent`, `Build`, `Status`, `Clear`, `Search`.
-- [ ] `LoadManifest` validates versions, offsets, dimensions, hashes, and generation filenames.
-- [ ] `EncodeFloat32LE`, `CosineExact`, `FuseRanks`; zero-norm vectors fail safely.
-- [ ] Progress sink is cancellable, monotonic, and contains counts/status only.
+- [x] Embedding adapters reuse phase-2 endpoint/redaction policy and never depend on chat selection.
+- [x] `ConsentFingerprint`, `RequireConsent`, `Build`, `Status`, `Clear`, `Search`.
+- [x] Strict manifest loading validates versions, offsets, dimensions, hashes, generation filenames, and exact vector coverage.
+- [x] `EncodeFloat32LE`, `CosineExact`, `FuseRanks`; zero-norm vectors fail safely.
+- [x] Progress sink is cancellable, monotonic, reentrant-safe, and contains counts/status only.
 
 ## Dependency Map
 
@@ -97,20 +97,20 @@ Keep provider HTTP, manifest I/O, numeric scan, lifecycle, and consent separate.
 
 ## Implementation Steps
 
-- [ ] Write embedding request/auth/response/limit tests; run RED; implement compatible and Gemini adapters; run GREEN.
-- [ ] Write consent drift/loopback tests; run RED; implement consent fingerprint and persistence contract; run GREEN.
-- [ ] Commit: `feat(desktop): add opt in embedding providers`.
-- [ ] Write manifest corruption/atomic commit/vector numeric tests; run RED; implement immutable generation storage; run GREEN.
-- [ ] Write reuse/edit/delete/cancel tests; run RED; implement incremental indexer and cleanup; run GREEN/race.
-- [ ] Commit: `feat(desktop): add incremental semantic index`.
-- [ ] Write cosine/RRF/fallback tests; run RED; implement exact scan and fusion; run GREEN/full regression.
-- [ ] Commit: `feat(desktop): add hybrid retrieval ranking`.
+- [x] Write embedding request/auth/response/limit tests; run RED; implement compatible and Gemini adapters; run GREEN.
+- [x] Write consent drift/loopback tests; run RED; implement consent fingerprint and persistence contract; run GREEN.
+- [x] Commit: `feat(desktop): add opt in embedding providers` (`17259779`).
+- [x] Write manifest corruption/atomic commit/vector numeric tests; run RED; implement immutable generation storage; run GREEN.
+- [x] Write reuse/edit/delete/cancel tests; run RED; implement incremental indexer and cleanup; run GREEN/race.
+- [x] Commit: `feat(desktop): add incremental semantic index` (`da156b33`).
+- [x] Write cosine/RRF/fallback tests; run RED; implement exact scan and fusion; run GREEN/full regression.
+- [x] Commit: `feat(desktop): add hybrid retrieval ranking` (`a41ccec1`).
 
 ## Success Criteria
 
-- [ ] No note text leaves the machine without a current consent fingerprint.
-- [ ] Cancel, failure, stale, or corrupt semantic state always preserves lexical answers and prior valid generation.
-- [ ] Cache isolation, vector reuse, invalidation, clear, and deterministic ranks pass.
+- [x] No note text leaves the machine without a current consent fingerprint.
+- [x] Cancel, failure, stale, or corrupt semantic state always preserves lexical answers and prior valid generation.
+- [x] Cache isolation, vector reuse, invalidation, clear, and deterministic ranks pass.
 
 ## Security, Risks, and Rollback
 
