@@ -21,11 +21,16 @@ var (
 
 var citationPattern = regexp.MustCompile(`^cit_[0-9a-f]{32}$`)
 
-type CitationOptions struct{ Random io.Reader }
+type CitationOptions struct {
+	Random       io.Reader
+	MaxCitations int
+}
 
 type Citation struct {
 	ID      string `json:"id"`
 	Heading string `json:"heading"`
+	ChunkID string `json:"-"`
+	Chunk   Chunk  `json:"-"`
 }
 
 type CitationNote struct {
@@ -54,6 +59,9 @@ func NewCitationReader(ctx context.Context, index *Lexical, hits []Hit, options 
 		return nil, nil, err
 	}
 	if len(hits) > MaxCitationInputHits {
+		return nil, nil, ErrLimitReached
+	}
+	if options.MaxCitations < 0 || options.MaxCitations > MaxCitationsPerSession {
 		return nil, nil, ErrLimitReached
 	}
 	if index == nil {
@@ -90,6 +98,9 @@ func NewCitationReader(ctx context.Context, index *Lexical, hits []Hit, options 
 	if len(fresh.Hits) != len(unique) {
 		return nil, nil, ErrStaleIndex
 	}
+	if options.MaxCitations > 0 && len(fresh.Hits) > options.MaxCitations {
+		fresh.Hits = fresh.Hits[:options.MaxCitations]
+	}
 	random := options.Random
 	if random == nil {
 		random = rand.Reader
@@ -108,7 +119,7 @@ func NewCitationReader(ctx context.Context, index *Lexical, hits []Hit, options 
 			return nil, nil, ErrDuplicateCitation
 		}
 		reader.entries[id] = citationEntry{chunk: hit.Chunk, documentHash: hit.DocumentHash, identity: hit.identity, rootIdentity: hit.rootIdentity}
-		citations = append(citations, Citation{ID: id, Heading: hit.Heading})
+		citations = append(citations, Citation{ID: id, Heading: hit.Heading, ChunkID: hit.ID, Chunk: hit.Chunk})
 	}
 	return reader, citations, nil
 }

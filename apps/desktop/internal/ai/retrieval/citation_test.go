@@ -3,6 +3,7 @@ package retrieval
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,6 +19,29 @@ func (random *countingRandom) Read(value []byte) (int, error) {
 		value[index] = byte(index + 1)
 	}
 	return len(value), nil
+}
+
+func TestCitationCarriesBackendChunkMappingWithoutJSONLeak(t *testing.T) {
+	index, _ := buildSearch(t, map[string]string{"wiki/a.md": "needle evidence"})
+	search, err := index.Search(context.Background(), "needle", SearchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, citations, err := NewCitationReader(context.Background(), index, search.Hits, CitationOptions{Random: bytes.NewReader(bytes.Repeat([]byte{0x1a}, 16))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if len(citations) != 1 || citations[0].ChunkID != search.Hits[0].ID || citations[0].Chunk.ID != search.Hits[0].ID || citations[0].Chunk.Text != "needle evidence" {
+		t.Fatalf("backend mapping = %#v", citations)
+	}
+	wire, err := json.Marshal(citations[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(wire), search.Hits[0].ID) || string(wire) != `{"id":"cit_1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a","heading":""}` {
+		t.Fatalf("citation leaked backend identity: %s", wire)
+	}
 }
 
 func TestCitationReaderIssuesOpaqueDeduplicatedIDsAndReadsBroadNote(t *testing.T) {
