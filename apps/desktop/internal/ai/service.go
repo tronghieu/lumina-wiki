@@ -9,6 +9,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/retrieval"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
 )
 
@@ -19,17 +21,18 @@ type Service struct {
 	attacher    WorkspaceAttacher
 	runtimes    RuntimeFactory
 	sessions    SessionRegistry
+	streams     StreamSinkFactory
 	activations *activationGate
 }
 
 func NewService(dependencies Dependencies) (*Service, error) {
 	if dependencies.Windows == nil || dependencies.Native == nil || dependencies.Validator == nil ||
-		dependencies.Attacher == nil || dependencies.Runtimes == nil || dependencies.Sessions == nil {
+		dependencies.Attacher == nil || dependencies.Runtimes == nil || dependencies.Sessions == nil || dependencies.Streams == nil {
 		return nil, ErrInvalidInput
 	}
 	return &Service{
 		windows: dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
-		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions,
+		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions, streams: dependencies.Streams,
 		activations: newActivationGate(),
 	}, nil
 }
@@ -87,7 +90,7 @@ func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRo
 }
 
 func (service *Service) resolveWindow(ctx context.Context) (session.WindowID, error) {
-	if service == nil || service.windows == nil {
+	if service == nil || service.windows == nil || ctx == nil || ctx.Err() != nil {
 		return 0, ErrWindowUnavailable
 	}
 	window, err := service.windows.ResolveWindow(ctx)
@@ -104,8 +107,42 @@ type onceRuntime struct {
 
 func (runtime *onceRuntime) Close() error {
 	var err error
-	runtime.once.Do(func() { err = runtime.runtime.Close() })
+	if runtime == nil {
+		return nil
+	}
+	runtime.once.Do(func() {
+		if validRuntime(runtime.runtime) {
+			err = runtime.runtime.Close()
+		}
+	})
 	return err
+}
+
+func (runtime *onceRuntime) RunChat(ctx context.Context, request runtimeChatRequest, sink chat.EventSink) error {
+	capable, ok := chatRuntimeCapability(runtime)
+	if !ok {
+		return ErrChatUnavailable
+	}
+	if err := capable.RunChat(ctx, request, sink); err != nil {
+		return ErrChatUnavailable
+	}
+	return nil
+}
+
+func (runtime *onceRuntime) ReadCitationNote(ctx context.Context, requestID, citationID string) (retrieval.CitationNote, error) {
+	capable, ok := chatRuntimeCapability(runtime)
+	if !ok {
+		return retrieval.CitationNote{}, ErrCitationUnavailable
+	}
+	return capable.ReadCitationNote(ctx, requestID, citationID)
+}
+
+func chatRuntimeCapability(runtime *onceRuntime) (chatCapableRuntime, bool) {
+	if runtime == nil || !validRuntime(runtime.runtime) {
+		return nil, false
+	}
+	capable, ok := runtime.runtime.(chatCapableRuntime)
+	return capable, ok && validRuntime(capable)
 }
 
 func closeRuntime(runtime session.Runtime) {

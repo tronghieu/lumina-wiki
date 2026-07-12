@@ -118,6 +118,14 @@ func (registry *blockingSessionRegistry) Deactivate(window session.WindowID, ref
 	return registry.inner.Deactivate(window, reference)
 }
 
+func (registry *blockingSessionRegistry) BeginRequest(ctx context.Context, window session.WindowID, reference session.Reference, requestID string) (context.Context, *session.RequestLease, error) {
+	return registry.inner.BeginRequest(ctx, window, reference, requestID)
+}
+
+func (registry *blockingSessionRegistry) Resolve(window session.WindowID, reference session.Reference) (*session.RuntimeLease, error) {
+	return registry.inner.Resolve(window, reference)
+}
+
 func (registry *blockingSessionRegistry) CancelRequest(window session.WindowID, reference session.Reference, requestID string) error {
 	return registry.inner.CancelRequest(window, reference, requestID)
 }

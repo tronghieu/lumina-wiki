@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -19,20 +20,21 @@ type wailsEventDispatcher interface {
 
 type WailsStreamSink struct {
 	dispatcher wailsEventDispatcher
+	reference  SessionReferenceDTO
 }
 
-func NewWailsStreamSink(window application.Window) (*WailsStreamSink, error) {
-	if !hasValue(window) {
+func NewWailsStreamSink(window application.Window, reference SessionReferenceDTO) (*WailsStreamSink, error) {
+	if !hasValue(window) || !validSessionReferenceSyntax(reference) {
 		return nil, ErrInvalidInput
 	}
-	return newWailsStreamSink(window)
+	return newWailsStreamSink(window, reference)
 }
 
-func newWailsStreamSink(dispatcher wailsEventDispatcher) (*WailsStreamSink, error) {
-	if !hasValue(dispatcher) {
+func newWailsStreamSink(dispatcher wailsEventDispatcher, reference SessionReferenceDTO) (*WailsStreamSink, error) {
+	if !hasValue(dispatcher) || !validSessionReferenceSyntax(reference) {
 		return nil, ErrInvalidInput
 	}
-	return &WailsStreamSink{dispatcher: dispatcher}, nil
+	return &WailsStreamSink{dispatcher: dispatcher, reference: reference}, nil
 }
 
 // OnEvent dispatches directly to one owning window without an internal queue.
@@ -40,11 +42,29 @@ func newWailsStreamSink(dispatcher wailsEventDispatcher) (*WailsStreamSink, erro
 // was accepted synchronously; it cannot guarantee frontend receipt.
 func (sink *WailsStreamSink) OnEvent(ctx context.Context, event chat.Event) error {
 	if sink == nil || !hasValue(sink.dispatcher) || ctx == nil || ctx.Err() != nil ||
-		!validChatEventID(event.RequestID) || !validChatEventID(event.ConversationID) {
+		!validWailsChatEvent(event) {
 		return ErrEventDispatch
 	}
-	sink.dispatcher.DispatchWailsEvent(&application.CustomEvent{Name: WailsChatEventName, Data: event})
+	sink.dispatcher.DispatchWailsEvent(&application.CustomEvent{
+		Name: WailsChatEventName,
+		Data: ChatEventDTO{Session: sink.reference, Event: newChatStreamEventDTO(event)},
+	})
 	return nil
+}
+
+type WailsStreamSinkFactory struct{}
+
+func NewWailsStreamSinkFactory() *WailsStreamSinkFactory { return &WailsStreamSinkFactory{} }
+
+func (*WailsStreamSinkFactory) NewChatSink(ctx context.Context, expected session.WindowID, reference SessionReferenceDTO) (chat.EventSink, error) {
+	if ctx == nil || ctx.Err() != nil || expected == 0 {
+		return nil, ErrWindowUnavailable
+	}
+	window, ok := ctx.Value(application.WindowKey).(application.Window)
+	if !ok || !hasValue(window) || session.WindowID(window.ID()) != expected {
+		return nil, ErrWindowUnavailable
+	}
+	return NewWailsStreamSink(window, reference)
 }
 
 func validChatEventID(value string) bool {

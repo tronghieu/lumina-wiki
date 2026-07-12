@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -62,6 +63,12 @@ func (registry *reentrantActivationErrorRegistry) Activate(_ session.WindowID, _
 
 func (*reentrantActivationErrorRegistry) Deactivate(session.WindowID, session.Reference) error {
 	return session.ErrInvalidSession
+}
+func (*reentrantActivationErrorRegistry) BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error) {
+	return nil, nil, session.ErrInvalidSession
+}
+func (*reentrantActivationErrorRegistry) Resolve(session.WindowID, session.Reference) (*session.RuntimeLease, error) {
+	return nil, session.ErrInvalidSession
 }
 func (*reentrantActivationErrorRegistry) CancelRequest(session.WindowID, session.Reference, string) error {
 	return nil

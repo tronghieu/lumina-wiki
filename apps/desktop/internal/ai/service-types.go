@@ -88,6 +88,8 @@ type RuntimeFactory interface {
 type SessionRegistry interface {
 	Activate(session.WindowID, workspaceid.WorkspaceID, session.DisplayMetadata, session.Runtime) (session.Capability, error)
 	Deactivate(session.WindowID, session.Reference) error
+	BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error)
+	Resolve(session.WindowID, session.Reference) (*session.RuntimeLease, error)
 	CancelRequest(session.WindowID, session.Reference, string) error
 	CloseWindow(session.WindowID) error
 	Close() error
@@ -100,4 +102,5 @@ type Dependencies struct {
 	Attacher  WorkspaceAttacher
 	Runtimes  RuntimeFactory
 	Sessions  SessionRegistry
+	Streams   StreamSinkFactory
 }

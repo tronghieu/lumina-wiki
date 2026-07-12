@@ -153,6 +153,16 @@ func (stub *registryStub) Deactivate(session.WindowID, session.Reference) error 
 	return stub.deactivateErr
 }
 
+func (stub *registryStub) BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error) {
+	stub.log.add("begin-request")
+	return nil, nil, session.ErrInvalidSession
+}
+
+func (stub *registryStub) Resolve(session.WindowID, session.Reference) (*session.RuntimeLease, error) {
+	stub.log.add("resolve")
+	return nil, session.ErrInvalidSession
+}
+
 func (stub *registryStub) CancelRequest(session.WindowID, session.Reference, string) error {
 	stub.log.add("cancel-request")
 	return stub.cancelErr
@@ -174,7 +184,7 @@ func newTestService(log *callLog) (*Service, *nativeAuthorityStub, *validatorStu
 	attacher := &attacherStub{log: log, decision: validDecision(workspaceid.AttachKnown), confirmID: testWorkspaceID}
 	factory := &runtimeFactoryStub{log: log, runtime: &runtimeSpy{}}
 	registry := &registryStub{log: log, capability: session.Capability{SessionID: session.SessionID("sess_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), WorkspaceID: testWorkspaceID, Generation: 1, Display: session.DisplayMetadata{Label: "Nghiên cứu"}}}
-	service, err := NewService(Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry})
+	service, err := NewService(Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry, Streams: streamSinkFactoryStub{}})
 	if err != nil {
 		panic(err)
 	}
