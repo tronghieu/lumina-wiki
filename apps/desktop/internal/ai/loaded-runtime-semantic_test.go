@@ -104,6 +104,12 @@ type runtimeSemanticStore struct {
 	hits          []retrieval.SemanticHit
 	searchCalls   int
 	searchRequest index.SemanticSearchRequest
+	buildStatus   index.IndexStatus
+	buildErr      error
+	buildRequest  index.BuildRequest
+	buildCalls    int
+	clearStatus   index.IndexStatus
+	clearErr      error
 }
 
 func (store *runtimeSemanticStore) Status(_ context.Context, request index.StatusRequest) (index.IndexStatus, error) {
@@ -116,6 +122,16 @@ func (store *runtimeSemanticStore) Search(_ context.Context, request index.Seman
 	store.searchCalls++
 	store.searchRequest = request
 	return store.hits, nil
+}
+
+func (store *runtimeSemanticStore) Build(_ context.Context, request index.BuildRequest, _ index.ProgressSink) (index.IndexStatus, error) {
+	store.buildCalls++
+	store.buildRequest = request
+	return store.buildStatus, store.buildErr
+}
+
+func (store *runtimeSemanticStore) Clear(context.Context) (index.IndexStatus, error) {
+	return store.clearStatus, store.clearErr
 }
 
 type runtimeQueryEmbedder struct {

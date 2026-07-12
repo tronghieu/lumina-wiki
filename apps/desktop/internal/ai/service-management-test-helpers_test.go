@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
@@ -19,6 +20,8 @@ type managementRuntimeStub struct {
 	deleteAllResult history.DeleteAllResult
 	err             error
 	closeCalls      int
+	indexStatus     index.IndexStatus
+	indexCancelled  bool
 }
 
 func (stub *managementRuntimeStub) called() {
@@ -56,6 +59,22 @@ func (stub *managementRuntimeStub) DeleteHistory(context.Context, string) (histo
 func (stub *managementRuntimeStub) DeleteAllHistory(context.Context) (history.DeleteAllResult, error) {
 	stub.called()
 	return stub.deleteAllResult, stub.err
+}
+func (stub *managementRuntimeStub) IndexStatus(context.Context, string) (index.IndexStatus, error) {
+	stub.called()
+	return stub.indexStatus, stub.err
+}
+func (stub *managementRuntimeStub) BuildIndex(context.Context, string) (index.IndexStatus, error) {
+	stub.called()
+	return stub.indexStatus, stub.err
+}
+func (stub *managementRuntimeStub) CancelIndex(context.Context, string) (bool, error) {
+	stub.called()
+	return stub.indexCancelled, stub.err
+}
+func (stub *managementRuntimeStub) ClearIndex(context.Context, string) (index.IndexStatus, error) {
+	stub.called()
+	return stub.indexStatus, stub.err
 }
 func (stub *managementRuntimeStub) Close() error {
 	stub.mu.Lock()

@@ -76,3 +76,17 @@ type HistoryDeleteAllResultDTO struct {
 	RemainingIDs        []string `json:"remainingIds"`
 	Durable             bool     `json:"durable"`
 }
+
+type IndexRequestDTO struct {
+	Session            SessionReferenceDTO `json:"session"`
+	EmbeddingProfileID string              `json:"embeddingProfileId"`
+}
+type IndexStatusDTO struct {
+	State      string `json:"state"`
+	Chunks     int    `json:"chunks"`
+	Vectors    int    `json:"vectors"`
+	Dimensions int    `json:"dimensions"`
+}
+type IndexCancelResultDTO struct {
+	Cancelled bool `json:"cancelled"`
+}

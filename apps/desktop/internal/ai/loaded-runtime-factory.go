@@ -23,17 +23,20 @@ import (
 type LoadedRuntimeFactory struct{ deps LoadedRuntimeDependencies }
 
 type loadedRuntime struct {
-	mu        sync.Mutex
-	wg        sync.WaitGroup
-	closeOnce sync.Once
-	ctx       context.Context
-	cancel    context.CancelFunc
-	id        workspaceid.WorkspaceID
-	root      string
-	proof     os.FileInfo
-	deps      LoadedRuntimeDependencies
-	citations *chat.CitationLeaseRegistry
-	closed    bool
+	mu              sync.Mutex
+	wg              sync.WaitGroup
+	closeOnce       sync.Once
+	ctx             context.Context
+	cancel          context.CancelFunc
+	id              workspaceid.WorkspaceID
+	root            string
+	proof           os.FileInfo
+	deps            LoadedRuntimeDependencies
+	citations       *chat.CitationLeaseRegistry
+	closed          bool
+	indexMu         sync.Mutex
+	indexMutation   *runtimeIndexMutation
+	indexGeneration uint64
 }
 
 func NewLoadedRuntimeFactory(deps LoadedRuntimeDependencies) (*LoadedRuntimeFactory, error) {

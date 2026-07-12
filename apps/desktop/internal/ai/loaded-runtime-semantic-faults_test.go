@@ -140,3 +140,11 @@ func (store *blockingRuntimeSemanticStore) Status(ctx context.Context, _ index.S
 func (*blockingRuntimeSemanticStore) Search(context.Context, index.SemanticSearchRequest) ([]retrieval.SemanticHit, error) {
 	return nil, errors.New("search must not run")
 }
+
+func (*blockingRuntimeSemanticStore) Build(context.Context, index.BuildRequest, index.ProgressSink) (index.IndexStatus, error) {
+	return index.IndexStatus{}, errors.New("build must not run")
+}
+
+func (*blockingRuntimeSemanticStore) Clear(context.Context) (index.IndexStatus, error) {
+	return index.IndexStatus{}, errors.New("clear must not run")
+}

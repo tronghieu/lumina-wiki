@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
@@ -23,6 +24,10 @@ type managementCapableRuntime interface {
 	LoadHistory(context.Context, string) ([]history.ConversationRecord, error)
 	DeleteHistory(context.Context, string) (history.DeleteResult, error)
 	DeleteAllHistory(context.Context) (history.DeleteAllResult, error)
+	IndexStatus(context.Context, string) (index.IndexStatus, error)
+	BuildIndex(context.Context, string) (index.IndexStatus, error)
+	CancelIndex(context.Context, string) (bool, error)
+	ClearIndex(context.Context, string) (index.IndexStatus, error)
 }
 
 func (service *Service) resolveManagement(ctx context.Context, reference SessionReferenceDTO) (managementCapableRuntime, *session.RuntimeLease, error) {

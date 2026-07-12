@@ -48,6 +48,8 @@ type RetrieverFactory func(chat.HybridConfig) chat.RetrievalRunner
 type RuntimeSemanticStore interface {
 	chat.SemanticSearcher
 	Status(context.Context, index.StatusRequest) (index.IndexStatus, error)
+	Build(context.Context, index.BuildRequest, index.ProgressSink) (index.IndexStatus, error)
+	Clear(context.Context) (index.IndexStatus, error)
 }
 
 type SemanticStoreFactory func(workspaceid.WorkspaceID) (RuntimeSemanticStore, error)
