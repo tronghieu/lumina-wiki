@@ -11,6 +11,10 @@ type citationTokenKey struct {
 }
 
 func (allowlist *EvidenceAllowlist) Extract(text string) (CitationExtraction, error) {
+	return allowlist.extractWithAllowed(text, nil)
+}
+
+func (allowlist *EvidenceAllowlist) extractWithAllowed(text string, allowed map[string]bool) (CitationExtraction, error) {
 	if !validAssistantText(text) {
 		return CitationExtraction{}, ErrInvalidAssistantText
 	}
@@ -41,7 +45,9 @@ func (allowlist *EvidenceAllowlist) Extract(text string) (CitationExtraction, er
 			if !seenIDs[number] {
 				seenIDs[number] = true
 				id := modelEvidenceID(number)
-				if entry, ok := allowlist.byID[id]; ok {
+				if allowed != nil && !allowed[id] {
+					result.UnknownCount++
+				} else if entry, ok := allowlist.byID[id]; ok {
 					result.Citations = append(result.Citations, entry.dto())
 				} else {
 					result.UnknownCount++

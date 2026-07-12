@@ -96,6 +96,19 @@ func (allowlist *EvidenceAllowlist) Len() int {
 	return len(allowlist.entries)
 }
 
+func (allowlist *EvidenceAllowlist) citationDTOs() []CitationDTO {
+	allowlist.mu.RLock()
+	defer allowlist.mu.RUnlock()
+	result := make([]CitationDTO, 0, len(allowlist.entries))
+	if allowlist.closed {
+		return result
+	}
+	for _, entry := range allowlist.entries {
+		result = append(result, entry.dto())
+	}
+	return result
+}
+
 func (allowlist *EvidenceAllowlist) Close() {
 	allowlist.mu.Lock()
 	if !allowlist.closed {
