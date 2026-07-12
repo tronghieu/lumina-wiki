@@ -18,8 +18,10 @@ var (
 	ErrWorkspaceAttach   = errors.New("workspace attachment failed")
 	ErrRuntimeLoad       = errors.New("workspace runtime load failed")
 	ErrActivation        = errors.New("workspace activation failed")
+	ErrActivationBusy    = errors.New("workspace activation already in progress")
 	ErrSessionRejected   = errors.New("invalid or expired session")
 	ErrSessionCleanup    = errors.New("session cleanup failed")
+	ErrEventDispatch     = errors.New("chat event dispatch failed")
 )
 
 type ActivationStatus string

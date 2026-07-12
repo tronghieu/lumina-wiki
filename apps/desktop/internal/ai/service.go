@@ -10,16 +10,16 @@ import (
 	"unicode/utf8"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
-	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
 )
 
 type Service struct {
-	windows   WindowResolver
-	native    NativeAuthority
-	validator WorkspaceValidator
-	attacher  WorkspaceAttacher
-	runtimes  RuntimeFactory
-	sessions  SessionRegistry
+	windows     WindowResolver
+	native      NativeAuthority
+	validator   WorkspaceValidator
+	attacher    WorkspaceAttacher
+	runtimes    RuntimeFactory
+	sessions    SessionRegistry
+	activations *activationGate
 }
 
 func NewService(dependencies Dependencies) (*Service, error) {
@@ -27,8 +27,11 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		dependencies.Attacher == nil || dependencies.Runtimes == nil || dependencies.Sessions == nil {
 		return nil, ErrInvalidInput
 	}
-	return &Service{dependencies.Windows, dependencies.Native, dependencies.Validator,
-		dependencies.Attacher, dependencies.Runtimes, dependencies.Sessions}, nil
+	return &Service{
+		windows: dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
+		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions,
+		activations: newActivationGate(),
+	}, nil
 }
 
 func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (ActivationResult, error) {
@@ -36,7 +39,15 @@ func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (Activat
 	if err != nil {
 		return ActivationResult{}, err
 	}
-	selection, err := service.native.ChooseDirectory(ctx, window)
+	lease, err := service.activations.Acquire(ctx, window)
+	if err != nil {
+		return ActivationResult{}, err
+	}
+	defer lease.Finish()
+	selection, err := service.native.ChooseDirectory(lease.Context(), window)
+	if leaseErr := lease.Validate(); leaseErr != nil {
+		return ActivationResult{}, leaseErr
+	}
 	if err != nil {
 		return ActivationResult{}, ErrNativeAuthority
 	}
@@ -46,7 +57,7 @@ func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (Activat
 	if !validTypedRoot(selection.Path) {
 		return ActivationResult{}, ErrInvalidWorkspace
 	}
-	return service.activateApproved(ctx, window, selection.Path)
+	return service.activateApproved(lease, selection.Path)
 }
 
 func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRoot string) (ActivationResult, error) {
@@ -57,72 +68,22 @@ func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRo
 	if err != nil {
 		return ActivationResult{}, err
 	}
-	approved, err := service.native.ConfirmDirectory(ctx, window, typedRoot)
+	lease, err := service.activations.Acquire(ctx, window)
+	if err != nil {
+		return ActivationResult{}, err
+	}
+	defer lease.Finish()
+	approved, err := service.native.ConfirmDirectory(lease.Context(), window, typedRoot)
+	if leaseErr := lease.Validate(); leaseErr != nil {
+		return ActivationResult{}, leaseErr
+	}
 	if err != nil {
 		return ActivationResult{}, ErrNativeAuthority
 	}
 	if !approved {
 		return cancelledResult(), nil
 	}
-	return service.activateApproved(ctx, window, typedRoot)
-}
-
-func (service *Service) activateApproved(ctx context.Context, window session.WindowID, root string) (result ActivationResult, resultErr error) {
-	shape, err := service.validator.Validate(ctx, root)
-	if err != nil || !shape.Valid {
-		return ActivationResult{}, ErrInvalidWorkspace
-	}
-	decision, err := service.attacher.BeginAttach(root)
-	if err != nil {
-		return ActivationResult{}, ErrWorkspaceAttach
-	}
-	pending := true
-	defer func() {
-		if pending {
-			if err := service.attacher.CancelAttach(decision.Token); err != nil {
-				result = ActivationResult{}
-				resultErr = ErrWorkspaceAttach
-			}
-		}
-	}()
-
-	if decisionNeedsConfirmation(decision.Kind) {
-		approved, approvalErr := service.native.ConfirmAttachDecision(ctx, window, decision.Kind)
-		if approvalErr != nil {
-			return ActivationResult{}, ErrNativeAuthority
-		}
-		if !approved {
-			pending = false
-			if err := service.attacher.CancelAttach(decision.Token); err != nil {
-				return ActivationResult{}, ErrWorkspaceAttach
-			}
-			return cancelledResult(), nil
-		}
-	} else if decision.Kind != workspaceid.AttachNew && decision.Kind != workspaceid.AttachKnown {
-		return ActivationResult{}, ErrWorkspaceAttach
-	}
-
-	label, err := displayBasename(decision.CanonicalPath)
-	if err != nil {
-		return ActivationResult{}, ErrWorkspaceAttach
-	}
-	pending = false
-	workspaceID, err := service.attacher.ConfirmAttach(decision.Token)
-	if err != nil || !workspaceID.Valid() {
-		return ActivationResult{}, ErrWorkspaceAttach
-	}
-	runtime, err := service.runtimes.Load(ctx, workspaceID, decision.CanonicalPath)
-	if err != nil || !validRuntime(runtime) {
-		closeRuntime(runtime)
-		return ActivationResult{}, ErrRuntimeLoad
-	}
-	owned := &onceRuntime{runtime: runtime}
-	capability, err := service.sessions.Activate(window, workspaceID, session.DisplayMetadata{Label: label}, owned)
-	if err != nil {
-		_ = owned.Close()
-		return ActivationResult{}, ErrActivation
-	}
-	return activeResult(capability), nil
+	return service.activateApproved(lease, typedRoot)
 }
 
 func (service *Service) resolveWindow(ctx context.Context) (session.WindowID, error) {

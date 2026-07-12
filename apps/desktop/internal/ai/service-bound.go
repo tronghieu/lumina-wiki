@@ -37,9 +37,10 @@ func (service *Service) CancelChat(ctx context.Context, reference SessionReferen
 }
 
 func CloseWindow(service *Service, window session.WindowID) error {
-	if service == nil || service.sessions == nil || window == 0 {
+	if service == nil || service.sessions == nil || service.activations == nil || window == 0 {
 		return ErrInvalidInput
 	}
+	service.activations.CloseWindow(window)
 	if err := service.sessions.CloseWindow(window); err != nil {
 		return ErrSessionCleanup
 	}
@@ -47,9 +48,10 @@ func CloseWindow(service *Service, window session.WindowID) error {
 }
 
 func Close(service *Service) error {
-	if service == nil || service.sessions == nil {
+	if service == nil || service.sessions == nil || service.activations == nil {
 		return ErrInvalidInput
 	}
+	service.activations.Close()
 	if err := service.sessions.Close(); err != nil {
 		return ErrSessionCleanup
 	}
