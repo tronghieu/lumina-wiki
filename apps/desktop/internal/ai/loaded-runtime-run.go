@@ -50,7 +50,11 @@ func (runtime *loadedRuntime) RunChat(parent context.Context, request runtimeCha
 	if err != nil || lexical == nil {
 		return runtime.failPreflight(ctx, request, sink, "retrieval_unavailable", err, store, request.History.Persist)
 	}
-	retriever := runtime.deps.RetrieverFactory(lexical, semantic)
+	hybridConfig, semanticErr := runtime.semanticConfig(ctx, config, lexical, semantic)
+	if semanticErr != nil {
+		return runtime.failPreflight(ctx, request, sink, "retrieval_unavailable", semanticErr, store, request.History.Persist)
+	}
+	retriever := runtime.deps.RetrieverFactory(hybridConfig)
 	if nilLike(retriever) || retriever.Lexical() != lexical {
 		return runtime.failPreflight(ctx, request, sink, "retrieval_unavailable", errors.New("invalid retriever"), store, request.History.Persist)
 	}

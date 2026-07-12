@@ -45,7 +45,7 @@ func TestLoadedRuntimeRunsTrustedLexicalChatAndPublishesCitation(t *testing.T) {
 	}
 }
 
-func TestLoadedRuntimeSelectedEmbeddingIsVisibleUnavailableWithoutEmbeddingCall(t *testing.T) {
+func TestLoadedRuntimeSelectedEmbeddingWithEmptyIndexIsVisibleEmptyWithoutEmbeddingCall(t *testing.T) {
 	root := runtimeWorkspace(t)
 	if err := os.WriteFile(filepath.Join(root, "wiki", "note.md"), []byte("needle evidence"), 0o600); err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestLoadedRuntimeSelectedEmbeddingIsVisibleUnavailableWithoutEmbeddingCall(
 		t.Fatal(err)
 	}
 	started := capture.events[0]
-	if started.Semantic.Status != string(retrieval.SemanticUnavailable) || started.Semantic.Warning != retrieval.WarningSemanticUnavailable || provider.calls != 1 {
+	if started.Semantic.Status != string(retrieval.SemanticEmpty) || started.Semantic.Warning != "" || provider.calls != 1 {
 		t.Fatalf("semantic fallback = %#v provider calls %d", started.Semantic, provider.calls)
 	}
 }

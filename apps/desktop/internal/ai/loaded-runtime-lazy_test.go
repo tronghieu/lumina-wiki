@@ -38,7 +38,7 @@ func TestLoadedRuntimeFactoryLoadReadsOnlyTrustedRootIdentity(t *testing.T) {
 			reads++
 			return nil, nil
 		},
-		RetrieverFactory: func(*retrieval.Lexical, bool) chat.RetrievalRunner {
+		RetrieverFactory: func(chat.HybridConfig) chat.RetrievalRunner {
 			reads++
 			return nil
 		},

@@ -23,11 +23,12 @@ type HybridLimits struct {
 }
 
 type HybridConfig struct {
-	Lexical  *retrieval.Lexical
-	Semantic SemanticSearcher
-	Provider index.EmbeddingProvider
-	Metadata SemanticMetadata
-	Limits   HybridLimits
+	Lexical            *retrieval.Lexical
+	Semantic           SemanticSearcher
+	Provider           index.EmbeddingProvider
+	Metadata           SemanticMetadata
+	Limits             HybridLimits
+	SemanticSetupError error
 }
 
 type SemanticSearcher interface {
@@ -70,6 +71,12 @@ func (retriever *HybridRetriever) Retrieve(ctx context.Context, question string,
 	config := retriever.config
 	if !config.Metadata.Enabled {
 		return fallbackResult(baseline, nil, true, limit), nil
+	}
+	if err := ctx.Err(); err != nil {
+		return HybridResult{}, err
+	}
+	if config.SemanticSetupError != nil {
+		return fallbackResult(baseline, config.SemanticSetupError, false, limit), nil
 	}
 	if config.Semantic == nil || config.Provider == nil {
 		return fallbackResult(baseline, retrieval.ErrSemanticUnavailable, false, limit), nil

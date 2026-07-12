@@ -6,6 +6,7 @@ import (
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/providers"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/retrieval"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
@@ -33,16 +34,26 @@ type RuntimeHistoryStore interface {
 type LexicalFactory func(context.Context, string, os.FileInfo) (*retrieval.Lexical, error)
 type HistoryFactory func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error)
 type ProviderFactory func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error)
-type RetrieverFactory func(*retrieval.Lexical, bool) chat.RetrievalRunner
+type RetrieverFactory func(chat.HybridConfig) chat.RetrievalRunner
+
+type RuntimeSemanticStore interface {
+	chat.SemanticSearcher
+	Status(context.Context, index.StatusRequest) (index.IndexStatus, error)
+}
+
+type SemanticStoreFactory func(workspaceid.WorkspaceID) (RuntimeSemanticStore, error)
+type EmbeddingProviderFactory func(settings.Profile, index.FactoryOptions) (index.EmbeddingProvider, error)
 
 type LoadedRuntimeDependencies struct {
-	Trust            RootTrustProvider
-	Config           ConfigReader
-	Credentials      CredentialResolver
-	Client           providers.SafeClient
-	HistoryBase      string
-	LexicalFactory   LexicalFactory
-	HistoryFactory   HistoryFactory
-	ProviderFactory  ProviderFactory
-	RetrieverFactory RetrieverFactory
+	Trust                    RootTrustProvider
+	Config                   ConfigReader
+	Credentials              CredentialResolver
+	Client                   providers.SafeClient
+	HistoryBase              string
+	LexicalFactory           LexicalFactory
+	HistoryFactory           HistoryFactory
+	ProviderFactory          ProviderFactory
+	RetrieverFactory         RetrieverFactory
+	SemanticStoreFactory     SemanticStoreFactory
+	EmbeddingProviderFactory EmbeddingProviderFactory
 }

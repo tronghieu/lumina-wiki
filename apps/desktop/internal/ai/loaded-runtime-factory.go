@@ -11,6 +11,7 @@ import (
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/providers"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/retrieval"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
@@ -56,8 +57,14 @@ func NewLoadedRuntimeFactory(deps LoadedRuntimeDependencies) (*LoadedRuntimeFact
 		}
 	}
 	if deps.RetrieverFactory == nil {
-		deps.RetrieverFactory = func(lexical *retrieval.Lexical, semantic bool) chat.RetrievalRunner {
-			return chat.NewHybridRetriever(chat.HybridConfig{Lexical: lexical, Metadata: chat.SemanticMetadata{Enabled: semantic}})
+		deps.RetrieverFactory = func(config chat.HybridConfig) chat.RetrievalRunner { return chat.NewHybridRetriever(config) }
+	}
+	if deps.SemanticStoreFactory == nil {
+		deps.SemanticStoreFactory = func(id workspaceid.WorkspaceID) (RuntimeSemanticStore, error) { return index.NewStore(id) }
+	}
+	if deps.EmbeddingProviderFactory == nil {
+		deps.EmbeddingProviderFactory = func(profile settings.Profile, options index.FactoryOptions) (index.EmbeddingProvider, error) {
+			return index.NewEmbeddingProvider(profile, options)
 		}
 	}
 	return &LoadedRuntimeFactory{deps: deps}, nil
