@@ -184,7 +184,8 @@ func newTestService(log *callLog) (*Service, *nativeAuthorityStub, *validatorStu
 	attacher := &attacherStub{log: log, decision: validDecision(workspaceid.AttachKnown), confirmID: testWorkspaceID}
 	factory := &runtimeFactoryStub{log: log, runtime: &runtimeSpy{}}
 	registry := &registryStub{log: log, capability: session.Capability{SessionID: session.SessionID("sess_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), WorkspaceID: testWorkspaceID, Generation: 1, Display: session.DisplayMetadata{Label: "Nghiên cứu"}}}
-	service, err := NewService(Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry, Streams: streamSinkFactoryStub{}})
+	settingsStore, credentials := defaultFacadeRepositories()
+	service, err := NewService(Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry, Streams: streamSinkFactoryStub{}, Settings: settingsStore, Credentials: credentials})
 	if err != nil {
 		panic(err)
 	}

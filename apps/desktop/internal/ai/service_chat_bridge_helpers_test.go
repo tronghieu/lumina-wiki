@@ -127,10 +127,12 @@ func newBridgeService(t testingT, window session.WindowID, runtime session.Runti
 	}
 	log := &callLog{}
 	streams := &bridgeSinkFactory{sink: &bridgeEventSink{}}
+	settingsStore, credentials := defaultFacadeRepositories()
 	service, err := NewService(Dependencies{
 		Windows: &windowResolverStub{log: log, window: window}, Native: &nativeAuthorityStub{log: log},
 		Validator: &validatorStub{log: log}, Attacher: &attacherStub{log: log},
 		Runtimes: &runtimeFactoryStub{log: log, runtime: runtime}, Sessions: registry, Streams: streams,
+		Settings: settingsStore, Credentials: credentials,
 	})
 	if err != nil {
 		t.Fatal(err)

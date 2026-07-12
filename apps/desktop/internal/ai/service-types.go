@@ -4,24 +4,28 @@ import (
 	"context"
 	"errors"
 
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/secrets"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
 )
 
 const MaxTypedRootBytes = workspaceid.MaxCanonicalPathBytes
 
 var (
-	ErrInvalidInput      = errors.New("invalid workspace input")
-	ErrWindowUnavailable = errors.New("calling window is unavailable")
-	ErrNativeAuthority   = errors.New("native workspace approval failed")
-	ErrInvalidWorkspace  = errors.New("workspace validation failed")
-	ErrWorkspaceAttach   = errors.New("workspace attachment failed")
-	ErrRuntimeLoad       = errors.New("workspace runtime load failed")
-	ErrActivation        = errors.New("workspace activation failed")
-	ErrActivationBusy    = errors.New("workspace activation already in progress")
-	ErrSessionRejected   = errors.New("invalid or expired session")
-	ErrSessionCleanup    = errors.New("session cleanup failed")
-	ErrEventDispatch     = errors.New("chat event dispatch failed")
+	ErrInvalidInput          = errors.New("invalid workspace input")
+	ErrWindowUnavailable     = errors.New("calling window is unavailable")
+	ErrNativeAuthority       = errors.New("native workspace approval failed")
+	ErrInvalidWorkspace      = errors.New("workspace validation failed")
+	ErrWorkspaceAttach       = errors.New("workspace attachment failed")
+	ErrRuntimeLoad           = errors.New("workspace runtime load failed")
+	ErrActivation            = errors.New("workspace activation failed")
+	ErrActivationBusy        = errors.New("workspace activation already in progress")
+	ErrSessionRejected       = errors.New("invalid or expired session")
+	ErrSessionCleanup        = errors.New("session cleanup failed")
+	ErrEventDispatch         = errors.New("chat event dispatch failed")
+	ErrSettingsUnavailable   = errors.New("AI settings are unavailable")
+	ErrCredentialUnavailable = errors.New("credential operation is unavailable")
 )
 
 type ActivationStatus string
@@ -95,12 +99,26 @@ type SessionRegistry interface {
 	Close() error
 }
 
+type SettingsRepository interface {
+	Load() (settings.Config, error)
+	Save(settings.Config) error
+}
+
+type CredentialRepository interface {
+	Status(context.Context, string) (secrets.CredentialStatus, error)
+	Save(context.Context, string, []byte) (secrets.SaveResult, error)
+	ConfirmSessionCredential(context.Context, string, []byte) error
+	Delete(context.Context, string) error
+}
+
 type Dependencies struct {
-	Windows   WindowResolver
-	Native    NativeAuthority
-	Validator WorkspaceValidator
-	Attacher  WorkspaceAttacher
-	Runtimes  RuntimeFactory
-	Sessions  SessionRegistry
-	Streams   StreamSinkFactory
+	Windows     WindowResolver
+	Native      NativeAuthority
+	Validator   WorkspaceValidator
+	Attacher    WorkspaceAttacher
+	Runtimes    RuntimeFactory
+	Sessions    SessionRegistry
+	Streams     StreamSinkFactory
+	Settings    SettingsRepository
+	Credentials CredentialRepository
 }

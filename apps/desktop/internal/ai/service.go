@@ -22,17 +22,22 @@ type Service struct {
 	runtimes    RuntimeFactory
 	sessions    SessionRegistry
 	streams     StreamSinkFactory
+	settings    SettingsRepository
+	credentials CredentialRepository
+	settingsMu  sync.Mutex
 	activations *activationGate
 }
 
 func NewService(dependencies Dependencies) (*Service, error) {
-	if dependencies.Windows == nil || dependencies.Native == nil || dependencies.Validator == nil ||
-		dependencies.Attacher == nil || dependencies.Runtimes == nil || dependencies.Sessions == nil || dependencies.Streams == nil {
+	if nilLike(dependencies.Windows) || nilLike(dependencies.Native) || nilLike(dependencies.Validator) ||
+		nilLike(dependencies.Attacher) || nilLike(dependencies.Runtimes) || nilLike(dependencies.Sessions) ||
+		nilLike(dependencies.Streams) || nilLike(dependencies.Settings) || nilLike(dependencies.Credentials) {
 		return nil, ErrInvalidInput
 	}
 	return &Service{
 		windows: dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
 		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions, streams: dependencies.Streams,
+		settings: dependencies.Settings, credentials: dependencies.Credentials,
 		activations: newActivationGate(),
 	}, nil
 }

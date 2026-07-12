@@ -149,3 +149,21 @@ func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestNewServiceRejectsTypedNilFacadeDependencies(t *testing.T) {
+	log := &callLog{}
+	settingsStore, credentials := defaultFacadeRepositories()
+	var typedNilSettings *settingsRepositoryStub
+	dependencies := Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: &nativeAuthorityStub{log: log},
+		Validator: &validatorStub{log: log}, Attacher: &attacherStub{log: log}, Runtimes: &runtimeFactoryStub{log: log, runtime: &runtimeSpy{}},
+		Sessions: &registryStub{log: log}, Streams: streamSinkFactoryStub{}, Settings: typedNilSettings, Credentials: credentials}
+	if _, err := NewService(dependencies); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("settings err=%v", err)
+	}
+	dependencies.Settings = settingsStore
+	var typedNilCredentials *credentialRepositoryStub
+	dependencies.Credentials = typedNilCredentials
+	if _, err := NewService(dependencies); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("credentials err=%v", err)
+	}
+}
