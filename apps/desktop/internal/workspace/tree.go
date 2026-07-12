@@ -3,7 +3,6 @@ package workspace
 import (
 	"context"
 	"errors"
-	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -46,47 +45,6 @@ type TreeBuilder struct {
 
 func NewTreeBuilder() *TreeBuilder {
 	return &TreeBuilder{readDir: func(file *os.File, _ string, count int) ([]os.DirEntry, error) { return file.ReadDir(count) }}
-}
-
-// Build accepts a canonical root previously authorized by the backend. Its
-// validation is defense in depth, not an authorization decision.
-func (builder *TreeBuilder) Build(ctx context.Context, rootPath string) (WorkspaceTree, error) {
-	if err := ctx.Err(); err != nil {
-		return WorkspaceTree{}, err
-	}
-	root, err := openTreeWorkspace(rootPath)
-	if err != nil {
-		return WorkspaceTree{}, err
-	}
-	defer root.Close()
-	state := treeState{tree: WorkspaceTree{Nodes: []TreeNode{}, Warnings: []TreeWarning{}}}
-	for _, name := range []string{"_lumina", "raw", "wiki"} {
-		if state.entries >= MaxTreeEntries {
-			state.limit(name)
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return WorkspaceTree{}, err
-		}
-		info, err := root.Lstat(name)
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil || info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
-			continue
-		}
-		node, ok := builder.node(ctx, root, name, 0, &state)
-		if state.err != nil {
-			return WorkspaceTree{}, state.err
-		}
-		if ok {
-			state.tree.Nodes = append(state.tree.Nodes, node)
-		}
-	}
-	if !treeRootCurrent(root) {
-		return WorkspaceTree{}, errors.New("workspace root changed")
-	}
-	return state.tree, nil
 }
 
 type treeState struct {

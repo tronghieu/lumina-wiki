@@ -16,13 +16,49 @@ import (
 )
 
 type runtimeHistorySpy struct {
-	mu                             sync.Mutex
-	enabled                        bool
-	enabledErr, loadErr, appendErr error
-	records                        []history.ConversationRecord
-	appended                       []history.ConversationRecord
-	enabledCalls, loadCalls        int
-	appendCalls                    int
+	mu                                       sync.Mutex
+	enabled                                  bool
+	enabledErr, loadErr, appendErr           error
+	setErr, listErr, deleteErr, deleteAllErr error
+	records                                  []history.ConversationRecord
+	metadata                                 []history.ConversationMetadata
+	deleteResult                             history.DeleteResult
+	deleteAllResult                          history.DeleteAllResult
+	appended                                 []history.ConversationRecord
+	enabledCalls, loadCalls                  int
+	appendCalls                              int
+}
+
+func (spy *runtimeHistorySpy) SetEnabled(_ context.Context, enabled bool) error {
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if spy.setErr == nil {
+		spy.enabled = enabled
+	}
+	return spy.setErr
+}
+
+func (spy *runtimeHistorySpy) List(context.Context) ([]history.ConversationMetadata, error) {
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	return append([]history.ConversationMetadata(nil), spy.metadata...), spy.listErr
+}
+
+func (spy *runtimeHistorySpy) Delete(context.Context, string) (history.DeleteResult, error) {
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	return spy.deleteResult, spy.deleteErr
+}
+
+func (spy *runtimeHistorySpy) DeleteAll(context.Context) (history.DeleteAllResult, error) {
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	result := spy.deleteAllResult
+	result.DeletedIDs = append([]string{}, result.DeletedIDs...)
+	result.DurableDeletedIDs = append([]string{}, result.DurableDeletedIDs...)
+	result.UncertainDeletedIDs = append([]string{}, result.UncertainDeletedIDs...)
+	result.RemainingIDs = append([]string{}, result.RemainingIDs...)
+	return result, spy.deleteAllErr
 }
 
 func (spy *runtimeHistorySpy) Enabled(context.Context) (bool, error) {

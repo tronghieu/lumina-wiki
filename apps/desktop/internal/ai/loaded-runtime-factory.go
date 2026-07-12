@@ -17,6 +17,7 @@ import (
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
 type LoadedRuntimeFactory struct{ deps LoadedRuntimeDependencies }
@@ -38,6 +39,11 @@ type loadedRuntime struct {
 func NewLoadedRuntimeFactory(deps LoadedRuntimeDependencies) (*LoadedRuntimeFactory, error) {
 	if nilLike(deps.Trust) || nilLike(deps.Config) || nilLike(deps.Credentials) ||
 		deps.HistoryBase == "" || !filepath.IsAbs(deps.HistoryBase) {
+		return nil, ErrInvalidInput
+	}
+	if deps.Tree == nil {
+		deps.Tree = workspace.NewTreeBuilder()
+	} else if nilLike(deps.Tree) {
 		return nil, ErrInvalidInput
 	}
 	deps.HistoryBase = filepath.Clean(deps.HistoryBase)

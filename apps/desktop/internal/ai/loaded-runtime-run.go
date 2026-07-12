@@ -85,8 +85,11 @@ func selectedEmbedding(config settings.Config, selected string) (bool, error) {
 }
 
 func (runtime *loadedRuntime) begin(parent context.Context) (context.Context, string, os.FileInfo, func(), error) {
-	if runtime == nil || parent == nil || parent.Err() != nil {
+	if runtime == nil || parent == nil {
 		return nil, "", nil, func() {}, context.Canceled
+	}
+	if err := parent.Err(); err != nil {
+		return nil, "", nil, func() {}, err
 	}
 	runtime.mu.Lock()
 	if runtime.closed || runtime.ctx.Err() != nil || runtime.root == "" || runtime.proof == nil {

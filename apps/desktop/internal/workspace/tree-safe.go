@@ -113,40 +113,6 @@ func treeRootCurrent(root *os.Root) bool {
 	return err == nil && current.IsDir() && os.SameFile(opened, current)
 }
 
-func openTreeWorkspace(path string) (*os.Root, error) {
-	if path == "" || !utf8.ValidString(path) || !filepath.IsAbs(path) || filepath.Clean(path) != path || len(path) > MaxTreePathBytes {
-		return nil, errors.New("canonical absolute workspace root is required")
-	}
-	before, err := os.Lstat(path)
-	if err != nil || !before.IsDir() || before.Mode()&fs.ModeSymlink != 0 {
-		return nil, errors.New("workspace root is invalid")
-	}
-	root, err := os.OpenRoot(path)
-	if err != nil {
-		return nil, errors.New("workspace root cannot be opened")
-	}
-	valid := false
-	defer func() {
-		if !valid {
-			_ = root.Close()
-		}
-	}()
-	opened, err := root.Stat(".")
-	if err != nil || !os.SameFile(before, opened) {
-		return nil, errors.New("workspace root changed")
-	}
-	readme, err := root.Lstat("README.md")
-	if err != nil || !readme.Mode().IsRegular() || readme.Mode()&fs.ModeSymlink != 0 {
-		return nil, errors.New("not a Lumina workspace")
-	}
-	wiki, err := root.Lstat("wiki")
-	if err != nil || !wiki.IsDir() || wiki.Mode()&fs.ModeSymlink != 0 {
-		return nil, errors.New("not a Lumina workspace")
-	}
-	valid = true
-	return root, nil
-}
-
 func treeLstat(root *os.Root, path string) (os.FileInfo, error) {
 	if path == "" || len(path) > MaxTreePathBytes {
 		return nil, errors.New("unsafe path")

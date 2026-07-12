@@ -11,6 +11,7 @@ import (
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/retrieval"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
 type RootTrustProvider interface {
@@ -27,8 +28,16 @@ type CredentialResolver interface {
 
 type RuntimeHistoryStore interface {
 	Enabled(context.Context) (bool, error)
+	SetEnabled(context.Context, bool) error
+	List(context.Context) ([]history.ConversationMetadata, error)
 	Load(context.Context, string) ([]history.ConversationRecord, error)
 	Append(context.Context, history.ConversationRecord) (history.AppendOutcome, error)
+	Delete(context.Context, string) (history.DeleteResult, error)
+	DeleteAll(context.Context) (history.DeleteAllResult, error)
+}
+
+type TrustedTreeBuilder interface {
+	BuildTrusted(context.Context, string, os.FileInfo) (workspace.WorkspaceTree, error)
 }
 
 type LexicalFactory func(context.Context, string, os.FileInfo) (*retrieval.Lexical, error)
@@ -56,4 +65,5 @@ type LoadedRuntimeDependencies struct {
 	RetrieverFactory         RetrieverFactory
 	SemanticStoreFactory     SemanticStoreFactory
 	EmbeddingProviderFactory EmbeddingProviderFactory
+	Tree                     TrustedTreeBuilder
 }

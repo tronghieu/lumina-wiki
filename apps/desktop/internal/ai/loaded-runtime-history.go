@@ -11,7 +11,7 @@ import (
 )
 
 func (runtime *loadedRuntime) openHistory(ctx context.Context) (RuntimeHistoryStore, bool, error) {
-	store, err := runtime.deps.HistoryFactory(runtime.deps.HistoryBase, runtime.id)
+	store, err := runtime.newHistoryStore()
 	if err != nil || nilLike(store) {
 		return nil, false, errors.New("history unavailable")
 	}
@@ -20,6 +20,14 @@ func (runtime *loadedRuntime) openHistory(ctx context.Context) (RuntimeHistorySt
 		return nil, false, err
 	}
 	return store, enabled, nil
+}
+
+func (runtime *loadedRuntime) newHistoryStore() (RuntimeHistoryStore, error) {
+	store, err := runtime.deps.HistoryFactory(runtime.deps.HistoryBase, runtime.id)
+	if err != nil || nilLike(store) {
+		return nil, errors.New("history unavailable")
+	}
+	return store, nil
 }
 
 func completedHistoryTurns(source []history.ConversationRecord, conversationID string) ([]chat.Turn, error) {
