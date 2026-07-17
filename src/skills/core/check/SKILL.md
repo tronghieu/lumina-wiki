@@ -100,7 +100,7 @@ node _lumina/scripts/lint.mjs --fix --json
 The `--fix` pass:
 - Applies the supported auto-fixes listed in `references/lint-checks.md`
   (L01, L03, L06, L07, L09)
-- Leaves every other check (L02, L04, L05, L08, L10, L11, L12, L13, L14, L16)
+- Leaves every other check (L02, L04, L05, L08, L10, L11, L12, L13, L14, L16, L17)
   for manual correction
 
 ### Step 4 — Self-check re-run
@@ -123,6 +123,9 @@ If errors remain, do not report done. Address each remaining error specifically:
   or alias conflicts that need manual correction.
 - If L13 or L16 persist, suggest `/lumi-migrate-legacy --backfill-ids` — these
   are not fixed by `lint.mjs --fix`.
+- If L17 (dangling edge) persists, the edge still points at a slug with no
+  wiki file. Run `wiki.mjs remove-edge <from> <type> <to>` to drop it, or
+  recreate the missing page if the relationship should still hold.
 
 Repeat until `summary.errors === 0`. Do not loop more than 3 times — if errors
 persist, surface them to the user as needing manual attention.

@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `wiki.mjs remove-edge <from> <type> <to> [--dry-run]` — idempotently removes
+  a single relationship from `wiki/graph/edges.jsonl`, including its reverse
+  edge (respecting the terminal/exempt/symmetric gate). Matches regardless of
+  stored confidence; no-op (exit 0) if the edge is already absent; rejects
+  `cites`/`cited_by` and unknown edge types (exit 2). Emits a best-effort
+  `advisories` warning when a page body still contains the corresponding
+  `[[wikilink]]` after removal, since page bodies do not encode relation type
+  and are not auto-edited.
+- `wiki.mjs replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]`
+  — corrects a relationship's type as a single convergent write (remove old +
+  add new, both directions), preserving the old edge's confidence unless
+  overridden. Lets an ingest mistake like recording `introduces_concept` when
+  the source only `uses_concept` be fixed without any page edit, since bodies
+  list concepts in a type-agnostic `## Concepts` section.
+- Lint check L17: flags any edge in `edges.jsonl` whose `from` or `to`
+  endpoint is an internal slug that does not resolve to an existing wiki file
+  (URL endpoints are skipped), catching edges left pointing at deleted or
+  renamed entities.
+
 ## [1.9.0] - 2026-07-16
 
 ### Added

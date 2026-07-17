@@ -973,6 +973,291 @@ describe('dedup-edges', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: remove-edge
+// ---------------------------------------------------------------------------
+
+describe('remove-edge', () => {
+  test('removes forward+reverse for an asymmetric type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 1);
+      assert.equal(json.after, 0);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().length ? content.trim().split('\n').map(l => JSON.parse(l)) : [];
+      assert.equal(edges.length, 0, 'both forward and reverse edges gone');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('idempotent: removing a non-existent edge exits 0 with removed:0', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'ghost-a', 'uses_concept', 'ghost-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+      assert.equal(json.forwardRemoved, 0);
+      assert.equal(json.reverseRemoved, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('matches regardless of confidence', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-p', 'uses_concept', 'concept-q', '--confidence', 'high'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'source-p', 'uses_concept', 'concept-q'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('symmetric type removes the single canonical record', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-z', 'same_problem_as', 'source-a'], { cwd: tmp });
+
+      // Request removal in reversed argument order — canonical record is sorted.
+      const r = runWiki(['remove-edge', 'source-a', 'same_problem_as', 'source-z'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1, 'only the single canonical record is removed');
+      assert.equal(json.after, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('terminal/exempt type removes only forward (no reverse to remove)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'concept-x', 'grounded_in', 'foundations/theory-y'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'concept-x', 'grounded_in', 'foundations/theory-y'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 0);
+      assert.equal(json.after, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects unknown edge type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'a', 'nonexistent_type', 'b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects cites (citations live in citations.jsonl)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'src-a', 'cites', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects .. in slug args', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', '..', 'uses_concept', 'target'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not modify the file', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.removed, 2);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 1);
+      assert.equal(json.matched.length, 2);
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('advisory flags a surviving wikilink after removal', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+
+      const sourceDir = join(tmp, 'wiki', 'sources');
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(
+        join(sourceDir, 'source-a.md'),
+        '---\nid: source-a\ntitle: Source A\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors: []\nyear: 2024\nimportance: 3\n---\n\nSee [[concept-b]] for details.\n',
+        'utf8',
+      );
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.advisories.length, 1);
+      assert.match(json.advisories[0], /source-a.*\[\[concept-b\]\]/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: replace-edge
+// ---------------------------------------------------------------------------
+
+describe('replace-edge', () => {
+  test('introduces_concept -> uses_concept swaps both forward and reverse, preserves confidence', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'introduces_concept', 'concept-b', '--confidence', 'high'], { cwd: tmp });
+
+      const r = runWiki(['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 0, `replace-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+      assert.equal(json.added, true);
+      assert.equal(json.confidence, 'high');
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().split('\n').map(l => JSON.parse(l));
+
+      assert.equal(edges.length, 2);
+      const fwd = edges.find(e => e.from === 'source-a' && e.type === 'uses_concept' && e.to === 'concept-b');
+      const rev = edges.find(e => e.from === 'concept-b' && e.type === 'used_in' && e.to === 'source-a');
+      assert.ok(fwd, 'new forward uses_concept edge present');
+      assert.ok(rev, 'new reverse used_in edge present');
+      assert.equal(fwd.confidence, 'high');
+
+      const oldFwd = edges.find(e => e.type === 'introduces_concept');
+      const oldRev = edges.find(e => e.type === 'introduced_in');
+      assert.ok(!oldFwd, 'old forward edge removed');
+      assert.ok(!oldRev, 'old reverse edge removed');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects unknown edge type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['replace-edge', 'a', 'nonexistent_type', 'b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 2);
+
+      const r2 = runWiki(['replace-edge', 'a', 'uses_concept', 'b', 'nonexistent_type'], { cwd: tmp });
+      assert.equal(r2.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects cites/cited_by retyping (citations live in citations.jsonl)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['replace-edge', 'src-a', 'cites', 'src-b', 'builds_on'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'introduces_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(
+        ['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept', '--dry-run'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `replace-edge --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.willRemove, 2);
+      assert.equal(json.willAdd.forward.type, 'uses_concept');
+      assert.equal(json.willAdd.reverse.type, 'used_in');
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('convergent when already in target state', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      // Old edge never existed; new edge already present.
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 0, `replace-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+      assert.equal(json.added, false);
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged when already convergent');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: checkpoint-read and checkpoint-write
 // ---------------------------------------------------------------------------
 
