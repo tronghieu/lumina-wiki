@@ -22,6 +22,7 @@ output in `/lumi-check`.
 | L13 | `external_ids` missing a namespace derivable from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` |
 | L14 | `external_ids` value fails validation for its namespace | error | No — user must correct or remove the value |
 | L16 | `external_ids` value disagrees with the value derived from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` to reconcile |
+| L17 | Dangling edge endpoint (edge `from`/`to` does not resolve to an existing wiki file) | error | No — user must run `wiki.mjs remove-edge` or recreate the missing page |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 
@@ -37,6 +38,7 @@ Errors that must be resolved before done:
 - L08: missing required confidence field on an edge
 - L10: foundation alias conflicts
 - L14: invalid `external_ids` values
+- L17: dangling edge endpoints
 
 Advisories to surface to the user:
 
@@ -58,11 +60,13 @@ Advisories to surface to the user:
 - L07 deduplicates symmetric edges.
 - L09 regenerates the `<!-- lumina:index --> ... <!-- /lumina:index -->` block.
 
-L02, L04, L05, L08, L10, L11, L12, L13, L14, and L16 require manual
+L02, L04, L05, L08, L10, L11, L12, L13, L14, L16, and L17 require manual
 correction — none of them are touched by `--fix`. If L06 remains after
 `--fix`, the target page may not exist; identify it and suggest
 `/lumi-ingest` or `/lumi-edit`. For L13 and L16, the fix path is
-`/lumi-migrate-legacy --backfill-ids`, not `lint.mjs --fix`.
+`/lumi-migrate-legacy --backfill-ids`, not `lint.mjs --fix`. For L17, the fix
+path is `wiki.mjs remove-edge` (drop the stale edge) or recreating the
+missing page the edge still points at — never hand-edit `edges.jsonl`.
 
 The linter reads `_lumina/config/lumina.config.yaml` for exemption globs.
 `foundations/**`, `outputs/**`, and external URL targets are exempt from L06.

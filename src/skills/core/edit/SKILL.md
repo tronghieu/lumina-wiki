@@ -30,7 +30,8 @@ authoritative. This skill operates within those conventions.
 
 Key workspace paths:
 - `wiki/<type>/<slug>.md` — the page you edit
-- `_lumina/scripts/wiki.mjs` — engine (read-meta, set-meta, add-edge, dedup-edges)
+- `_lumina/scripts/wiki.mjs` — engine (read-meta, set-meta, add-edge, remove-edge,
+  replace-edge, dedup-edges)
 - `_lumina/scripts/lint.mjs` — linter (--fix, --json)
 
 ## Instructions
@@ -80,9 +81,9 @@ Use the Edit tool to modify the file. Follow these rules from README.md:
 ### Step 5 — Re-derive edges
 
 For every cross-reference you add or change, call `add-edge` once for the forward
-relationship. `wiki.mjs add-edge` is the only graph mutation path; it writes the
-required reverse edge automatically unless the edge is terminal, exempt, or
-symmetric.
+relationship. `add-edge`, `remove-edge`, and `replace-edge` are the supported
+graph mutation paths — all three go through `wiki.mjs` and write the required
+reverse edge automatically unless the edge is terminal, exempt, or symmetric.
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge <from-slug> <edge-type> <to-slug>
@@ -97,8 +98,15 @@ The call is idempotent: re-running it leaves the graph byte-identical (no
 duplicate edges are written).
 
 For a removed link, removing the wikilink from the body does not auto-remove the
-edge. Run lint and surface stale relationships for user attention; do not
-hand-edit `wiki/graph/edges.jsonl`.
+edge — page bodies do not encode relation type, so the removal is not automatic.
+Use `wiki.mjs remove-edge <from> <type> <to>` to drop the stale relationship
+(both directions, respecting the terminal/exempt/symmetric gate; `--dry-run`
+previews first). It emits an `advisories` note if the page body still contains
+the corresponding wikilink, since remove-edge does not touch page content
+itself. To correct a wrong relation type instead of removing it outright, use
+`wiki.mjs replace-edge <from> <old-type> <to> <new-type>` — because bodies list
+cross-references in a generic, type-agnostic section, a type-only correction
+needs no page edit at all. Never hand-edit `wiki/graph/edges.jsonl` directly.
 
 ### Step 6 — Lint and fix
 
@@ -112,6 +120,9 @@ Read the JSON output. If `summary.errors > 0` after fix, address each remaining
 error:
 - L06 (missing reverse edge): re-run the forward `add-edge`; it auto-adds reverse
 - L07 (duplicate symmetric edge): run `dedup-edges`
+- L17 (dangling edge): an edge still points at a slug that no longer resolves
+  to a wiki file — a common side effect of renaming or deleting a page. Run
+  `remove-edge <from> <type> <to>` to drop it, or recreate the missing page
 - Other errors: apply inline
 
 Warnings are advisory, but errors block completion until fixed or surfaced as
@@ -178,7 +189,8 @@ as a template and confirm before continuing. Never silently expand scope.
 ## Guardrails
 
 - Never modify files in `raw/`. This skill is wiki/-only.
-- Never hand-edit `wiki/graph/edges.jsonl`; graph mutation goes through `wiki.mjs`.
+- Never hand-edit `wiki/graph/edges.jsonl`; graph mutation goes through
+  `wiki.mjs` (`add-edge`, `remove-edge`, `replace-edge`).
 - If the user asks to edit multiple pages, process them one at a time and confirm
   each before proceeding.
 - If a page does not exist, do not create it — use `/lumi-ingest` instead.

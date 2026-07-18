@@ -184,7 +184,9 @@ Hard 2 s `AbortController` timeout + 500 ms belt-and-suspenders `exec` timeout. 
 
 ### `src/scripts/wiki.mjs`
 
-Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `remove-edge`, `replace-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+
+`remove-edge <from> <type> <to> [--dry-run]` idempotently removes one relationship (both directions, respecting the terminal/exempt/symmetric gate) regardless of stored confidence; no-op exit 0 if absent; rejects `cites`/`cited_by` and unknown types (exit 2); emits `advisories` if a page body still carries the `[[wikilink]]` post-removal. `replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]` corrects an edge's type as one convergent write (remove old + add new, both directions), preserving confidence unless overridden — the type-only change needs no page edit since bodies list concepts in a type-agnostic section.
 
 ### `src/scripts/schemas.mjs`
 
@@ -284,7 +286,7 @@ Lint enforces:
 
 ### `src/scripts/lint.mjs`
 
-`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16 (14 checks total; L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
+`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L17 (15 checks total; L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
 
 | Check | Description | Fixable |
 |---|---|---|
@@ -303,6 +305,7 @@ Lint enforces:
 | L13 | `external_ids` missing namespace derivable from `urls[]` (warning) | no |
 | L14 | `external_ids` value fails `normalizeExternalId` (error) | no |
 | L16 | `external_ids[ns]` disagrees with `urls[]`-derived value (warning) | no |
+| L17 | Dangling edge — an edge's `from`/`to` internal slug does not resolve to any wiki file (error) | no |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 

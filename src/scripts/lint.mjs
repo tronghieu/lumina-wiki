@@ -80,7 +80,7 @@ const isIndexExempt = (f) => INDEX_EXEMPT_PREFIXES.some(p => f.startsWith(p));
 /** All check IDs in run order.
  *  L15 is intentionally absent — collision check was deferred as premature
  *  for typical wiki size. Adding L15 later is the natural next slot. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17'];
 
 /**
  * Legacy frontmatter fields that have been renamed across versions.
@@ -920,6 +920,44 @@ function checkL16(wikiRelPath, fm) {
   return findings;
 }
 
+/**
+ * L17: Edge endpoint (from or to) is an internal wiki slug that does not
+ * resolve to any existing wiki file. Catches edges left dangling after an
+ * entity is deleted or renamed (e.g. a future remove-edge/rename operation)
+ * — something no other check currently detects, since L06/L07 only reason
+ * about edge-pair symmetry and never check that either endpoint's file
+ * actually exists.
+ *
+ * Resolution mirrors L05 exactly: an endpoint is "internal" unless it
+ * contains '://' (an external URL, e.g. a see_also_url target), and an
+ * internal endpoint resolves iff it is a member of knownSlugs — the same
+ * set L05 checks wikilinks against. No extra exemption is applied for
+ * foundations/**, outputs/**, or reflections/**: those dirs hold real
+ * entity files that land in knownSlugs like any other, so a genuine file
+ * there resolves fine and a missing one is correctly flagged.
+ *
+ * @param {Array<{from:string,to:string,type:string}>} edges
+ * @param {Set<string>} knownSlugs  - Set of wiki-relative paths (without .md), same as passed to checkL05.
+ * @returns {Finding[]}
+ */
+function checkL17(edges, knownSlugs) {
+  const findings = [];
+  for (const edge of edges) {
+    for (const key of ['from', 'to']) {
+      const target = edge[key];
+      if (typeof target !== 'string' || target.includes('://')) continue; // external URL, not a slug
+      if (!knownSlugs.has(target)) {
+        findings.push(finding(
+          'L17-dangling-edge', 'error', false,
+          edge.from, null,
+          `Dangling edge endpoint: ${target} in edge ${edge.from} --${edge.type}--> ${edge.to} does not resolve to any wiki file`
+        ));
+      }
+    }
+  }
+  return findings;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1182,6 +1220,7 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
   allFindings.push(...checkL07(edges, new Set(edgeSet)));
   allFindings.push(...checkL08(edges));
+  allFindings.push(...checkL17(edges, knownSlugs));
 
   if (indexContent !== undefined) {
     const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
@@ -1479,7 +1518,7 @@ export {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16,
+  checkL13, checkL14, checkL16, checkL17,
   fixL01, fixL03, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
