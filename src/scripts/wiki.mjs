@@ -943,6 +943,36 @@ async function addCitation(projectRoot, fromSlug, toSlug) {
 }
 
 /**
+ * Remove a citation edge (cites) from wiki/graph/citations.jsonl.
+ * Idempotent.
+ * @param {string} projectRoot
+ * @param {string} fromSlug
+ * @param {string} toSlug
+ * @param {{dryRun?: boolean}} [opts]
+ * @returns {Promise<{removed: number, before: number, after?: number, dryRun?: boolean, matched?: object[]}>}
+ */
+async function removeCitation(projectRoot, fromSlug, toSlug, opts = {}) {
+  const graphDir = join(projectRoot, 'wiki', 'graph');
+  const citationsFile = join(graphDir, 'citations.jsonl');
+
+  const existing = await readJsonl(citationsFile);
+  const before = existing.length;
+
+  const matched = existing.filter(e => e.from === fromSlug && e.to === toSlug);
+  const remaining = existing.filter(e => !(e.from === fromSlug && e.to === toSlug));
+
+  if (opts.dryRun) {
+    return { dryRun: true, removed: matched.length, before, matched };
+  }
+
+  if (matched.length > 0) {
+    await writeJsonl(citationsFile, remaining);
+  }
+
+  return { removed: matched.length, before, after: remaining.length };
+}
+
+/**
  * Batch-add edges from a JSON file.
  * Reads [{from, type, to, confidence?}, ...], validates all, then writes in one pass.
  * @param {string} projectRoot
@@ -1782,6 +1812,7 @@ async function main(argv) {
       '  set-meta <slug> <key> <value> [--json-value]  Set frontmatter key',
       '  add-edge <from> <type> <to> [--confidence high|medium|low]',
       '  add-citation <from> <to>        Append cites edge to citations.jsonl',
+      '  remove-citation <from> <to> [--dry-run]  Remove cites edge from citations.jsonl',
       '  batch-edges <json-file>         Apply array of edges from JSON file',
       '  dedup-edges                     Deduplicate edges.jsonl',
       '  remove-edge <from> <type> <to> [--dry-run]',
@@ -1958,6 +1989,27 @@ async function main(argv) {
       }
 
       // -----------------------------------------------------------------------
+      case 'remove-citation': {
+        const fromSlug = positional[0];
+        const toSlug = positional[1];
+
+        if (!fromSlug || !toSlug) {
+          emitError('remove-citation requires <from-slug> <to-slug>', 2);
+          process.exit(2);
+        }
+        if (fromSlug.includes('..') || toSlug.includes('..')) {
+          emitError('Slug may not contain ..', 2);
+          process.exit(2);
+        }
+
+        const projectRoot = await requireProjectRoot();
+        const dryRun = Boolean(flags['dry-run']);
+        const result = await removeCitation(projectRoot, fromSlug, toSlug, { dryRun });
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
       case 'batch-edges': {
         const jsonFile = positional[0];
         if (!jsonFile) {
@@ -1992,7 +2044,7 @@ async function main(argv) {
 
         if (edgeType === 'cites' || edgeType === 'cited_by') {
           emitError(
-            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; remove-citation is not yet available.',
+            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `remove-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument).',
             2,
           );
           process.exit(2);
@@ -2033,7 +2085,7 @@ async function main(argv) {
 
         if ([oldType, newType].includes('cites') || [oldType, newType].includes('cited_by')) {
           emitError(
-            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges.',
+            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges. Use add-citation / remove-citation to manage citations.',
             2,
           );
           process.exit(2);

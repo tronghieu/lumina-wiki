@@ -819,6 +819,117 @@ describe('add-citation', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: remove-citation
+// ---------------------------------------------------------------------------
+
+describe('remove-citation', () => {
+  test('removes a citation from citations.jsonl', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      runWiki(['add-citation', 'src-a', 'src-c'], { cwd: tmp });
+
+      const r = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'), 'utf8');
+      const citations = content.trim().split('\n').map(l => JSON.parse(l));
+      assert.ok(!citations.some(e => e.from === 'src-a' && e.to === 'src-b'), 'src-a -> src-b should be gone');
+      assert.ok(citations.some(e => e.from === 'src-a' && e.to === 'src-c'), 'src-a -> src-c should remain');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not modify citations.jsonl', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const hashBefore = await hashFile(citationsFile);
+
+      const r = runWiki(['remove-citation', 'src-a', 'src-b', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.removed, 1);
+      assert.equal(json.matched.length, 1);
+
+      const hashAfter = await hashFile(citationsFile);
+      assert.equal(hashBefore, hashAfter, 'citations.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('is idempotent when the citation is absent', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const hashBefore = await hashFile(citationsFile);
+
+      const r = runWiki(['remove-citation', 'src-x', 'src-y'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+
+      const hashAfter = await hashFile(citationsFile);
+      assert.equal(hashBefore, hashAfter, 'citations.jsonl unchanged when citation absent');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('is safe to run twice', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+
+      const r1 = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r1.status, 0, `remove-citation (1st) failed: ${r1.stderr}`);
+      const json1 = parseJson(r1.stdout);
+      assert.equal(json1.removed, 1);
+
+      const r2 = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r2.status, 0, `remove-citation (2nd) failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.removed, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects missing arguments', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-citation', 'src-a'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects slugs containing ..', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-citation', '../evil', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: batch-edges
 // ---------------------------------------------------------------------------
 
