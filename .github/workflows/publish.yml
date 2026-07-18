@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
@@ -50,3 +50,25 @@ jobs:
 
       - name: Publish package
         run: npm publish
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          notes="$(awk -v prefix="## [${version}]" '
+            index($0, prefix) == 1 { flag = 1; next }
+            /^## \[/ && flag { exit }
+            flag { print }
+          ' CHANGELOG.md)"
+          notes="$(printf '%s\n' "$notes" | sed -e '/./,$!d')"
+          if [ -n "$notes" ]; then
+            printf '%s\n' "$notes" > release-notes.md
+            gh release create "${GITHUB_REF_NAME}" --verify-tag \
+              --title "${GITHUB_REF_NAME}" --notes-file release-notes.md
+          else
+            echo "No CHANGELOG entry for ${version}; falling back to generated notes."
+            gh release create "${GITHUB_REF_NAME}" --verify-tag \
+              --title "${GITHUB_REF_NAME}" --generate-notes
+          fi
