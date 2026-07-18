@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-07-18
+
+### Added
+
+- `wiki.mjs remove-citation <from> <to> [--dry-run]` — idempotently removes
+  the matching forward `cites` record from `wiki/graph/citations.jsonl`,
+  mirroring `add-citation`. Idempotent when the citation is absent
+  (`removed: 0`) and supports `--dry-run`. Citations store no reverse
+  record (`cited_by` is derived at read time), so only the single forward
+  record is removed.
+
+### Changed
+
+- Reworded the `remove-edge` and `replace-edge` citation guard messages to
+  point at the correct `add-citation` / `remove-citation` commands.
+
 ## [1.9.1] - 2026-07-18
 
 ### Added
