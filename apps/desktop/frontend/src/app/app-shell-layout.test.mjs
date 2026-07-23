@@ -1,48 +1,57 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import assert from 'node:assert/strict';
 
-const shellSource = readFileSync(new URL('./app-shell.tsx', import.meta.url), 'utf8');
-const settingsSource = readFileSync(new URL('./ai-settings-panel.tsx', import.meta.url), 'utf8');
-const inspectorSource = readFileSync(new URL('../features/graph/node-inspector.tsx', import.meta.url), 'utf8');
-const cssSource = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+const readSource = (relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+const shellSource = readSource('./app-shell.tsx');
+const titleSource = readSource('./desktop-title-bar.tsx');
+const railSource = readSource('../features/workspace/workspace-rail.tsx');
+const artifactSource = readSource('../features/graph/artifact-pane.tsx');
+const noteSource = readSource('../features/graph/note-view.tsx');
+const inspectorSource = readSource('../features/graph/node-inspector.tsx');
 
-test('app shell follows the hand-drawn three-zone layout contract', () => {
-  assert.match(shellSource, /className="graph-menu"/);
-  assert.match(shellSource, /className="activity-rail"/);
-  assert.match(shellSource, /className="file-tree"/);
-  assert.match(shellSource, /className="main-artifact"/);
-  assert.match(inspectorSource, /className="agent-panel"/);
-  assert.match(settingsSource, /className="settings-panel"/);
+test('app shell composes the reference semantic zones', () => {
+  assert.match(shellSource, /<DesktopTitleBar/);
+  assert.match(shellSource, /<WorkspaceRail/);
+  assert.match(shellSource, /<ArtifactPane/);
+  assert.match(shellSource, /<NodeInspector/);
+  assert.match(titleSource, /data-wails-drag/);
+  assert.match(titleSource, /Workspace \{connected \? 'connected' : 'not connected'\}/);
+  assert.match(railSource, /aria-label="Workspace navigation"/);
+  assert.match(artifactSource, /aria-label="Workspace artifact"/);
+  assert.match(inspectorSource, /aria-label="Agent panel"/);
 });
 
-test('app shell keeps primary workspace actions reachable', () => {
+test('artifact pane keeps every real workspace action reachable', () => {
   for (const label of ['Open', 'Refresh', 'Source', 'Check', 'Import']) {
-    assert.match(shellSource + inspectorSource, new RegExp(`>${label}<`));
+    assert.match(artifactSource, new RegExp(`>${label}<`));
+  }
+  for (const callback of ['onChooseWorkspace', 'onRefreshGraph', 'onChooseSourcePath', 'onRunCheck', 'onImportSource']) {
+    assert.ok(artifactSource.includes(`onClick={${callback}}`));
   }
 });
 
-test('layout css defines desktop zones and compact fallbacks', () => {
-  assert.match(cssSource, /\.app-shell\s*{[^}]*grid-template-columns:\s*300px minmax\(520px, 1fr\) 360px/s);
-  assert.match(cssSource, /\.agent-panel\s*{/);
-  assert.match(cssSource, /\.graph-menu-settings\s*{[^}]*grid-row:\s*3/s);
-  assert.match(shellSource, /className="settings-icon"/);
-  assert.match(cssSource, /@media \(max-width: 1080px\)/);
-  assert.match(cssSource, /@media \(max-width: 760px\)/);
+test('graph and note remain real selectable artifact views', () => {
+  assert.match(artifactSource, /role="tablist"/);
+  assert.match(artifactSource, /role="tab"/);
+  assert.match(artifactSource, />\s*Graph\s*</);
+  assert.match(artifactSource, />\s*Note\s*</);
+  assert.match(artifactSource, /<GraphView/);
+  assert.match(artifactSource, /<NoteView/);
+  assert.match(noteSource, /noteState\.kind/);
+  assert.match(noteSource, /<pre>/);
 });
 
-test('settings owns local AI model controls', () => {
-  assert.match(shellSource, /aria-label="Settings"/);
-  assert.match(shellSource, /aria-expanded={settingsOpen}/);
-  assert.match(settingsSource, /aria-label="AI provider"/);
-  assert.match(settingsSource, /aria-label="AI model"/);
-  assert.match(settingsSource, /localStorage/);
-  assert.match(settingsSource, /provider:\s*'Local'/);
-  assert.doesNotMatch(inspectorSource, /aria-label="Model"/);
+test('tree and agent regions have explicit reopen controls', () => {
+  assert.match(railSource, /aria-label=\{open \? 'Close workspace tree' : 'Open workspace tree'\}/);
+  assert.match(shellSource, /aria-label="Open Agent panel"/);
+  assert.match(railSource, /aria-expanded=/);
+  assert.match(inspectorSource, /aria-label="Close Agent panel"/);
 });
 
-test('agent panel does not expose fake chat controls', () => {
-  assert.doesNotMatch(inspectorSource, /New chat/);
-  assert.doesNotMatch(inspectorSource, /Chat input/);
-  assert.doesNotMatch(inspectorSource, />Send</);
+test('production shell contains no sample workspace or hard-coded tree rows', () => {
+  const productionSources = [shellSource, railSource, artifactSource, noteSource, inspectorSource].join('\n');
+  assert.doesNotMatch(productionSources, /Sample graph|AI Social Impact|Ada Lovelace|ai-work-society/);
+  assert.doesNotMatch(railSource, /\[\s*['"]chapters['"]/);
+  assert.doesNotMatch(inspectorSource, /New chat|Chat input|>Send</);
 });

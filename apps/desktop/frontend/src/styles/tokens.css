@@ -1,0 +1,124 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter/Inter-Variable.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter/Inter-Medium.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  src: url('/fonts/source-serif-4/SourceSerif4-Variable.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono/JetBrainsMono-Variable.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/fonts/be-vietnam-pro/BeVietnamPro-Regular.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/fonts/be-vietnam-pro/BeVietnamPro-Bold.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+:root {
+  --bg: #0f0f10;
+  --surface: #1a1a1c;
+  --rail: #161617;
+  --rail-2: #121213;
+  --border: #2a2a2d;
+  --line-2: #222225;
+  --ink: #ededee;
+  --muted: #9a9a9e;
+  --accent: #e5b341;
+  --on-accent: #1b1505;
+  --success: #28c840;
+  --danger: #ff5f57;
+  --overlay: rgb(4 4 5 / 64%);
+  --selection: rgb(229 179 65 / 12%);
+  --focus-ring: rgb(229 179 65 / 44%);
+  --edge: rgb(237 237 238 / 5.5%);
+  --edge-focus: rgb(229 179 65 / 55%);
+  --node: #74747a;
+  --node-hub: #a9a9ae;
+  --node-person: #6f6b62;
+  --node-dim: #37373b;
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Source Serif 4', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-vietnamese: 'Be Vietnam Pro', sans-serif;
+  --title-height: 38px;
+  --activity-width: 46px;
+  --tree-width: 228px;
+  --agent-width: 344px;
+  --agent-collapsed-width: 50px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 18px;
+  --space-8: 20px;
+  --space-9: 32px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --duration-fast: 150ms;
+  --duration-state: 200ms;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+[data-theme='light'] {
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --rail: #f1f0ea;
+  --rail-2: #eae9e1;
+  --border: #e5e5e3;
+  --line-2: #e2e1da;
+  --ink: #111111;
+  --muted: #6b6b70;
+  --accent: #8a5e0a;
+  --on-accent: #ffffff;
+  --success: #147a2a;
+  --danger: #b42318;
+  --overlay: rgb(17 17 17 / 42%);
+  --selection: rgb(138 94 10 / 12%);
+  --focus-ring: rgb(138 94 10 / 38%);
+  --edge: rgb(0 0 0 / 10%);
+  --edge-focus: rgb(138 94 10 / 55%);
+  --node: #6a6a70;
+  --node-hub: #3c3c40;
+  --node-person: #8a8276;
+  --node-dim: #cfcfc8;
+}

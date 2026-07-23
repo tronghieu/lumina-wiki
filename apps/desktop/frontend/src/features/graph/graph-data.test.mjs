@@ -3,29 +3,45 @@ import { describe, it } from 'node:test';
 import {
   linkedNodeSelectionId,
   linkedNodes,
+  resolveGraphEmphasis,
   resolveSelectedNodeId,
-  sampleGraph,
-  searchGraph,
   toFlowEdges,
   toFlowNodes,
 } from './graph-data.ts';
 
+const sampleGraph = {
+  nodes: [
+    { id: 'ai-social-impact', title: 'AI Social Impact', type: 'source', path: 'sources/ai-social-impact.md', preview: 'Source note.' },
+    { id: 'ethics', title: 'Ethics', type: 'concept', path: 'concepts/ethics.md', preview: 'Ethics note.' },
+    { id: 'privacy', title: 'Privacy', type: 'concept', path: 'concepts/privacy.md', preview: 'Privacy note.' },
+    { id: 'education', title: 'Education', type: 'concept', path: 'concepts/education.md', preview: 'Education note.' },
+    { id: 'ada-lovelace', title: 'Ada Lovelace', type: 'person', path: 'people/ada-lovelace.md', preview: 'Person note.' },
+    { id: 'outputs/social-impact-brief', title: 'Social Impact Brief', type: 'output', path: 'outputs/social-impact-brief.md', preview: 'Output note.' },
+  ],
+  edges: [
+    { from: 'ai-social-impact', type: 'defines', to: 'ethics' },
+    { from: 'ai-social-impact', type: 'defines', to: 'privacy' },
+    { from: 'ai-social-impact', type: 'mentions', to: 'ada-lovelace' },
+    { from: 'ethics', type: 'related_to', to: 'privacy' },
+    { from: 'privacy', type: 'related_to', to: 'education' },
+    { from: 'ai-social-impact', type: 'produced', to: 'outputs/social-impact-brief' },
+  ],
+};
+
 describe('graph-data', () => {
-  it('filters nodes by title, type, and path', () => {
-    assert.deepEqual(searchGraph(sampleGraph, 'privacy').nodes.map((node) => node.id), ['privacy']);
-    assert.deepEqual(searchGraph(sampleGraph, 'people/').nodes.map((node) => node.id), ['ada-lovelace']);
-    assert.deepEqual(searchGraph(sampleGraph, 'concept').nodes.map((node) => node.id), ['ethics', 'privacy', 'education']);
+  it('dims nonmatches without deleting real graph data', () => {
+    const emphasis = resolveGraphEmphasis(sampleGraph, 'privacy', '');
+    assert.equal(emphasis.get('privacy'), 'match');
+    assert.equal(emphasis.get('education'), 'dim');
+    assert.equal(emphasis.size, sampleGraph.nodes.length);
   });
 
-  it('keeps only edges whose endpoints are visible after search', () => {
-    const filtered = searchGraph(sampleGraph, 'concept');
-    assert.deepEqual(filtered.edges.map((edge) => `${edge.from}:${edge.to}`), ['ethics:privacy', 'privacy:education']);
-  });
-
-  it('keeps the selected node visible when search would otherwise hide it', () => {
-    const filtered = searchGraph(sampleGraph, 'AI Social Impact', 'privacy');
-    assert.deepEqual(filtered.nodes.map((node) => node.id), ['ai-social-impact', 'privacy']);
-    assert.deepEqual(filtered.edges.map((edge) => `${edge.from}:${edge.to}`), ['ai-social-impact:privacy']);
+  it('keeps the selected node and its neighbors prominent during search', () => {
+    const emphasis = resolveGraphEmphasis(sampleGraph, 'education', 'ai-social-impact');
+    assert.equal(emphasis.get('ai-social-impact'), 'selected');
+    assert.equal(emphasis.get('education'), 'match');
+    assert.equal(emphasis.get('ethics'), 'neighbor');
+    assert.equal(emphasis.get('privacy'), 'neighbor');
   });
 
   it('returns sorted linked nodes for selected node', () => {
@@ -37,12 +53,15 @@ describe('graph-data', () => {
     ]);
   });
 
-  it('marks selected React Flow node and filters edge endpoints', () => {
-    const flowNodes = toFlowNodes(sampleGraph.nodes, 'privacy');
-    assert.equal(flowNodes.find((node) => node.id === 'privacy')?.className, 'flow-node selected');
+  it('marks selected flow nodes and emphasizes connected edges', () => {
+    const emphasis = resolveGraphEmphasis(sampleGraph, '', 'privacy');
+    const flowNodes = toFlowNodes(sampleGraph, emphasis);
+    assert.match(flowNodes.find((node) => node.id === 'privacy')?.className ?? '', /selected/);
+    assert.equal(flowNodes.every((node) => node.type === 'lumina'), true);
 
-    const visibleNodeIds = new Set(['ethics', 'privacy']);
-    assert.deepEqual(toFlowEdges(sampleGraph.edges, visibleNodeIds).map((edge) => edge.id), ['ethics-related_to-privacy']);
+    const flowEdges = toFlowEdges(sampleGraph.edges, emphasis);
+    assert.equal(flowEdges.length, sampleGraph.edges.length);
+    assert.match(flowEdges.find((edge) => edge.id === 'ethics-related_to-privacy')?.className ?? '', /focused/);
   });
 
   it('keeps a valid selected node or falls back to the first loaded node', () => {

@@ -1,6 +1,6 @@
-import { Background, Controls, MiniMap, ReactFlow, type NodeMouseHandler } from '@xyflow/react';
+import { Controls, ReactFlow, type NodeMouseHandler, type NodeProps } from '@xyflow/react';
 import { useMemo } from 'react';
-import { searchGraph, toFlowEdges, toFlowNodes } from './graph-data';
+import { resolveGraphEmphasis, toFlowEdges, toFlowNodes } from './graph-data';
 import type { KnowledgeGraph } from './graph-types';
 
 type GraphViewProps = {
@@ -11,10 +11,9 @@ type GraphViewProps = {
 };
 
 export function GraphView({ graph, query, selectedNodeId, onSelectNode }: GraphViewProps) {
-  const visibleGraph = useMemo(() => searchGraph(graph, query, selectedNodeId), [graph, query, selectedNodeId]);
-  const visibleNodeIds = useMemo(() => new Set(visibleGraph.nodes.map((node) => node.id)), [visibleGraph.nodes]);
-  const nodes = useMemo(() => toFlowNodes(visibleGraph.nodes, selectedNodeId), [visibleGraph.nodes, selectedNodeId]);
-  const edges = useMemo(() => toFlowEdges(visibleGraph.edges, visibleNodeIds), [visibleGraph.edges, visibleNodeIds]);
+  const emphasis = useMemo(() => resolveGraphEmphasis(graph, query, selectedNodeId), [graph, query, selectedNodeId]);
+  const nodes = useMemo(() => toFlowNodes(graph, emphasis), [graph, emphasis]);
+  const edges = useMemo(() => toFlowEdges(graph.edges, emphasis), [graph.edges, emphasis]);
 
   const handleNodeClick: NodeMouseHandler = (_, node) => {
     onSelectNode(node.id);
@@ -28,21 +27,42 @@ export function GraphView({ graph, query, selectedNodeId, onSelectNode }: GraphV
         fitViewOptions={{ padding: 0.22 }}
         minZoom={0.45}
         nodes={nodes}
+        nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
         onNodeClick={handleNodeClick}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#d7dce8" gap={28} />
-        <MiniMap pannable zoomable className="graph-minimap" />
         <Controls className="graph-controls" showInteractive={false} />
       </ReactFlow>
+      <ul className="graph-node-fallback" aria-label="Graph nodes">
+        {graph.nodes.map((node) => (
+          <li key={node.id}>
+            <button type="button" onClick={() => onSelectNode(node.id)}>
+              {node.title}
+            </button>
+          </li>
+        ))}
+      </ul>
       {nodes.length === 0 && (
         <div className="empty-state">
-          <strong>No nodes found</strong>
-          <span>Try a broader search.</span>
+          <strong>No graph nodes loaded</strong>
+          <span>Open a Lumina workspace to view its knowledge graph.</span>
         </div>
       )}
     </section>
+  );
+}
+
+const nodeTypes = {
+  lumina: LuminaGraphNode,
+};
+
+function LuminaGraphNode({ data }: NodeProps) {
+  return (
+    <div className="graph-node-content">
+      <span className="graph-node-dot" aria-hidden="true" />
+      <span className="graph-node-label">{String(data.label ?? '')}</span>
+    </div>
   );
 }

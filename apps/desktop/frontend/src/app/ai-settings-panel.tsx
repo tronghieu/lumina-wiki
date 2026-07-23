@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const AI_SETTINGS_STORAGE_KEY = 'lumina.desktop.aiSettings';
 const DEFAULT_AI_SETTINGS = {
@@ -52,41 +52,56 @@ function writeStoredAiSettings(settings: AiSettings) {
 
 export function AiSettingsPanel({ onClose }: AiSettingsPanelProps) {
   const [settings, setSettings] = useState(readStoredAiSettings);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     writeStoredAiSettings(settings);
   }, [settings]);
 
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
   return (
-    <section className="settings-panel" id="settings-panel" aria-label="Settings">
-      <header>
-        <div>
-          <h2>Settings</h2>
-          <span>AI model</span>
-        </div>
-        <button type="button" aria-label="Close settings" onClick={onClose}>x</button>
-      </header>
-      <label>
-        <span>Provider</span>
-        <select
-          aria-label="AI provider"
-          onChange={(event) => setSettings((current) => ({ ...current, provider: event.target.value }))}
-          value={settings.provider}
-        >
-          {AI_PROVIDERS.map((provider) => (
-            <option key={provider}>{provider}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        <span>Model</span>
-        <input
-          aria-label="AI model"
-          onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
-          placeholder="Model name"
-          value={settings.model}
-        />
-      </label>
-    </section>
+    <div className="settings-backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section
+        className="settings-panel"
+        id="settings-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
+        <header>
+          <div>
+            <h2 id="settings-title">Settings</h2>
+            <span>AI model</span>
+          </div>
+          <button ref={closeButtonRef} type="button" aria-label="Close settings" onClick={onClose}>×</button>
+        </header>
+        <label>
+          <span>Provider</span>
+          <select
+            aria-label="AI provider"
+            onChange={(event) => setSettings((current) => ({ ...current, provider: event.target.value }))}
+            value={settings.provider}
+          >
+            {AI_PROVIDERS.map((provider) => (
+              <option key={provider}>{provider}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Model</span>
+          <input
+            aria-label="AI model"
+            onChange={(event) => setSettings((current) => ({ ...current, model: event.target.value }))}
+            placeholder="Model name"
+            value={settings.model}
+          />
+        </label>
+      </section>
+    </div>
   );
 }

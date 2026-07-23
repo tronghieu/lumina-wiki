@@ -9,7 +9,7 @@ import type { CheckResult } from '../bindings/github.com/tronghieu/lumina-wiki/a
 import { RunCheck } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/service';
 import type { WorkspaceSummary } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
 import { Summary, Validate } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/service';
-import { resolveSelectedNodeId, sampleGraph } from './features/graph/graph-data';
+import { resolveSelectedNodeId } from './features/graph/graph-data';
 import type { KnowledgeGraph } from './features/graph/graph-types';
 import {
   noteUnavailableState,
@@ -31,11 +31,11 @@ import {
 
 function App() {
   const [query, setQuery] = useState('');
-  const [selectedNodeId, setSelectedNodeId] = useState(sampleGraph.nodes[0]?.id ?? '');
+  const [selectedNodeId, setSelectedNodeId] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [sourcePath, setSourcePath] = useState('');
   const [actionState, setActionState] = useState<WorkspaceActionState>(idleActionState);
-  const [graph, setGraph] = useState<KnowledgeGraph>(sampleGraph);
+  const [graph, setGraph] = useState<KnowledgeGraph>({ nodes: [], edges: [] });
   const [noteState, setNoteState] = useState<NoteContentState>(noteUnavailableState);
   const [lastCheckResult, setLastCheckResult] = useState<CheckResult | null>(null);
   const [workspaceSummary, setWorkspaceSummary] = useState<WorkspaceSummary | null>(null);
@@ -248,6 +248,7 @@ function App() {
       sourcePath={sourcePath}
       workspaceSummary={workspaceSummary}
       workspaceRoot={workspaceRoot}
+      workspaceTree={[]}
       onImportSource={importSource}
       onChooseSourcePath={chooseSourcePath}
       onChooseWorkspace={chooseWorkspace}
