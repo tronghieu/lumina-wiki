@@ -51,7 +51,8 @@ func TestLoadedRuntimeMissingEmbeddingConsentFallsBackWithoutCredentialOrSearch(
 	store := &runtimeSemanticStore{status: index.IndexStatus{State: index.StateReady, Chunks: 1, Vectors: 1, Dimensions: 8}}
 	chatProvider := &runtimeProviderSpy{events: []providers.StreamEvent{{Kind: providers.EventDelta, Delta: &providers.Delta{Text: "done"}}}}
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "embed-main")},
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "embed-main")},
 		Credentials: credentials, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return &runtimeHistorySpy{}, nil },
 		ProviderFactory: func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error) {
@@ -83,7 +84,8 @@ func TestLoadedRuntimeDynamicDimensionsRejectOversizedReadyStatusBeforeEmbedding
 	factoryCalls := 0
 	chatProvider := &runtimeProviderSpy{events: []providers.StreamEvent{{Kind: providers.EventDelta, Delta: &providers.Delta{Text: "done"}}}}
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: config}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: config}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return &runtimeHistorySpy{}, nil },
 		ProviderFactory: func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error) {
 			return chatProvider, nil

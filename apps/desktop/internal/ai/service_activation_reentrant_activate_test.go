@@ -64,6 +64,9 @@ func (registry *reentrantActivationErrorRegistry) Activate(_ session.WindowID, _
 func (*reentrantActivationErrorRegistry) Deactivate(session.WindowID, session.Reference) error {
 	return session.ErrInvalidSession
 }
+func (*reentrantActivationErrorRegistry) BeginDeactivate(session.WindowID, session.Reference) (func() error, error) {
+	return nil, session.ErrInvalidSession
+}
 func (*reentrantActivationErrorRegistry) BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error) {
 	return nil, nil, session.ErrInvalidSession
 }

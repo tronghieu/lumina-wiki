@@ -1,6 +1,9 @@
 package session
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 type cleanupAction struct {
 	cancels []context.CancelFunc
@@ -8,22 +11,39 @@ type cleanupAction struct {
 }
 
 func (registry *Registry) Deactivate(window WindowID, reference Reference) error {
+	finish, err := registry.BeginDeactivate(window, reference)
+	if err != nil {
+		return err
+	}
+	return finish()
+}
+
+// BeginDeactivate authenticates and retires a session before returning its
+// cleanup step. Callers may commit related lifecycle state before cleanup
+// invokes runtime code.
+func (registry *Registry) BeginDeactivate(window WindowID, reference Reference) (func() error, error) {
 	if window == 0 || !validSessionID(reference.SessionID) || reference.Generation == 0 {
-		return ErrInvalidSession
+		return nil, ErrInvalidSession
 	}
 	registry.mu.Lock()
 	session, ok := registry.resolveLocked(window, reference)
 	if !ok {
 		registry.mu.Unlock()
-		return ErrInvalidSession
+		return nil, ErrInvalidSession
 	}
 	delete(registry.current, window)
 	action := registry.retireLocked(session)
 	registry.mu.Unlock()
-	if registry.runCleanup(action) {
-		return ErrRuntimeClose
-	}
-	return nil
+	var once sync.Once
+	var cleanupErr error
+	return func() error {
+		once.Do(func() {
+			if registry.runCleanup(action) {
+				cleanupErr = ErrRuntimeClose
+			}
+		})
+		return cleanupErr
+	}, nil
 }
 
 func (registry *Registry) CloseWindow(window WindowID) error {

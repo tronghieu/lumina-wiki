@@ -81,6 +81,28 @@ func TestResolveLeaseDefersRuntimeClose(t *testing.T) {
 	}
 }
 
+func TestBeginDeactivateRetiresBeforeDeferredCleanupAndReportsCloseFailure(t *testing.T) {
+	registry := NewRegistry(Options{Random: entropy(1)})
+	runtime := &runtimeSpy{err: errors.New("close failed")}
+	capability := activate(t, registry, 1, runtime)
+	finish, err := registry.BeginDeactivate(1, capability.Reference())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.closeCount() != 0 {
+		t.Fatalf("cleanup ran before commit: %d", runtime.closeCount())
+	}
+	if _, err := registry.Resolve(1, capability.Reference()); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("retired capability resolved: %v", err)
+	}
+	if err := finish(); !errors.Is(err, ErrRuntimeClose) {
+		t.Fatalf("cleanup err=%v", err)
+	}
+	if err := finish(); !errors.Is(err, ErrRuntimeClose) || runtime.closeCount() != 1 {
+		t.Fatalf("repeated cleanup err=%v closes=%d", err, runtime.closeCount())
+	}
+}
+
 type reentrantRuntime struct {
 	registry *Registry
 	done     chan struct{}

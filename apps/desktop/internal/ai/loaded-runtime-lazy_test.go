@@ -25,7 +25,8 @@ func TestLoadedRuntimeFactoryLoadReadsOnlyTrustedRootIdentity(t *testing.T) {
 	credentials := &runtimeCredentialSpy{}
 	reads := 0
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: trust, Config: config, Credentials: credentials, HistoryBase: t.TempDir(),
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         trust, Config: config, Credentials: credentials, HistoryBase: t.TempDir(),
 		LexicalFactory: func(context.Context, string, os.FileInfo) (*retrieval.Lexical, error) {
 			reads++
 			return nil, nil
@@ -61,9 +62,10 @@ func TestLoadedRuntimeFactoryLoadReadsOnlyTrustedRootIdentity(t *testing.T) {
 
 func TestLoadedRuntimeFactoryRejectsInvalidDependenciesAndLoadSafely(t *testing.T) {
 	var typedNil *runtimeTrustSpy
-	base := LoadedRuntimeDependencies{Trust: &runtimeTrustSpy{}, Config: &runtimeConfigSpy{}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir()}
+	base := LoadedRuntimeDependencies{ConsentAccess: NewConsentAccessGate(), Trust: &runtimeTrustSpy{}, Config: &runtimeConfigSpy{}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir()}
 	for name, mutate := range map[string]func(*LoadedRuntimeDependencies){
 		"typed nil trust":  func(deps *LoadedRuntimeDependencies) { deps.Trust = typedNil },
+		"nil consent gate": func(deps *LoadedRuntimeDependencies) { deps.ConsentAccess = nil },
 		"nil config":       func(deps *LoadedRuntimeDependencies) { deps.Config = nil },
 		"nil credentials":  func(deps *LoadedRuntimeDependencies) { deps.Credentials = nil },
 		"relative history": func(deps *LoadedRuntimeDependencies) { deps.HistoryBase = "relative" },
@@ -93,7 +95,8 @@ func TestLoadedRuntimeFactoryRejectsInvalidDependenciesAndLoadSafely(t *testing.
 func TestLoadedRuntimeFactoryRejectsTypedNilRootProofWithoutPanic(t *testing.T) {
 	var proof *typedNilFileInfo
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{}, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -146,7 +146,8 @@ func newRuntimeForTest(t *testing.T, root string, config *runtimeConfigSpy, hist
 		t.Fatal(err)
 	}
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: config, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: config, Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return historyStore, nil },
 		ProviderFactory: func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error) {
 			return provider, nil

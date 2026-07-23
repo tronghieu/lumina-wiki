@@ -34,7 +34,7 @@ func TestLoadedRuntimeDefaultProviderResolvesCredentialOnlyInsideStream(t *testi
 	}}
 	proof := &runtimeTrustSpy{}
 	proof.proof, _ = os.Stat(root)
-	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{Trust: proof, Config: &runtimeConfigSpy{config: configValue},
+	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{ConsentAccess: NewConsentAccessGate(), Trust: proof, Config: &runtimeConfigSpy{config: configValue},
 		Credentials: credentials, Client: client, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return &runtimeHistorySpy{}, nil }})
 	if err != nil {

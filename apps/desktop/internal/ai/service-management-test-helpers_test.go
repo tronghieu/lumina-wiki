@@ -10,18 +10,23 @@ import (
 )
 
 type managementRuntimeStub struct {
-	mu              sync.Mutex
-	calls           int
-	tree            workspace.WorkspaceTree
-	enabled         bool
-	metadata        []history.ConversationMetadata
-	records         []history.ConversationRecord
-	deleteResult    history.DeleteResult
-	deleteAllResult history.DeleteAllResult
-	err             error
-	closeCalls      int
-	indexStatus     index.IndexStatus
-	indexCancelled  bool
+	mu                 sync.Mutex
+	calls              int
+	tree               workspace.WorkspaceTree
+	enabled            bool
+	metadata           []history.ConversationMetadata
+	records            []history.ConversationRecord
+	deleteResult       history.DeleteResult
+	deleteAllResult    history.DeleteAllResult
+	err                error
+	closeCalls         int
+	indexStatus        index.IndexStatus
+	indexCancelled     bool
+	consentSubject     embeddingConsentSubject
+	consentClearStatus index.IndexStatus
+	consentClearCalls  int
+	consentClearErr    error
+	consentMutation    chan struct{}
 }
 
 func (stub *managementRuntimeStub) called() {
@@ -75,6 +80,31 @@ func (stub *managementRuntimeStub) CancelIndex(context.Context, string) (bool, e
 func (stub *managementRuntimeStub) ClearIndex(context.Context, string) (index.IndexStatus, error) {
 	stub.called()
 	return stub.indexStatus, stub.err
+}
+func (stub *managementRuntimeStub) EmbeddingConsentSubject(context.Context, string) (embeddingConsentSubject, error) {
+	stub.called()
+	return stub.consentSubject, stub.err
+}
+func (stub *managementRuntimeStub) BeginConsentMutation(context.Context, string) (func(), error) {
+	stub.called()
+	if stub.err != nil {
+		return nil, stub.err
+	}
+	if stub.consentMutation != nil {
+		select {
+		case <-stub.consentMutation:
+		default:
+			close(stub.consentMutation)
+		}
+	}
+	return func() {}, nil
+}
+func (stub *managementRuntimeStub) ClearIndexForConsent(context.Context, string) (index.IndexStatus, error) {
+	stub.called()
+	stub.mu.Lock()
+	stub.consentClearCalls++
+	stub.mu.Unlock()
+	return stub.consentClearStatus, stub.consentClearErr
 }
 func (stub *managementRuntimeStub) Close() error {
 	stub.mu.Lock()

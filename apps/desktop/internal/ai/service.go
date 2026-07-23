@@ -2,10 +2,10 @@ package ai
 
 import (
 	"context"
-	"path"
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -15,17 +15,20 @@ import (
 )
 
 type Service struct {
-	windows     WindowResolver
-	native      NativeAuthority
-	validator   WorkspaceValidator
-	attacher    WorkspaceAttacher
-	runtimes    RuntimeFactory
-	sessions    SessionRegistry
-	streams     StreamSinkFactory
-	settings    SettingsRepository
-	credentials CredentialRepository
-	settingsMu  sync.Mutex
-	activations *activationGate
+	consentAccess   *ConsentAccessGate
+	windows         WindowResolver
+	native          NativeAuthority
+	validator       WorkspaceValidator
+	attacher        WorkspaceAttacher
+	runtimes        RuntimeFactory
+	sessions        SessionRegistry
+	streams         StreamSinkFactory
+	settings        SettingsRepository
+	credentials     CredentialRepository
+	settingsMu      sync.Mutex
+	consentCommitMu sync.Mutex
+	activations     *activationGate
+	now             func() time.Time
 }
 
 func NewService(dependencies Dependencies) (*Service, error) {
@@ -34,12 +37,21 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		nilLike(dependencies.Streams) || nilLike(dependencies.Settings) || nilLike(dependencies.Credentials) {
 		return nil, ErrInvalidInput
 	}
+	if err := validateConsentAccessComposition(dependencies); err != nil {
+		return nil, err
+	}
 	return &Service{
-		windows: dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
+		consentAccess: dependencies.ConsentAccess,
+		windows:       dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
 		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions, streams: dependencies.Streams,
 		settings: dependencies.Settings, credentials: dependencies.Credentials,
 		activations: newActivationGate(),
+		now:         defaultNow(dependencies.Now),
 	}, nil
+}
+
+func (service *Service) ServiceShutdown() error {
+	return Close(service)
 }
 
 func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (ActivationResult, error) {
@@ -67,7 +79,6 @@ func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (Activat
 	}
 	return service.activateApproved(lease, selection.Path)
 }
-
 func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRoot string) (ActivationResult, error) {
 	if !validTypedRoot(typedRoot) {
 		return ActivationResult{}, ErrInvalidInput
@@ -93,7 +104,6 @@ func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRo
 	}
 	return service.activateApproved(lease, typedRoot)
 }
-
 func (service *Service) resolveWindow(ctx context.Context) (session.WindowID, error) {
 	if service == nil || service.windows == nil || ctx == nil || ctx.Err() != nil {
 		return 0, ErrWindowUnavailable
@@ -179,18 +189,4 @@ func validRuntime(runtime session.Runtime) bool {
 	default:
 		return true
 	}
-}
-
-func displayBasename(root string) (string, error) {
-	normalized := strings.TrimRight(strings.ReplaceAll(root, `\`, "/"), "/")
-	label := path.Base(normalized)
-	if label == "" || label == "." || label == ".." || len(label) > 256 || !utf8.ValidString(label) || strings.ContainsAny(label, `/\`) {
-		return "", ErrWorkspaceAttach
-	}
-	for _, character := range label {
-		if !unicode.IsPrint(character) || unicode.Is(unicode.Cf, character) {
-			return "", ErrWorkspaceAttach
-		}
-	}
-	return label, nil
 }

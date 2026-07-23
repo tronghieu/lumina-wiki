@@ -2,8 +2,15 @@ package ai
 
 import (
 	"context"
+	"fmt"
+	"net/netip"
+	"net/url"
+	"strings"
+	"unicode"
 
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -88,6 +95,40 @@ func (authority *WailsNativeAuthority) ConfirmAttachDecision(ctx context.Context
 	return authority.ask(ctx, windowID, NativeQuestionSpec{
 		Title: title, Message: message, ApproveLabel: "Continue", CancelLabel: "Cancel",
 	})
+}
+
+func (authority *WailsNativeAuthority) ConfirmEmbeddingDisclosure(ctx context.Context, windowID session.WindowID, disclosure EmbeddingDisclosure) (bool, error) {
+	if !validEmbeddingDisclosure(disclosure) {
+		return false, ErrNativeAuthority
+	}
+	message := fmt.Sprintf("Embedding disclosure: %s\nProvider: %s (%s)\nModel: %s\nEndpoint: %s",
+		disclosure.Kind, disclosure.ProviderLabel, disclosure.ProviderKind, disclosure.Model, disclosure.EndpointOrigin)
+	return authority.ask(ctx, windowID, NativeQuestionSpec{Title: "Allow embedding processing?", Message: message,
+		ApproveLabel: "Allow Embeddings", CancelLabel: "Cancel"})
+}
+
+func validEmbeddingDisclosure(value EmbeddingDisclosure) bool {
+	if !profileIDPattern.MatchString(value.ProfileID) || value.ProviderLabel == "" || len(value.ProviderLabel) > settings.MaxLabelBytes ||
+		value.Model == "" || len(value.Model) > settings.MaxModelBytes || value.DisclosureVersion != index.CurrentDisclosureVersion ||
+		value.Kind != string(index.DisclosureRemote) && value.Kind != string(index.DisclosureLocal) ||
+		!safeDisclosureText(value.ProviderLabel) || !safeDisclosureText(value.Model) || !safeDisclosureText(value.ProviderKind) || !safeDisclosureText(value.EndpointOrigin) {
+		return false
+	}
+	kind := settings.ProviderKind(value.ProviderKind)
+	if kind != settings.ProviderOpenAI && kind != settings.ProviderGemini && kind != settings.ProviderOpenAICompatible && kind != settings.ProviderOllama {
+		return false
+	}
+	u, err := url.Parse(value.EndpointOrigin)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" && u.Path != "/" {
+		return false
+	}
+	address, parseErr := netip.ParseAddr(u.Hostname())
+	isLocal := parseErr == nil && address.IsLoopback()
+	return isLocal == (value.Kind == string(index.DisclosureLocal))
+}
+
+func safeDisclosureText(value string) bool {
+	return value != "" && strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || !unicode.IsPrint(r) || unicode.Is(unicode.Cf, r) }) < 0
 }
 
 func (authority *WailsNativeAuthority) ask(ctx context.Context, windowID session.WindowID, question NativeQuestionSpec) (bool, error) {

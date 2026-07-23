@@ -1,7 +1,7 @@
 # Lumina-Wiki — System Architecture
 
 **Document Type:** Locked v0.1 Architecture  
-**Last Updated:** 2026-05-06  
+**Last Updated:** 2026-07-23
 **Status:** Stable; breaking changes require SemVer major bump
 
 ---
@@ -51,6 +51,36 @@
 │     exemption globs; consumed by wiki.mjs + lint.mjs)    │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Optional Desktop Companion Boundary
+
+The Wails desktop app under [`apps/desktop/`](../apps/desktop/) is an optional
+client of a Lumina workspace, not a third installation layer. It does not alter
+the npm installer or the projected workspace payload. The Go backend owns
+native and AI authority; React consumes generated Wails bindings and remains a
+presentation client.
+
+- [`apps/desktop/main.go`](../apps/desktop/main.go) and
+  [`apps/desktop/ai-composition.go`](../apps/desktop/ai-composition.go) own
+  production composition and service registration.
+- Native workspace choice or confirmation produces a backend-issued,
+  window-bound session capability. Workspace reads resolve that capability
+  rather than trusting a frontend path, and AI operations treat the workspace
+  as immutable.
+- Settings, history, and derived indexes stay in desktop-owned local storage;
+  provider secrets stay in the operating-system keyring.
+- Lexical retrieval remains local. Embedding use is opt-in and guarded by
+  explicit consent before workspace text may be sent to the configured
+  embedding provider.
+- Chat and index work is cancellable. Session deactivation, window close, and
+  application shutdown retire capabilities and clean up active work.
+
+The backend contracts live in
+[`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React
+bindings live under
+[`apps/desktop/frontend/bindings/`](../apps/desktop/frontend/bindings/).
 
 ---
 

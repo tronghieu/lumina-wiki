@@ -90,3 +90,14 @@ type IndexStatusDTO struct {
 type IndexCancelResultDTO struct {
 	Cancelled bool `json:"cancelled"`
 }
+
+type EmbeddingConsentRequestDTO struct {
+	Session            SessionReferenceDTO `json:"session"`
+	EmbeddingProfileID string              `json:"embeddingProfileId"`
+}
+type EmbeddingConsentResultDTO struct {
+	ProfileID         string `json:"profileId"`
+	Granted           bool   `json:"granted"`
+	Kind              string `json:"kind"`
+	DisclosureVersion int    `json:"disclosureVersion"`
+}

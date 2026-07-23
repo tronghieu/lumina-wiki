@@ -16,6 +16,13 @@ func (runtime *loadedRuntime) RunChat(parent context.Context, request runtimeCha
 		return runtime.failPreflight(parent, request, sink, "runtime_closed", err, nil, false)
 	}
 	defer finish()
+	if request.Profiles.EmbeddingProfileID != "" {
+		finishConsentUse, gateErr := runtime.deps.ConsentAccess.BeginUse(ctx)
+		if gateErr != nil {
+			return runtime.failPreflight(ctx, request, sink, "embedding_consent_unavailable", gateErr, nil, false)
+		}
+		defer finishConsentUse()
+	}
 	config, err := runtime.deps.Config.Load()
 	if err != nil {
 		return runtime.failPreflight(ctx, request, sink, "config_unavailable", err, nil, false)

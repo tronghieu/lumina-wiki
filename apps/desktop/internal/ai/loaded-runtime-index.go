@@ -19,6 +19,7 @@ type runtimeIndexMutation struct {
 	profileID  string
 	generation uint64
 	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
 type runtimeIndexInput struct {
@@ -71,6 +72,11 @@ func (runtime *loadedRuntime) BuildIndex(parent context.Context, profileID strin
 		return index.IndexStatus{}, err
 	}
 	defer done()
+	finishConsentUse, err := runtime.deps.ConsentAccess.BeginUse(buildCtx)
+	if err != nil {
+		return index.IndexStatus{}, err
+	}
+	defer finishConsentUse()
 	input, err := runtime.indexInput(buildCtx, root, proof, profileID)
 	if err != nil {
 		return index.IndexStatus{}, err
@@ -78,7 +84,7 @@ func (runtime *loadedRuntime) BuildIndex(parent context.Context, profileID strin
 	var provider index.EmbeddingProvider
 	if len(input.chunks) > 0 {
 		provider, err = runtime.deps.EmbeddingProviderFactory(input.profile, index.FactoryOptions{WorkspaceID: runtime.id,
-			Config: input.config, Client: runtime.deps.Client, Credentials: runtime.deps.Credentials})
+			Config: input.config, Client: runtime.deps.Client, Credentials: runtime.deps.Credentials, Now: runtime.deps.Now})
 		if err != nil || nilLike(provider) {
 			return index.IndexStatus{}, ErrIndexUnavailable
 		}

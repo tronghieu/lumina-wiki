@@ -42,6 +42,7 @@ func TestEmbeddingConsentRoundTripAndOldConfigCompatibility(t *testing.T) {
 	config.EmbeddingConsents = []EmbeddingConsentGrant{{
 		WorkspaceID: "ws_0123456789abcdef0123456789abcdef",
 		Fingerprint: strings.Repeat("a", 64), DisclosureVersion: 1,
+		State:     EmbeddingConsentCommitted,
 		GrantedAt: time.Date(2026, 7, 12, 1, 2, 3, 0, time.UTC),
 		ExpiresAt: time.Date(2026, 8, 12, 1, 2, 3, 0, time.UTC),
 	}}
@@ -59,6 +60,23 @@ func TestEmbeddingConsentRoundTripAndOldConfigCompatibility(t *testing.T) {
 	}
 }
 
+func TestEmbeddingConsentMissingStateMigratesToCommittedAndPendingRoundTrips(t *testing.T) {
+	base := `{"schemaVersion":1,"embeddingConsents":[{"workspaceId":"ws_0123456789abcdef0123456789abcdef","fingerprint":"` + strings.Repeat("a", 64) + `","disclosureVersion":1,"grantedAt":"2026-07-12T01:02:03Z"}]}`
+	legacy, err := decodeConfig([]byte(base))
+	if err != nil || legacy.EmbeddingConsents[0].State != EmbeddingConsentCommitted {
+		t.Fatalf("legacy state=%#v err=%v", legacy.EmbeddingConsents, err)
+	}
+	legacy.EmbeddingConsents[0].State = EmbeddingConsentPending
+	raw, err := encodeConfig(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := decodeConfig(raw)
+	if err != nil || pending.EmbeddingConsents[0].State != EmbeddingConsentPending {
+		t.Fatalf("pending state=%#v err=%v", pending.EmbeddingConsents, err)
+	}
+}
+
 func TestEmbeddingConsentStrictValidation(t *testing.T) {
 	valid := EmbeddingConsentGrant{
 		WorkspaceID: "ws_0123456789abcdef0123456789abcdef",
@@ -71,6 +89,7 @@ func TestEmbeddingConsentStrictValidation(t *testing.T) {
 		"disclosure":  func(g *EmbeddingConsentGrant) { g.DisclosureVersion = 0 },
 		"granted":     func(g *EmbeddingConsentGrant) { g.GrantedAt = time.Time{} },
 		"expiry":      func(g *EmbeddingConsentGrant) { g.ExpiresAt = g.GrantedAt.Add(-time.Second) },
+		"state":       func(g *EmbeddingConsentGrant) { g.State = EmbeddingConsentState("unknown") },
 	} {
 		t.Run(name, func(t *testing.T) {
 			grant := valid

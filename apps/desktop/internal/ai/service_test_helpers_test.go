@@ -47,6 +47,9 @@ type nativeAuthorityStub struct {
 	directoryErr    error
 	attachDecision  bool
 	attachPromptErr error
+	embeddingOK     bool
+	embeddingErr    error
+	embeddingPrompt EmbeddingDisclosure
 }
 
 func (stub *nativeAuthorityStub) ChooseDirectory(context.Context, session.WindowID) (DirectorySelection, error) {
@@ -153,6 +156,14 @@ func (stub *registryStub) Deactivate(session.WindowID, session.Reference) error 
 	return stub.deactivateErr
 }
 
+func (stub *registryStub) BeginDeactivate(session.WindowID, session.Reference) (func() error, error) {
+	stub.log.add("deactivate")
+	if errors.Is(stub.deactivateErr, session.ErrInvalidSession) {
+		return nil, stub.deactivateErr
+	}
+	return func() error { return stub.deactivateErr }, nil
+}
+
 func (stub *registryStub) BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error) {
 	stub.log.add("begin-request")
 	return nil, nil, session.ErrInvalidSession
@@ -185,7 +196,7 @@ func newTestService(log *callLog) (*Service, *nativeAuthorityStub, *validatorStu
 	factory := &runtimeFactoryStub{log: log, runtime: &runtimeSpy{}}
 	registry := &registryStub{log: log, capability: session.Capability{SessionID: session.SessionID("sess_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), WorkspaceID: testWorkspaceID, Generation: 1, Display: session.DisplayMetadata{Label: "Nghiên cứu"}}}
 	settingsStore, credentials := defaultFacadeRepositories()
-	service, err := NewService(Dependencies{Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry, Streams: streamSinkFactoryStub{}, Settings: settingsStore, Credentials: credentials})
+	service, err := NewService(Dependencies{ConsentAccess: NewConsentAccessGate(), Windows: &windowResolverStub{log: log, window: 7}, Native: authority, Validator: validator, Attacher: attacher, Runtimes: factory, Sessions: registry, Streams: streamSinkFactoryStub{}, Settings: settingsStore, Credentials: credentials})
 	if err != nil {
 		panic(err)
 	}

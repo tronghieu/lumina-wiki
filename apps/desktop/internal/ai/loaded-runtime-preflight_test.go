@@ -89,7 +89,8 @@ func TestLoadedRuntimeRejectsRootReplacementBeforeProviderFactoryOrCredential(t 
 	provider := &runtimeProviderSpy{}
 	factoryCalls := 0
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "")},
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "")},
 		Credentials: credentials, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return &runtimeHistorySpy{}, nil },
 		ProviderFactory: func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error) {

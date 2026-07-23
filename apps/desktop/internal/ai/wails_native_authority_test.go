@@ -80,6 +80,46 @@ func TestWailsNativeConfirmationPromptsNeverContainCallerPath(t *testing.T) {
 	}
 }
 
+func TestWailsNativeEmbeddingDisclosurePromptIsOwnedAndSafe(t *testing.T) {
+	window := application.NewWindow(application.WebviewWindowOptions{Name: "consent-owner"})
+	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}
+	driver := &nativeDialogDriverStub{answer: true}
+	authority, _ := newWailsNativeAuthority(lookup, driver)
+	disclosure := EmbeddingDisclosure{ProfileID: "embed-main", ProviderLabel: "Local embeddings", ProviderKind: "ollama",
+		Model: "nomic-embed", EndpointOrigin: "http://127.0.0.1:11434", Kind: "local_cpu_disk", DisclosureVersion: 1}
+	approved, err := authority.ConfirmEmbeddingDisclosure(context.Background(), session.WindowID(window.ID()), disclosure)
+	if err != nil || !approved || len(driver.questions) != 1 {
+		t.Fatalf("approved=%v err=%v questions=%d", approved, err, len(driver.questions))
+	}
+	question := driver.questions[0]
+	if question.Window != window || !strings.Contains(question.Message, "local_cpu_disk") || !strings.Contains(question.Message, disclosure.EndpointOrigin) || strings.Contains(question.Message, "credential") || strings.Contains(question.Message, "token") {
+		t.Fatalf("question=%#v", question)
+	}
+}
+
+func TestWailsNativeRejectsInvalidEmbeddingDisclosure(t *testing.T) {
+	window := application.NewWindow(application.WebviewWindowOptions{Name: "consent-invalid"})
+	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}
+	driver := &nativeDialogDriverStub{answer: true}
+	authority, _ := newWailsNativeAuthority(lookup, driver)
+	invalid := EmbeddingDisclosure{ProfileID: "embed-main", ProviderLabel: "Provider", ProviderKind: "ollama", Model: "model",
+		EndpointOrigin: "http://user:secret@127.0.0.1/private", Kind: "local_cpu_disk", DisclosureVersion: 1}
+	if _, err := authority.ConfirmEmbeddingDisclosure(context.Background(), session.WindowID(window.ID()), invalid); !errors.Is(err, ErrNativeAuthority) {
+		t.Fatalf("err=%v", err)
+	}
+	if len(driver.questions) != 0 {
+		t.Fatal("invalid disclosure prompted")
+	}
+	invalid = EmbeddingDisclosure{ProfileID: "embed-main", ProviderLabel: "safe\u202eevil", ProviderKind: "ollama", Model: "model",
+		EndpointOrigin: "http://127.0.0.1:11434", Kind: "local_cpu_disk", DisclosureVersion: 1}
+	if _, err := authority.ConfirmEmbeddingDisclosure(context.Background(), session.WindowID(window.ID()), invalid); !errors.Is(err, ErrNativeAuthority) {
+		t.Fatalf("bidi err=%v", err)
+	}
+	if len(driver.questions) != 0 {
+		t.Fatal("bidi disclosure prompted")
+	}
+}
+
 func TestWailsNativeMapsOnlySensitiveAttachKindsToStablePrompts(t *testing.T) {
 	window := application.NewWindow(application.WebviewWindowOptions{Name: "decision-owner"})
 	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}

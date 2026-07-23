@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Chat orchestration and Wails streaming"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [1, 2, 3, 4]
@@ -80,13 +80,13 @@ The phase-5 Wails facade is the sole composition owner. Its complete exported su
 
 ## Interface and Function Checklist
 
-- [ ] `ContextBuilder.Build`, `EvidenceAllowlist.Resolve`, `Orchestrator.Chat`.
-- [ ] `TerminalGuard.Emit` owns sequence and rejects late/duplicate terminals.
-- [ ] `Service.ChooseAndActivateWorkspace` and `ConfirmAndActivateWorkspace` create a window-bound capability/generation only after trusted native user action; all read APIs resolve it rather than accepting a root.
-- [ ] `Service.Chat` validates sizes/IDs/session and returns only safe completion metadata; `CancelChat` is idempotent and request-scoped.
-- [ ] Complete facade includes settings, credential challenge, history, index, tree, chat/cancel, and broad citation-read methods before bindings regenerate.
-- [ ] `WailsStreamSink` is the sole Wails-specific event adapter; domain tests inject memory sink.
-- [ ] DTO/error serialization contains no credentials, raw provider body, prompt, excerpt, or transcript.
+- [x] `ContextBuilder.Build`, `EvidenceAllowlist.Resolve`, `Orchestrator.Chat`.
+- [x] `TerminalGuard.Emit` owns sequence and rejects late/duplicate terminals.
+- [x] `Service.ChooseAndActivateWorkspace` and `ConfirmAndActivateWorkspace` create a window-bound capability/generation only after trusted native user action; all read APIs resolve it rather than accepting a root.
+- [x] `Service.Chat` validates sizes/IDs/session and returns only safe completion metadata; `CancelChat` is idempotent and request-scoped.
+- [x] Complete facade includes settings, credential challenge, history, index, tree, chat/cancel, and broad citation-read methods before bindings regenerate.
+- [x] `WailsStreamSink` is the sole Wails-specific event adapter; domain tests inject memory sink.
+- [x] DTO/error serialization contains no credentials, raw provider body, prompt, excerpt, or transcript.
 
 ## Dependency Map
 
@@ -111,21 +111,21 @@ Keep Wails emission out of domain orchestration. Keep `main.go` construction-onl
 
 ## Implementation Steps
 
-- [ ] Write context budget/injection/citation allowlist tests; run RED; implement context and citations; run GREEN.
-- [ ] Commit: `feat(desktop): build bounded cited chat context`.
-- [ ] Write provider/fallback/retry/history orchestration tests; run RED; implement orchestrator; run GREEN.
-- [ ] Write stream race/concurrency/window-close tests; run RED; implement terminal guard and Wails sink; run GREEN/race.
-- [ ] Write forged/stale/cross-window/direct-root capability, native-denial, and explicit-cancel handshake tests; run RED; implement trusted activation registry and request cancellation; run GREEN/race.
-- [ ] Commit: `feat(desktop): orchestrate cancellable chat streams`.
-- [ ] Write complete Wails facade serialization/validation tests for every listed method; run RED; implement facade and sole `main.go` registration; run GREEN.
-- [ ] Regenerate bindings, inspect for secret fields/getters, run TS build/full Go regression.
-- [ ] Commit: `feat(desktop): expose safe AI service bindings`.
+- [x] Write context budget/injection/citation allowlist tests; run RED; implement context and citations; run GREEN.
+- [x] Commit: `feat(desktop): build bounded cited chat context` (`9031d05`).
+- [x] Write provider/fallback/retry/history orchestration tests; run RED; implement orchestrator; run GREEN.
+- [x] Write stream race/concurrency/window-close tests; run RED; implement terminal guard and Wails sink; run GREEN/race.
+- [x] Write forged/stale/cross-window/direct-root capability, native-denial, and explicit-cancel handshake tests; run RED; implement trusted activation registry and request cancellation; run GREEN/race.
+- [x] Commit: `feat(desktop): orchestrate cancellable chat streams` (`f4531d9`).
+- [x] Write complete Wails facade serialization/validation tests for every listed method; run RED; implement facade and sole `main.go` registration; run GREEN.
+- [x] Regenerate bindings, inspect for secret fields/getters, run TS build/full Go regression.
+- [x] Expose the safe AI facade through focused checkpoints (`fe4a11c` through `3ffec62`).
 
 ## Success Criteria
 
-- [ ] Every request produces ordered events and one terminal event under race tests.
-- [ ] Only current allowlisted evidence becomes a citation path; prompt-injection fixtures cannot request tools or secrets.
-- [ ] Chat/retrieval/history leaves workspace manifest byte-identical and sanitized errors pass scans.
+- [x] Every request produces ordered events and one terminal event under race tests.
+- [x] Only current allowlisted evidence becomes a citation path; prompt-injection fixtures cannot request tools or secrets.
+- [x] Chat/retrieval/history leaves workspace manifest byte-identical and sanitized errors pass scans.
 
 ## Security, Risks, and Rollback
 

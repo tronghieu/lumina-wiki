@@ -24,6 +24,7 @@ type activationLease struct {
 	gate       *activationGate
 	window     session.WindowID
 	generation uint64
+	parent     context.Context
 	ctx        context.Context
 	cancel     context.CancelFunc
 	committing bool
@@ -34,8 +35,11 @@ func newActivationGate() *activationGate {
 }
 
 func (gate *activationGate) Acquire(parent context.Context, window session.WindowID) (*activationLease, error) {
-	if gate == nil || parent == nil || parent.Err() != nil || window == 0 {
+	if gate == nil || parent == nil || window == 0 {
 		return nil, ErrWindowUnavailable
+	}
+	if err := parent.Err(); err != nil {
+		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
 	gate.mu.Lock()
@@ -56,7 +60,7 @@ func (gate *activationGate) Acquire(parent context.Context, window session.Windo
 	}
 	state.generation++
 	lease := &activationLease{gate: gate, window: window, generation: state.generation,
-		ctx: ctx, cancel: cancel}
+		parent: parent, ctx: ctx, cancel: cancel}
 	state.active = lease
 	gate.mu.Unlock()
 	return lease, nil
@@ -70,7 +74,13 @@ func (lease *activationLease) Context() context.Context {
 }
 
 func (lease *activationLease) Validate() error {
-	if lease == nil || lease.ctx == nil || lease.ctx.Err() != nil {
+	if lease == nil || lease.ctx == nil || lease.parent == nil {
+		return ErrWindowUnavailable
+	}
+	if err := lease.parent.Err(); err != nil {
+		return err
+	}
+	if lease.ctx.Err() != nil {
 		return ErrWindowUnavailable
 	}
 	gate := lease.gate
@@ -99,6 +109,23 @@ func (lease *activationLease) Finish() {
 		gate.mu.Unlock()
 		lease.cancel()
 	})
+}
+
+func (gate *activationGate) Invalidate(window session.WindowID) {
+	var cancel context.CancelFunc
+	gate.mu.Lock()
+	state := gate.windows[window]
+	if state != nil {
+		state.generation++
+		if state.active != nil {
+			cancel = state.active.cancel
+			state.active = nil
+		}
+	}
+	gate.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (gate *activationGate) CloseWindow(window session.WindowID) {

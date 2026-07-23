@@ -1,7 +1,7 @@
 ---
 title: "Lumina Desktop AI workspace redesign"
 description: "Reference-faithful Wails desktop shell with secure provider chat, local history, and opt-in hybrid retrieval over immutable Lumina workspaces."
-status: pending
+status: in-progress
 priority: P1
 effort: "28d"
 branch: "feat/lumina-desktop-wails"
@@ -37,10 +37,12 @@ Production-port `Lumina Desktop.dc.html` tokens and hierarchy while preserving r
 | 2 | [Streaming chat provider adapters](./phase-02-streaming-chat-provider-adapters.md) | Completed |
 | 3 | [Workspace corpus and lexical retrieval](./phase-03-workspace-corpus-and-lexical-retrieval.md) | Completed |
 | 4 | [Semantic embeddings and hybrid index](./phase-04-semantic-embeddings-and-hybrid-index.md) | Completed |
-| 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Pending |
+| 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Completed |
 | 6 | [Reference-faithful workspace shell](./phase-06-reference-faithful-workspace-shell.md) | Pending |
 | 7 | [Agent chat and settings integration](./phase-07-agent-chat-and-settings-integration.md) | Pending |
 | 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | Pending |
+
+**Progress:** 87/140 checklist items complete (62.1%); 5/8 phases complete (62.5%).
 
 ## Dependencies
 

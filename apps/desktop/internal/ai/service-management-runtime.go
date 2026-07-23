@@ -28,6 +28,9 @@ type managementCapableRuntime interface {
 	BuildIndex(context.Context, string) (index.IndexStatus, error)
 	CancelIndex(context.Context, string) (bool, error)
 	ClearIndex(context.Context, string) (index.IndexStatus, error)
+	EmbeddingConsentSubject(context.Context, string) (embeddingConsentSubject, error)
+	BeginConsentMutation(context.Context, string) (func(), error)
+	ClearIndexForConsent(context.Context, string) (index.IndexStatus, error)
 }
 
 func (service *Service) resolveManagement(ctx context.Context, reference SessionReferenceDTO) (managementCapableRuntime, *session.RuntimeLease, error) {
@@ -40,6 +43,13 @@ func (service *Service) resolveManagement(ctx context.Context, reference Session
 	window, err := service.resolveWindow(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	return service.resolveManagementWindow(ctx, window, reference)
+}
+
+func (service *Service) resolveManagementWindow(ctx context.Context, window session.WindowID, reference SessionReferenceDTO) (managementCapableRuntime, *session.RuntimeLease, error) {
+	if service == nil || service.sessions == nil || ctx == nil || ctx.Err() != nil || window == 0 || !validSessionReferenceSyntax(reference) {
+		return nil, nil, ErrInvalidInput
 	}
 	lease, err := service.sessions.Resolve(window, reference.sessionReference())
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
@@ -40,7 +41,7 @@ type loadedRuntime struct {
 }
 
 func NewLoadedRuntimeFactory(deps LoadedRuntimeDependencies) (*LoadedRuntimeFactory, error) {
-	if nilLike(deps.Trust) || nilLike(deps.Config) || nilLike(deps.Credentials) ||
+	if nilLike(deps.ConsentAccess) || nilLike(deps.Trust) || nilLike(deps.Config) || nilLike(deps.Credentials) ||
 		deps.HistoryBase == "" || !filepath.IsAbs(deps.HistoryBase) {
 		return nil, ErrInvalidInput
 	}
@@ -76,7 +77,17 @@ func NewLoadedRuntimeFactory(deps LoadedRuntimeDependencies) (*LoadedRuntimeFact
 			return index.NewEmbeddingProvider(profile, options)
 		}
 	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
 	return &LoadedRuntimeFactory{deps: deps}, nil
+}
+
+func (factory *LoadedRuntimeFactory) ConsentAccessGate() *ConsentAccessGate {
+	if factory == nil {
+		return nil
+	}
+	return factory.deps.ConsentAccess
 }
 
 func (factory *LoadedRuntimeFactory) Load(ctx context.Context, id workspaceid.WorkspaceID, root string) (session.Runtime, error) {

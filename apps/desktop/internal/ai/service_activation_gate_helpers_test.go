@@ -68,6 +68,10 @@ func (authority *blockingActivationAuthority) ConfirmAttachDecision(context.Cont
 	return true, nil
 }
 
+func (*blockingActivationAuthority) ConfirmEmbeddingDisclosure(context.Context, session.WindowID, EmbeddingDisclosure) (bool, error) {
+	return true, nil
+}
+
 func (authority *blockingActivationAuthority) calls() int {
 	authority.mu.Lock()
 	defer authority.mu.Unlock()
@@ -116,6 +120,10 @@ func (registry *blockingSessionRegistry) Deactivate(window session.WindowID, ref
 		return registry.deactivateErr
 	}
 	return registry.inner.Deactivate(window, reference)
+}
+
+func (registry *blockingSessionRegistry) BeginDeactivate(window session.WindowID, reference session.Reference) (func() error, error) {
+	return registry.inner.BeginDeactivate(window, reference)
 }
 
 func (registry *blockingSessionRegistry) BeginRequest(ctx context.Context, window session.WindowID, reference session.Reference, requestID string) (context.Context, *session.RequestLease, error) {

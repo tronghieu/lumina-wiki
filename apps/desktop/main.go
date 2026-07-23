@@ -3,7 +3,10 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
+	desktopai "github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
 	desktopgraph "github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
 	desktopimporter "github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer"
 	desktoptools "github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools"
@@ -16,11 +19,12 @@ var assets embed.FS
 
 func main() {
 	info := appInfo()
+	workspaceService := desktopworkspace.NewService()
 	app := application.New(application.Options{
 		Name:        info.Name,
 		Description: info.Description,
 		Services: []application.Service{
-			application.NewService(desktopworkspace.NewService()),
+			application.NewService(workspaceService),
 			application.NewService(desktopgraph.NewService()),
 			application.NewService(desktoptools.NewService()),
 			application.NewService(desktopimporter.NewService()),
@@ -32,8 +36,17 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+	configBase, err := os.UserConfigDir()
+	if err != nil {
+		log.Fatal("Lumina Desktop could not open its private settings directory")
+	}
+	aiService, err := newAIService(app, workspaceService, configBase)
+	if err != nil {
+		log.Fatal("Lumina Desktop AI service could not start")
+	}
+	app.RegisterService(application.NewService(aiService))
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: info.Name,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
@@ -42,6 +55,9 @@ func main() {
 		},
 		BackgroundColour: application.NewRGB(247, 248, 252),
 		URL:              "/",
+	})
+	registerAIWindowCleanup(window, func(windowID session.WindowID) error {
+		return desktopai.CloseWindow(aiService, windowID)
 	})
 
 	if err := app.Run(); err != nil {

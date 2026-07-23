@@ -73,7 +73,7 @@ func RequireConsent(config settings.Config, workspace workspaceid.WorkspaceID, p
 		return err
 	}
 	for _, grant := range config.EmbeddingConsents {
-		if grant.WorkspaceID == string(workspace) && grant.Fingerprint == disclosure.Fingerprint && grant.DisclosureVersion == disclosure.Version && !now.Before(grant.GrantedAt) && grant.RevokedAt.IsZero() && (grant.ExpiresAt.IsZero() || now.Before(grant.ExpiresAt)) {
+		if grant.WorkspaceID == string(workspace) && grant.Fingerprint == disclosure.Fingerprint && grant.DisclosureVersion == disclosure.Version && grant.State == settings.EmbeddingConsentCommitted && !now.Before(grant.GrantedAt) && grant.RevokedAt.IsZero() && (grant.ExpiresAt.IsZero() || now.Before(grant.ExpiresAt)) {
 			return nil
 		}
 	}
@@ -81,6 +81,14 @@ func RequireConsent(config settings.Config, workspace workspaceid.WorkspaceID, p
 }
 
 func GrantConsent(config settings.Config, workspace workspaceid.WorkspaceID, profile settings.Profile, grantedAt, expiresAt time.Time) (settings.Config, error) {
+	return putConsent(config, workspace, profile, grantedAt, expiresAt, settings.EmbeddingConsentCommitted)
+}
+
+func StageConsent(config settings.Config, workspace workspaceid.WorkspaceID, profile settings.Profile, grantedAt, expiresAt time.Time) (settings.Config, error) {
+	return putConsent(config, workspace, profile, grantedAt, expiresAt, settings.EmbeddingConsentPending)
+}
+
+func putConsent(config settings.Config, workspace workspaceid.WorkspaceID, profile settings.Profile, grantedAt, expiresAt time.Time, state settings.EmbeddingConsentState) (settings.Config, error) {
 	config, err := config.Normalized()
 	if err != nil {
 		return settings.Config{}, err
@@ -89,7 +97,7 @@ func GrantConsent(config settings.Config, workspace workspaceid.WorkspaceID, pro
 	if err != nil || grantedAt.IsZero() || !expiresAt.IsZero() && !expiresAt.After(grantedAt) {
 		return settings.Config{}, errors.New("embedding consent grant is invalid")
 	}
-	grant := settings.EmbeddingConsentGrant{WorkspaceID: string(workspace), Fingerprint: disclosure.Fingerprint, DisclosureVersion: disclosure.Version, GrantedAt: grantedAt.UTC(), ExpiresAt: expiresAt.UTC()}
+	grant := settings.EmbeddingConsentGrant{WorkspaceID: string(workspace), Fingerprint: disclosure.Fingerprint, DisclosureVersion: disclosure.Version, State: state, GrantedAt: grantedAt.UTC(), ExpiresAt: expiresAt.UTC()}
 	filtered := config.EmbeddingConsents[:0]
 	for _, existing := range config.EmbeddingConsents {
 		if existing.WorkspaceID != grant.WorkspaceID || existing.Fingerprint != grant.Fingerprint {
@@ -98,6 +106,28 @@ func GrantConsent(config settings.Config, workspace workspaceid.WorkspaceID, pro
 	}
 	config.EmbeddingConsents = append(filtered, grant)
 	return config.Normalized()
+}
+
+func CommitConsent(config settings.Config, workspace workspaceid.WorkspaceID, profile settings.Profile) (settings.Config, error) {
+	config, err := config.Normalized()
+	if err != nil {
+		return settings.Config{}, err
+	}
+	disclosure, err := ConsentFingerprint(workspace, profile)
+	if err != nil {
+		return settings.Config{}, errors.New("embedding consent commit is invalid")
+	}
+	for i := range config.EmbeddingConsents {
+		grant := &config.EmbeddingConsents[i]
+		if grant.WorkspaceID == string(workspace) && grant.Fingerprint == disclosure.Fingerprint {
+			if grant.State != settings.EmbeddingConsentPending {
+				return settings.Config{}, errors.New("embedding consent commit is invalid")
+			}
+			grant.State = settings.EmbeddingConsentCommitted
+			return config.Normalized()
+		}
+	}
+	return settings.Config{}, ErrConsentRequired
 }
 
 func RevokeConsent(config settings.Config, workspace workspaceid.WorkspaceID, profile settings.Profile, revokedAt time.Time) (settings.Config, error) {

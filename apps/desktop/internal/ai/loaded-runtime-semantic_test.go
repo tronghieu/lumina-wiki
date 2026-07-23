@@ -164,7 +164,8 @@ func semanticRuntimeWithFactories(t *testing.T, root string, store SemanticStore
 	proof, _ := os.Stat(root)
 	provider := &runtimeProviderSpy{events: []providers.StreamEvent{{Kind: providers.EventDelta, Delta: &providers.Delta{Text: "done"}}}}
 	factory, err := NewLoadedRuntimeFactory(LoadedRuntimeDependencies{
-		Trust: &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "embed-main")},
+		ConsentAccess: NewConsentAccessGate(),
+		Trust:         &runtimeTrustSpy{proof: proof}, Config: &runtimeConfigSpy{config: runtimeConfig("chat-main", "embed-main")},
 		Credentials: &runtimeCredentialSpy{}, HistoryBase: t.TempDir(),
 		HistoryFactory: func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error) { return &runtimeHistorySpy{}, nil },
 		ProviderFactory: func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error) {

@@ -57,7 +57,7 @@ func (runtime *loadedRuntime) semanticConfig(ctx context.Context, config setting
 		return result, nil
 	}
 	provider, err := runtime.deps.EmbeddingProviderFactory(*config.Embedding, index.FactoryOptions{
-		WorkspaceID: runtime.id, Config: config, Client: runtime.deps.Client, Credentials: runtime.deps.Credentials})
+		WorkspaceID: runtime.id, Config: config, Client: runtime.deps.Client, Credentials: runtime.deps.Credentials, Now: runtime.deps.Now})
 	if err != nil || nilLike(provider) {
 		result.SemanticSetupError = retrieval.ErrSemanticUnavailable
 		return result, nil

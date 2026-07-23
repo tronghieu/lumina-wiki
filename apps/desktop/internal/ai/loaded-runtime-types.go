@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
@@ -56,6 +57,7 @@ type SemanticStoreFactory func(workspaceid.WorkspaceID) (RuntimeSemanticStore, e
 type EmbeddingProviderFactory func(settings.Profile, index.FactoryOptions) (index.EmbeddingProvider, error)
 
 type LoadedRuntimeDependencies struct {
+	ConsentAccess            *ConsentAccessGate
 	Trust                    RootTrustProvider
 	Config                   ConfigReader
 	Credentials              CredentialResolver
@@ -68,4 +70,5 @@ type LoadedRuntimeDependencies struct {
 	SemanticStoreFactory     SemanticStoreFactory
 	EmbeddingProviderFactory EmbeddingProviderFactory
 	Tree                     TrustedTreeBuilder
+	Now                      func() time.Time
 }

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/secrets"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
@@ -73,6 +74,17 @@ type NativeAuthority interface {
 	ChooseDirectory(context.Context, session.WindowID) (DirectorySelection, error)
 	ConfirmDirectory(context.Context, session.WindowID, string) (bool, error)
 	ConfirmAttachDecision(context.Context, session.WindowID, workspaceid.AttachKind) (bool, error)
+	ConfirmEmbeddingDisclosure(context.Context, session.WindowID, EmbeddingDisclosure) (bool, error)
+}
+
+type EmbeddingDisclosure struct {
+	ProfileID         string
+	ProviderLabel     string
+	ProviderKind      string
+	Model             string
+	EndpointOrigin    string
+	Kind              string
+	DisclosureVersion int
 }
 
 type WorkspaceValidator interface {
@@ -92,6 +104,7 @@ type RuntimeFactory interface {
 type SessionRegistry interface {
 	Activate(session.WindowID, workspaceid.WorkspaceID, session.DisplayMetadata, session.Runtime) (session.Capability, error)
 	Deactivate(session.WindowID, session.Reference) error
+	BeginDeactivate(session.WindowID, session.Reference) (func() error, error)
 	BeginRequest(context.Context, session.WindowID, session.Reference, string) (context.Context, *session.RequestLease, error)
 	Resolve(session.WindowID, session.Reference) (*session.RuntimeLease, error)
 	CancelRequest(session.WindowID, session.Reference, string) error
@@ -112,13 +125,15 @@ type CredentialRepository interface {
 }
 
 type Dependencies struct {
-	Windows     WindowResolver
-	Native      NativeAuthority
-	Validator   WorkspaceValidator
-	Attacher    WorkspaceAttacher
-	Runtimes    RuntimeFactory
-	Sessions    SessionRegistry
-	Streams     StreamSinkFactory
-	Settings    SettingsRepository
-	Credentials CredentialRepository
+	ConsentAccess *ConsentAccessGate
+	Windows       WindowResolver
+	Native        NativeAuthority
+	Validator     WorkspaceValidator
+	Attacher      WorkspaceAttacher
+	Runtimes      RuntimeFactory
+	Sessions      SessionRegistry
+	Streams       StreamSinkFactory
+	Settings      SettingsRepository
+	Credentials   CredentialRepository
+	Now           func() time.Time
 }

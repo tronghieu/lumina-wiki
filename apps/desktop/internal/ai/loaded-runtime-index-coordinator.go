@@ -7,6 +7,7 @@ type runtimeIndexMutationKind uint8
 const (
 	runtimeIndexMutationBuild runtimeIndexMutationKind = iota + 1
 	runtimeIndexMutationClear
+	runtimeIndexMutationConsent
 )
 
 func (runtime *loadedRuntime) indexBuilding(profileID string) bool {
@@ -35,7 +36,7 @@ func (runtime *loadedRuntime) startIndexMutation(parent context.Context, kind ru
 	if kind == runtimeIndexMutationBuild {
 		ctx, cancel = context.WithCancel(parent)
 	}
-	mutation := &runtimeIndexMutation{kind: kind, profileID: profileID, generation: runtime.indexGeneration, cancel: cancel}
+	mutation := &runtimeIndexMutation{kind: kind, profileID: profileID, generation: runtime.indexGeneration, cancel: cancel, done: make(chan struct{})}
 	runtime.indexMutation = mutation
 	return ctx, func() {
 		if cancel != nil {
@@ -44,6 +45,7 @@ func (runtime *loadedRuntime) startIndexMutation(parent context.Context, kind ru
 		runtime.indexMu.Lock()
 		if runtime.indexMutation == mutation && runtime.indexMutation.generation == mutation.generation {
 			runtime.indexMutation = nil
+			close(mutation.done)
 		}
 		runtime.indexMu.Unlock()
 	}, nil

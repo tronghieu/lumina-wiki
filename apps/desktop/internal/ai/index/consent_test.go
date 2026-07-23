@@ -74,6 +74,25 @@ func TestConsentRequiresExactCurrentUnexpiredGrant(t *testing.T) {
 	}
 }
 
+func TestPendingConsentNeverAuthorizesEmbedding(t *testing.T) {
+	now := time.Date(2026, 7, 12, 1, 0, 0, 0, time.UTC)
+	profile := embeddingProfile(settings.ProviderOpenAI, "https://api.example.com/v1")
+	pending, err := StageConsent(settings.DefaultConfig(), testWorkspace, profile, now, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireConsent(pending, testWorkspace, profile, now); !errors.Is(err, ErrConsentRequired) {
+		t.Fatalf("pending consent authorized embedding: %v", err)
+	}
+	committed, err := CommitConsent(pending, testWorkspace, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireConsent(committed, testWorkspace, profile, now); err != nil {
+		t.Fatalf("committed consent rejected: %v", err)
+	}
+}
+
 func TestGrantConsentPreservesProfilesAndReplacesSameGrant(t *testing.T) {
 	now := time.Date(2026, 7, 12, 1, 0, 0, 0, time.UTC)
 	profile := embeddingProfile(settings.ProviderOpenAI, "https://api.example.com/v1")
