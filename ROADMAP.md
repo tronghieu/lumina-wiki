@@ -26,6 +26,10 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - ~~**Schema Parity:** Standardize cross-source ID handling across all core and research skills.~~ **Shipped in v1.2** (`external_ids` namespace, `sources[]` provenance, lint L13/L14/L16).
 - ~~**Research & Discovery Expansion:** Broaden coverage to OpenAlex, CORE, Unpaywall, and RSS feeds.~~ **Shipped in v1.6 (pending release).** Multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) with always-on OpenAlex metadata anchor; RSS / Atom feed monitoring as first-class watchlist items; `/lumi-research-watch-run` skill for on-demand polling; `cron-daily.sh` wrapper for scheduled invocation.
   - *Spec:* [Research Source & Discovery Expansion](./docs/planning-artifacts/specs/spec-research-expansion.md)
+- **Desktop companion app (unreleased):** The Wails workspace interface and
+  optional AI assistant are implemented, including cross-platform package,
+  install, and launch verification. Signed distribution remains before release.
+  - *Development guide:* [Lumina Desktop](./apps/desktop/README.md)
 - **Advanced Ranking:** Integrate influential citation counts and altmetrics into the core discovery flow.
   - *Outcome:* Surface quality and influence signals to prioritize research reading.
   - *Spec:* [Paper Ranking & Quality](./docs/planning-artifacts/specs/spec-paper-ranking.md)
@@ -51,7 +55,6 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - **Domain Packs:** Create specialized "Science Packs" for bio-medical or physics domains.
 - ~~**Local Cache Layer:** Implement session-level caching for fetcher responses to optimize rate limits.~~ **Shipped in v1.2** (persistent HTTP GET cache via `_lumina/tools/http_cache.py`).
 - **Intelligence Layer:** Graph-walking algorithms for proactive "missing link" or "relevant paper" recommendations.
-- **Desktop Application:** Explore a standalone desktop environment (Electron/Tauri) for a richer GUI-driven experience and native OS integration.
 
 ---
 *Note: This roadmap is non-binding and evolved based on research needs and technical feasibility.*

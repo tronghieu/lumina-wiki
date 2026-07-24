@@ -116,12 +116,12 @@ AI surface:
   into the active workspace. Import remains the sole exception and adds exactly
   one new, non-overwriting file under `raw/sources/`.
 
-The desktop app is not released yet. Local visual, accessibility, workspace
-immutability, secret-boundary, and native-build gates have passed. The desktop
-workflow defines packaging and process-launch smoke checks for macOS, Windows,
-and Linux, but it has not yet produced a successful remote three-platform run.
-Signed distribution and full packaged-GUI interaction evidence remain release
-prerequisites.
+The desktop app is not released yet. Visual, accessibility, workspace
+immutability, secret-boundary, native-package, and packaged-GUI gates have
+passed. The desktop workflow packages and launch-smokes the app on macOS,
+Windows, and Linux. Full execution evidence is recorded in the
+[completed redesign plan](../../plans/260711-1407-lumina-desktop-ai-redesign/plan.md).
+Signed distribution remains a release prerequisite.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:

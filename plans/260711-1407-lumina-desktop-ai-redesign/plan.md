@@ -1,7 +1,7 @@
 ---
 title: "Lumina Desktop AI workspace redesign"
 description: "Reference-faithful Wails desktop shell with secure provider chat, local history, and opt-in hybrid retrieval over immutable Lumina workspaces."
-status: in-progress
+status: completed
 priority: P1
 effort: "28d"
 branch: "feat/lumina-desktop-wails"
@@ -40,9 +40,9 @@ Production-port `Lumina Desktop.dc.html` tokens and hierarchy while preserving r
 | 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Completed |
 | 6 | [Reference-faithful workspace shell](./phase-06-reference-faithful-workspace-shell.md) | Completed |
 | 7 | [Agent chat and settings integration](./phase-07-agent-chat-and-settings-integration.md) | Completed |
-| 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | In Progress |
+| 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | Completed |
 
-**Progress:** 138/140 checklist items complete (98.6%); 7/8 phases complete (87.5%).
+**Progress:** 140/140 checklist items complete (100%); 8/8 phases complete (100%).
 
 ## Dependencies
 
@@ -83,7 +83,9 @@ Adjudication: `reports/from-red-team-coordinator-to-planner-adjudicated-plan-rev
 
 - 2026-07-11 — Deep structural, traceability, source-evidence, dependency, ownership, security, and testability validation passed after three audit patches.
 - 2026-07-24 — Phase 8 local release-gate implementation landed in `6bb37be`; focus-contract follow-up `a05b3af` restored the frontend gate. Local frontend (78/78), Playwright visual (4/4), Playwright accessibility (5/5), build, audit, focused/full/race Go, generated-binding, Wails native-build, and diff gates passed.
-- Phase 8 remains in progress: the GitHub workflow has not yet produced remote macOS/Windows/Linux evidence, and full packaged-GUI interactions (open workspace, graph/note, settings, and stream cancellation) remain pending. No remote CI pass is claimed.
+- 2026-07-24 — Commit `e7542b0` passed [GitHub Actions run 30106072667](https://github.com/nguyennguyenit/lumina-wiki/actions/runs/30106072667): quality and Ubuntu/macOS/Windows package jobs succeeded, including installation and launch checks for the Linux `.deb`, Windows NSIS package, and macOS `.app`.
+- 2026-07-24 — The locally packaged macOS `.app` passed the manual GUI smoke: fixture workspace activation, 5-node/6-link graph, `people/ada-lovelace.md`, AI Settings, and terminal `Cancelled` stream state. The loopback mock server was stopped afterward.
+- 2026-07-24 — Plan completed with all 140 checklist items and all 8 phases complete; no gate was waived.
 - Reports: `reports/plan-validation.md` and `reports/plan-audit.md`.
 - Implementation readiness: READY; no unresolved decision or waived gate.
 

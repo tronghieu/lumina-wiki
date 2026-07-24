@@ -88,7 +88,8 @@ presentation client.
   [`desktop.yml`](../.github/workflows/desktop.yml). Deterministic fixture data
   lives only in the browser test harness. The workflow's packaged smoke checks
   prove process launch, not full GUI interactions; execution evidence is
-  recorded separately in the active desktop plan.
+  recorded separately in the
+  [completed desktop plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md).
 
 The backend contracts live in
 [`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React

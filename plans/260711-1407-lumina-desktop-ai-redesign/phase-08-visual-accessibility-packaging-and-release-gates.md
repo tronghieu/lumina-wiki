@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Visual accessibility packaging and release gates"
-status: in-progress
+status: completed
 priority: P1
 effort: "3d"
 dependencies: [7]
@@ -122,19 +122,21 @@ Change only defects exposed by gates; keep reference metadata and masks narrow. 
 - [x] Run offline/stale/corrupt/cancel/history migration scenarios and complete control inventory.
 - [x] Update README in plain language; regenerate bindings; run frontend, Go, race, audit, Wails build, and diff gates.
 - [x] Commit desktop AI/privacy documentation as part of consolidated Phase 8 checkpoint `6bb37be`.
-- [ ] Add/execute `.github/workflows/desktop.yml` on macOS/Windows/Linux with documented Wails prerequisites; retain Playwright traces/diffs and packaged smoke artifacts; record OS-specific exceptions as failed gates, not waived claims.
+- [x] Add/execute `.github/workflows/desktop.yml` on macOS/Windows/Linux with documented Wails prerequisites; retain Playwright traces/diffs and packaged smoke artifacts; record OS-specific exceptions as failed gates, not waived claims.
 
 ## Success Criteria
 
 - [x] Quantitative visual, responsive, accessibility, font, and control inventory gates pass.
 - [x] Secret scans and workspace manifests prove stated trust boundaries; Import matches its sole exception.
-- [ ] All tests, builds, generated bindings, audits, packaged smoke, and diff check pass with committed evidence.
+- [x] All tests, builds, generated bindings, audits, packaged smoke, and diff check pass with committed evidence.
 
 ## Implementation Evidence
 
 - Commit `6bb37be` adds the Phase 8 release-verification harness, workflow, visual references, accessibility coverage, immutability and secret-boundary scans, control inventory, and user documentation.
 - Follow-up commit `a05b3af` aligns the source contract with ref-based focus restoration. Verified local results: frontend 78/78, Playwright visual 4/4, Playwright accessibility 5/5, production build, audit with zero findings, focused/full/race Go gates, generated bindings without semantic drift, native Wails build, and repository diff check.
-- Pending evidence: the workflow has not yet run successfully on remote macOS, Windows, and Linux runners. Full packaged-GUI interactions—launch, open workspace, graph/note navigation, settings, and stream cancellation—also remain pending. No remote CI pass is claimed.
+- Commit `e7542b0` completed [GitHub Actions run 30106072667](https://github.com/nguyennguyenit/lumina-wiki/actions/runs/30106072667) successfully: the quality job and package jobs for Ubuntu, macOS, and Windows all passed. The Linux `.deb` installed and launched, the Windows NSIS installer completed silently and its installed executable launched, and the macOS `.app` launched.
+- The locally packaged `apps/desktop/bin/lumina-desktop.app` completed the manual GUI smoke on 2026-07-24: it opened the fixture workspace, rendered 5 graph nodes and 6 links, loaded `people/ada-lovelace.md`, opened AI Settings, and an immediate cancellation against a loopback stream reached the terminal `Cancelled` state. The loopback mock server was stopped after the check.
+- Completed: 2026-07-24. No OS-specific package exception or waived gate remains.
 
 ## Security, Risks, and Rollback
 
