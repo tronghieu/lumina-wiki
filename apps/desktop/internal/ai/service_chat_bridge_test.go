@@ -49,6 +49,7 @@ func TestChatForwardsOnlyNormalizedSafeRequestAndFinishesOnError(t *testing.T) {
 	runtime := &bridgeRuntime{runErr: errors.New("raw /private/root secret")}
 	service, capability, _ := newBridgeService(t, 7, &onceRuntime{runtime: runtime})
 	request := validBridgeRequest(capability)
+	request.RetryOfAttemptID = "prior-attempt"
 	if _, err := service.Chat(context.Background(), request); !errors.Is(err, ErrChatUnavailable) || errors.Is(err, runtime.runErr) {
 		t.Fatalf("first=%v", err)
 	}
@@ -59,7 +60,8 @@ func TestChatForwardsOnlyNormalizedSafeRequestAndFinishesOnError(t *testing.T) {
 	if err != nil || completion != (ChatCompletionDTO{RequestID: "request", ConversationID: "conversation"}) {
 		t.Fatalf("completion=%#v err=%v", completion, err)
 	}
-	if runtime.request.Question != request.Question || runtime.request.Profiles != request.Profiles || runtime.request.History != request.History {
+	if runtime.request.Question != request.Question || runtime.request.Profiles != request.Profiles || runtime.request.History != request.History ||
+		runtime.request.RetryOfAttemptID != request.RetryOfAttemptID {
 		t.Fatalf("runtime request=%#v", runtime.request)
 	}
 }

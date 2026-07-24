@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
-import type { CheckResult } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  HistoryMetadataDTO,
+  SessionReferenceDTO,
+} from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/models';
 import type { WorkspaceSummary } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
+import { AgentPanel } from '../features/chat/agent-panel';
+import type { ChatCitation, ChatState } from '../features/chat/chat-types';
+import type { SettingsViewModel } from '../features/settings/ai-settings';
 import { ArtifactPane } from '../features/graph/artifact-pane';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
-import { NodeInspector } from '../features/graph/node-inspector';
 import type { NoteContentState } from '../features/graph/note-content';
 import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
 import type { WorkspaceTreeNode } from '../features/workspace/workspace-tree-data';
@@ -15,49 +20,89 @@ import { resolveThemePreference, toggleTheme } from './theme-preference';
 
 type AppShellProps = {
   actionState: WorkspaceActionState;
+  aiSession: SessionReferenceDTO | null;
+  canChat: boolean;
+  cancellingChat: boolean;
+  chat: ChatState;
   graph: KnowledgeGraph;
-  lastCheckResult: CheckResult | null;
+  history: HistoryMetadataDTO[];
+  historyBusy: boolean;
+  historyEnabled: boolean;
   noteState: NoteContentState;
   query: string;
   selectedNodeId: string;
   sourcePath: string;
   workspaceSummary: WorkspaceSummary | null;
+  workspaceDraftRoot: string;
   workspaceRoot: string;
   workspaceTree: WorkspaceTreeNode[];
   onImportSource: () => void;
+  onActivateWorkspace: () => void;
+  onCancelChat: () => void;
+  onCitation: (citation: ChatCitation) => Promise<boolean>;
   onChooseSourcePath: () => void;
   onChooseWorkspace: () => void;
   onQueryChange: (query: string) => void;
+  onDeleteHistory: (conversationId: string) => void;
+  onDeleteAllHistory: () => void;
+  onLoadHistory: (conversationId: string) => void;
+  onNewChat: () => void;
+  onProfilesChange: (settings: SettingsViewModel) => void;
   onRefreshGraph: () => void;
+  onRefreshHistory: () => void;
+  onRetryChat: () => void;
   onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
   onSourcePathChange: (path: string) => void;
+  onSubmitChat: (text: string) => boolean;
+  onToggleHistory: () => void;
   onWorkspaceRootChange: (path: string) => void;
 };
 
 export function AppShell({
   actionState,
+  aiSession,
+  canChat,
+  cancellingChat,
+  chat,
   graph,
-  lastCheckResult,
+  history,
+  historyBusy,
+  historyEnabled,
   noteState,
   query,
   selectedNodeId,
   workspaceSummary,
+  workspaceDraftRoot,
   workspaceRoot,
   workspaceTree,
   onImportSource,
+  onActivateWorkspace,
+  onCancelChat,
+  onCitation,
   onChooseSourcePath,
   onChooseWorkspace,
   onQueryChange,
+  onDeleteHistory,
+  onDeleteAllHistory,
+  onLoadHistory,
+  onNewChat,
+  onProfilesChange,
   onRefreshGraph,
+  onRefreshHistory,
+  onRetryChat,
   onRunCheck,
   onSelectNode,
+  onSubmitChat,
+  onToggleHistory,
+  onWorkspaceRootChange,
 }: AppShellProps) {
   const initialPanels = resolveResponsivePanels(typeof window === 'undefined' ? 1480 : window.innerWidth);
   const [activeView, setActiveView] = useState<ArtifactView>('graph');
   const [treeOpen, setTreeOpen] = useState(initialPanels.treeInitiallyOpen);
   const [agentOpen, setAgentOpen] = useState(initialPanels.agentInitiallyOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const responsivePanels = useRef(initialPanels);
   const [theme, setTheme] = useState(() => resolveThemePreference(
     typeof window === 'undefined' ? null : window.localStorage.getItem('lumina.desktop.theme'),
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -78,6 +123,24 @@ export function AppShell({
   }, [agentOpen, settingsOpen, treeOpen]);
 
   useEffect(() => {
+    function syncResponsivePanels() {
+      const next = resolveResponsivePanels(window.innerWidth);
+      const previous = responsivePanels.current;
+      if (
+        next.agentInitiallyOpen === previous.agentInitiallyOpen
+        && next.treeInitiallyOpen === previous.treeInitiallyOpen
+      ) {
+        return;
+      }
+      responsivePanels.current = next;
+      setAgentOpen(next.agentInitiallyOpen);
+      setTreeOpen(next.treeInitiallyOpen);
+    }
+    window.addEventListener('resize', syncResponsivePanels);
+    return () => window.removeEventListener('resize', syncResponsivePanels);
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('lumina.desktop.theme', theme);
   }, [theme]);
@@ -87,6 +150,21 @@ export function AppShell({
     const node = graph.nodes.find((candidate) => candidate.path === graphPath);
     if (node) {
       onSelectNode(node.id);
+      setActiveView('note');
+    }
+  }
+
+  async function openCitation(citation: ChatCitation) {
+    const graphPath = citation.path.startsWith('wiki/')
+      ? citation.path.slice('wiki/'.length)
+      : citation.path;
+    const node = graph.nodes.find((candidate) => candidate.path === graphPath);
+    if (node) {
+      await onSelectNode(node.id);
+      setActiveView('note');
+      return;
+    }
+    if (await onCitation(citation)) {
       setActiveView('note');
     }
   }
@@ -102,7 +180,10 @@ export function AppShell({
           workspaceTree={workspaceTree}
           theme={theme}
           onClose={() => setTreeOpen(false)}
-          onOpen={() => setTreeOpen(true)}
+          onOpen={() => {
+            if (window.innerWidth <= 1180) setAgentOpen(false);
+            setTreeOpen(true);
+          }}
           onOpenSettings={() => setSettingsOpen(true)}
           onSelectGraph={() => {
             setActiveView('graph');
@@ -118,7 +199,9 @@ export function AppShell({
           query={query}
           selectedNodeId={selectedNodeId}
           workspaceSummary={workspaceSummary}
+          workspaceDraftRoot={workspaceDraftRoot}
           workspaceRoot={workspaceRoot}
+          onActivateWorkspace={onActivateWorkspace}
           onActiveViewChange={setActiveView}
           onChooseSourcePath={onChooseSourcePath}
           onChooseWorkspace={onChooseWorkspace}
@@ -127,17 +210,34 @@ export function AppShell({
           onRefreshGraph={onRefreshGraph}
           onRunCheck={onRunCheck}
           onSelectNode={onSelectNode}
+          onWorkspaceDraftChange={onWorkspaceRootChange}
         />
         {agentOpen ? (
-          <NodeInspector
-            actionState={actionState}
-            graph={graph}
-            lastCheckResult={lastCheckResult}
-            selectedNodeId={selectedNodeId}
-            workspaceSummary={workspaceSummary}
-            workspaceRoot={workspaceRoot}
-            onClose={() => setAgentOpen(false)}
-            onSelectNode={onSelectNode}
+          <AgentPanel
+            chat={chat}
+            canChat={canChat}
+            cancelling={cancellingChat}
+            contextLabel={(selectedNode?.path ?? workspaceLabel) || 'No workspace'}
+            workspaceStatus={actionState}
+            history={history}
+            historyBusy={historyBusy}
+            historyEnabled={historyEnabled}
+            onCancel={onCancelChat}
+            onCitation={(citation) => void openCitation(citation)}
+            onClose={() => {
+              setAgentOpen(false);
+              window.setTimeout(() => {
+                document.querySelector<HTMLButtonElement>('[aria-label="Open Agent panel"]')?.focus();
+              });
+            }}
+            onDeleteHistory={onDeleteHistory}
+            onDeleteAllHistory={onDeleteAllHistory}
+            onLoadHistory={onLoadHistory}
+            onNewChat={onNewChat}
+            onRefreshHistory={onRefreshHistory}
+            onRetry={onRetryChat}
+            onSubmit={onSubmitChat}
+            onToggleHistory={onToggleHistory}
           />
         ) : (
           <aside className="agent-panel-collapsed" aria-label="Agent panel collapsed">
@@ -146,14 +246,28 @@ export function AppShell({
               aria-controls="agent-panel"
               aria-expanded={agentOpen}
               aria-label="Open Agent panel"
-              onClick={() => setAgentOpen(true)}
+              onClick={() => {
+                if (window.innerWidth <= 1180) setTreeOpen(false);
+                setAgentOpen(true);
+              }}
             >
               ‹
             </button>
             <span>Agent</span>
           </aside>
         )}
-        {settingsOpen && <AiSettingsPanel onClose={() => setSettingsOpen(false)} />}
+        {settingsOpen && (
+          <AiSettingsPanel
+            session={aiSession}
+            onClose={() => {
+              setSettingsOpen(false);
+              window.setTimeout(() => {
+                document.querySelector<HTMLButtonElement>('[aria-label="Settings"]')?.focus();
+              });
+            }}
+            onProfilesChange={onProfilesChange}
+          />
+        )}
       </div>
     </main>
   );

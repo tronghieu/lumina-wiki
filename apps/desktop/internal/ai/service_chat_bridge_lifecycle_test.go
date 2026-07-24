@@ -72,6 +72,8 @@ func TestChatRejectsEveryBoundedFieldBeforeSessionLookup(t *testing.T) {
 		"question":     func(request *ChatRequestDTO) { request.Question = strings.Repeat("x", retrieval.MaxQueryBytes+1) },
 		"chat profile": func(request *ChatRequestDTO) { request.Profiles.ChatProfileID = "bad/profile" },
 		"embedding":    func(request *ChatRequestDTO) { request.Profiles.EmbeddingProfileID = "bad/profile" },
+		"retry":        func(request *ChatRequestDTO) { request.RetryOfAttemptID = "bad/retry" },
+		"self retry":   func(request *ChatRequestDTO) { request.RetryOfAttemptID = request.RequestID },
 		"linked paths": func(request *ChatRequestDTO) { request.LinkedPaths = linked },
 		"session":      func(request *ChatRequestDTO) { request.Session.Generation = 0 },
 	}

@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Reference-faithful workspace shell"
-status: pending
+status: completed
 priority: P1
 effort: "3d"
 dependencies: [3]
@@ -76,11 +76,11 @@ export function normalizeWorkspaceTree(nodes: WorkspaceTreeNode[]): WorkspaceTre
 
 ## Interface and Function Checklist
 
-- [ ] Preserve `KnowledgeGraph`, `NoteContentState`, `sourcePath`, `workspaceRoot`, `onChooseSourcePath`, `onSourcePathChange`, `onWorkspaceRootChange`, `onImportSource`, other workspace callbacks, and React Flow selection.
-- [ ] `normalizeWorkspaceTree`, `resolveArtifactView`, `resolveResponsivePanels` are pure/tested.
-- [ ] Desktop window controls call verified Wails runtime actions and remain masked in pixel tests.
-- [ ] Semantic landmarks, button labels, `aria-expanded`, selected state, and fallback list exist.
-- [ ] `App.tsx` still owns real backend orchestration until phase 7 extracts chat/settings hooks.
+- [x] Preserve `KnowledgeGraph`, `NoteContentState`, `sourcePath`, `workspaceRoot`, `onChooseSourcePath`, `onSourcePathChange`, `onWorkspaceRootChange`, `onImportSource`, other workspace callbacks, and React Flow selection.
+- [x] `normalizeWorkspaceTree`, `resolveArtifactView`, `resolveResponsivePanels` are pure/tested.
+- [x] Desktop window controls call verified Wails runtime actions and remain masked in pixel tests.
+- [x] Semantic landmarks, button labels, `aria-expanded`, selected state, and fallback list exist.
+- [x] `App.tsx` still owns real backend orchestration until phase 7 extracts chat/settings hooks.
 
 ## Dependency Map
 
@@ -104,20 +104,26 @@ Split by visible responsibility before styling. Keep `App.tsx`, each component, 
 
 ## Implementation Steps
 
-- [ ] First fix `package.json` test discovery to `tsc --noEmit && node --test --experimental-strip-types`; add a nested sentinel and test-count proof; run all existing nested suites.
-- [ ] Write real-tree normalization/no-phantom-data tests; run RED; implement pure tree data; run GREEN.
-- [ ] Write shell landmarks/action/tab/drawer tests; run RED; extract title/rail/artifact/note components; run GREEN.
-- [ ] Commit: `refactor(desktop): compose reference workspace shell`.
-- [ ] Write token/theme/font-source tests; run RED; split CSS, move the existing Inter binary/license into canonical font paths, add licensed local fonts, and reject duplicates; run GREEN.
-- [ ] Style React Flow and note states from real data; run graph/note/workspace tests and build.
-- [ ] Commit: `feat(desktop): apply reference shell design system`.
-- [ ] Verify empty, disconnected, and loaded fixtures manually at three viewports; run Go regression.
+- [x] First fix `package.json` test discovery to `tsc --noEmit && node --test --experimental-strip-types`; add a nested sentinel and test-count proof; run all existing nested suites.
+- [x] Write real-tree normalization/no-phantom-data tests; run RED; implement pure tree data; run GREEN.
+- [x] Write shell landmarks/action/tab/drawer tests; run RED; extract title/rail/artifact/note components; run GREEN.
+- [x] Commit: `refactor(desktop): compose reference workspace shell`.
+- [x] Write token/theme/font-source tests; run RED; split CSS, move the existing Inter binary/license into canonical font paths, add licensed local fonts, and reject duplicates; run GREEN.
+- [x] Style React Flow and note states from real data; run graph/note/workspace tests and build.
+- [x] Commit: `feat(desktop): apply reference shell design system`.
+- [x] Verify empty, disconnected, and loaded fixtures manually at three viewports; run Go regression.
 
 ## Success Criteria
 
-- [ ] Shell structure/tokens match reference contract without fake data or inert controls.
-- [ ] Existing workspace actions, graph selection, note read, and stale-request guards pass unchanged.
-- [ ] CSS/component modularization thresholds and frontend build pass.
+- [x] Shell structure/tokens match reference contract without fake data or inert controls.
+- [x] Existing workspace actions, graph selection, note read, and stale-request guards pass unchanged.
+- [x] CSS/component modularization thresholds and frontend build pass.
+
+## Completion Evidence
+
+- Completed: 2026-07-24 in consolidated shell checkpoint `bb24a1d`.
+- Verified recursive frontend tests, production build, real workspace/tree/graph/note action preservation, empty/disconnected/loaded states, local-font/token contracts, and desktop Go regression.
+- Phase 8 retains quantitative screenshot, accessibility, and packaged native smoke gates.
 
 ## Security, Risks, and Rollback
 

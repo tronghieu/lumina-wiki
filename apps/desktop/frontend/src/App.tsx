@@ -1,263 +1,152 @@
 import '@xyflow/react/dist/style.css';
 import './app.css';
-import { Dialogs } from '@wailsio/runtime';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ListAIProfiles,
+  ReadCitationNote,
+} from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/service';
 import { AppShell } from './app/app-shell';
-import { Load, ReadNote } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph/service';
-import { ImportToRawSources } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer/service';
-import type { CheckResult } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/models';
-import { RunCheck } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools/service';
-import type { WorkspaceSummary } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
-import { Summary, Validate } from '../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/service';
-import { resolveSelectedNodeId } from './features/graph/graph-data';
-import type { KnowledgeGraph } from './features/graph/graph-types';
+import { useChatHistory } from './features/chat/use-chat-history';
+import type { ChatCitation } from './features/chat/chat-types';
+import { useChat } from './features/chat/use-chat';
+import { linkedNodes } from './features/graph/graph-data';
 import {
-  noteUnavailableState,
-  toNoteErrorState,
-  toNoteLoadedState,
-  type NoteContentState,
-} from './features/graph/note-content';
+  normalizeSettings,
+  settingsForSession,
+  type SettingsViewModel,
+} from './features/settings/ai-settings';
 import {
-  createWorkspaceRequestGuard,
-  formatActionError,
-  formatCheckResult,
-  formatGraphRefreshed,
-  formatImportResult,
-  formatWorkspaceLoaded,
-  idleActionState,
-  type WorkspaceActionState,
-  workspaceLoadCanceledState,
-} from './features/workspace/workspace-actions';
+  createSessionRequestGuard,
+  sessionIdentity,
+} from './features/shared/session-request-guard';
+import { useWorkspace } from './features/workspace/use-workspace';
 
 function App() {
-  const [query, setQuery] = useState('');
-  const [selectedNodeId, setSelectedNodeId] = useState('');
-  const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [sourcePath, setSourcePath] = useState('');
-  const [actionState, setActionState] = useState<WorkspaceActionState>(idleActionState);
-  const [graph, setGraph] = useState<KnowledgeGraph>({ nodes: [], edges: [] });
-  const [noteState, setNoteState] = useState<NoteContentState>(noteUnavailableState);
-  const [lastCheckResult, setLastCheckResult] = useState<CheckResult | null>(null);
-  const [workspaceSummary, setWorkspaceSummary] = useState<WorkspaceSummary | null>(null);
-  const workspaceRequestGuard = useMemo(createWorkspaceRequestGuard, []);
-  const noteRequestId = useRef(0);
+  const workspace = useWorkspace();
+  const profileRequestGuard = useMemo(createSessionRequestGuard, []);
+  const citationRequestGuard = useMemo(createSessionRequestGuard, []);
+  const activeSession = workspace.loadedWorkspace?.session ?? null;
+  const activeSessionKey = sessionIdentity(activeSession);
+  citationRequestGuard.setSession(activeSession);
+  const [aiSettings, setAISettings] = useState<SettingsViewModel>(() => normalizeSettings({}));
+  const [aiSettingsSessionKey, setAISettingsSessionKey] = useState('no-session');
+  const activeAISettings = settingsForSession(aiSettings, aiSettingsSessionKey, activeSessionKey);
+  const selectedNode = workspace.graph.nodes.find((node) => node.id === workspace.selectedNodeId);
+  const chat = useChat({
+    session: activeSession,
+    chatProfileId: activeAISettings.chat.model ? activeAISettings.chat.id : '',
+    embeddingProfileId: activeAISettings.semanticEnabled ? activeAISettings.embedding?.id : undefined,
+    historyEnabled: workspace.historyEnabled,
+    selectedPath: selectedNode?.path,
+    linkedPaths: selectedNode
+      ? linkedNodes(workspace.graph, selectedNode.id).map((node) => node.path)
+      : [],
+  });
+  const history = useChatHistory(
+    activeSession,
+    workspace.historyEnabled,
+    workspace.setHistoryEnabled,
+    chat.loadState,
+  );
 
-  async function chooseWorkspace() {
-    try {
-      const selected = await Dialogs.OpenFile({
-        Title: 'Open Lumina workspace',
-        ButtonText: 'Open Workspace',
-        CanChooseDirectories: true,
-        CanChooseFiles: false,
+  useEffect(() => {
+    const request = profileRequestGuard.begin();
+    void ListAIProfiles()
+      .then((profiles) => {
+        if (profileRequestGuard.isCurrent(request)) setAISettings(normalizeSettings(profiles));
+      })
+      .catch(() => {
+        if (profileRequestGuard.isCurrent(request)) setAISettings(normalizeSettings({}));
       });
-      if (!selected) {
-        setActionState(workspaceLoadCanceledState);
-        return;
-      }
-      await loadWorkspace(selected);
-    } catch (error) {
-      setActionState(formatActionError(error));
-    }
-  }
+  }, [profileRequestGuard]);
 
-  async function loadWorkspace(root = workspaceRoot) {
-    await refreshWorkspaceGraph(root, {
-      clearCheckResult: true,
-      loadingTitle: 'Loading workspace',
-      missingRootMessage: 'Choose or enter a Lumina workspace root.',
-      successState: (validatedRoot, loadedGraph) => formatWorkspaceLoaded(validatedRoot, loadedGraph),
-    });
-  }
+  const updateAISettings = useCallback((settings: SettingsViewModel) => {
+    profileRequestGuard.begin();
+    setAISettings(settings);
+    setAISettingsSessionKey(activeSessionKey);
+  }, [activeSessionKey, profileRequestGuard]);
 
-  async function refreshGraph() {
-    await refreshWorkspaceGraph(workspaceRoot, {
-      clearCheckResult: false,
-      loadingTitle: 'Refreshing graph',
-      missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
-      successState: (_, loadedGraph) => formatGraphRefreshed(loadedGraph),
-    });
-  }
-
-  async function chooseSourcePath() {
-    try {
-      const selected = await Dialogs.OpenFile({
-        Title: 'Choose source file',
-        ButtonText: 'Choose Source',
-        CanChooseDirectories: false,
-        CanChooseFiles: true,
-        Filters: [
-          { DisplayName: 'Documents', Pattern: '*.md;*.txt;*.pdf;*.docx;*.rtf;*.epub' },
-          { DisplayName: 'All Files', Pattern: '*' },
-        ],
+  useEffect(() => {
+    if (history.partialDeleteCount > 0) {
+      workspace.setActionState({
+        kind: 'error',
+        title: 'History partially cleared',
+        message: `${history.partialDeleteCount} conversation(s) remain.`,
       });
-      if (selected) {
-        setSourcePath(selected);
-      }
-    } catch (error) {
-      setActionState(formatActionError(error));
     }
-  }
+  }, [history.partialDeleteCount, workspace.setActionState]);
 
-  async function runCheck() {
-    const checkedRoot = workspaceRoot.trim();
-    if (!checkedRoot) {
-      setActionState({ kind: 'error', title: 'Workspace required', message: 'Enter a Lumina workspace root.' });
-      return;
-    }
-    const requestId = beginWorkspaceRequest();
-    setActionState({ kind: 'loading', title: 'Running check', message: checkedRoot });
+  async function openCitation(citation: ChatCitation): Promise<boolean> {
+    const loaded = workspace.loadedWorkspace;
+    if (!loaded || !citation.requestId) return false;
+    const artifactRequest = workspace.beginArtifactRead();
+    if (artifactRequest === null) return false;
+    const request = citationRequestGuard.begin();
     try {
-      const result = await RunCheck(checkedRoot);
-      if (!workspaceRequestGuard.isCurrent(requestId)) {
-        return;
-      }
-      setLastCheckResult(result);
-      const checkState = formatCheckResult(result);
-      await refreshWorkspaceGraph(checkedRoot, {
-        clearCheckResult: false,
-        loadingTitle: 'Refreshing graph',
-        missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
-        successState: () => checkState,
-      }, requestId);
-    } catch (error) {
-      if (workspaceRequestGuard.isCurrent(requestId)) {
-        setActionState(formatActionError(error));
-      }
-    }
-  }
-
-  async function importSource() {
-    const importRoot = workspaceRoot.trim();
-    const importedSourcePath = sourcePath.trim();
-    if (!importRoot || !importedSourcePath) {
-      setActionState({ kind: 'error', title: 'Paths required', message: 'Enter workspace root and source file path.' });
-      return;
-    }
-    const requestId = beginWorkspaceRequest();
-    setActionState({ kind: 'loading', title: 'Importing source', message: importedSourcePath });
-    try {
-      const importState = formatImportResult(await ImportToRawSources(importRoot, importedSourcePath));
-      if (!workspaceRequestGuard.isCurrent(requestId)) {
-        return;
-      }
-      await refreshWorkspaceGraph(importRoot, {
-        clearCheckResult: false,
-        loadingTitle: 'Refreshing graph',
-        missingRootMessage: 'Open a Lumina workspace before refreshing the graph.',
-        successState: () => importState,
-      }, requestId);
-    } catch (error) {
-      if (workspaceRequestGuard.isCurrent(requestId)) {
-        setActionState(formatActionError(error));
-      }
-    }
-  }
-
-  async function refreshWorkspaceGraph(
-    root: string,
-    options: {
-      clearCheckResult: boolean;
-      loadingTitle: string;
-      missingRootMessage: string;
-      successState: (validatedRoot: string, loadedGraph: KnowledgeGraph) => WorkspaceActionState;
-    },
-    requestId = beginWorkspaceRequest(),
-  ) {
-    const trimmedRoot = root.trim();
-    if (!trimmedRoot) {
-      setActionState({ kind: 'error', title: 'Workspace required', message: options.missingRootMessage });
-      return;
-    }
-    setActionState({ kind: 'loading', title: options.loadingTitle, message: trimmedRoot });
-    try {
-      const validation = await Validate(trimmedRoot);
-      if (!workspaceRequestGuard.isCurrent(requestId)) {
-        return;
-      }
-      const loadedSummary = await Summary(validation.root);
-      if (!workspaceRequestGuard.isCurrent(requestId)) {
-        return;
-      }
-      const loadedGraph = await Load(validation.root);
-      if (!workspaceRequestGuard.isCurrent(requestId)) {
-        return;
-      }
-      const nextSelectedNodeId = resolveSelectedNodeId(loadedGraph, selectedNodeId);
-      setWorkspaceRoot(validation.root);
-      setWorkspaceSummary(loadedSummary);
-      setGraph(loadedGraph);
-      setSelectedNodeId(nextSelectedNodeId);
-      if (options.clearCheckResult) {
-        setLastCheckResult(null);
-      }
-      void loadSelectedNote(validation.root, loadedGraph, nextSelectedNodeId);
-      setActionState(options.successState(validation.root, loadedGraph));
-    } catch (error) {
-      if (workspaceRequestGuard.isCurrent(requestId)) {
-        setActionState(formatActionError(error));
-      }
-    }
-  }
-
-  function updateWorkspaceRoot(path: string) {
-    beginWorkspaceRequest();
-    setWorkspaceRoot(path);
-    setWorkspaceSummary(null);
-  }
-
-  function beginWorkspaceRequest() {
-    const requestId = workspaceRequestGuard.begin();
-    noteRequestId.current += 1;
-    return requestId;
-  }
-
-  async function selectNode(nodeId: string) {
-    setSelectedNodeId(nodeId);
-    await loadSelectedNote(workspaceRoot, graph, nodeId);
-  }
-
-  async function loadSelectedNote(root: string, currentGraph: KnowledgeGraph, nodeId: string) {
-    const requestId = noteRequestId.current + 1;
-    noteRequestId.current = requestId;
-    const selectedNode = currentGraph.nodes.find((node) => node.id === nodeId);
-    if (!root.trim() || !selectedNode) {
-      setNoteState(noteUnavailableState);
-      return;
-    }
-    setNoteState({ kind: 'loading', path: selectedNode.path, content: 'Loading note content...' });
-    try {
-      const note = await ReadNote(root.trim(), selectedNode.path);
-      if (noteRequestId.current === requestId) {
-        setNoteState(toNoteLoadedState(note));
-      }
-    } catch (error) {
-      if (noteRequestId.current === requestId) {
-        setNoteState(toNoteErrorState(selectedNode.path, error));
-      }
+      const note = await ReadCitationNote({
+        session: loaded.session,
+        requestId: citation.requestId,
+        citationId: citation.citationId,
+      });
+      if (!citationRequestGuard.isCurrent(request) || !workspace.isArtifactReadCurrent(artifactRequest)) return false;
+      workspace.showCitationNote(note);
+      workspace.setActionState({
+        kind: 'success',
+        title: 'Citation opened',
+        message: note.heading || note.path,
+      });
+      return true;
+    } catch {
+      if (!citationRequestGuard.isCurrent(request) || !workspace.isArtifactReadCurrent(artifactRequest)) return false;
+      workspace.setActionState({
+        kind: 'error',
+        title: 'Citation unavailable',
+        message: 'This citation can no longer be opened.',
+      });
+      return false;
     }
   }
 
   return (
     <AppShell
-      actionState={actionState}
-      graph={graph}
-      lastCheckResult={lastCheckResult}
-      query={query}
-      noteState={noteState}
-      selectedNodeId={selectedNodeId}
-      sourcePath={sourcePath}
-      workspaceSummary={workspaceSummary}
-      workspaceRoot={workspaceRoot}
-      workspaceTree={[]}
-      onImportSource={importSource}
-      onChooseSourcePath={chooseSourcePath}
-      onChooseWorkspace={chooseWorkspace}
-      onQueryChange={setQuery}
-      onRefreshGraph={refreshGraph}
-      onRunCheck={runCheck}
-      onSelectNode={selectNode}
-      onSourcePathChange={setSourcePath}
-      onWorkspaceRootChange={updateWorkspaceRoot}
+      actionState={workspace.actionState}
+      aiSession={activeSession}
+      canChat={Boolean(workspace.loadedWorkspace && activeAISettings.chat.model)}
+      cancellingChat={chat.cancelling}
+      chat={chat.state}
+      graph={workspace.graph}
+      history={history.history}
+      historyBusy={history.historyBusy}
+      historyEnabled={workspace.historyEnabled}
+      noteState={workspace.noteState}
+      query={workspace.query}
+      selectedNodeId={workspace.selectedNodeId}
+      sourcePath={workspace.sourcePath}
+      workspaceDraftRoot={workspace.draftWorkspaceRoot}
+      workspaceRoot={workspace.loadedWorkspace?.root ?? ''}
+      workspaceSummary={workspace.workspaceSummary}
+      workspaceTree={workspace.workspaceTree}
+      onActivateWorkspace={() => void workspace.activateWorkspace()}
+      onCancelChat={chat.cancel}
+      onChooseSourcePath={workspace.chooseSourcePath}
+      onChooseWorkspace={workspace.chooseWorkspace}
+      onCitation={openCitation}
+      onDeleteAllHistory={history.deleteAllHistory}
+      onDeleteHistory={history.deleteHistory}
+      onImportSource={workspace.importSource}
+      onLoadHistory={history.loadHistory}
+      onNewChat={() => chat.reset()}
+      onProfilesChange={updateAISettings}
+      onQueryChange={workspace.setQuery}
+      onRefreshGraph={workspace.refreshGraph}
+      onRefreshHistory={history.refreshHistory}
+      onRetryChat={chat.retry}
+      onRunCheck={workspace.runCheck}
+      onSelectNode={workspace.selectNode}
+      onSourcePathChange={workspace.setSourcePath}
+      onSubmitChat={chat.submit}
+      onToggleHistory={history.toggleHistory}
+      onWorkspaceRootChange={workspace.updateWorkspaceRoot}
     />
   );
 }

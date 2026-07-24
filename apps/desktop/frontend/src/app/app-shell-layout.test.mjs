@@ -8,18 +8,18 @@ const titleSource = readSource('./desktop-title-bar.tsx');
 const railSource = readSource('../features/workspace/workspace-rail.tsx');
 const artifactSource = readSource('../features/graph/artifact-pane.tsx');
 const noteSource = readSource('../features/graph/note-view.tsx');
-const inspectorSource = readSource('../features/graph/node-inspector.tsx');
+const agentSource = readSource('../features/chat/agent-panel.tsx');
 
 test('app shell composes the reference semantic zones', () => {
   assert.match(shellSource, /<DesktopTitleBar/);
   assert.match(shellSource, /<WorkspaceRail/);
   assert.match(shellSource, /<ArtifactPane/);
-  assert.match(shellSource, /<NodeInspector/);
+  assert.match(shellSource, /<AgentPanel/);
   assert.match(titleSource, /data-wails-drag/);
   assert.match(titleSource, /Workspace \{connected \? 'connected' : 'not connected'\}/);
   assert.match(railSource, /aria-label="Workspace navigation"/);
   assert.match(artifactSource, /aria-label="Workspace artifact"/);
-  assert.match(inspectorSource, /aria-label="Agent panel"/);
+  assert.match(agentSource, /aria-label="Agent panel"/);
 });
 
 test('artifact pane keeps every real workspace action reachable', () => {
@@ -46,12 +46,15 @@ test('tree and agent regions have explicit reopen controls', () => {
   assert.match(railSource, /aria-label=\{open \? 'Close workspace tree' : 'Open workspace tree'\}/);
   assert.match(shellSource, /aria-label="Open Agent panel"/);
   assert.match(railSource, /aria-expanded=/);
-  assert.match(inspectorSource, /aria-label="Close Agent panel"/);
+  assert.match(agentSource, /aria-label="Close Agent panel"/);
 });
 
 test('production shell contains no sample workspace or hard-coded tree rows', () => {
-  const productionSources = [shellSource, railSource, artifactSource, noteSource, inspectorSource].join('\n');
+  const productionSources = [shellSource, railSource, artifactSource, noteSource, agentSource].join('\n');
   assert.doesNotMatch(productionSources, /Sample graph|AI Social Impact|Ada Lovelace|ai-work-society/);
   assert.doesNotMatch(railSource, /\[\s*['"]chapters['"]/);
-  assert.doesNotMatch(inspectorSource, /New chat|Chat input|>Send</);
+  assert.match(agentSource, />New chat</);
+  assert.match(agentSource, /aria-label="Chat input"/);
+  assert.match(agentSource, />Send</);
+  assert.doesNotMatch(agentSource, /Welcome|How can I help|Sample response|canned/i);
 });

@@ -26,14 +26,15 @@ type ChatHistoryOptionsDTO struct {
 }
 
 type ChatRequestDTO struct {
-	Session        SessionReferenceDTO   `json:"session"`
-	RequestID      string                `json:"requestId"`
-	ConversationID string                `json:"conversationId"`
-	Question       string                `json:"question"`
-	Profiles       ProfileSelectionDTO   `json:"profiles"`
-	History        ChatHistoryOptionsDTO `json:"history"`
-	SelectedPath   string                `json:"selectedPath,omitempty"`
-	LinkedPaths    []string              `json:"linkedPaths,omitempty"`
+	Session          SessionReferenceDTO   `json:"session"`
+	RequestID        string                `json:"requestId"`
+	ConversationID   string                `json:"conversationId"`
+	RetryOfAttemptID string                `json:"retryOfAttemptId,omitempty"`
+	Question         string                `json:"question"`
+	Profiles         ProfileSelectionDTO   `json:"profiles"`
+	History          ChatHistoryOptionsDTO `json:"history"`
+	SelectedPath     string                `json:"selectedPath,omitempty"`
+	LinkedPaths      []string              `json:"linkedPaths,omitempty"`
 }
 
 type ChatCompletionDTO struct {
@@ -102,12 +103,12 @@ type StreamSinkFactory interface {
 }
 
 type runtimeChatRequest struct {
-	RequestID, ConversationID string
-	Question                  string
-	Profiles                  ProfileSelectionDTO
-	History                   ChatHistoryOptionsDTO
-	SelectedPath              string
-	LinkedPaths               []string
+	RequestID, ConversationID, RetryOfAttemptID string
+	Question                                    string
+	Profiles                                    ProfileSelectionDTO
+	History                                     ChatHistoryOptionsDTO
+	SelectedPath                                string
+	LinkedPaths                                 []string
 }
 
 type chatCapableRuntime interface {

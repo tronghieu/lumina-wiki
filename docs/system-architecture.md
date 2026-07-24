@@ -1,7 +1,7 @@
 # Lumina-Wiki — System Architecture
 
 **Document Type:** Locked v0.1 Architecture  
-**Last Updated:** 2026-07-23
+**Last Updated:** 2026-07-24
 **Status:** Stable; breaking changes require SemVer major bump
 
 ---
@@ -69,13 +69,18 @@ presentation client.
   window-bound session capability. Workspace reads resolve that capability
   rather than trusting a frontend path, and AI operations treat the workspace
   as immutable.
-- Settings, history, and derived indexes stay in desktop-owned local storage;
-  provider secrets stay in the operating-system keyring.
+- Settings, history, and derived indexes stay in desktop-owned local storage.
+  Provider secrets stay behind backend credential services: the operating-system
+  keyring when persisted, or confirmed backend memory for session-only use.
 - Lexical retrieval remains local. Embedding use is opt-in and guarded by
   explicit consent before workspace text may be sent to the configured
   embedding provider.
 - Chat and index work is cancellable. Session deactivation, window close, and
   application shutdown retire capabilities and clean up active work.
+- React subscribes before starting chat, filters events by active workspace
+  session, request, and sequence, and treats the matching terminal stream event
+  as authoritative. Cancellation keeps that listener through the terminal
+  handshake; retries are linked attempts rather than duplicate user turns.
 
 The backend contracts live in
 [`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React

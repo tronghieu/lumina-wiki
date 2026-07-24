@@ -236,6 +236,7 @@ export class ChatRequestDTO {
     "session": SessionReferenceDTO;
     "requestId": string;
     "conversationId": string;
+    "retryOfAttemptId"?: string;
     "question": string;
     "profiles": ProfileSelectionDTO;
     "history": ChatHistoryOptionsDTO;
@@ -271,21 +272,21 @@ export class ChatRequestDTO {
      */
     static createFrom($$source: any = {}): ChatRequestDTO {
         const $$createField0_0 = $$createType5;
-        const $$createField4_0 = $$createType6;
-        const $$createField5_0 = $$createType7;
-        const $$createField7_0 = $$createType8;
+        const $$createField5_0 = $$createType6;
+        const $$createField6_0 = $$createType7;
+        const $$createField8_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
         }
         if ("profiles" in $$parsedSource) {
-            $$parsedSource["profiles"] = $$createField4_0($$parsedSource["profiles"]);
+            $$parsedSource["profiles"] = $$createField5_0($$parsedSource["profiles"]);
         }
         if ("history" in $$parsedSource) {
-            $$parsedSource["history"] = $$createField5_0($$parsedSource["history"]);
+            $$parsedSource["history"] = $$createField6_0($$parsedSource["history"]);
         }
         if ("linkedPaths" in $$parsedSource) {
-            $$parsedSource["linkedPaths"] = $$createField7_0($$parsedSource["linkedPaths"]);
+            $$parsedSource["linkedPaths"] = $$createField8_0($$parsedSource["linkedPaths"]);
         }
         return new ChatRequestDTO($$parsedSource as Partial<ChatRequestDTO>);
     }

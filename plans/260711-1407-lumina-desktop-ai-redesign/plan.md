@@ -38,11 +38,11 @@ Production-port `Lumina Desktop.dc.html` tokens and hierarchy while preserving r
 | 3 | [Workspace corpus and lexical retrieval](./phase-03-workspace-corpus-and-lexical-retrieval.md) | Completed |
 | 4 | [Semantic embeddings and hybrid index](./phase-04-semantic-embeddings-and-hybrid-index.md) | Completed |
 | 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Completed |
-| 6 | [Reference-faithful workspace shell](./phase-06-reference-faithful-workspace-shell.md) | Pending |
-| 7 | [Agent chat and settings integration](./phase-07-agent-chat-and-settings-integration.md) | Pending |
+| 6 | [Reference-faithful workspace shell](./phase-06-reference-faithful-workspace-shell.md) | Completed |
+| 7 | [Agent chat and settings integration](./phase-07-agent-chat-and-settings-integration.md) | Completed |
 | 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | Pending |
 
-**Progress:** 87/140 checklist items complete (62.1%); 5/8 phases complete (62.5%).
+**Progress:** 121/140 checklist items complete (86.4%); 7/8 phases complete (87.5%).
 
 ## Dependencies
 
@@ -73,6 +73,7 @@ Adjudication: `reports/from-red-team-coordinator-to-planner-adjudicated-plan-rev
 ## Whole-Plan Consistency Sweep
 
 - Workspace identity: draft paths are UI-only; loaded session capability/generation is authoritative in phases 3, 5, and 7.
+- Trusted activation: Phase 7 accepts native frontend `Dialogs.OpenFile` followed by backend `ConfirmAndActivateWorkspace` in place of `ChooseAndActivateWorkspace`; the backend confirmation still exclusively mints the loaded workspace capability, so the security boundary and public contracts remain intact.
 - Ownership: phase 5 alone creates/registers `internal/ai/service.go`; phase 1 supplies injected stores only.
 - Cancellation: frontend requests cancellation explicitly and retains the listener until the matching terminal event or bounded timeout.
 - Citations/tree: phase 3 owns safe broad-note reads and bounded workspace tree DTOs; phase 6 renders the DTO; phase 7 navigates graph notes or opens an allowlisted note artifact.

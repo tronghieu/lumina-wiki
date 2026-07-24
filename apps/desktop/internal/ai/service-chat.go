@@ -50,7 +50,8 @@ func (service *Service) Chat(ctx context.Context, request ChatRequestDTO) (ChatC
 		return ChatCompletionDTO{}, ErrChatUnavailable
 	}
 	domain := runtimeChatRequest{
-		RequestID: request.RequestID, ConversationID: request.ConversationID, Question: request.Question,
+		RequestID: request.RequestID, ConversationID: request.ConversationID,
+		RetryOfAttemptID: request.RetryOfAttemptID, Question: request.Question,
 		Profiles: request.Profiles, History: request.History, SelectedPath: request.SelectedPath,
 		LinkedPaths: append([]string(nil), request.LinkedPaths...),
 	}
@@ -72,6 +73,7 @@ func mapBeginRequestError(err error) error {
 
 func validChatRequestDTO(ctx context.Context, request ChatRequestDTO) bool {
 	if ctx == nil || !validSessionReferenceSyntax(request.Session) || !validFacadeID(request.RequestID) || !validFacadeID(request.ConversationID) ||
+		request.RetryOfAttemptID != "" && (!validFacadeID(request.RetryOfAttemptID) || request.RetryOfAttemptID == request.RequestID) ||
 		!validQuestion(request.Question) || !validProfileSelection(request.Profiles) ||
 		!validRelativeWikiPath(request.SelectedPath, true) || len(request.LinkedPaths) > retrieval.MaxLinkedPathInputs {
 		return false

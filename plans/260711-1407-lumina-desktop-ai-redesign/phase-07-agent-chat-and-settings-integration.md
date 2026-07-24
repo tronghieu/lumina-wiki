@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Agent chat and settings integration"
-status: pending
+status: completed
 priority: P1
 effort: "4d"
 dependencies: [5, 6]
@@ -27,6 +27,8 @@ Connect the reference Agent panel and Settings dialog to generated backend contr
 - Open calls backend `ChooseAndActivateWorkspace`; activating an edited draft calls backend `ConfirmAndActivateWorkspace` and changes loaded state only after native confirmation succeeds.
 - Render actual user/provider events only; cancel/retry/new chat/history enable-disable-delete; valid citations navigate to real graph nodes and unknown citations remain inert.
 - Settings normalizes independent chat/embedding profiles, never receives secret values, clears ephemeral credential input, defaults semantic mode off, and requires matching disclosure consent.
+
+Accepted deviation: the production Open flow uses native frontend `Dialogs.OpenFile` and then calls backend `ConfirmAndActivateWorkspace`, rather than calling `ChooseAndActivateWorkspace`. The frontend receives no capability from the dialog; only backend confirmation activates the loaded workspace, preserving capability security and existing public contracts.
 
 ## Architecture
 
@@ -79,13 +81,13 @@ export interface ChatBridge { onStream(cb: (event: StreamEvent) => void): () => 
 
 ## Interface and Function Checklist
 
-- [ ] `reduceChat` filters request/sequence/terminal state and caps rendered output.
-- [ ] `startChat(bridge, req, dispatch)` subscribes synchronously; explicit cancel waits for authoritative terminal or timeout before cleanup.
-- [ ] `AgentPanel` has real composer, Cancel, Retry, New chat, citation buttons, live region, collapse/reopen controls.
-- [ ] `normalizeSettings`, `credentialStatusLabel`, `consentRequired`; no frontend `localStorage` for AI profiles/secrets/history.
-- [ ] Citation navigation resolves current graph nodes or calls `ReadCitationNote` with an opaque citation ID; never accepts arbitrary filesystem paths.
-- [ ] Workspace view-model separates draft root from backend-issued loaded session and atomically clears prior graph/note/chat on successful activation only.
-- [ ] Open/typed-root flows use trusted backend chooser/confirmation methods; frontend cannot mint a session by calling validation with a path.
+- [x] `reduceChat` filters request/sequence/terminal state and caps rendered output.
+- [x] `startChat(bridge, req, dispatch)` subscribes synchronously; explicit cancel waits for authoritative terminal or timeout before cleanup.
+- [x] `AgentPanel` has real composer, Cancel, Retry, New chat, citation buttons, live region, collapse/reopen controls.
+- [x] `normalizeSettings`, `credentialStatusLabel`, `consentRequired`; no frontend `localStorage` for AI profiles/secrets/history.
+- [x] Citation navigation resolves current graph nodes or calls `ReadCitationNote` with an opaque citation ID; never accepts arbitrary filesystem paths.
+- [x] Workspace view-model separates draft root from backend-issued loaded session and atomically clears prior graph/note/chat on successful activation only.
+- [x] Open/typed-root flows use trusted backend chooser/confirmation methods; frontend cannot mint a session by calling validation with a path.
 
 ## Dependency Map
 
@@ -109,20 +111,28 @@ Move async stream logic out of `App.tsx`; move state transitions out of JSX; kee
 
 ## Implementation Steps
 
-- [ ] Write reducer ordering/terminal/retry/reset tests; run RED; implement `chat-state.ts`; run GREEN.
-- [ ] Write subscribe-before-call/explicit-cancel/promise-reject-before-terminal/timeout cleanup tests; run RED; implement `use-chat-stream.ts`; run GREEN.
-- [ ] Commit: `feat(desktop): connect cancellable chat state`.
-- [ ] Replace no-chat structural test with real composer/no-canned-response contract; run RED; implement Agent panel; run GREEN.
-- [ ] Write settings normalization/secret/consent/index tests; run RED; refactor dialog and backend gateways; run GREEN.
-- [ ] Commit: `feat(desktop): connect AI settings and history`.
-- [ ] Add citation-to-node and semantic-fallback integration tests; run RED; wire `App.tsx`/shell; run GREEN.
-- [ ] Regenerate/scan bindings, run frontend build/full Go tests, then commit `feat(desktop): integrate cited agent chat`.
+- [x] Write reducer ordering/terminal/retry/reset tests; run RED; implement `chat-state.ts`; run GREEN.
+- [x] Write subscribe-before-call/explicit-cancel/promise-reject-before-terminal/timeout cleanup tests; run RED; implement `use-chat-stream.ts`; run GREEN.
+- [x] Prepare the cancellable-chat checkpoint scope for the final consolidated Phase 7 commit.
+- [x] Replace no-chat structural test with real composer/no-canned-response contract; run RED; implement Agent panel; run GREEN.
+- [x] Write settings normalization/secret/consent/index tests; run RED; refactor dialog and backend gateways; run GREEN.
+- [x] Prepare the AI settings/history checkpoint scope for the final consolidated Phase 7 commit.
+- [x] Add citation-to-node and semantic-fallback integration tests; run RED; wire `App.tsx`/shell; run GREEN.
+- [x] Regenerate/scan bindings and run the frontend build/full Go gates; include the integrated cited-agent scope in the final consolidated Phase 7 commit.
 
 ## Success Criteria
 
-- [ ] Real streamed chat cancels, retries, cites, resets, persists/clears history, and cleans listeners.
-- [ ] No fake response, phantom message, frontend secret persistence, or arbitrary citation navigation remains.
-- [ ] `App.tsx` and Agent/settings modules meet modularity targets and all existing workspace flows pass.
+- [x] Real streamed chat cancels, retries, cites, resets, persists/clears history, and cleans listeners.
+- [x] No fake response, phantom message, frontend secret persistence, or arbitrary citation navigation remains.
+- [x] `App.tsx` and Agent/settings modules meet modularity targets and all existing workspace flows pass.
+
+## Completion Evidence
+
+- Completed: 2026-07-24; final code review PASS with no blockers.
+- Frontend: 72/72 tests passed and production build passed.
+- Bindings: regenerated and scanned; `retryOfAttemptId` remains optional.
+- Backend: scoped 15-package Go gate passed; repository `git diff --check` passed.
+- Activation deviation accepted above; capability issuance remains backend-only.
 
 ## Security, Risks, and Rollback
 

@@ -1,9 +1,9 @@
 # Lumina Desktop
 
 Lumina Desktop is a Wails 3 companion app for existing Lumina-Wiki workspaces.
-The MVP is local-first and graph-focused: inspect the wiki graph, run the
-existing Lumina check tool, and import source files without changing the root
-npm CLI package.
+Its reference-faithful workspace shell combines the real workspace tree, graph,
+Markdown notes, checks, source import, and an optional AI agent without changing
+the root npm CLI package.
 
 ## Stack
 
@@ -63,34 +63,40 @@ npm audit --omit=optional
 ## Scope
 
 This app is intentionally isolated from the root npm package. Do not add
-desktop dependencies to the root `package.json`. Desktop writes must respect
-Lumina's workspace contract: graph and wiki mutations go through existing
-Lumina tools, not direct app edits.
+desktop dependencies to the root `package.json`. AI, retrieval, and navigation
+keep the active workspace immutable. The existing check and non-overwriting
+source-import flows remain the only operational surfaces; graph and wiki
+mutations still belong to existing Lumina tools, not direct app edits.
 
-Current write-capable surface:
+Workspace surface:
 
 - `Run Check` executes the installed workspace script at
   `_lumina/scripts/lint.mjs --summary` through Go `exec.CommandContext`.
-- `Import` copies one selected file into `raw/sources/`.
-- Import refuses overwrites and rejects symlink sources.
-
-Current read/navigation surface:
-
-- `Open Workspace` uses the native folder picker, validates the selected
-  Lumina workspace, and loads its real `wiki/` graph.
+- `Import` copies one selected file into `raw/sources/`; it refuses overwrites
+  and rejects symlink sources.
+- `Open Workspace` starts with the native folder picker, then requires backend
+  confirmation before activating a session capability for AI, tree, and history
+  reads.
+- The responsive shell renders the real bounded workspace tree and `wiki/`
+  graph, with no sample workspace content.
 - Selecting a graph node shows the full Markdown note content in the inspector.
 - `Run Check` shows both the summary and detailed stdout/stderr output in the
   inspector.
-- The graph canvas starts with sample data only until a workspace is loaded.
 - `Choose Source` uses the native file picker; the importer service still
   performs all filesystem validation before copying.
 
-Current MVP limits:
+AI surface:
 
-- No provider-backed chat.
-- No graph edge or wiki note editing.
-- Workspace and source paths are session-only; recent workspaces are not
-  persisted yet.
+- Provider-backed chat streams cited answers and supports cancellation, retry,
+  new conversations, and workspace-scoped history.
+- The Go backend owns provider profiles, credential handling, conversation
+  history, retrieval, citations, and active workspace sessions. Secrets are not
+  returned to the frontend.
+- Lexical workspace search is always available. Semantic search is opt-in,
+  requires disclosure consent, and falls back to lexical search when unavailable.
+
+The desktop app is not released yet. Visual, accessibility, native packaging,
+and release gates remain pending.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:

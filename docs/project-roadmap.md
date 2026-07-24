@@ -2,7 +2,7 @@
 
 **Current Version:** 1.1.0 (2026-05-06)  
 **Canonical source:** [ROADMAP.md](../ROADMAP.md) at project root  
-**Updated:** 2026-07-23
+**Updated:** 2026-07-24
 
 ---
 
@@ -30,7 +30,7 @@ Focus: Stability, local capabilities, and v1.x feature expansion.
 | **CI/CD hardening** (Bun, Node 22 LTS) | Planned | — |
 | **Stability lock** (CLI contract published; --cwd deprecation; exit-4 cancellation) | Shipped v1.x | — |
 | **Schema parity** (cross-source ID handling) | In progress | — |
-| **Desktop companion app** (Wails workspace UI + optional local AI services) | Plan in progress: backend phases 1–5 complete; shell, integration, and release pending | [plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md) |
+| **Desktop companion app** (Wails workspace UI + optional local AI services) | Plan in progress: phases 1–7 complete; visual, accessibility, packaging, and release gates pending | [plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md) |
 
 ---
 

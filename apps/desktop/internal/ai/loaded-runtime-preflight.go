@@ -38,7 +38,10 @@ func (runtime *loadedRuntime) failPreflight(parent context.Context, request runt
 			now := time.Now().UTC()
 			record := history.ConversationRecord{SchemaVersion: history.CurrentSchemaVersion,
 				ConversationID: request.ConversationID, AttemptID: request.RequestID, CreatedAt: now, FinishedAt: now,
-				Status: status, UserMessage: request.Question, ErrorCode: terminalCode}
+				Status: status, RetryOfAttemptID: request.RetryOfAttemptID, ErrorCode: terminalCode}
+			if request.RetryOfAttemptID == "" {
+				record.UserMessage = request.Question
+			}
 			historyCtx, cancelHistory := context.WithTimeout(context.Background(), runtimeFinalizationTimeout)
 			_, _ = store.Append(historyCtx, record)
 			cancelHistory()

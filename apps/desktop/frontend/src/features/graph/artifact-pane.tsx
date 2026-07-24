@@ -13,7 +13,9 @@ type ArtifactPaneProps = {
   query: string;
   selectedNodeId: string;
   workspaceSummary: WorkspaceSummary | null;
+  workspaceDraftRoot: string;
   workspaceRoot: string;
+  onActivateWorkspace: () => void;
   onActiveViewChange: (view: ArtifactView) => void;
   onChooseSourcePath: () => void;
   onChooseWorkspace: () => void;
@@ -22,6 +24,7 @@ type ArtifactPaneProps = {
   onRefreshGraph: () => void;
   onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
+  onWorkspaceDraftChange: (path: string) => void;
 };
 
 export function ArtifactPane({
@@ -31,7 +34,9 @@ export function ArtifactPane({
   query,
   selectedNodeId,
   workspaceSummary,
+  workspaceDraftRoot,
   workspaceRoot,
+  onActivateWorkspace,
   onActiveViewChange,
   onChooseSourcePath,
   onChooseWorkspace,
@@ -40,6 +45,7 @@ export function ArtifactPane({
   onRefreshGraph,
   onRunCheck,
   onSelectNode,
+  onWorkspaceDraftChange,
 }: ArtifactPaneProps) {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
   const title = selectedNode?.title ?? (workspaceRoot ? 'Knowledge graph' : 'Open a workspace');
@@ -58,6 +64,21 @@ export function ArtifactPane({
           <button type="button" onClick={onRunCheck} disabled={!workspaceRoot}>Check</button>
           <button className="primary-action" type="button" onClick={onImportSource} disabled={!workspaceRoot}>Import</button>
         </div>
+        <form className="workspace-root-control" onSubmit={(event) => {
+          event.preventDefault();
+          onActivateWorkspace();
+        }}>
+          <label>
+            <span className="visually-hidden">Workspace root</span>
+            <input
+              aria-label="Workspace root"
+              value={workspaceDraftRoot}
+              placeholder="Workspace path"
+              onChange={(event) => onWorkspaceDraftChange(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={!workspaceDraftRoot.trim()}>Connect</button>
+        </form>
         <div className="artifact-controls">
           <div className="artifact-tabs" role="tablist" aria-label="Artifact view">
             <button

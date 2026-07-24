@@ -76,7 +76,8 @@ func (runtime *loadedRuntime) RunChat(parent context.Context, request runtimeCha
 	orchestrator := chat.NewOrchestrator(chat.OrchestratorConfig{Retriever: retriever, Provider: provider,
 		History: appender, Citations: runtime.citations})
 	return orchestrator.Run(ctx, chat.Request{RequestID: request.RequestID, ConversationID: request.ConversationID,
-		AttemptID: request.RequestID, Question: request.Question, Profile: *config.Chat, History: turns,
+		AttemptID: request.RequestID, RetryOfAttemptID: request.RetryOfAttemptID,
+		Question: request.Question, Profile: *config.Chat, History: turns,
 		SelectedPath: request.SelectedPath, LinkedPaths: append([]string(nil), request.LinkedPaths...),
 		HistoryEnabled: request.History.Persist}, sink)
 }

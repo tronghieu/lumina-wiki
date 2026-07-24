@@ -36,6 +36,22 @@ func TestLoadedRuntimeProfilePreflightEmitsStartedFailedAndPersistsOnce(t *testi
 	}
 }
 
+func TestLoadedRuntimePersistsPreflightRetryAsLinkedAttempt(t *testing.T) {
+	store := &runtimeHistorySpy{enabled: true}
+	runtime := newRuntimeForTest(t, runtimeWorkspace(t), &runtimeConfigSpy{config: runtimeConfig("saved-profile", "")}, store, &runtimeProviderSpy{})
+	err := runtime.RunChat(context.Background(), runtimeChatRequest{
+		RequestID: "retry-attempt", ConversationID: "conversation", RetryOfAttemptID: "prior-attempt",
+		Question: "same question", Profiles: ProfileSelectionDTO{ChatProfileID: "missing-profile"},
+		History: ChatHistoryOptionsDTO{Persist: true},
+	}, &runtimeEventCapture{})
+	if err == nil {
+		t.Fatal("expected preflight failure")
+	}
+	if len(store.appended) != 1 || store.appended[0].RetryOfAttemptID != "prior-attempt" || store.appended[0].UserMessage != "" {
+		t.Fatalf("preflight retry history=%#v", store.appended)
+	}
+}
+
 func TestLoadedRuntimeHistoryDisabledOrCorruptNeverCallsProvider(t *testing.T) {
 	for _, test := range []struct {
 		name    string

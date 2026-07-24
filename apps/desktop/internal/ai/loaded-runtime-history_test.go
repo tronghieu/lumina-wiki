@@ -41,6 +41,23 @@ func TestLoadedRuntimeIncludesOnlyRecentCompletedOriginalHistoryAndPersistsCompl
 	}
 }
 
+func TestLoadedRuntimePersistsRetryWithoutDuplicatingUserMessage(t *testing.T) {
+	store := &runtimeHistorySpy{enabled: true}
+	provider := &runtimeProviderSpy{events: []providers.StreamEvent{{Kind: providers.EventDelta, Delta: &providers.Delta{Text: "done"}}}}
+	runtime := newRuntimeForTest(t, runtimeWorkspace(t), &runtimeConfigSpy{config: runtimeConfig("chat-main", "")}, store, provider)
+	err := runtime.RunChat(context.Background(), runtimeChatRequest{
+		RequestID: "retry-attempt", ConversationID: "conversation", RetryOfAttemptID: "prior-attempt",
+		Question: "same question", Profiles: ProfileSelectionDTO{ChatProfileID: "chat-main"},
+		History: ChatHistoryOptionsDTO{Persist: true},
+	}, &runtimeEventCapture{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.appended) != 1 || store.appended[0].RetryOfAttemptID != "prior-attempt" || store.appended[0].UserMessage != "" {
+		t.Fatalf("retry history=%#v", store.appended)
+	}
+}
+
 func TestCompletedHistoryTurnsCapsProviderTurns(t *testing.T) {
 	records := make([]history.ConversationRecord, history.MaxAttemptsPerConversation)
 	for index := range records {
