@@ -51,12 +51,22 @@ export function AgentPanel({
   const [pendingDelete, setPendingDelete] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const confirmClearRef = useRef<HTMLButtonElement>(null);
+  const confirmDeleteRefs = useRef(new Map<string, HTMLButtonElement>());
   const active = chat.phase === 'starting' || chat.phase === 'streaming';
   const retryable = chat.phase === 'failed' || chat.phase === 'cancelled';
 
   useEffect(() => {
     if (historyOpen) onRefreshHistory();
   }, [historyOpen, onRefreshHistory]);
+
+  useEffect(() => {
+    if (confirmClear) confirmClearRef.current?.focus();
+  }, [confirmClear]);
+
+  useEffect(() => {
+    if (pendingDelete) confirmDeleteRefs.current.get(pendingDelete)?.focus();
+  }, [pendingDelete]);
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
@@ -97,7 +107,7 @@ export function AgentPanel({
             </button>
             {confirmClear ? (
               <>
-                <button type="button" disabled={historyBusy} onClick={() => {
+            <button ref={confirmClearRef} type="button" disabled={historyBusy} onClick={() => {
                   onDeleteAllHistory();
                   setConfirmClear(false);
                 }}>Confirm clear all</button>
@@ -118,6 +128,7 @@ export function AgentPanel({
               </div>
               <button
                 type="button"
+                aria-label={`Open ${conversation.latestStatus} conversation ${conversation.conversationId}`}
                 disabled={active || historyBusy}
                 onClick={() => onLoadHistory(conversation.conversationId)}
               >
@@ -125,14 +136,30 @@ export function AgentPanel({
               </button>
               {pendingDelete === conversation.conversationId ? (
                 <>
-                  <button type="button" disabled={historyBusy} onClick={() => {
+                  <button
+                    ref={(element) => {
+                      if (element) confirmDeleteRefs.current.set(conversation.conversationId, element);
+                      else confirmDeleteRefs.current.delete(conversation.conversationId);
+                    }}
+                    type="button"
+                    aria-label={`Confirm delete conversation ${conversation.conversationId}`}
+                    disabled={historyBusy}
+                    onClick={() => {
                     onDeleteHistory(conversation.conversationId);
                     setPendingDelete('');
-                  }}>Confirm delete</button>
+                    }}
+                  >
+                    Confirm delete
+                  </button>
                   <button type="button" onClick={() => setPendingDelete('')}>Keep</button>
                 </>
               ) : (
-                <button type="button" disabled={active || historyBusy} onClick={() => setPendingDelete(conversation.conversationId)}>
+                <button
+                  type="button"
+                  aria-label={`Delete conversation ${conversation.conversationId}`}
+                  disabled={active || historyBusy}
+                  onClick={() => setPendingDelete(conversation.conversationId)}
+                >
                   Delete
                 </button>
               )}
@@ -143,7 +170,9 @@ export function AgentPanel({
         <>
           <div className="agent-toolbar">
             <button type="button" disabled={active} onClick={onNewChat}>New chat</button>
-            <span title={workspaceStatus.message}>{workspaceStatus.title}</span>
+            <span role="status" aria-label={`${workspaceStatus.title}: ${workspaceStatus.message}`}>
+              {workspaceStatus.title}
+            </span>
             <span>{semanticLabel(chat.semanticStatus, chat.semanticWarning)}</span>
           </div>
           <div className="agent-messages" aria-busy={active}>

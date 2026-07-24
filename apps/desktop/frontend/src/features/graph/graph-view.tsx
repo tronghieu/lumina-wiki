@@ -1,4 +1,4 @@
-import { Controls, ReactFlow, type NodeMouseHandler, type NodeProps } from '@xyflow/react';
+import { Controls, Handle, Position, ReactFlow, type NodeMouseHandler, type NodeProps } from '@xyflow/react';
 import { useMemo } from 'react';
 import { resolveGraphEmphasis, toFlowEdges, toFlowNodes } from './graph-data';
 import type { KnowledgeGraph } from './graph-types';
@@ -61,8 +61,10 @@ const nodeTypes = {
 function LuminaGraphNode({ data }: NodeProps) {
   return (
     <div className="graph-node-content">
+      <Handle type="target" position={Position.Top} />
       <span className="graph-node-dot" aria-hidden="true" />
       <span className="graph-node-label">{String(data.label ?? '')}</span>
+      <Handle type="source" position={Position.Bottom} />
     </div>
   );
 }

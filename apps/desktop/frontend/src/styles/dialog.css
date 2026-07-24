@@ -93,7 +93,7 @@
 
 .settings-tabs button[aria-pressed='true'],
 .settings-actions button:first-child {
-  color: var(--accent-ink);
+  color: var(--on-accent);
   border-color: var(--accent);
   background: var(--accent);
 }

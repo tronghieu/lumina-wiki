@@ -1,4 +1,5 @@
 import type { WorkspaceSummary } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
+import type { KeyboardEvent } from 'react';
 import type { ArtifactView } from '../../app/app-shell-state';
 import { formatWorkspaceOverviewStats } from '../workspace/workspace-actions';
 import { GraphView } from './graph-view';
@@ -50,6 +51,20 @@ export function ArtifactPane({
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
   const title = selectedNode?.title ?? (workspaceRoot ? 'Knowledge graph' : 'Open a workspace');
 
+  function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const currentView = (event.target as HTMLElement).id === 'artifact-tab-note' ? 'note' : 'graph';
+    const nextView = event.key === 'Home'
+      ? 'graph'
+      : event.key === 'End'
+        ? 'note'
+        : currentView === 'graph' ? 'note' : 'graph';
+    if (nextView === 'note' && !selectedNode) return;
+    onActiveViewChange(nextView);
+    event.currentTarget.querySelector<HTMLButtonElement>(`#artifact-tab-${nextView}`)?.focus();
+  }
+
   return (
     <section className="main-artifact" aria-label="Workspace artifact">
       <header className="artifact-header">
@@ -80,20 +95,31 @@ export function ArtifactPane({
           <button type="submit" disabled={!workspaceDraftRoot.trim()}>Connect</button>
         </form>
         <div className="artifact-controls">
-          <div className="artifact-tabs" role="tablist" aria-label="Artifact view">
+          <div
+            className="artifact-tabs"
+            role="tablist"
+            aria-label="Artifact view"
+            onKeyDown={handleTabKeyDown}
+          >
             <button
+              id="artifact-tab-graph"
               type="button"
               role="tab"
+              aria-controls="artifact-panel-graph"
               aria-selected={activeView === 'graph'}
+              tabIndex={activeView === 'graph' ? 0 : -1}
               onClick={() => onActiveViewChange('graph')}
             >
               Graph
             </button>
             <button
+              id="artifact-tab-note"
               type="button"
               role="tab"
+              aria-controls="artifact-panel-note"
               aria-selected={activeView === 'note'}
               disabled={!selectedNode}
+              tabIndex={activeView === 'note' ? 0 : -1}
               onClick={() => onActiveViewChange('note')}
             >
               Note
@@ -126,11 +152,18 @@ export function ArtifactPane({
         </section>
       )}
 
-      {activeView === 'graph' ? (
-        <GraphView graph={graph} query={query} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} />
-      ) : (
-        <NoteView noteState={noteState} />
-      )}
+      <div
+        id={`artifact-panel-${activeView}`}
+        className="artifact-tab-panel"
+        role="tabpanel"
+        aria-labelledby={`artifact-tab-${activeView}`}
+      >
+        {activeView === 'graph' ? (
+          <GraphView graph={graph} query={query} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} />
+        ) : (
+          <NoteView noteState={noteState} />
+        )}
+      </div>
     </section>
   );
 }

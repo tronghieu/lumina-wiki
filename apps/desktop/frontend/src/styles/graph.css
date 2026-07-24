@@ -90,12 +90,15 @@
 }
 
 .react-flow__node.flow-node.dim .graph-node-label {
-  color: var(--node-dim);
+  color: var(--muted);
 }
 
-.react-flow__node-default .react-flow__handle {
+.graph-node-content .react-flow__handle {
   width: 1px;
   height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  border: 0;
   opacity: 0;
 }
 

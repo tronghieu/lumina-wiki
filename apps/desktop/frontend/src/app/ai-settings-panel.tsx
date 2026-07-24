@@ -1,4 +1,4 @@
-import { useRef, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type FormEvent, type KeyboardEvent } from 'react';
 import type { SessionReferenceDTO } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/models';
 import {
   consentRequired,
@@ -18,7 +18,12 @@ type AiSettingsPanelProps = {
 export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }: AiSettingsPanelProps) {
   const controller = useAISettingsController(session, onProfilesChange, gateway);
   const dialogRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const profile = controller.profile;
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
 
   function close() {
     controller.setSecret('');
@@ -38,7 +43,7 @@ export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }:
     if (controls.length === 0) return;
     const first = controls[0];
     const last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleRef.current)) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -63,11 +68,11 @@ export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }:
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        onKeyDown={handleDialogKey}
+        onKeyDownCapture={handleDialogKey}
       >
         <header>
           <div>
-            <h2 id="settings-title" tabIndex={-1}>AI Settings</h2>
+            <h2 ref={titleRef} id="settings-title" tabIndex={-1}>AI Settings</h2>
             <span>Backend-owned profiles and credentials</span>
           </div>
           <button type="button" aria-label="Close settings" onClick={close}>×</button>

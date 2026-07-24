@@ -374,6 +374,13 @@ button.tree-row:hover {
   background: var(--bg);
 }
 
+.artifact-tab-panel {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
 .artifact-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -710,5 +717,9 @@ button.tree-row:hover {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  button:active:not(:disabled) {
+    transform: none;
   }
 }

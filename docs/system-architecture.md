@@ -81,6 +81,11 @@ presentation client.
   session, request, and sequence, and treats the matching terminal stream event
   as authoritative. Cancellation keeps that listener through the terminal
   handshake; retries are linked attempts rather than duplicate user turns.
+- Release verification combines source contracts with a pinned Chromium
+  fixture. Dark/light snapshots, rendered responsive geometry, axe checks,
+  keyboard/focus behavior, local fonts, workspace byte manifests, generated
+  binding scans, race tests, and native Wails builds are reproducible gates.
+  Deterministic fixture data lives only in the browser test harness.
 
 The backend contracts live in
 [`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React

@@ -123,7 +123,7 @@ function TreeRow({
           className={node.path === selectedPath ? 'tree-row selected' : 'tree-row'}
           type="button"
           aria-expanded={directory ? expanded : undefined}
-          aria-selected={selectable ? node.path === selectedPath : undefined}
+          aria-current={selectable && node.path === selectedPath ? 'page' : undefined}
           onClick={() => directory ? onToggle(node.path) : onSelectPath(node.path)}
         >
           <span className="tree-disclosure" aria-hidden="true">{directory ? (expanded ? '⌄' : '›') : '·'}</span>

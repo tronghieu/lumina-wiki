@@ -58,6 +58,8 @@ cd frontend
 npm run test
 npm run build
 npm audit --omit=optional
+npm run test:visual
+npm run test:a11y
 ```
 
 ## Scope
@@ -95,8 +97,29 @@ AI surface:
 - Lexical workspace search is always available. Semantic search is opt-in,
   requires disclosure consent, and falls back to lexical search when unavailable.
 
-The desktop app is not released yet. Visual, accessibility, native packaging,
-and release gates remain pending.
+## AI privacy and local data
+
+- Chat sends your question and selected workspace evidence only to the provider
+  profile you configure. Semantic search explains whether it runs locally or
+  sends note text to a remote embedding provider before you can enable it.
+- Provider credentials stay in the Go backend and the operating system's secure
+  credential store when available. The frontend cannot read them back.
+- Conversation history is optional and stored in Lumina's local application
+  data, scoped to the active workspace. You can turn history off, delete one
+  conversation, or clear all conversations from the Agent panel.
+- Cancel stops an active answer and waits for the backend's final cancellation
+  event. Retry creates a linked attempt without duplicating the original user
+  message.
+- If semantic search is unavailable, chat continues with workspace text search
+  and shows that fallback in the Agent panel.
+- Chat, search, profiles, history, citations, and semantic indexes do not write
+  into the active workspace. Import remains the sole exception and adds exactly
+  one new, non-overwriting file under `raw/sources/`.
+
+The desktop app is not released yet. Its visual, accessibility, workspace
+immutability, secret-boundary, and local native-build gates are automated;
+signed distribution and remote three-platform workflow evidence are still
+release prerequisites.
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:

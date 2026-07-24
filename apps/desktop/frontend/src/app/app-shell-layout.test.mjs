@@ -34,6 +34,7 @@ test('artifact pane keeps every real workspace action reachable', () => {
 test('graph and note remain real selectable artifact views', () => {
   assert.match(artifactSource, /role="tablist"/);
   assert.match(artifactSource, /role="tab"/);
+  assert.match(artifactSource, /onKeyDown=\{handleTabKeyDown\}/);
   assert.match(artifactSource, />\s*Graph\s*</);
   assert.match(artifactSource, />\s*Note\s*</);
   assert.match(artifactSource, /<GraphView/);

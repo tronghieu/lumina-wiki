@@ -103,6 +103,7 @@ export function AppShell({
   const [agentOpen, setAgentOpen] = useState(initialPanels.agentInitiallyOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const responsivePanels = useRef(initialPanels);
+  const settingsTrigger = useRef<HTMLButtonElement | null>(null);
   const [theme, setTheme] = useState(() => resolveThemePreference(
     typeof window === 'undefined' ? null : window.localStorage.getItem('lumina.desktop.theme'),
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -111,16 +112,63 @@ export function AppShell({
   const resolvedView = resolveArtifactView(activeView, selectedNodeId);
   const workspaceLabel = workspaceName(workspaceRoot);
 
+  function closeAgentPanel() {
+    setAgentOpen(false);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Open Agent panel"]')?.focus();
+    });
+  }
+
+  function openAgentPanel() {
+    if (window.innerWidth <= 1180) setTreeOpen(false);
+    setAgentOpen(true);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Close Agent panel"]')?.focus();
+    });
+  }
+
+  function closeWorkspaceTree() {
+    setTreeOpen(false);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('[aria-label="Open workspace tree"]')?.focus();
+    });
+  }
+
+  function openWorkspaceTree() {
+    if (window.innerWidth <= 1180) setAgentOpen(false);
+    setTreeOpen(true);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('.workspace-tree-panel [aria-label="Close workspace tree"]')?.focus();
+    });
+  }
+
+  function openSettings() {
+    settingsTrigger.current = document.activeElement instanceof HTMLButtonElement
+      ? document.activeElement
+      : null;
+    setSettingsOpen(true);
+  }
+
+  function closeSettings() {
+    setSettingsOpen(false);
+  }
+
   useEffect(() => {
     function closeOverlay(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
-      if (settingsOpen) setSettingsOpen(false);
-      else if (agentOpen) setAgentOpen(false);
-      else if (treeOpen) setTreeOpen(false);
+      if (settingsOpen) closeSettings();
+      else if (agentOpen) closeAgentPanel();
+      else if (treeOpen) closeWorkspaceTree();
     }
     window.addEventListener('keydown', closeOverlay);
     return () => window.removeEventListener('keydown', closeOverlay);
   }, [agentOpen, settingsOpen, treeOpen]);
+
+  useEffect(() => {
+    if (settingsOpen || !settingsTrigger.current) return;
+    settingsTrigger.current.focus();
+    settingsTrigger.current = null;
+  }, [settingsOpen]);
 
   useEffect(() => {
     function syncResponsivePanels() {
@@ -179,12 +227,9 @@ export function AppShell({
           workspaceLabel={workspaceLabel}
           workspaceTree={workspaceTree}
           theme={theme}
-          onClose={() => setTreeOpen(false)}
-          onOpen={() => {
-            if (window.innerWidth <= 1180) setAgentOpen(false);
-            setTreeOpen(true);
-          }}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onClose={closeWorkspaceTree}
+          onOpen={openWorkspaceTree}
+          onOpenSettings={openSettings}
           onSelectGraph={() => {
             setActiveView('graph');
             onQueryChange('');
@@ -224,12 +269,7 @@ export function AppShell({
             historyEnabled={historyEnabled}
             onCancel={onCancelChat}
             onCitation={(citation) => void openCitation(citation)}
-            onClose={() => {
-              setAgentOpen(false);
-              window.setTimeout(() => {
-                document.querySelector<HTMLButtonElement>('[aria-label="Open Agent panel"]')?.focus();
-              });
-            }}
+            onClose={closeAgentPanel}
             onDeleteHistory={onDeleteHistory}
             onDeleteAllHistory={onDeleteAllHistory}
             onLoadHistory={onLoadHistory}
@@ -246,10 +286,7 @@ export function AppShell({
               aria-controls="agent-panel"
               aria-expanded={agentOpen}
               aria-label="Open Agent panel"
-              onClick={() => {
-                if (window.innerWidth <= 1180) setTreeOpen(false);
-                setAgentOpen(true);
-              }}
+              onClick={openAgentPanel}
             >
               ‹
             </button>
@@ -259,12 +296,7 @@ export function AppShell({
         {settingsOpen && (
           <AiSettingsPanel
             session={aiSession}
-            onClose={() => {
-              setSettingsOpen(false);
-              window.setTimeout(() => {
-                document.querySelector<HTMLButtonElement>('[aria-label="Settings"]')?.focus();
-              });
-            }}
+            onClose={closeSettings}
             onProfilesChange={onProfilesChange}
           />
         )}

@@ -190,7 +190,7 @@
   min-height: 44px;
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--accent-ink);
+  color: var(--on-accent);
   background: var(--accent);
   font-weight: 600;
 }

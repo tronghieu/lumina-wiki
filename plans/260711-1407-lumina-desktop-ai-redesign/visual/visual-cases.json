@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-24",
+  "runner": {
+    "playwright": "1.61.1",
+    "browser": "chromium",
+    "browserVersion": "149.0.7827.55",
+    "os": "macOS 26 arm64",
+    "capturedHost": "macOS 26.5.2 (25F84)",
+    "locale": "en-US",
+    "deviceScaleFactor": 1,
+    "reducedMotion": "reduce"
+  },
+  "fonts": [
+    "Inter",
+    "Source Serif 4",
+    "JetBrains Mono",
+    "Be Vietnam Pro"
+  ],
+  "cases": [
+    {
+      "name": "reference-dark-1480x920",
+      "viewport": { "width": 1480, "height": 920 },
+      "theme": "dark",
+      "maxDiffPixelRatio": 0.02,
+      "masks": []
+    },
+    {
+      "name": "reference-light-1480x920",
+      "viewport": { "width": 1480, "height": 920 },
+      "theme": "light",
+      "maxDiffPixelRatio": 0.02,
+      "masks": []
+    },
+    {
+      "name": "responsive-1180x820",
+      "viewport": { "width": 1180, "height": 820 },
+      "theme": "dark",
+      "measurementOnly": true,
+      "masks": []
+    },
+    {
+      "name": "responsive-760x780",
+      "viewport": { "width": 760, "height": 780 },
+      "theme": "dark",
+      "measurementOnly": true,
+      "masks": []
+    }
+  ],
+  "dynamicRegions": {
+    "graph": "Measured by rendered node/edge count and viewport geometry.",
+    "workspaceCounts": "Supplied by deterministic test-only bridge fixture.",
+    "nativeWindowControls": "Excluded from the browser fixture; native package smoke owns this region."
+  }
+}
