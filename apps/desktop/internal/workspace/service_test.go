@@ -27,7 +27,7 @@ func TestValidateWorkspace(t *testing.T) {
 }
 
 func TestSummaryCountsWorkspaceInventory(t *testing.T) {
-	root := filepath.Join("..", "testdata", "lumina-workspace")
+	root := summaryWorkspaceFixture(t)
 	service := NewService()
 
 	summary, err := service.Summary(root)
@@ -62,6 +62,22 @@ func TestSummaryCountsWorkspaceInventory(t *testing.T) {
 	if len(summary.MissingExpectedFolders) != 1 || summary.MissingExpectedFolders[0] != "raw/notes" {
 		t.Fatalf("unexpected missing folders: %#v", summary.MissingExpectedFolders)
 	}
+}
+
+func summaryWorkspaceFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	source := filepath.Join("..", "testdata", "lumina-workspace")
+	if err := os.CopyFS(root, os.DirFS(source)); err != nil {
+		t.Fatalf("copy workspace fixture: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "raw")); err != nil {
+		t.Fatalf("reset raw fixture: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "raw", "sources"), 0o700); err != nil {
+		t.Fatalf("create empty raw sources fixture: %v", err)
+	}
+	return root
 }
 
 func TestSummaryReportsMissingOptionalFolders(t *testing.T) {
