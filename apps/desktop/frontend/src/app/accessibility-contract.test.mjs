@@ -42,7 +42,9 @@ test('dialog and side panels provide keyboard and focus recovery contracts', () 
   assert.match(settingsSource, /aria-modal="true"/);
   assert.match(settingsSource, /event\.key !== 'Tab'/);
   assert.match(settingsSource, /event\.key === 'Escape'/);
-  assert.match(shellSource, /\[aria-label="Settings"\]\S*.*focus\(\)/s);
+  assert.match(shellSource, /settingsTrigger = useRef<HTMLButtonElement \| null>/);
+  assert.match(shellSource, /settingsTrigger\.current = document\.activeElement/);
+  assert.match(shellSource, /settingsTrigger\.current\.focus\(\)/);
   assert.match(shellSource, /\[aria-label="Open Agent panel"\]\S*.*focus\(\)/s);
   assert.match(agentSource, /event\.key === 'Enter' && !event\.shiftKey/);
   assert.match(agentSource, /confirmClearRef\.current\?\.focus\(\)/);
