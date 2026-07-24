@@ -6,6 +6,8 @@
  *   1. Installation directory (default: process.cwd())
  *   2. Research purpose (multi-line free-form, optional)
  *   3. IDE targets (multi-select)
+ *   3.5. AI agent platforms (multi-select, optional; CAP-8 — deliberately
+ *        separate from IDE targets, default none)
  *   4. Packs (multi-select; core always included)
  *   5. Language pair (communication_language, document_output_language)
  *
@@ -93,6 +95,7 @@ export function defaultAnswers(cwd = process.cwd(), locale = 'en') {
     projectName:          defaultProjectName(directory),
     researchPurpose:      '',
     ideTargets:           ['claude_code'],
+    agentTargets:         [],
     packs:                ['core'],
     communicationLang:    langName,
     documentOutputLang:   langName,
@@ -115,6 +118,7 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
     { id: 'directory',          type: 'text' },
     { id: 'researchPurpose',    type: 'text' },
     { id: 'ideTargets',         type: 'multiselect' },
+    { id: 'agentTargets',       type: 'multiselect' },
     { id: 'packs',              type: 'multiselect' },
     { id: 'communicationLang',  type: 'text',        defaultValue: LOCALE_LANGUAGE_NAME[locale] ?? 'English' },
     { id: 'documentOutputLang', type: 'text',        defaultValue: LOCALE_LANGUAGE_NAME[locale] ?? 'English' },
@@ -302,6 +306,22 @@ export async function runInstallPrompts({
     ? ideTargetsRaw
     : ['claude_code'];
 
+  // ── Prompt 3.5: AI agent platforms (optional, CAP-8) ─────────────────────
+  // Deliberately separate from the IDE-targets prompt above — these install
+  // skills globally (no project payload) for an always-on chat assistant.
+  // Default is none selected; never persisted into lumina.config.yaml.
+  const agentTargetsRaw = await multiselect({
+    message: t ? t('prompt.agent_targets.message') : 'AI agent platforms (optional — installs skills globally for an always-on chat assistant)',
+    options: [
+      { value: 'openclaw', label: t ? t('prompt.agent_targets.option.openclaw.label') : 'OpenClaw', hint: t ? t('prompt.agent_targets.option.openclaw.hint') : 'installs skills to ~/.openclaw/skills' },
+      { value: 'hermes',   label: t ? t('prompt.agent_targets.option.hermes.label') : 'Hermes Agent', hint: t ? t('prompt.agent_targets.option.hermes.hint') : 'installs skills to ~/.hermes/skills' },
+    ],
+    initialValues: modifyAnswers?.agentTargets ?? [],
+    required: false,
+  });
+  if (isCancel(agentTargetsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+  const agentTargets = Array.isArray(agentTargetsRaw) ? agentTargetsRaw : [];
+
   // ── Prompt 4: Packs ──────────────────────────────────────────────────────
   const packsRaw = await multiselect({
     message: t ? t('prompt.packs.message') : 'Packs to install (core is always included)',
@@ -343,12 +363,35 @@ export async function runInstallPrompts({
     projectName,
     researchPurpose,
     ideTargets,
+    agentTargets,
     packs,
     communicationLang,
     documentOutputLang,
     locale,
     localeSwitchConfirmedFor,
   };
+}
+
+// ---------------------------------------------------------------------------
+// runAgentInstallAcknowledgment
+// ---------------------------------------------------------------------------
+
+/**
+ * Pause for the user to acknowledge the AI-agent install next-steps notice
+ * (CAP-8 / platform-integration.md "Installer UX"). Under `acceptDefaults`
+ * (--yes), returns immediately without prompting — the notice text itself is
+ * still printed by the caller either way. English-only by design; this
+ * acknowledgment is not routed through the locale system.
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @returns {Promise<void>}
+ */
+export async function runAgentInstallAcknowledgment({ acceptDefaults = false } = {}) {
+  if (acceptDefaults) return;
+  const { text, isCancel } = await getClack();
+  const ack = await text({ message: 'Press Enter to continue', defaultValue: '' });
+  if (isCancel(ack)) process.exit(4);
 }
 
 // ---------------------------------------------------------------------------

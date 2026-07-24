@@ -19,7 +19,7 @@ them, but they do not require reverse links.
 
 ## Context
 
-Read `README.md` first. Use the research pack Wikipedia fetcher when background
+Read `README.md` at the project root before this SKILL.md. Use the research pack Wikipedia fetcher when background
 material should come from a public encyclopedia:
 
 ```bash

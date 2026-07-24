@@ -72,6 +72,12 @@ jobs:
       - name: Package readiness
         run: npm run ci:package
 
+      - name: Agent-host isolation
+        run: npm run ci:agent-isolation
+
+      - name: End-to-end (librarian mode)
+        run: npm run test:e2e
+
   bun-smoke:
     name: Bun smoke (ubuntu)
     runs-on: ubuntu-latest

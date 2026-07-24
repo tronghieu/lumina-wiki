@@ -19,7 +19,7 @@ shortlist. Ingestion happens later through `/lumi-ingest`.
 
 ## Context
 
-Read `README.md` first. This skill is available only when the research pack is
+Read `README.md` at the project root before this SKILL.md. This skill is available only when the research pack is
 installed. Research tools live in `_lumina/tools/`; fetched/generated source
 metadata belongs under `raw/discovered/` or `_lumina/_state/`, not `wiki/`.
 

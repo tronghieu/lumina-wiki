@@ -128,6 +128,18 @@ npm run test:update        # update-check timeouts
 
 ---
 
+## Testing AI-agent global installs (`--agents`)
+
+`--agents openclaw` / `--agents hermes` write skills into a **global**, user-level skills directory (see `docs/specs/spec-librarian-mode/platform-integration.md` for the exact paths per platform), not into a project. That means a careless manual test can drop files into your real home directory.
+
+- **Never run `--agents ...` against your real `$HOME`** during development unless you mean to. Any manual check needs an overridden `HOME` (or platform-equivalent env var) pointed at a scratch directory first.
+- Prefer the automated coverage instead of manual runs: `commands-agents.test.js` (run via `npm run test:installer:commands-agents`, folded into `npm run test:installer`) spawns the CLI with `HOME` redirected to a temp directory per test, so it's always safe to run and is the fastest way to check a change to the agent-install path.
+- Two CI gates guard this surface specifically:
+  - `npm run ci:agent-isolation` — proves the installer never deletes or overwrites a foreign skill already sitting in the target skills directory (global or project-level), and that removal only ever touches previously-installed `lumi-*` entries.
+  - `test:e2e` — an end-to-end pass over the full agent-install flow; check `package.json` for whether this script is wired up yet before relying on it locally.
+
+---
+
 ## Recommended dev loop
 
 ```bash

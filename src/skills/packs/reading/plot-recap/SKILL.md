@@ -24,7 +24,7 @@ one event from the cursor chapter or later has failed its core contract.
 
 ## Context
 
-Read `README.md` at the project root for the full schema. This skill reads from:
+Read `README.md` at the project root before this SKILL.md. The full schema reference lives there. This skill reads from:
 - `wiki/chapters/<book-slug>/` — chapter pages with `number` frontmatter for ordering
 - `wiki/characters/<book-slug>/` — character pages
 - `wiki/themes/<book-slug>/` — theme pages

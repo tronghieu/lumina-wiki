@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Multi-wiki knowledge-assistant mode: a global wiki registry (name, aliases,
+  path, description, packs) at `~/.lumina/wikis.json`, managed through the new
+  `lumina wikis add|remove|list|resolve|doctor` commands so one chat assistant
+  can look after several wikis without ambient reliance on the current
+  directory.
+- `--agents openclaw|hermes` install option: places the `lumi-*` skill set,
+  including the new `lumi-hub` fleet-management skill, into the target
+  platform's global skills directory so an always-on assistant (OpenClaw,
+  Hermes) can route requests to the right wiki. This target writes no
+  workspace payload (`_lumina/`, `wiki/`, entry-point stubs) — only skills.
+- Non-destructive skill install/uninstall: the installer now manages only the
+  `lumi-*` entries it owns, in any skills directory (global or project-level)
+  it touches. Foreign skills already present are never deleted, overwritten,
+  or renamed; removal is limited to previously-installed `lumi-*` skills
+  dropped from the current selection.
+- `lumina wikis doctor [name] [--fix]`: a structure and lint health check for
+  one or every registered wiki, with an additive-only repair mode that only
+  ever creates missing pieces — it never rewrites or deletes existing content.
+
 ## [1.9.2] - 2026-07-18
 
 ### Added

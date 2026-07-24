@@ -30,6 +30,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [Research Pack for Research Work](#research-pack-for-research-work)
 - [Common Commands](#common-commands)
 - [Using OpenAI CodexApp (ChatGPT), Claude Code, and Gemini CLI](#using-openai-codexapp-chatgpt-claude-code-and-gemini-cli)
+- [Using Your Wikis from a Chat Assistant (OpenClaw or Hermes)](#using-your-wikis-from-a-chat-assistant-openclaw-or-hermes)
 - [Using Obsidian to Read the Wiki](#using-obsidian-to-read-the-wiki)
 - [Upgrading Lumina-Wiki](#upgrading-lumina-wiki)
 - [Frequently Asked Questions](#frequently-asked-questions)
@@ -499,6 +500,44 @@ With Claude Code, open the project where Lumina-Wiki is installed and use `/lumi
 ### Gemini CLI
 
 With Gemini CLI, open a terminal in the project where Lumina-Wiki is installed, then chat with Gemini in that same folder. Lumina-Wiki has an entry file for Gemini CLI so the agent understands the wiki structure and Lumina commands.
+
+## Using Your Wikis from a Chat Assistant (OpenClaw or Hermes)
+
+If you use an always-on chat assistant such as OpenClaw or Hermes — reachable through Telegram or Lark — it can look after several of your wikis at the same time. You send it a document or a question from wherever you already talk to it, and it puts the document in the right wiki's inbox or answers from the right wiki, without you ever opening a project folder yourself.
+
+### When to use this
+
+Reach for this if you keep more than one wiki (for example, one for work reading and one for a personal project), or if you would rather message your wiki from chat than open a code editor every time you have a document or a question.
+
+### How to set it up
+
+1. Install the assistant helper globally, once per assistant you use:
+
+    ```bash
+    npx lumina-wiki install --yes --agents openclaw
+    ```
+
+    (swap `openclaw` for `hermes` if that is your assistant). This step only teaches the assistant how to find your wikis — each wiki still needs its own normal install, following the steps earlier in this guide.
+
+2. Tell it about each wiki you already have:
+
+    ```bash
+    lumina wikis add /path/to/your/wiki --name "AI Engineering" --alias "AI"
+    ```
+
+    Give it a clear name and, if you like, a short alias — pick words you would naturally say when chatting.
+
+3. Just start chatting. Name the wiki when you ask for something ("add this PDF to my AI Engineering wiki", "what does Cooking say about knife care?"), and the assistant will ask you which one you mean if it is not sure.
+
+### What you get back
+
+Documents you send land in the right wiki's inbox and get filed properly, the same as if you had added them yourself. At any time you can ask things like "which wikis do I have?" or "is everything healthy?", and the assistant checks and reports back in plain language. This health check-up can also be set to run on a schedule, so small problems get noticed and fixed before they pile up.
+
+A few practical things worth knowing:
+
+- Telegram will not deliver a file bigger than about 20 MB, no matter which assistant you use.
+- OpenClaw starts with a small limit on how big an attached file it will accept — if you plan to send larger documents, you will need to raise that limit yourself (look for a setting called `mediaMaxMb` in OpenClaw's own configuration).
+- If you run Hermes inside Docker, your wiki folders need to be shared into the container before the assistant can reach them — see Hermes's own setup documentation for how to do that.
 
 ## Using Obsidian to Read the Wiki
 

@@ -114,6 +114,25 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 
 See [`CHANGELOG.md`](CHANGELOG.md) or the local `_lumina/CHANGELOG.md` after install for version-by-version schema changes.
 
+### **Step 4 (Optional): Connect a Chat Assistant**
+
+If you want a chat assistant such as OpenClaw or Hermes (reachable through Telegram or Lark) to look after several of your wikis at once, install its helper globally instead of into one project:
+
+```bash
+npx lumina-wiki install --yes --agents openclaw   # or --agents hermes
+```
+
+Then register each wiki and check on the fleet with the `lumina wikis` command:
+
+```bash
+lumina wikis add <path> --name "..." --alias "..."
+lumina wikis list
+lumina wikis resolve "<name or alias>"
+lumina wikis doctor
+```
+
+See the [User Guide](docs/user-guide/en.md#using-your-wikis-from-a-chat-assistant-openclaw-or-hermes) for the full walkthrough, including chat-platform file-size notes.
+
 ## 3. Your First Commands (Core Skills)
 
 Interact with your wiki using these commands in your AI chat interface, such as Gemini CLI, Claude, or Codex.

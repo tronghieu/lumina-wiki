@@ -18,7 +18,7 @@ setup for optional fetchers; it is not the Lumina installer.
 
 ## Context
 
-Read `README.md` first. The installer may create `.env.example`, but it must not
+Read `README.md` at the project root before this SKILL.md. The installer may create `.env.example`, but it must not
 create `.env` with secrets. This skill can help the user create or update `.env`
 after they provide values.
 

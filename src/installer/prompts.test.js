@@ -14,11 +14,11 @@ test('buildPromptList: locale is FIRST prompt', () => {
   assert.equal(list[0].id, 'locale');
 });
 
-test('buildPromptList: ordering is locale, directory, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang', () => {
+test('buildPromptList: ordering is locale, directory, researchPurpose, ideTargets, agentTargets, packs, communicationLang, documentOutputLang', () => {
   const list = buildPromptList(null, 'en');
   const ids = list.map(p => p.id);
   assert.deepEqual(ids, [
-    'locale', 'directory', 'researchPurpose', 'ideTargets',
+    'locale', 'directory', 'researchPurpose', 'ideTargets', 'agentTargets',
     'packs', 'communicationLang', 'documentOutputLang',
   ]);
 });

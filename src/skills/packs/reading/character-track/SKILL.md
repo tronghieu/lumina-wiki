@@ -23,7 +23,7 @@ Run this after each chapter-ingest (or in batch after several chapters).
 
 ## Context
 
-Read `README.md` at the project root for the full schema. Character pages live under
+Read `README.md` at the project root before this SKILL.md. The full schema reference lives there. Character pages live under
 `wiki/characters/<book-slug>/` — the book-slug namespace is mandatory because a workspace
 may hold multiple books and the same character name must not collide across them.
 

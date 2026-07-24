@@ -36,6 +36,13 @@ export default {
   'prompt.ide.option.generic.label':           '通用',
   'prompt.ide.option.generic.hint':            '仅 README.md',
 
+  // ── AI 代理平台 ─────────────────────────────────────────────────────────────
+  'prompt.agent_targets.message':              'AI 代理平台(可选 — 将技能安装到全局位置,供常驻聊天助手使用)',
+  'prompt.agent_targets.option.openclaw.label':'OpenClaw',
+  'prompt.agent_targets.option.openclaw.hint': '将技能安装至 ~/.openclaw/skills',
+  'prompt.agent_targets.option.hermes.label':  'Hermes Agent',
+  'prompt.agent_targets.option.hermes.hint':   '将技能安装至 ~/.hermes/skills',
+
   // ── Packs ──────────────────────────────────────────────────────────────────
   'prompt.packs.message':                      '要安装的包(core 始终包含)',
   'prompt.packs.option.research.label':        'Research',

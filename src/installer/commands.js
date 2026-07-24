@@ -20,6 +20,7 @@ import { constants as fsConstants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 import {
   atomicWrite,
@@ -51,10 +52,12 @@ import {
   runUninstallConfirm,
   runReadmeMergePrompt,
   runUpgradeModePrompt,
+  runAgentInstallAcknowledgment,
   LOCALE_LANGUAGE_NAME,
 } from './prompts.js';
 import { VALID_LOCALES, loadLocale } from './locales.js';
 import { checkForUpdate } from './update-check.js';
+import { readAgentsManifest, writeAgentsManifest } from './agents-manifest.js';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -128,6 +131,10 @@ const LUMINA_DIRS = [
 
 const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
+// AI-agent global-skills targets (CAP-8). Deliberately a separate set from
+// VALID_IDE_TARGETS — these never write a project workspace payload, only a
+// platform's documented global skills directory (see platform-integration.md).
+const VALID_AGENT_TARGETS = new Set(['openclaw', 'hermes']);
 const RESEARCH_TOOL_FILES = [
   '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
   'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
@@ -173,6 +180,10 @@ async function readManifestForInstall(projectRoot) {
  * @param {boolean} opts.noUpdate      - Skip update check
  * @param {string|string[]} [opts.packs] - Pack override for non-interactive installs
  * @param {string|string[]} [opts.ideTargets] - IDE target override
+ * @param {string} [opts.agents]       - Comma-separated AI-agent platform targets
+ *   (CAP-8): 'openclaw', 'hermes'. Additive to the classic project install —
+ *   each selected platform gets a skills-only install into its documented
+ *   global skills directory; never persisted into lumina.config.yaml.
  * @param {string} [opts.projectName]  - Hidden escape hatch; default = basename(directory)
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
@@ -287,7 +298,7 @@ export async function installCommand(opts = {}) {
     }
   }
 
-  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
+  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale, agentTargets = [] } = answers;
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
   const hasLearning = packs.includes('learning');
@@ -476,6 +487,22 @@ export async function installCommand(opts = {}) {
   if (!sawPackPrompt && uninstalledPacks.length > 0) {
     console.log(t('hint.packs_available', { packs: uninstalledPacks.join(', ') }));
   }
+
+  // 19. AI-agent global skill installs (CAP-8) — fully independent of the
+  // project payload above: writes only into each platform's documented
+  // global skills directory (never anything under projectRoot). Guarded
+  // behind agentTargets so a classic install (no --agents / no selection)
+  // is byte-identical to today (AD-7/AD-9).
+  if (agentTargets.length > 0) {
+    const preambleContent = await readFile(
+      join(TEMPLATES_DIR, 'partials', 'librarian-preamble.md'), 'utf8',
+    );
+    for (const platform of agentTargets) {
+      await copySkillsToAgentPlatform(platform, preambleContent);
+      printAgentInstallNotice(platform);
+      await runAgentInstallAcknowledgment({ acceptDefaults: yes });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -519,8 +546,10 @@ export async function uninstallCommand(opts = {}) {
   await rm(join(projectRoot, '_lumina'), { recursive: true, force: true });
   console.log(colors.green(t('uninstall.removed_lumina')));
 
-  // Remove .agents/
-  await rm(join(projectRoot, '.agents'), { recursive: true, force: true });
+  // Remove only the lumi-* skills this install owns (CAP-9 / AD-8) — never a
+  // whole-directory wipe, which would destroy any foreign skill a user or
+  // another tool placed in .agents/skills/.
+  await removeOwnedAgentsSkills(projectRoot);
   console.log(colors.green(t('uninstall.removed_agents')));
 
   // Remove .claude/skills/lumi-* symlinks
@@ -826,6 +855,18 @@ function applyInstallOverrides(answers, opts) {
   if (ideOverride) {
     validateValues(ideOverride, VALID_IDE_TARGETS, 'IDE target');
     next.ideTargets = unique(ideOverride);
+  }
+
+  // AI-agent global-skills targets (CAP-8). --agents is a raw comma-separated
+  // string (see bin/lumina.js); never persisted into lumina.config.yaml (AD-9)
+  // — every invocation decides fresh, so an upgrade path with no override
+  // simply defaults to none selected.
+  const agentOverride = parseListOption(opts.agents, '--agents');
+  if (agentOverride) {
+    validateValues(agentOverride, VALID_AGENT_TARGETS, 'agent target');
+    next.agentTargets = unique(agentOverride);
+  } else {
+    next.agentTargets = unique(next.agentTargets || []);
   }
 
   if (opts.projectName) next.projectName = String(opts.projectName);
@@ -1228,6 +1269,196 @@ async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
   return skillRows;
 }
 
+// ---------------------------------------------------------------------------
+// AI-agent global skill installs (CAP-8, AD-7, AD-8)
+// ---------------------------------------------------------------------------
+
+// The exact opening sentence used as the anchor for AD-7's literal injection.
+// Line-anchored, prefix-compared (trim-compare in the style of
+// template-engine's `line.trim() === marker`): a shipped SKILL.md may
+// continue the same line with more of that paragraph (e.g.
+// "...before this SKILL.md. The Repository Layout section..."), so matching
+// is done against the start of the trimmed line, not full-line equality.
+// Any SKILL.md whose opening does not use this exact sentence (e.g.
+// lumi-hub, or skills phrased differently) is left byte-identical — this
+// injection only ever substitutes this one literal anchor, never a
+// template-engine render.
+const LIBRARIAN_PREAMBLE_ANCHOR = 'Read `README.md` at the project root before this SKILL.md.';
+
+/**
+ * Documented global skills directory for an AI-agent platform target.
+ * Based on the real OS home directory (`os.homedir()`, which honors HOME /
+ * USERPROFILE overrides) — never LUMINA_HOME, which is a separate Lumina hub
+ * concern (see agents-manifest.js).
+ *
+ * @param {string} platform - 'openclaw' | 'hermes'
+ * @returns {string|null}
+ */
+function agentGlobalSkillsDir(platform) {
+  switch (platform) {
+    case 'openclaw': return join(homedir(), '.openclaw', 'skills');
+    case 'hermes':   return join(homedir(), '.hermes', 'skills');
+    default:         return null;
+  }
+}
+
+/**
+ * Substitute the literal LIBRARIAN_PREAMBLE_ANCHOR line in a copied SKILL.md
+ * with the full content of the routing-preamble partial. No-op (file left
+ * exactly as copied) when the anchor line is absent — this never runs the
+ * file through the template engine, so any `{{...}}` placeholders the skill
+ * body already contains survive untouched.
+ *
+ * @param {string} skillMdPath  - Path to the already-copied SKILL.md.
+ * @param {string} preambleRaw  - Raw content of librarian-preamble.md.
+ * @returns {Promise<void>}
+ */
+async function injectLibrarianPreamble(skillMdPath, preambleRaw) {
+  let content;
+  try {
+    content = await readFile(skillMdPath, 'utf8');
+  } catch (_) {
+    return;
+  }
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalized.split('\n');
+  const idx = lines.findIndex(line => line.trimStart().startsWith(LIBRARIAN_PREAMBLE_ANCHOR));
+  if (idx === -1) return; // e.g. lumi-hub — no anchor line, copy stands verbatim
+
+  const line = lines[idx];
+  const trimmedStart = line.trimStart();
+  const leading = line.slice(0, line.length - trimmedStart.length);
+  const trailing = trimmedStart.slice(LIBRARIAN_PREAMBLE_ANCHOR.length).trim();
+
+  const preambleLines = preambleRaw
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\n$/, '')
+    .split('\n');
+
+  // Any prose that continued on the same line after the anchor sentence is
+  // real content (not filler) — preserve it as its own line right after the
+  // preamble instead of discarding it.
+  const replacement = trailing ? [...preambleLines, '', leading + trailing] : preambleLines;
+  const newLines = [...lines.slice(0, idx), ...replacement, ...lines.slice(idx + 1)];
+  await atomicWrite(skillMdPath, newLines.join('\n'));
+}
+
+/**
+ * Install the full fixed skill set (all packs + the lumi-hub front door) into
+ * one AI-agent platform's documented global skills directory. Skills-only:
+ * never writes anything under a project root. Plain copy — no symlink
+ * ladder (AD-7). Non-destructive: only ever creates/removes directories
+ * named after our own `lumi-*` canonicalIds, tracked via the platform's
+ * agents manifest (AD-2/AD-8) — any other entry in the directory is
+ * untouched.
+ *
+ * @param {string} platform      - 'openclaw' | 'hermes'
+ * @param {string} preambleRaw   - Raw content of librarian-preamble.md.
+ * @returns {Promise<void>}
+ */
+async function copySkillsToAgentPlatform(platform, preambleRaw) {
+  const destRoot = agentGlobalSkillsDir(platform);
+  if (!destRoot) return;
+
+  const allPackSkills = getSkillDefs(['core', 'research', 'reading', 'learning']);
+  const targets = [
+    ...allPackSkills.map(skill => ({
+      canonicalId: skill.canonicalId,
+      srcDir: join(SKILLS_DIR, ...skill.srcPackPath.split('/'), skill.name),
+    })),
+    { canonicalId: 'lumi-hub', srcDir: join(SKILLS_DIR, 'agents', 'hub') },
+  ];
+
+  const previousManifest = await readAgentsManifest(platform);
+  const ownedBefore = new Set(previousManifest?.skills ?? []);
+  const selected = new Set(targets.map(target => target.canonicalId));
+
+  await ensureDir(destRoot);
+
+  for (const { canonicalId, srcDir } of targets) {
+    await access(join(srcDir, 'SKILL.md'), fsConstants.F_OK);
+    const destDir = join(destRoot, canonicalId);
+    // Safe to remove-then-recreate: destDir's name is always one of our own
+    // fixed lumi-* canonicalIds, never a name a foreign skill would occupy.
+    await rm(destDir, { recursive: true, force: true });
+    await ensureDir(destDir);
+    await copyDir(srcDir, destDir);
+    await injectLibrarianPreamble(join(destDir, 'SKILL.md'), preambleRaw);
+  }
+
+  // AD-8: remove only entries we owned previously that are no longer part
+  // of the (currently always-full) selection — never touch anything else.
+  for (const canonicalId of ownedBefore) {
+    if (!selected.has(canonicalId)) {
+      await rm(join(destRoot, canonicalId), { recursive: true, force: true });
+    }
+  }
+
+  await writeAgentsManifest(platform, [...selected]);
+}
+
+const AGENT_PLATFORM_LABELS = { openclaw: 'OpenClaw', hermes: 'Hermes Agent' };
+
+/**
+ * Plain-language next-steps notice after an AI-agent global skill install
+ * (CAP-8 / platform-integration.md "Installer UX"). English source only —
+ * this notice is not routed through the locale system.
+ *
+ * @param {string} platform
+ */
+function printAgentInstallNotice(platform) {
+  const label = AGENT_PLATFORM_LABELS[platform] ?? platform;
+  console.log('');
+  console.log(`[done] Installed Lumina skills globally for ${label}.`);
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Register your wikis: lumina wikis add <path> --name "..."');
+  console.log('  2. Say which wiki you mean when you chat with it — it will ask if it is not sure.');
+  console.log('  3. Optional: run a health check any time with: lumina wikis doctor');
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// Uninstall helpers (CAP-9 / AD-8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove only the `.agents/skills/<canonicalId>` entries this install owns,
+ * then remove `.agents/skills` and `.agents` themselves only if left empty.
+ * Never a recursive wipe of `.agents/` — that would take any foreign skill
+ * with it (the CAP-9 defect this replaces).
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<void>}
+ */
+async function removeOwnedAgentsSkills(projectRoot) {
+  const agentsSkillsDir = join(projectRoot, '.agents', 'skills');
+
+  let ownedIds;
+  const skillRows = await readSkillsManifest(projectRoot).catch(() => []);
+  if (skillRows.length > 0) {
+    ownedIds = skillRows.map(row => row.canonical_id).filter(Boolean);
+  } else {
+    // Manifest missing or unreadable — fall back to the same lumi-prefix
+    // filter the .claude/skills loop already uses, never a whole-dir wipe.
+    ownedIds = (await readdir_safe(agentsSkillsDir)).filter(name => name.startsWith('lumi-'));
+  }
+
+  for (const canonicalId of ownedIds) {
+    await rm(join(agentsSkillsDir, canonicalId), { recursive: true, force: true });
+  }
+
+  await removeDirIfEmpty(agentsSkillsDir);
+  await removeDirIfEmpty(join(projectRoot, '.agents'));
+}
+
+async function removeDirIfEmpty(dirPath) {
+  const entries = await readdir_safe(dirPath);
+  if (entries.length === 0) {
+    await rm(dirPath, { recursive: true, force: true });
+  }
+}
+
 function replaceOrAppendSchemaRegion(existingContent, newSchemaContent) {
   if (extractSchemaRegion(existingContent) !== null) {
     return replaceSchemaRegion(existingContent, newSchemaContent);
@@ -1414,7 +1645,12 @@ async function writeGitignore(projectRoot) {
   }
 }
 
-async function seedWikiFiles(projectRoot) {
+// Exported for src/installer/wikis-command.js's `doctor --fix` (AD-6): the
+// only correct way to recreate missing seed files is the installer's own
+// seeding source, never a hand-written stand-in. This function already
+// no-ops on any path that exists (exists→skip), so it is safe to call as a
+// pure repair step.
+export async function seedWikiFiles(projectRoot) {
   const indexPath = join(projectRoot, 'wiki', 'index.md');
   const logPath   = join(projectRoot, 'wiki', 'log.md');
 

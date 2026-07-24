@@ -18,7 +18,7 @@ not discover or ingest new sources here; gaps should be reported explicitly.
 
 ## Context
 
-Read `README.md` first. Survey pages live under `wiki/summary/` and use the
+Read `README.md` at the project root before this SKILL.md. Survey pages live under `wiki/summary/` and use the
 same frontmatter contract as any other summary page: `id`, `title`,
 `type: summary`, `created`, `updated`, and `covers` (an array of every wiki
 page slug the survey draws on). `covers` is required — a summary page without
