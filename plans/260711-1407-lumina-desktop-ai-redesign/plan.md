@@ -40,9 +40,9 @@ Production-port `Lumina Desktop.dc.html` tokens and hierarchy while preserving r
 | 5 | [Chat orchestration and Wails streaming](./phase-05-chat-orchestration-and-wails-streaming.md) | Completed |
 | 6 | [Reference-faithful workspace shell](./phase-06-reference-faithful-workspace-shell.md) | Completed |
 | 7 | [Agent chat and settings integration](./phase-07-agent-chat-and-settings-integration.md) | Completed |
-| 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | Pending |
+| 8 | [Visual accessibility packaging and release gates](./phase-08-visual-accessibility-packaging-and-release-gates.md) | In Progress |
 
-**Progress:** 121/140 checklist items complete (86.4%); 7/8 phases complete (87.5%).
+**Progress:** 138/140 checklist items complete (98.6%); 7/8 phases complete (87.5%).
 
 ## Dependencies
 
@@ -82,6 +82,8 @@ Adjudication: `reports/from-red-team-coordinator-to-planner-adjudicated-plan-rev
 ## Validation Log
 
 - 2026-07-11 — Deep structural, traceability, source-evidence, dependency, ownership, security, and testability validation passed after three audit patches.
+- 2026-07-24 — Phase 8 local release-gate implementation landed in `6bb37be`; focus-contract follow-up `a05b3af` restored the frontend gate. Local frontend (78/78), Playwright visual (4/4), Playwright accessibility (5/5), build, audit, focused/full/race Go, generated-binding, Wails native-build, and diff gates passed.
+- Phase 8 remains in progress: the GitHub workflow has not yet produced remote macOS/Windows/Linux evidence, and full packaged-GUI interactions (open workspace, graph/note, settings, and stream cancellation) remain pending. No remote CI pass is claimed.
 - Reports: `reports/plan-validation.md` and `reports/plan-audit.md`.
 - Implementation readiness: READY; no unresolved decision or waived gate.
 

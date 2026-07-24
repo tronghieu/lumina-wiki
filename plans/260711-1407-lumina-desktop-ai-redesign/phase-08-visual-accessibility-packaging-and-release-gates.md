@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Visual accessibility packaging and release gates"
-status: pending
+status: in-progress
 priority: P1
 effort: "3d"
 dependencies: [7]
@@ -81,12 +81,12 @@ Keep source-level Node tests for deterministic contracts and add an unconditiona
 
 ## Interface and Function Checklist
 
-- [ ] `visual-cases.json` pins renderer/browser version, OS, DPR, viewport, fonts, masks, threshold.
-- [ ] `npm run test:visual` uses Playwright screenshot comparison; `npm run test:a11y` runs axe plus interaction/focus assertions; both publish traces/diffs on CI failure.
-- [ ] `control-inventory.md` names component, handler, state, keyboard operation for each visible control.
-- [ ] Immutability helper hashes file contents/relative paths before and after workflows, excluding no workspace paths.
-- [ ] Package scan confirms one canonical copy of each local font/license and rejects duplicate unreferenced binaries, root-level stale Inter assets, `@import`, `fonts.googleapis.com`, and remote font URLs.
-- [ ] README states disclosure, local storage, clear/delete, fallback, cancellation, and zero chat workspace writes in plain language.
+- [x] `visual-cases.json` pins renderer/browser version, OS, DPR, viewport, fonts, masks, threshold.
+- [x] `npm run test:visual` uses Playwright screenshot comparison; `npm run test:a11y` runs axe plus interaction/focus assertions; both publish traces/diffs on CI failure.
+- [x] `control-inventory.md` names component, handler, state, keyboard operation for each visible control.
+- [x] Immutability helper hashes file contents/relative paths before and after workflows, excluding no workspace paths.
+- [x] Package scan confirms one canonical copy of each local font/license and rejects duplicate unreferenced binaries, root-level stale Inter assets, `@import`, `fonts.googleapis.com`, and remote font URLs.
+- [x] README states disclosure, local storage, clear/delete, fallback, cancellation, and zero chat workspace writes in plain language.
 
 ## Dependency Map
 
@@ -113,22 +113,28 @@ Change only defects exposed by gates; keep reference metadata and masks narrow. 
 
 ## Implementation Steps
 
-- [ ] Write token/responsive/font/control contract tests; run RED; fix styles/components minimally; run GREEN.
-- [ ] Add pinned Playwright/axe dependencies, config, deterministic Wails fixture, and CI artifact policy; write focus/keyboard/contrast/reduced-motion tests; run RED; fix semantics/styles; run GREEN.
-- [ ] Commit: `fix(desktop): meet visual accessibility contracts`.
-- [ ] Create pinned visual metadata/references/masks; run `npm run test:visual` for dark/light/three viewports and `npm run test:a11y`; fix unmasked regressions to <=2%.
-- [ ] Write immutability/Import/redaction/binding scans; run RED; implement harness and remove leaks; run GREEN.
-- [ ] Commit: `test(desktop): prove workspace and secret boundaries`.
-- [ ] Run offline/stale/corrupt/cancel/history migration scenarios and complete control inventory.
-- [ ] Update README in plain language; regenerate bindings; run frontend, Go, race, audit, Wails build, and diff gates.
-- [ ] Commit: `docs(desktop): document AI chat and privacy controls`.
+- [x] Write token/responsive/font/control contract tests; run RED; fix styles/components minimally; run GREEN.
+- [x] Add pinned Playwright/axe dependencies, config, deterministic Wails fixture, and CI artifact policy; write focus/keyboard/contrast/reduced-motion tests; run RED; fix semantics/styles; run GREEN.
+- [x] Commit visual/accessibility contracts as part of consolidated Phase 8 checkpoint `6bb37be` (`feat(desktop): add release verification gates`).
+- [x] Create pinned visual metadata/references/masks; run `npm run test:visual` for dark/light/three viewports and `npm run test:a11y`; fix unmasked regressions to <=2%.
+- [x] Write immutability/Import/redaction/binding scans; run RED; implement harness and remove leaks; run GREEN.
+- [x] Commit workspace/secret-boundary gates as part of consolidated Phase 8 checkpoint `6bb37be`.
+- [x] Run offline/stale/corrupt/cancel/history migration scenarios and complete control inventory.
+- [x] Update README in plain language; regenerate bindings; run frontend, Go, race, audit, Wails build, and diff gates.
+- [x] Commit desktop AI/privacy documentation as part of consolidated Phase 8 checkpoint `6bb37be`.
 - [ ] Add/execute `.github/workflows/desktop.yml` on macOS/Windows/Linux with documented Wails prerequisites; retain Playwright traces/diffs and packaged smoke artifacts; record OS-specific exceptions as failed gates, not waived claims.
 
 ## Success Criteria
 
-- [ ] Quantitative visual, responsive, accessibility, font, and control inventory gates pass.
-- [ ] Secret scans and workspace manifests prove stated trust boundaries; Import matches its sole exception.
+- [x] Quantitative visual, responsive, accessibility, font, and control inventory gates pass.
+- [x] Secret scans and workspace manifests prove stated trust boundaries; Import matches its sole exception.
 - [ ] All tests, builds, generated bindings, audits, packaged smoke, and diff check pass with committed evidence.
+
+## Implementation Evidence
+
+- Commit `6bb37be` adds the Phase 8 release-verification harness, workflow, visual references, accessibility coverage, immutability and secret-boundary scans, control inventory, and user documentation.
+- Follow-up commit `a05b3af` aligns the source contract with ref-based focus restoration. Verified local results: frontend 78/78, Playwright visual 4/4, Playwright accessibility 5/5, production build, audit with zero findings, focused/full/race Go gates, generated bindings without semantic drift, native Wails build, and repository diff check.
+- Pending evidence: the workflow has not yet run successfully on remote macOS, Windows, and Linux runners. Full packaged-GUI interactions—launch, open workspace, graph/note navigation, settings, and stream cancellation—also remain pending. No remote CI pass is claimed.
 
 ## Security, Risks, and Rollback
 

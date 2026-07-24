@@ -84,8 +84,11 @@ presentation client.
 - Release verification combines source contracts with a pinned Chromium
   fixture. Dark/light snapshots, rendered responsive geometry, axe checks,
   keyboard/focus behavior, local fonts, workspace byte manifests, generated
-  binding scans, race tests, and native Wails builds are reproducible gates.
-  Deterministic fixture data lives only in the browser test harness.
+  binding scans, race tests, and native Wails builds are defined by
+  [`desktop.yml`](../.github/workflows/desktop.yml). Deterministic fixture data
+  lives only in the browser test harness. The workflow's packaged smoke checks
+  prove process launch, not full GUI interactions; execution evidence is
+  recorded separately in the active desktop plan.
 
 The backend contracts live in
 [`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React

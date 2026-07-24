@@ -30,7 +30,7 @@ Focus: Stability, local capabilities, and v1.x feature expansion.
 | **CI/CD hardening** (Bun, Node 22 LTS) | Planned | — |
 | **Stability lock** (CLI contract published; --cwd deprecation; exit-4 cancellation) | Shipped v1.x | — |
 | **Schema parity** (cross-source ID handling) | In progress | — |
-| **Desktop companion app** (Wails workspace UI + optional local AI services) | Plan in progress: implementation and local release gates complete; first remote macOS/Windows/Linux packaging matrix pending | [plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md) |
+| **Desktop companion app** (Wails workspace UI + optional local AI services) | Plan in progress: local verification passed; first remote macOS/Windows/Linux packaging run and full packaged-GUI interaction evidence pending | [plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md) |
 
 ---
 
