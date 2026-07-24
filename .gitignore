@@ -29,3 +29,5 @@ Thumbs.db
 
 # Lumina runtime state (only relevant if installer is run inside repo by mistake)
 _lumina/_state/
+
+.tmp

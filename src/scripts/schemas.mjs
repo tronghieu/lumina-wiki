@@ -107,6 +107,10 @@ export const ENTITY_DIRS = {
   summary:     { dir: 'summary/',     pack: 'core' },
   outputs:     { dir: 'outputs/',     pack: 'core' },
   graph:       { dir: 'graph/',       pack: 'core' },
+  // Per-unit reading notes for long sources (books, theses); nested as
+  // readings/<source-slug>/<nn>-<unit-slug>.md. Named "readings" (not "notes")
+  // to avoid colliding with the raw/notes/ user drop zone.
+  readings:    { dir: 'readings/',    pack: 'core' },
 
   // research pack
   foundations: { dir: 'foundations/', pack: 'research' },
@@ -210,10 +214,20 @@ export const EDGE_TYPES = [
   { name: 'authored_by',        from: 'sources', to: 'people',   reverse: 'authored',        symmetric: false, pack: 'core' },
   { name: 'authored',           from: 'people',  to: 'sources',  reverse: 'authored_by',     symmetric: false, pack: 'core' },
 
+  // --- reading note <-> source ---------------------------------------------
+  { name: 'annotates',          from: 'readings', to: 'sources',  reverse: 'annotated_by',    symmetric: false, pack: 'core' },
+  { name: 'annotated_by',       from: 'sources',  to: 'readings', reverse: 'annotates',       symmetric: false, pack: 'core' },
+
   // --- concept <-> concept -------------------------------------------------
   { name: 'related_to',         from: 'concepts', to: 'concepts', reverse: 'related_to',     symmetric: true,  pack: 'core' },
   { name: 'part_of',            from: 'concepts', to: 'concepts', reverse: 'has_part',        symmetric: false, pack: 'core' },
   { name: 'has_part',           from: 'concepts', to: 'concepts', reverse: 'part_of',         symmetric: false, pack: 'core' },
+
+  // --- research pack: topic organization edges -----------------------------
+  { name: 'includes_source',    from: 'topics',   to: 'sources',  reverse: 'included_in_topic', symmetric: false, pack: 'research' },
+  { name: 'included_in_topic',  from: 'sources',  to: 'topics',   reverse: 'includes_source',   symmetric: false, pack: 'research' },
+  { name: 'covers_concept',     from: 'topics',   to: 'concepts', reverse: 'covered_by_topic',  symmetric: false, pack: 'research' },
+  { name: 'covered_by_topic',   from: 'concepts', to: 'topics',   reverse: 'covers_concept',    symmetric: false, pack: 'research' },
 
   // --- terminal edges (no reverse) — exempt-only rule applies -------------
   // Any entity -> foundations/** (research pack)
@@ -283,6 +297,7 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'findings',     type: 'array', required: false },
     { key: 'external_ids', type: 'object', required: false },
     { key: 'sources',      type: 'array',  required: false },
+    { key: 'ranking',      type: 'object', required: false },
   ],
 
   // Concept page
@@ -316,6 +331,19 @@ export const REQUIRED_FRONTMATTER = {
     { key: 'created', type: 'iso-date', required: true  },
     { key: 'updated', type: 'iso-date', required: true  },
     { key: 'covers',  type: 'array',    required: true  },
+  ],
+
+  // Reading-note page (core) — per-unit analytical notes for a long source.
+  // `source` is the parent source slug; `part` orders units within the source.
+  readings: [
+    { key: 'id',      type: 'string',   required: true  },
+    { key: 'title',   type: 'string',   required: true  },
+    { key: 'type',    type: 'string',   required: true  },
+    { key: 'created', type: 'iso-date', required: true  },
+    { key: 'updated', type: 'iso-date', required: true  },
+    { key: 'source',  type: 'string',   required: true  },
+    { key: 'part',    type: 'number',   required: true  },
+    { key: 'pages',   type: 'string',   required: false },
   ],
 
   // Research pack: foundation page (terminal — no back-links required)

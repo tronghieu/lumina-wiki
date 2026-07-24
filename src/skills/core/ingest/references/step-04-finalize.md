@@ -4,7 +4,7 @@
 
 - All frontmatter writes go through `wiki.mjs set-meta`.
 - `wiki/log.md` is append-only. Use `wiki.mjs log` — never edit the file directly.
-- The phase-level checkpoint at `_lumina/_state/ingest-<slug>.json` ends here; mark it `phase: "done"`.
+- The phase-level checkpoint at `_lumina/_state/ingest-<file-basename>.json` ends here; mark it `phase: "done"`.
 
 ## Why this step exists
 

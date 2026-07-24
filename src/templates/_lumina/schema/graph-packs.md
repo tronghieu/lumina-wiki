@@ -24,6 +24,8 @@ The graph builder reads this file when determining valid edge types per pack.
 | `introduced_in`    | No        | concepts  | sources   | `introduces_concept`|
 | `uses_concept`     | No        | sources   | concepts  | `used_in`         |
 | `used_in`          | No        | concepts  | sources   | `uses_concept`    |
+| `annotates`        | No        | readings  | sources   | `annotated_by`    |
+| `annotated_by`     | No        | sources   | readings  | `annotates`       |
 | `produced`         | No        | *         | outputs   | (terminal)        |
 | `see_also_url`     | No        | *         | *         | (terminal)        |
 {{#if pack_research}}

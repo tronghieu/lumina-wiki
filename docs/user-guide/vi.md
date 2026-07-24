@@ -8,6 +8,16 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 
 ---
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Video hướng dẫn Lumina-Wiki" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Xem video hướng dẫn</a>
+</p>
+
+---
+
 **Tham gia cộng đồng Lumina Wiki trên Zalo** — hỏi đáp, chia sẻ cách dùng, và nhận thông báo cập nhật sớm nhất. Quét mã QR bằng ứng dụng Zalo để vào nhóm:
 
 <p align="center">
@@ -411,7 +421,7 @@ Các ví dụ dưới đây dùng cú pháp `/lumi-*`, phù hợp với các mô
 | --- | --- |
 | `/lumi-init` | Chuẩn bị cấu trúc wiki ban đầu và quét những gì đã có trong `raw/`. |
 | `/lumi-ingest <file hoặc nguồn>` | Đưa một tài liệu vào wiki. Đây là lệnh bạn sẽ dùng rất thường xuyên. |
-| `/lumi-ask <câu hỏi>` | Hỏi kho tri thức đã được tạo trong `wiki/`. |
+| `/lumi-ask <câu hỏi>` | Hỏi kho tri thức trong `wiki/`. Luôn cho biết những trang nào làm căn cứ cho câu trả lời, và chỉ ra các tệp trong `raw/sources/` nếu còn thiếu thông tin. |
 | `/lumi-edit <trang wiki>` | Nhờ AI sửa hoặc cập nhật một trang wiki cụ thể. |
 | `/lumi-check` | Nhờ AI kiểm tra sức khỏe wiki: lỗi cấu trúc, liên kết hỏng, hoặc trang chưa được cập nhật đúng. |
 | `/lumi-reset` | Xóa hoặc đặt lại một phần wiki theo cách có kiểm soát. |
@@ -503,6 +513,14 @@ Nếu dừng giữa chừng, tiến độ được giữ lại; chạy lại `/l
 - Một ghi nhận trong log, để bạn biết tài liệu đó đã được đưa vào wiki khi nào và kết quả ra sao.
 - Một dấu độ tin cậy thấp trên trang nếu bạn chọn lưu kèm điểm còn nghi ngờ, để sau này quay lại xem.
 
+### Tài liệu dài và sách nguyên cuốn
+
+Khi tài liệu rất dài — cả một cuốn sách, một luận án, hay bất cứ thứ gì từ khoảng 50 trang trở lên — AI sẽ đổi cách đọc. Thay vì lướt một lần rồi tóm tắt, nó lập dàn ý cấu trúc trước, rồi đọc theo từng chương, viết một ghi chú cho mỗi phần kèm số trang bên cạnh mọi ý quan trọng. Trang tóm tắt sau đó được viết từ chính các ghi chú này, và mọi câu trích dẫn đều được đối chiếu với trang gốc để không có gì bị bịa ra.
+
+Bạn vẫn nhận được trang tóm tắt như bình thường, cộng thêm một thư mục ghi chú đọc trong `wiki/readings/` — mỗi chương một ghi chú. Những câu hỏi sau này về cuốn sách sẽ được trả lời từ các ghi chú đó, nên AI không phải đọc lại cả cuốn, và bạn luôn truy được câu trả lời về đúng trang gốc. Nếu việc đọc bị gián đoạn giữa chừng, chạy lại `/lumi-ingest` sẽ tiếp tục từ chương đã đọc xong gần nhất.
+
+Một điều cần lưu ý: nếu bạn đang tự đọc dở một cuốn tiểu thuyết và không muốn bị lộ kết truyện, đừng đưa cả cuốn vào theo cách này — hãy dùng lệnh đọc theo từng chương của Reading Pack, vốn chỉ biết đúng phần truyện mà bạn đã đọc.
+
 ## Dùng Với OpenAI CodexApp (ChatGPT), Claude Code, Gemini CLI
 
 Lumina-Wiki không phải một ứng dụng chat riêng. Nó là một bộ cấu trúc thư mục, script và lệnh để AI agent làm việc trong project của bạn.
@@ -558,6 +576,8 @@ npx lumina-wiki install
 
 Installer sẽ cập nhật script, schema và skill. Nội dung tri thức của bạn trong `wiki/`, tài liệu gốc trong `raw/`, và log hiện có được giữ lại.
 
+Bạn có thể chạy lệnh tại thư mục gốc hoặc một thư mục nằm bên trong project; Lumina sẽ tìm đúng không gian làm việc bao quanh. Khi bỏ một gói hoặc công cụ AI khỏi thiết lập, các lệnh cũ và tệp thiết lập chưa được chỉnh sửa sẽ được dọn đi. Tệp bạn đã sửa được giữ lại và báo rõ. Bạn cũng có thể di chuyển, đổi tên hoặc sao chép toàn bộ project; các liên kết do Lumina quản lý sẽ được sửa trong lần nâng cấp tiếp theo.
+
 Nếu wiki cũ thiếu một số trường metadata mới, installer có thể cảnh báo. Khi đó bạn có thể chạy:
 
 ```text
@@ -596,7 +616,7 @@ Có thể, nhưng nên cẩn thận. `wiki/` là khu vực tri thức mà AI ph�
 
 ### Tôi vừa thêm tài liệu vào `raw/`, tại sao `/lumi-ask` chưa biết?
 
-Vì tài liệu gốc mới chỉ nằm trong `raw/`. Hãy đưa nó vào wiki bằng:
+Vì tài liệu gốc mới chỉ nằm trong `raw/`. Nếu bạn hỏi về nó trước khi đưa vào wiki, `/lumi-ask` sẽ cho biết wiki chưa có thông tin này và chỉ ra những tệp trong `raw/sources/` có vẻ chứa câu trả lời — để bạn có thể mở ra đọc ngay. Để AI cũng dùng được tài liệu đó, hãy đưa nó vào wiki bằng:
 
 ```text
 /lumi-ingest raw/sources/<tên-file>

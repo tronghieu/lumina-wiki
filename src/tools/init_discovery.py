@@ -255,11 +255,11 @@ def _arxiv_search(query: str, limit: int, env: dict[str, str]) -> list[dict[str,
 
 
 def _openalex_search(query: str, limit: int, env: dict[str, str]) -> list[dict[str, Any]]:
-    """Run OpenAlex search; return list of paper dicts. Polite-pool via OPENALEX_MAILTO."""
+    """Run OpenAlex search; return list of paper dicts. Auth via OPENALEX_API_KEY."""
     try:
         from fetch_openalex import cmd_search
-        mailto = env.get("OPENALEX_MAILTO", "").strip()
-        return cmd_search(query, limit, [], mailto)
+        api_key = env.get("OPENALEX_API_KEY", "").strip()
+        return cmd_search(query, limit, [], api_key)
     except ImportError:
         import subprocess
         merged_env = {**os.environ, **env}

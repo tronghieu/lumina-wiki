@@ -6,6 +6,18 @@ You can think of Lumina-Wiki as a "second brain" for reading and research. The d
 
 Your role is to choose sources, ask questions, check the direction of the analysis, and decide what matters. The AI's role is to take care of the knowledge area in `wiki/`: writing new pages, updating old pages, keeping links, updating the index, writing the log, and helping the wiki stay consistent as it grows.
 
+---
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Lumina-Wiki video walkthrough" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Watch the video walkthrough (Vietnamese)</a>
+</p>
+
+---
+
 ## Contents
 
 - [Problems With the Old Way of Managing Knowledge](#problems-with-the-old-way-of-managing-knowledge)
@@ -353,7 +365,7 @@ The examples below use `/lumi-*` syntax, which fits environments that use slash 
 | --- | --- |
 | `/lumi-init` | Prepare the initial wiki structure and scan what is already in `raw/`. |
 | `/lumi-ingest <file or source>` | Add a document to the wiki. This is the command you will use very often. |
-| `/lumi-ask <question>` | Ask the knowledge base created in `wiki/`. |
+| `/lumi-ask <question>` | Ask the knowledge base in `wiki/`. It always shows which pages back up the answer, and points you to files in `raw/sources/` if something is missing. |
 | `/lumi-edit <wiki page>` | Ask AI to edit or update a specific wiki page. |
 | `/lumi-check` | Ask AI to check wiki health: structure errors, broken links, or pages that were not updated correctly. |
 | `/lumi-reset` | Delete or reset part of the wiki in a controlled way. |
@@ -445,6 +457,14 @@ If you quit at any point, progress is preserved. Running `/lumi-ingest` again on
 - A record in the wiki log showing when the document was added and how the check went.
 - A low-confidence mark on the page if you chose to save it with reservations, so you know to return to it.
 
+### Long documents and whole books
+
+When a document is very long — a whole book, a thesis, anything around 50 pages or more — the AI changes how it reads. Instead of skimming once and summarizing, it first maps out the structure, then reads chapter by chapter, writing a note for each part with page numbers next to every important point. The summary page is then written from those notes, and every quotation is checked against the original pages so nothing gets invented.
+
+You get the same summary page as usual, plus a folder of reading notes in `wiki/readings/` — one note per chapter. Later questions about the book are answered from these notes, so the AI does not re-read the whole book, and you can trace any answer back to the exact page. If the reading is interrupted partway, running `/lumi-ingest` again continues from the last finished chapter.
+
+One thing to watch: if you are still reading a novel yourself and do not want the ending revealed, do not add the whole book this way — use the Reading Pack's chapter-by-chapter command instead, which only ever knows as much of the story as you do.
+
 ## Using OpenAI CodexApp (ChatGPT), Claude Code, and Gemini CLI
 
 Lumina-Wiki is not a separate chat app. It is a folder structure, scripts, and commands that let an AI agent work inside your project.
@@ -500,6 +520,8 @@ npx lumina-wiki install
 
 The installer will update scripts, schemas, and skills. Your knowledge content in `wiki/`, original documents in `raw/`, and existing log are preserved.
 
+You may run the command from the project root or from a folder inside it. Lumina will find the enclosing workspace. When you remove a pack or AI tool from the setup, its old managed commands and unchanged setup files are removed. Files you changed are kept and reported. Moving, renaming, or copying the whole project is also supported; managed links are repaired on the next upgrade.
+
 If an old wiki is missing some new metadata fields, the installer may warn you. In that case, you can run:
 
 ```text
@@ -538,7 +560,7 @@ You can, but be careful. `wiki/` is the knowledge area where AI maintains struct
 
 ### I just added a document to `raw/`. Why does `/lumi-ask` not know it yet?
 
-Because the original document is only in `raw/`. Add it to the wiki with:
+Because the original document is only in `raw/`. If you ask about it before adding it to the wiki, `/lumi-ask` will tell you the wiki doesn't cover it yet and point out which files in `raw/sources/` look like they might have the answer — so you can open and read them yourself right away. To let AI use it too, add it to the wiki with:
 
 ```text
 /lumi-ingest raw/sources/<file-name>

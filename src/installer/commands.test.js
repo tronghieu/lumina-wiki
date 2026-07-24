@@ -1,10 +1,15 @@
 /**
  * Tests for src/installer/commands.js high-risk install behavior.
+ *
+ * Run this file directly with Node, as configured in package.json. Several
+ * tests intentionally emit localized installer output; Node 20's parent test
+ * runner multiplexes that output with its serialized protocol and can
+ * intermittently misparse the stream (GitHub issue #23).
  */
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, access, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, access, rm, mkdir, readlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -12,7 +17,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { installCommand, printPostUpgradeBanner, applyInstallOverrides, validateLanguageInput } from './commands.js';
-import { writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
+import { readManifest, readSkillsManifest, writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
 const PKG = require('../../package.json');
@@ -72,12 +77,16 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'references', '4c-rubric.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-ingest', 'references', 'pdf-preprocessing.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-check', 'references', 'lint-checks.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-verify', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-help', 'SKILL.md'));
       await access(join(workspace, '_lumina', 'tools', 'prepare_source.py'));
+      await access(join(workspace, '_lumina', 'tools', 'fetch_scite.py'));
+      await access(join(workspace, '_lumina', 'tools', 'fetch_altmetric.py'));
       await access(join(workspace, '_lumina', 'scripts', 'discover-runner.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'external-ids.mjs'));
       await access(join(workspace, '_lumina', 'scripts', 'parse-ids.mjs'));
@@ -380,6 +389,300 @@ describe('installCommand', () => {
       await cleanTmp(tmp);
     }
   });
+
+  // ── Upgrade menu (BMAD-style) ──────────────────────────────────────────────
+
+  test('fresh install with default (core-only) packs prints hint about available packs', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'hint-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /more packs are available/);
+      assert.match(result.stdout, /research/);
+      assert.match(result.stdout, /reading/);
+      assert.match(result.stdout, /learning/);
+      assert.match(result.stdout, /Modify installation/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('fresh install with every pack does not print the packs-available hint', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'full-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update', '--directory', workspace, '--packs', 'core,research,reading,learning'],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.ok(!result.stdout.includes('more packs are available'), 'hint should not print once every pack is installed');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade with --yes: quick update semantics keep existing packs and print the packs-available hint', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeManifest(tmp, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: '0.1.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: { core: { version: '0.1.0', source: 'built-in' } },
+        ideTargets: ['claude_code'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: tmp },
+      });
+      await writeFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: Core Only Wiki',
+        'communication_language: English',
+        'document_output_language: English',
+        'ide_targets:',
+        '  claude_code: true',
+        'packs:',
+        '  core: true',
+        '',
+      ].join('\n'), 'utf8');
+
+      const captured = [];
+      const origWrite = process.stdout.write.bind(process.stdout);
+      process.stdout.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+      try {
+        await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      } finally {
+        process.stdout.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.match(output, /more packs are available/);
+      assert.match(output, /research/);
+      assert.match(output, /reading/);
+      assert.match(output, /learning/);
+
+      // Quick update semantics: --yes on an upgrade never adds packs the user
+      // didn't already request — it only preserves the prior config.
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /research: false/);
+      assert.match(config, /reading: false/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade without --yes over a non-TTY pipe skips the interactive upgrade menu (behaves like quick update)', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeManifest(tmp, {
+        schemaVersion: MANIFEST_SCHEMA_VERSION,
+        packageVersion: '0.1.0',
+        installedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        packs: {
+          core: { version: '0.1.0', source: 'built-in' },
+          research: { version: '0.1.0', source: 'built-in' },
+        },
+        ideTargets: ['codex'],
+        symlinkStrategies: {},
+        resolvedPaths: { projectRoot: tmp },
+      });
+      await writeFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), [
+        'project_name: Piped Wiki',
+        'communication_language: English',
+        'document_output_language: English',
+        'ide_targets:',
+        '  codex: true',
+        'packs:',
+        '  core: true',
+        '  research: true',
+        '',
+      ].join('\n'), 'utf8');
+
+      // No --yes flag: spawnSync's default stdio is piped, not a TTY, so the
+      // interactive upgrade menu's TTY guard must skip the prompt rather than
+      // block waiting for input that will never arrive.
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--no-update', '--directory', tmp],
+        { encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /project_name: Piped Wiki/);
+      assert.match(config, /research: true/);
+      assert.match(config, /codex: true/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CLI install from a nested directory upgrades the enclosing workspace', async () => {
+    const tmp = await makeTmpDir();
+    const nested = join(tmp, 'docs', 'notes');
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await mkdir(nested, { recursive: true });
+
+      const result = spawnSync(
+        process.execPath,
+        [CLI, 'install', '--yes', '--no-update'],
+        { cwd: nested, encoding: 'utf8', timeout: 30000 },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      await assert.rejects(() => access(join(nested, '_lumina', 'manifest.json')));
+      await access(join(tmp, '_lumina', 'manifest.json'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade removes obsolete managed skills, links, tools, and unchanged IDE stubs', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core,research',
+        ideTargets: 'claude_code,codex',
+      });
+      await access(join(tmp, 'wiki', 'topics'));
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core',
+        ideTargets: 'codex',
+      });
+
+      await assert.rejects(() => access(join(tmp, '.agents', 'skills', 'lumi-research-discover')));
+      await assert.rejects(() => access(join(tmp, '.claude', 'skills', 'lumi-research-discover')));
+      await assert.rejects(() => access(join(tmp, '.claude', 'skills', 'lumi-init')));
+      await assert.rejects(() => access(join(tmp, '_lumina', 'tools', 'discover.py')));
+      await assert.rejects(() => access(join(tmp, '.env.example')));
+      await assert.rejects(() => access(join(tmp, 'CLAUDE.md')));
+      await access(join(tmp, 'AGENTS.md'));
+      await access(join(tmp, 'wiki', 'topics'));
+
+      const rows = await readSkillsManifest(tmp);
+      assert.ok(rows.every(row => row.pack === 'core'));
+      assert.ok(rows.every(row => row.target_link_path === ''));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade preserves a modified stub when its IDE target is removed', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        ideTargets: 'claude_code,codex',
+      });
+      const custom = '# My Claude instructions\n';
+      await writeFile(join(tmp, 'CLAUDE.md'), custom, 'utf8');
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        ideTargets: 'codex',
+      });
+
+      assert.equal(await readFile(join(tmp, 'CLAUDE.md'), 'utf8'), custom);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('pack cleanup does not remove a user-created Claude path when Claude was never selected', async () => {
+    const tmp = await makeTmpDir();
+    const customPath = join(tmp, '.claude', 'skills', 'lumi-research-discover');
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core,research',
+        ideTargets: 'codex',
+      });
+      await mkdir(customPath, { recursive: true });
+      await writeFile(join(customPath, 'CUSTOM.md'), 'user-owned\n', 'utf8');
+
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: 'core',
+        ideTargets: 'codex',
+      });
+
+      assert.equal(
+        await readFile(join(customPath, 'CUSTOM.md'), 'utf8'),
+        'user-owned\n',
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('relocated workspace refreshes manifest paths and keeps portable skill links', async () => {
+    const tmp = await makeTmpDir();
+    const original = join(tmp, 'original');
+    const relocated = join(tmp, 'relocated');
+    try {
+      await mkdir(original, { recursive: true });
+      await installCommand({ cwd: original, yes: true, noUpdate: true });
+      const { cp } = await import('node:fs/promises');
+      await cp(original, relocated, { recursive: true });
+
+      await installCommand({ cwd: relocated, yes: true, noUpdate: true });
+
+      const manifest = await readManifest(relocated);
+      assert.equal(manifest.resolvedPaths.projectRoot, relocated);
+      if (process.platform !== 'win32') {
+        const target = await readlink(join(relocated, '.claude', 'skills', 'lumi-init'));
+        assert.equal(target, '../../.agents/skills/lumi-init');
+      }
+      await access(join(relocated, '.claude', 'skills', 'lumi-init', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('install fails when required Claude skill links cannot be created', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '.claude'), { recursive: true });
+      await writeFile(join(tmp, '.claude', 'skills'), 'blocks skill directory', 'utf8');
+
+      await assert.rejects(
+        () => installCommand({ cwd: tmp, yes: true, noUpdate: true }),
+        (err) => err.code === 2 && /SKILL_LINKS_INCOMPLETE/.test(err.message),
+      );
+      await assert.rejects(() => access(join(tmp, '_lumina', 'manifest.json')));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
 });
 
 
@@ -412,6 +715,31 @@ describe("applyInstallOverrides — locale + language validation", () => {
   test("no --lang, existing answers.locale=zh preserved", () => {
     const r = applyInstallOverrides({ ...base, locale: "zh" }, {});
     assert.equal(r.locale, "zh");
+  });
+
+  test("interactive locale selection cascades installed default languages", () => {
+    const r = applyInstallOverrides({
+      ...base,
+      locale: "en",
+      selectedLocale: "vi",
+      communicationLang: "English",
+      documentOutputLang: "English",
+    }, {});
+    assert.equal(r.locale, "vi");
+    assert.equal(r.communicationLang, "Vietnamese");
+    assert.equal(r.documentOutputLang, "Vietnamese");
+    assert.equal("selectedLocale" in r, false);
+  });
+
+  test("--lang remains authoritative over an interactive locale selection", () => {
+    const r = applyInstallOverrides({
+      ...base,
+      locale: "en",
+      selectedLocale: "vi",
+      localeSwitchConfirmedFor: "vi",
+    }, { lang: "zh" });
+    assert.equal(r.locale, "zh");
+    assert.equal(r.localeSwitchConfirmedFor, "vi");
   });
 
   test("--communication-language empty after trim throws code 2", () => {

@@ -150,7 +150,7 @@ or update the reflection page:
 Append a log entry via the wiki engine:
 
 ```bash
-node _lumina/scripts/wiki.mjs log lumi-learning-reflect "reflected on <concept-id>; evolution_count=<N>"
+node _lumina/scripts/wiki.mjs log learning-reflect "reflected on <concept-id>; evolution_count=<N>"
 ```
 
 Then report to the user:

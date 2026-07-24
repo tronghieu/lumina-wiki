@@ -184,7 +184,9 @@ Hard 2 s `AbortController` timeout + 500 ms belt-and-suspenders `exec` timeout. 
 
 ### `src/scripts/wiki.mjs`
 
-Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `remove-edge`, `replace-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+
+`remove-edge <from> <type> <to> [--dry-run]` idempotently removes one relationship (both directions, respecting the terminal/exempt/symmetric gate) regardless of stored confidence; no-op exit 0 if absent; rejects `cites`/`cited_by` and unknown types (exit 2); emits `advisories` if a page body still carries the `[[wikilink]]` post-removal. `replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]` corrects an edge's type as one convergent write (remove old + add new, both directions), preserving confidence unless overridden — the type-only change needs no page edit since bodies list concepts in a type-agnostic section.
 
 ### `src/scripts/schemas.mjs`
 
@@ -284,7 +286,7 @@ Lint enforces:
 
 ### `src/scripts/lint.mjs`
 
-`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. Nine checks:
+`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L17 (15 checks total; L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
 
 | Check | Description | Fixable |
 |---|---|---|
@@ -297,9 +299,13 @@ Lint enforces:
 | L07 | Symmetric edge stored both ways | yes (dedupes) |
 | L08 | Missing required confidence field | no |
 | L09 | Stale `index.md` (warning) | yes (rewrites `<!-- lumina:index -->` block) |
+| L10 | `foundations/` alias conflict — two foundations share an alias, or an alias collides with another foundation's title (error) | no |
+| L11 | `confidence` field missing on a `sources`/`concepts` entity (warning) | no |
+| L12 | `sources` page `raw_paths` entry lives in `raw/tmp/` (transient), escapes the project root, or is missing on disk (warning; three sub-variants: `L12-raw-paths-transient`, `L12-raw-paths-unsafe`, `L12-raw-paths-missing`) | no |
 | L13 | `external_ids` missing namespace derivable from `urls[]` (warning) | no |
 | L14 | `external_ids` value fails `normalizeExternalId` (error) | no |
 | L16 | `external_ids[ns]` disagrees with `urls[]`-derived value (warning) | no |
+| L17 | Dangling edge — an edge's `from`/`to` internal slug does not resolve to any wiki file (error) | no |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 
@@ -323,7 +329,7 @@ All tools follow these contracts:
 
 ## 5. Wiki schema contract
 
-**4 core page types:**
+**5 core page types:**
 
 | Type | Directory | Purpose |
 |---|---|---|
@@ -331,6 +337,7 @@ All tools follow these contracts:
 | Concept | `concepts/` | Cross-source idea or technique |
 | Person | `people/` | Profile of referenced person |
 | Summary | `summary/` | Area-level synthesis |
+| Reading note | `readings/` | Per-unit page-anchored notes for long sources (books, theses); written by `/lumi-ingest` long-source pipeline, linked to the source via `annotates`/`annotated_by`, exempt from `wiki/index.md` (L09) like `reflections/` |
 
 **Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 
@@ -398,7 +405,7 @@ allowed-tools:              # explicit allowlist (Bash, Read, Write, Edit)
 
 Body opens with: "Read `README.md` at the project root before this SKILL.md." then `## Role`, `## Context`, procedural steps.
 
-**Drift to fix:** reading-pack skills omit `allowed-tools`. New pack skills should include it explicitly.
+(historical — fixed; all pack skills now declare `allowed-tools`.) New pack skills should include it explicitly.
 
 ### Entry-point stub pattern (confirmed)
 
@@ -469,12 +476,13 @@ Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 ID
 12. **Bidirectional invariant.** Most common ingest mistake. Forward link without reverse = L06 fail.
 13. **README schema fence.** Edits inside `<!-- lumina:schema -->` markers are wiped on upgrade. User content must go outside.
 14. **Adding a new pack** requires threaded `{{#if pack_X}}` guards in `lumina.config.yaml`, page templates, and these regions of `src/templates/README.md`: Repository Layout (`wiki/`, `raw/`, `_lumina/tools/` lines), the `raw/` rule sentence (named exception paths), Page Types table rows, Cross-Reference Rules table rows, Exemptions list, Skills section, Tooling Conventions. New pack skills MUST follow the `lumi-<pack>-<name>` canonicalId convention (see §6 "Skill naming convention") — the SKILL.md `name:` frontmatter, body header, `getSkillDefs()` entry, and any cross-skill references must all carry the pack prefix. Forgetting any one = orphaned or leaking content.
-15. **Reading-pack skills missing `allowed-tools`** — known drift, fix when touching them.
+15. **Reading-pack skills missing `allowed-tools`** — (historical — fixed; all pack skills now declare `allowed-tools`.)
 16. **`/lumi-research-discover` writes to `raw/discovered/`** — crosses the "raw is read-only" headline. The exception is implicit; document it explicitly when adding any new skill that touches `raw/`.
 17. **Stale planning artifact:** `docs/planning-artifacts/lumina-wiki-readme-template.md` lines 179–181 list dropped research skills. The shipped `README.md` at project root is authoritative.
 18. **Pre-release semver not handled** — `isNewerVersion('1.0.0-alpha.1', '1.0.0')` returns nonsense. Don't use for pre-release tags.
 19. **DeepXiv:** `read` is GET with `?section=`; `search` is POST with JSON body. Don't mix.
 20. **S2 silence:** when `SEMANTIC_SCHOLAR_API_KEY` is missing, `init_discovery.py` phases 2/3 return `[]` quietly. Zero results doesn't mean "no data" — check the key.
+21. **Ingest checkpoints are keyed by file basename, not slug:** `_lumina/_state/ingest-<file-basename>.json` exists before a slug is generated (slug assignment happens mid-flow, in `step-01-draft.md`'s "Generate slug" phase), so the checkpoint filename can't use the slug. The checkpoint JSON itself stores a `slug` field once generated (merged in during the `slug` phase) so other skills can match a checkpoint to its wiki entry by content rather than re-deriving the filename from the raw source path.
 
 ---
 

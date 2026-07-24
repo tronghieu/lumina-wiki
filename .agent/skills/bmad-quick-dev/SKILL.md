@@ -9,6 +9,9 @@ description: 'Implements any user intent, requirement, story, bug fix or change 
 
 **CRITICAL:** If a step says "read fully and follow step-XX", you read and follow step-XX. No exceptions.
 
+Subagents, when the capability is available, are an important part of this workflow. Use them as directed by the workflow steps.
+If you need an explicit user instruction to run them, ask once now for the whole workflow run.
+
 ## READY FOR DEVELOPMENT STANDARD
 
 A specification is "Ready for Development" when:
@@ -17,6 +20,8 @@ A specification is "Ready for Development" when:
 - **Logical**: Tasks ordered by dependency.
 - **Testable**: All ACs use Given/When/Then.
 - **Complete**: No placeholders or TBDs.
+- **Sufficient**: No known requirement, acceptance, dependency, or implementation gaps remain unresolved.
+- **Coherent**: No unresolved ambiguities or internal contradictions.
 
 ## SCOPE STANDARD
 
@@ -66,7 +71,6 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 - `date` as system-generated current datetime
 - `sprint_status` = `{implementation_artifacts}/sprint-status.yaml`
 - `project_context` = `**/project-context.md` (load if exists)
-- CLAUDE.md / memory files (load if exist)
 - YOU MUST ALWAYS SPEAK OUTPUT in your Agent communication style with the config `{communication_language}`
 - Language MUST be tailored to `{user_skill_level}`
 - Generate all documents in `{document_output_language}`
@@ -79,7 +83,7 @@ Greet `{user_name}`, speaking in `{communication_language}`.
 
 Execute each entry in `{workflow.activation_steps_append}` in order.
 
-Activation is complete. Begin the workflow below.
+Activation is complete. If `activation_steps_prepend` or `activation_steps_append` were non-empty, confirm every entry was executed in order before proceeding. Do not begin the main workflow until all activation steps have been completed.
 
 ## WORKFLOW ARCHITECTURE
 

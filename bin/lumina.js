@@ -199,6 +199,12 @@ program
   .option('--force-locale-switch', 'allow switching installer locale during upgrade')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
+    const hasExplicitDirectory = (
+      cmdOpts.directory != null
+      || cmdOpts.cwd != null
+      || globalOpts.directory != null
+      || globalOpts.cwd != null
+    );
     const mergedDir      = cmdOpts.directory ?? cmdOpts.cwd ?? globalOpts.directory ?? globalOpts.cwd ?? process.cwd();
     const mergedYes      = cmdOpts.yes      ?? globalOpts.yes      ?? false;
     const mergedReLink   = cmdOpts.reLink   ?? globalOpts.reLink   ?? false;
@@ -220,6 +226,7 @@ program
         documentOutputLang: cmdOpts.documentOutputLanguage,
         lang: cmdOpts.lang,
         forceLocaleSwitch: Boolean(cmdOpts.forceLocaleSwitch),
+        searchParents: !hasExplicitDirectory,
       });
     } catch (err) {
       // Top-level catch: locale may not be resolved yet (pre-loadLocale path).

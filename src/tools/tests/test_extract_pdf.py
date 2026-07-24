@@ -38,6 +38,19 @@ def blank_pdf(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.fixture
+def three_page_pdf(tmp_path: Path) -> Path:
+    """Write a three-page blank PDF using pypdf and return its path."""
+    pypdf = pytest.importorskip("pypdf")
+    writer = pypdf.PdfWriter()
+    for _ in range(3):
+        writer.add_blank_page(width=612, height=792)
+    path = tmp_path / "three.pdf"
+    with path.open("wb") as fh:
+        writer.write(fh)
+    return path
+
+
 # ---------------------------------------------------------------------------
 # _parse_pages
 # ---------------------------------------------------------------------------
@@ -146,6 +159,37 @@ class TestMainCLI:
         assert code == 0
         assert "may be scanned" in err
         assert out.endswith("\n")
+
+    def test_markers_emit_absolute_page_numbers(self, three_page_pdf: Path):
+        # --pages 2-3 --markers: markers carry the absolute page numbers 2 and
+        # 3, not 1 and 2. Blank pages extract to "" but markers still appear.
+        code, out, _ = self._run([str(three_page_pdf), "--pages", "2-3", "--markers"])
+        assert code == 0
+        assert "[[page 2]]" in out
+        assert "[[page 3]]" in out
+        assert "[[page 1]]" not in out
+
+    def test_markers_whole_document_starts_at_page_1(self, three_page_pdf: Path):
+        code, out, _ = self._run([str(three_page_pdf), "--markers"])
+        assert code == 0
+        for n in (1, 2, 3):
+            assert f"[[page {n}]]" in out
+
+    def test_info_reports_page_count_and_token_estimate(self, three_page_pdf: Path):
+        import json
+
+        code, out, _ = self._run([str(three_page_pdf), "--info"])
+        assert code == 0
+        data = json.loads(out)
+        assert data["pages"] == 3
+        assert data["chars"] == 0  # blank pages extract to ""
+        assert data["est_tokens"] == 0
+        assert "[[page" not in out
+
+    def test_info_with_pages_exits_2(self, three_page_pdf: Path):
+        code, _, err = self._run([str(three_page_pdf), "--info", "--pages", "1-2"])
+        assert code == 2
+        assert "--info" in err
 
     def test_no_pdf_library_exits_3(self, blank_pdf: Path, monkeypatch):
         # Force every extractor to look uninstalled by making them raise

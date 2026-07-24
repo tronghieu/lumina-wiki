@@ -149,9 +149,22 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
  * @param {boolean} [opts.acceptDefaults=false] - Skip prompts; return defaults.
  * @param {string}  [opts.cwd]                  - Project root for defaults.
  * @param {Function} [opts.t]                   - Locale translator function.
+ * @param {Function} [opts.resolveDestination]  - Detect an existing install after directory selection.
+ * @param {InstallAnswers|null} [opts.modifyAnswers] - Non-null switches to "modify installation"
+ *   mode (upgrade menu): directory and research-purpose prompts are skipped
+ *   (the install location is fixed and README purpose is never rewritten on
+ *   upgrade), and every remaining prompt is prefilled from these answers.
  * @returns {Promise<InstallAnswers>}
  */
-export async function runInstallPrompts({ acceptDefaults = false, cwd = process.cwd(), existingManifest = null, defaultLocale = 'en', t: initialT = null } = {}) {
+export async function runInstallPrompts({
+  acceptDefaults = false,
+  cwd = process.cwd(),
+  existingManifest = null,
+  defaultLocale = 'en',
+  t: initialT = null,
+  resolveDestination = null,
+  modifyAnswers = null,
+} = {}) {
   if (acceptDefaults) {
     const loc = existingManifest?.locale ?? defaultLocale;
     return defaultAnswers(cwd, loc);
@@ -199,6 +212,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   // If user picks a locale different from the installed one on an upgrade,
   // require explicit confirmation before destructively rewriting README.md
   // and IDE stubs. Default N — protects user content.
+  let localeSwitchConfirmedFor = null;
   if (existingManifest?.locale && existingManifest.locale !== locale) {
     const proceed = await confirm({
       // Use trilingual literal — user is mid-switch, so both old and new
@@ -211,26 +225,62 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
       cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
       process.exit(4);
     }
+    localeSwitchConfirmedFor = locale;
   }
 
   // ── Prompt 1: Installation directory ─────────────────────────────────────
+  // Modify mode: the install location is the existing workspace — not re-asked.
   const cwdAbs = resolve(cwd);
-  const directoryRaw = await text({
-    message: t ? t('prompt.directory.message') : 'Installation directory',
-    placeholder: cwdAbs,
-    defaultValue: cwdAbs,
-  });
-  if (isCancel(directoryRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
-  const directory = expandUserPath(directoryRaw, cwdAbs);
-  const projectName = defaultProjectName(directory);
+  let directory = cwdAbs;
+  let projectName = modifyAnswers?.projectName || defaultProjectName(directory);
+  if (!modifyAnswers) {
+    const directoryRaw = await text({
+      message: t ? t('prompt.directory.message') : 'Installation directory',
+      placeholder: cwdAbs,
+      defaultValue: cwdAbs,
+    });
+    if (isCancel(directoryRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+    directory = expandUserPath(directoryRaw, cwdAbs);
+    projectName = defaultProjectName(directory);
+  }
+
+  if (!existingManifest && resolveDestination) {
+    const detected = await resolveDestination(directory);
+    if (detected?.existingManifest && detected?.answers) {
+      const installedLocale = detected.existingManifest.locale ?? 'en';
+      let localeSwitchConfirmedFor = null;
+      if (installedLocale !== locale) {
+        const proceed = await confirm({
+          message: `Locale change ${installedLocale} -> ${locale} will rewrite README.md and IDE stubs in the new locale. Outside-schema edits are preserved. Continue?`,
+          initialValue: false,
+        });
+        if (isCancel(proceed) || !proceed) {
+          cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
+          process.exit(4);
+        }
+        localeSwitchConfirmedFor = locale;
+      }
+      return {
+        ...detected.answers,
+        directory,
+        selectedLocale: locale,
+        localeSwitchConfirmedFor,
+      };
+    }
+  }
 
   // ── Prompt 2: Research purpose (multi-line free-form, optional) ─────────
-  const researchPurposeRaw = await text({
-    message: t ? t('prompt.purpose.message') : 'Research purpose (optional — describe what this wiki is for)',
-    placeholder: t ? t('prompt.purpose.placeholder') : 'e.g. Track flash-attention variants for a survey',
-  });
-  if (isCancel(researchPurposeRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
-  const researchPurpose = researchPurposeRaw || '';
+  // Modify mode: skipped — README is schema-region-merged on upgrade, so a
+  // new purpose would never be written anywhere.
+  let researchPurpose = modifyAnswers?.researchPurpose ?? '';
+  if (!modifyAnswers) {
+    const researchPurposeRaw = await text({
+      message: t ? t('prompt.purpose.message') : 'Research purpose (optional — describe what this wiki is for)',
+      placeholder: t ? t('prompt.purpose.placeholder') : 'e.g. Track flash-attention variants for a survey',
+    });
+    if (isCancel(researchPurposeRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+    researchPurpose = researchPurposeRaw || '';
+  }
 
   // ── Prompt 3: IDE targets ────────────────────────────────────────────────
   const ideTargetsRaw = await multiselect({
@@ -244,7 +294,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
       { value: 'cursor',      label: t ? t('prompt.ide.option.cursor.label') : 'Cursor',                       hint: t ? t('prompt.ide.option.cursor.hint') : '.cursor/rules/lumina.mdc stub' },
       { value: 'generic',     label: t ? t('prompt.ide.option.generic.label') : 'Generic',                     hint: t ? t('prompt.ide.option.generic.hint') : 'README.md only' },
     ],
-    initialValues: ['claude_code'],
+    initialValues: modifyAnswers?.ideTargets?.length ? modifyAnswers.ideTargets : ['claude_code'],
     required: false,
   });
   if (isCancel(ideTargetsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
@@ -260,6 +310,7 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
       { value: 'reading',  label: t ? t('prompt.packs.option.reading.label') : 'Reading',   hint: t ? t('prompt.packs.option.reading.hint') : 'chapter-ingest/character-track/theme-map/plot-recap skills' },
       { value: 'learning', label: t ? t('prompt.packs.option.learning.label') : 'Learning', hint: t ? t('prompt.packs.option.learning.hint') : 'self-reflection skills (reflect skill + wiki/reflections/)' },
     ],
+    initialValues: modifyAnswers?.packs?.filter(p => p !== 'core') ?? [],
     required: false,
   });
   if (isCancel(packsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
@@ -267,21 +318,25 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
   const packs = ['core', ...selectedPacks.filter(p => p !== 'core')];
 
   // ── Prompt 5: Language pair ──────────────────────────────────────────────
+  // Modify mode: the previously configured languages win over the locale
+  // cascade — they are the user's explicit prior choice.
+  const commDefault = modifyAnswers?.communicationLang || langDefault;
+  const docDefault  = modifyAnswers?.documentOutputLang || langDefault;
   const communicationLangRaw = await text({
     message: t ? t('prompt.communication_language.message') : 'Communication language (how the LLM talks to you)',
-    placeholder: langDefault,
-    defaultValue: langDefault,
+    placeholder: commDefault,
+    defaultValue: commDefault,
   });
   if (isCancel(communicationLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
-  const communicationLang = communicationLangRaw || langDefault;
+  const communicationLang = communicationLangRaw || commDefault;
 
   const documentOutputLangRaw = await text({
     message: t ? t('prompt.document_output_language.message') : 'Document output language (language wiki pages are written in)',
-    placeholder: langDefault,
-    defaultValue: langDefault,
+    placeholder: docDefault,
+    defaultValue: docDefault,
   });
   if (isCancel(documentOutputLangRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
-  const documentOutputLang = documentOutputLangRaw || langDefault;
+  const documentOutputLang = documentOutputLangRaw || docDefault;
 
   return {
     directory,
@@ -292,7 +347,44 @@ export async function runInstallPrompts({ acceptDefaults = false, cwd = process.
     communicationLang,
     documentOutputLang,
     locale,
+    localeSwitchConfirmedFor,
   };
+}
+
+// ---------------------------------------------------------------------------
+// runUpgradeModePrompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask how to proceed when installing over an existing workspace:
+ * keep the previous choices (quick) or re-run the setup prompts (modify).
+ * Calls process.exit(4) if the user cancels (Ctrl-C).
+ *
+ * @param {object}  [opts]
+ * @param {Function} [opts.t] - Locale translator function.
+ * @returns {Promise<'quick'|'modify'>}
+ */
+export async function runUpgradeModePrompt({ t = null } = {}) {
+  const { select, isCancel, cancel } = await getClack();
+
+  const mode = await select({
+    message: t ? t('prompt.upgrade_mode.message') : 'Existing installation found. How would you like to proceed?',
+    options: [
+      {
+        value: 'quick',
+        label: t ? t('prompt.upgrade_mode.option.quick.label') : 'Quick update',
+        hint:  t ? t('prompt.upgrade_mode.option.quick.hint') : 'keep current packs, IDE targets, and languages',
+      },
+      {
+        value: 'modify',
+        label: t ? t('prompt.upgrade_mode.option.modify.label') : 'Modify installation',
+        hint:  t ? t('prompt.upgrade_mode.option.modify.hint') : 'add or remove packs and IDE targets, change languages',
+      },
+    ],
+    initialValue: 'quick',
+  });
+  if (isCancel(mode)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+  return mode;
 }
 
 // ---------------------------------------------------------------------------

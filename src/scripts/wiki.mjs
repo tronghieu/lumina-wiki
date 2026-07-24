@@ -943,6 +943,36 @@ async function addCitation(projectRoot, fromSlug, toSlug) {
 }
 
 /**
+ * Remove a citation edge (cites) from wiki/graph/citations.jsonl.
+ * Idempotent.
+ * @param {string} projectRoot
+ * @param {string} fromSlug
+ * @param {string} toSlug
+ * @param {{dryRun?: boolean}} [opts]
+ * @returns {Promise<{removed: number, before: number, after?: number, dryRun?: boolean, matched?: object[]}>}
+ */
+async function removeCitation(projectRoot, fromSlug, toSlug, opts = {}) {
+  const graphDir = join(projectRoot, 'wiki', 'graph');
+  const citationsFile = join(graphDir, 'citations.jsonl');
+
+  const existing = await readJsonl(citationsFile);
+  const before = existing.length;
+
+  const matched = existing.filter(e => e.from === fromSlug && e.to === toSlug);
+  const remaining = existing.filter(e => !(e.from === fromSlug && e.to === toSlug));
+
+  if (opts.dryRun) {
+    return { dryRun: true, removed: matched.length, before, matched };
+  }
+
+  if (matched.length > 0) {
+    await writeJsonl(citationsFile, remaining);
+  }
+
+  return { removed: matched.length, before, after: remaining.length };
+}
+
+/**
  * Batch-add edges from a JSON file.
  * Reads [{from, type, to, confidence?}, ...], validates all, then writes in one pass.
  * @param {string} projectRoot
@@ -1084,6 +1114,270 @@ async function dedupEdges(projectRoot) {
   return { before, after, removed: before - after };
 }
 
+/**
+ * Same reverse-skip gate used by addEdge/batchEdges: no reverse edge when the
+ * type is terminal, the target is exempt (EXEMPTION_GLOBS), or the type is
+ * symmetric (already covered by sorted endpoints).
+ * @param {object} typeDef
+ * @param {string} toSlug
+ * @returns {boolean}
+ */
+function skipReverseFor(typeDef, toSlug) {
+  return Boolean(typeDef.terminal || isExempt(toSlug) || typeDef.symmetric);
+}
+
+/**
+ * Partition an edge list into the edges matching a from/type/to relationship
+ * (forward + its reverse, per the same gate addEdge uses) versus the rest.
+ * Confidence is ignored when matching (edgeKey already ignores it).
+ *
+ * @param {object[]} edges
+ * @param {string} fromSlug
+ * @param {object} typeDef - EDGE_TYPES entry for the relationship's type.
+ * @param {string} toSlug
+ * @returns {{
+ *   remaining: object[],
+ *   matched: object[],
+ *   forwardRemoved: number,
+ *   reverseRemoved: number,
+ *   forwardMatch: object|null,
+ *   reverseMatch: object|null,
+ * }}
+ */
+function partitionEdgesForRemoval(edges, fromSlug, typeDef, toSlug) {
+  const fwdKey = edgeKey(normalizeEdge({ from: fromSlug, type: typeDef.name, to: toSlug }));
+
+  let revKey = null;
+  if (!skipReverseFor(typeDef, toSlug) && typeDef.reverse) {
+    revKey = edgeKey(normalizeEdge({ from: toSlug, type: typeDef.reverse, to: fromSlug }));
+  }
+
+  const remaining = [];
+  const matched = [];
+  let forwardMatch = null;
+  let reverseMatch = null;
+
+  for (const edge of edges) {
+    const key = edgeKey(edge);
+    if (key === fwdKey) {
+      matched.push(edge);
+      forwardMatch = edge;
+    } else if (revKey && key === revKey) {
+      matched.push(edge);
+      reverseMatch = edge;
+    } else {
+      remaining.push(edge);
+    }
+  }
+
+  return {
+    remaining,
+    matched,
+    forwardRemoved: forwardMatch ? 1 : 0,
+    reverseRemoved: reverseMatch ? 1 : 0,
+    forwardMatch,
+    reverseMatch,
+  };
+}
+
+/**
+ * Best-effort advisory scan: for from/to slugs that resolve to a wiki page,
+ * check whether the page's markdown still contains a `[[other-slug]]`
+ * wikilink after the edge that justified it was removed. Never throws —
+ * missing pages or read errors are skipped silently.
+ * @param {string} projectRoot
+ * @param {string} fromSlug
+ * @param {string} toSlug
+ * @returns {Promise<string[]>}
+ */
+async function collectRemovalAdvisories(projectRoot, fromSlug, toSlug) {
+  const advisories = [];
+
+  async function checkWikilink(pageSlug, linkedSlug) {
+    if (isExempt(pageSlug)) return; // e.g. external URL slug — no page to read
+    try {
+      const filePath = await findEntityFile(projectRoot, pageSlug);
+      if (!filePath) return;
+      const content = await readFile(filePath, 'utf8');
+      if (content.includes(`[[${linkedSlug}]]`)) {
+        advisories.push(
+          `Page ${pageSlug} still contains wikilink [[${linkedSlug}]]; review whether the mention should stay.`,
+        );
+      }
+    } catch (_) {
+      // best-effort — ignore fs errors
+    }
+  }
+
+  await checkWikilink(fromSlug, toSlug);
+  await checkWikilink(toSlug, fromSlug);
+
+  return advisories;
+}
+
+/**
+ * Remove a from/type/to relationship (forward + reverse, per the same gate
+ * addEdge uses) from edges.jsonl. Idempotent: matching ignores confidence,
+ * and removing an edge that isn't there exits 0 with removed:0.
+ *
+ * @param {string} projectRoot
+ * @param {string} fromSlug
+ * @param {string} edgeType
+ * @param {string} toSlug
+ * @param {object} [opts]
+ * @param {boolean} [opts.dryRun]
+ * @returns {Promise<object>}
+ */
+async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
+  const typeDef = EDGE_TYPES.find(t => t.name === edgeType);
+  if (!typeDef) {
+    const err = new Error(`Unknown edge type: ${edgeType}`);
+    err.code = 2;
+    throw err;
+  }
+
+  const edgesFile = join(projectRoot, 'wiki', 'graph', 'edges.jsonl');
+  const existing = await readJsonl(edgesFile);
+  const before = existing.length;
+
+  const { remaining, matched, forwardRemoved, reverseRemoved } =
+    partitionEdgesForRemoval(existing, fromSlug, typeDef, toSlug);
+
+  if (opts.dryRun) {
+    return {
+      dryRun: true,
+      removed: matched.length,
+      forwardRemoved,
+      reverseRemoved,
+      before,
+      matched,
+    };
+  }
+
+  if (matched.length > 0) {
+    await writeJsonl(edgesFile, remaining);
+  }
+
+  const advisories = await collectRemovalAdvisories(projectRoot, fromSlug, toSlug);
+
+  return {
+    removed: matched.length,
+    forwardRemoved,
+    reverseRemoved,
+    before,
+    after: remaining.length,
+    advisories,
+  };
+}
+
+/**
+ * Replace a from/old-type/to relationship with from/new-type/to: removes the
+ * old edge (forward + reverse, per the same gate addEdge uses for oldType)
+ * and adds the new edge (forward + reverse, per the same gate for newType),
+ * deduping by edgeKey, in a single read + single write.
+ *
+ * Confidence: an explicit opts.confidence wins; otherwise the confidence of
+ * the existing forward old edge (if any) is carried over; otherwise none.
+ *
+ * @param {string} projectRoot
+ * @param {string} fromSlug
+ * @param {string} oldType
+ * @param {string} toSlug
+ * @param {string} newType
+ * @param {object} [opts]
+ * @param {string} [opts.confidence]
+ * @param {boolean} [opts.dryRun]
+ * @returns {Promise<object>}
+ */
+async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts = {}) {
+  const oldTypeDef = EDGE_TYPES.find(t => t.name === oldType);
+  if (!oldTypeDef) {
+    const err = new Error(`Unknown edge type: ${oldType}`);
+    err.code = 2;
+    throw err;
+  }
+  const newTypeDef = EDGE_TYPES.find(t => t.name === newType);
+  if (!newTypeDef) {
+    const err = new Error(`Unknown edge type: ${newType}`);
+    err.code = 2;
+    throw err;
+  }
+  if (opts.confidence && !CONFIDENCE_VALUES.has(opts.confidence)) {
+    const err = new Error(`Invalid confidence: ${opts.confidence}. Must be high|medium|low`);
+    err.code = 2;
+    throw err;
+  }
+
+  const edgesFile = join(projectRoot, 'wiki', 'graph', 'edges.jsonl');
+  const existing = await readJsonl(edgesFile);
+  const before = existing.length;
+
+  const { remaining, matched, forwardMatch } =
+    partitionEdgesForRemoval(existing, fromSlug, oldTypeDef, toSlug);
+  const removed = matched.length;
+
+  let confidence = opts.confidence;
+  if (!confidence && forwardMatch && forwardMatch.confidence) {
+    confidence = forwardMatch.confidence;
+  }
+
+  const workingSet = remaining.slice();
+  const workingKeys = new Set(workingSet.map(edgeKey));
+
+  const forwardEdge = normalizeEdge({
+    from: fromSlug,
+    type: newType,
+    to: toSlug,
+    ...(confidence ? { confidence } : {}),
+  });
+  const fwdKey = edgeKey(forwardEdge);
+
+  let added = false;
+  if (!workingKeys.has(fwdKey)) {
+    workingSet.push(forwardEdge);
+    workingKeys.add(fwdKey);
+    added = true;
+  }
+
+  let reverseEdge = null;
+  if (!skipReverseFor(newTypeDef, toSlug) && newTypeDef.reverse) {
+    reverseEdge = { from: toSlug, type: newTypeDef.reverse, to: fromSlug };
+    const candidate = { ...reverseEdge, ...(confidence ? { confidence } : {}) };
+    const revKey = edgeKey(candidate);
+    if (!workingKeys.has(revKey)) {
+      workingSet.push(candidate);
+      workingKeys.add(revKey);
+      added = true;
+    }
+  }
+
+  const plan = {
+    oldType,
+    newType,
+    forward: { from: fromSlug, type: newType, to: toSlug },
+    reverse: reverseEdge,
+    confidence: confidence || null,
+  };
+
+  if (opts.dryRun) {
+    return {
+      dryRun: true,
+      willRemove: removed,
+      willAdd: { forward: plan.forward, reverse: plan.reverse },
+      confidence: plan.confidence,
+    };
+  }
+
+  // Convergent: old edge already gone and new edge already present — no-op.
+  if (removed === 0 && !added) {
+    return { removed: 0, added: false, ...plan, before, after: before };
+  }
+
+  await writeJsonl(edgesFile, workingSet);
+
+  return { removed, added, ...plan, before, after: workingSet.length };
+}
+
 // ---------------------------------------------------------------------------
 // 6. Checkpoint ops
 // ---------------------------------------------------------------------------
@@ -1179,26 +1473,33 @@ const CORE_WIKI_DIRS = [
   'wiki/graph',
 ];
 
-/** Research pack additional wiki dirs */
-const RESEARCH_WIKI_DIRS = [
-  'wiki/foundations',
-  'wiki/topics',
-];
+/**
+ * Installable (non-core) pack names, derived from ENTITY_DIRS so a new pack
+ * added to schemas.mjs becomes selectable via `init --pack` without touching
+ * this file.
+ * @type {string[]}
+ */
+const INSTALLABLE_PACKS = [...new Set(Object.values(ENTITY_DIRS).map(e => e.pack))]
+  .filter(pack => pack !== 'core');
 
-/** Reading pack additional wiki dirs */
-const READING_WIKI_DIRS = [
-  'wiki/chapters',
-  'wiki/characters',
-  'wiki/themes',
-  'wiki/plot',
-];
+/**
+ * Additional wiki dirs owned by a given pack, derived from ENTITY_DIRS.
+ * Preserves ENTITY_DIRS declaration order.
+ * @param {string} pack
+ * @returns {string[]}
+ */
+function wikiDirsForPack(pack) {
+  return Object.values(ENTITY_DIRS)
+    .filter(e => e.pack === pack)
+    .map(e => `wiki/${e.dir}`.replace(/\/$/, ''));
+}
 
 /**
  * Initialize a workspace skeleton.
  * Idempotent: re-running on an existing workspace is a no-op.
  * @param {string} projectRoot
  * @param {object} [opts]
- * @param {string} [opts.pack] - 'research' | 'reading' | undefined
+ * @param {string} [opts.pack] - one of INSTALLABLE_PACKS | undefined
  * @returns {Promise<{created: string[], skipped: string[]}>}
  */
 async function initWorkspace(projectRoot, opts = {}) {
@@ -1206,10 +1507,8 @@ async function initWorkspace(projectRoot, opts = {}) {
   const skipped = [];
 
   let dirs = [...CORE_WIKI_DIRS];
-  if (opts.pack === 'research') {
-    dirs = [...dirs, ...RESEARCH_WIKI_DIRS];
-  } else if (opts.pack === 'reading') {
-    dirs = [...dirs, ...READING_WIKI_DIRS];
+  if (opts.pack && INSTALLABLE_PACKS.includes(opts.pack)) {
+    dirs = [...dirs, ...wikiDirsForPack(opts.pack)];
   }
 
   // Add _lumina/_state dir
@@ -1506,15 +1805,18 @@ async function main(argv) {
       'Usage: node wiki.mjs <subcommand> [flags]',
       '',
       'Subcommands:',
-      '  init [--pack research|reading]  Create workspace skeleton',
+      `  init [--pack ${INSTALLABLE_PACKS.join('|')}]  Create workspace skeleton`,
       '  slug <title>                    Emit kebab-case slug',
       '  log <skill> <details...>        Append to wiki/log.md',
       '  read-meta <slug>                Read entity frontmatter as JSON',
       '  set-meta <slug> <key> <value> [--json-value]  Set frontmatter key',
       '  add-edge <from> <type> <to> [--confidence high|medium|low]',
       '  add-citation <from> <to>        Append cites edge to citations.jsonl',
+      '  remove-citation <from> <to> [--dry-run]  Remove cites edge from citations.jsonl',
       '  batch-edges <json-file>         Apply array of edges from JSON file',
       '  dedup-edges                     Deduplicate edges.jsonl',
+      '  remove-edge <from> <type> <to> [--dry-run]',
+      '  replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]',
       '  list-entities [path-prefix] [--type <type>]  List entity slugs as JSON',
       '  resolve-alias <text>            Map free-text query to a foundations/* slug',
       '  read-edges <slug>|--from <slug> [--type <type>] [--direction outbound|inbound|both]',
@@ -1539,8 +1841,8 @@ async function main(argv) {
         // init does not require an existing workspace; it creates one
         const projectRoot = process.cwd();
         const pack = flags.pack && typeof flags.pack === 'string' ? flags.pack : undefined;
-        if (pack && pack !== 'research' && pack !== 'reading') {
-          emitError(`Invalid --pack value: ${pack}. Must be research or reading.`, 2);
+        if (pack && !INSTALLABLE_PACKS.includes(pack)) {
+          emitError(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
           process.exit(2);
         }
         const result = await initWorkspace(projectRoot, { pack });
@@ -1687,6 +1989,27 @@ async function main(argv) {
       }
 
       // -----------------------------------------------------------------------
+      case 'remove-citation': {
+        const fromSlug = positional[0];
+        const toSlug = positional[1];
+
+        if (!fromSlug || !toSlug) {
+          emitError('remove-citation requires <from-slug> <to-slug>', 2);
+          process.exit(2);
+        }
+        if (fromSlug.includes('..') || toSlug.includes('..')) {
+          emitError('Slug may not contain ..', 2);
+          process.exit(2);
+        }
+
+        const projectRoot = await requireProjectRoot();
+        const dryRun = Boolean(flags['dry-run']);
+        const result = await removeCitation(projectRoot, fromSlug, toSlug, { dryRun });
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
       case 'batch-edges': {
         const jsonFile = positional[0];
         if (!jsonFile) {
@@ -1704,6 +2027,91 @@ async function main(argv) {
       case 'dedup-edges': {
         const projectRoot = await requireProjectRoot();
         const result = await dedupEdges(projectRoot);
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'remove-edge': {
+        const fromSlug = positional[0];
+        const edgeType = positional[1];
+        const toSlug = positional[2];
+
+        if (!fromSlug || !edgeType || !toSlug) {
+          emitError('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
+          process.exit(2);
+        }
+
+        if (edgeType === 'cites' || edgeType === 'cited_by') {
+          emitError(
+            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `remove-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument).',
+            2,
+          );
+          process.exit(2);
+        }
+
+        const projectRoot = await requireProjectRoot();
+
+        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
+          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
+          process.exit(2);
+        }
+        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
+          emitError(`Unsafe to-slug: ${toSlug}`, 2);
+          process.exit(2);
+        }
+        if (fromSlug.includes('..') || toSlug.includes('..')) {
+          emitError('Slug may not contain ..', 2);
+          process.exit(2);
+        }
+
+        const dryRun = Boolean(flags['dry-run']);
+        const result = await removeEdge(projectRoot, fromSlug, edgeType, toSlug, { dryRun });
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'replace-edge': {
+        const fromSlug = positional[0];
+        const oldType = positional[1];
+        const toSlug = positional[2];
+        const newType = positional[3];
+
+        if (!fromSlug || !oldType || !toSlug || !newType) {
+          emitError('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
+          process.exit(2);
+        }
+
+        if ([oldType, newType].includes('cites') || [oldType, newType].includes('cited_by')) {
+          emitError(
+            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges. Use add-citation / remove-citation to manage citations.',
+            2,
+          );
+          process.exit(2);
+        }
+
+        const projectRoot = await requireProjectRoot();
+
+        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
+          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
+          process.exit(2);
+        }
+        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
+          emitError(`Unsafe to-slug: ${toSlug}`, 2);
+          process.exit(2);
+        }
+        if (fromSlug.includes('..') || toSlug.includes('..')) {
+          emitError('Slug may not contain ..', 2);
+          process.exit(2);
+        }
+
+        const confidence = flags.confidence && typeof flags.confidence === 'string'
+          ? flags.confidence
+          : undefined;
+        const dryRun = Boolean(flags['dry-run']);
+
+        const result = await replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, { confidence, dryRun });
         emitJson(result);
         break;
       }

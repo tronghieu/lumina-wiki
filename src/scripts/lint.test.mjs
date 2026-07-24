@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16,
+  checkL13, checkL14, checkL16, checkL17,
   fixL01, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
@@ -202,6 +202,25 @@ describe('L01 frontmatter-required', () => {
   test('non-entity file returns empty', () => {
     const result = checkL01('index.md', {});
     assert.equal(result.length, 0);
+  });
+
+  test('readings page: clean with all required keys, violation when source missing', () => {
+    const fm = {
+      id: 'readings/deep-work/01-focus',
+      title: 'Part 1 - Focus',
+      type: 'reading',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      source: 'deep-work',
+      part: 1,
+    };
+    assert.equal(checkL01('readings/deep-work/01-focus.md', fm).length, 0);
+
+    const missing = { ...fm };
+    delete missing.source;
+    const result = checkL01('readings/deep-work/01-focus.md', missing);
+    assert.ok(result.length > 0);
+    assert.equal(result[0].id, 'L01-frontmatter-required');
   });
 });
 
@@ -755,6 +774,63 @@ describe('runLint L07 fix idempotency', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint L17 dangling-edge
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L17 dangling-edge', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('edge endpoint resolving to a real file: no L17 finding', async () => {
+    const edges = [{ from: 'sources/real-source', to: 'concepts/real-concept', type: 'uses_concept' }];
+    await makeWiki(tmpDir, {
+      edgesContent: edges.map(e => JSON.stringify(e)).join('\n') + '\n',
+    });
+    const sourceFm = renderFm(validSourceFm({ id: 'real-source', title: 'Real Source' }));
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'real-source.md'), sourceFm + 'Body.');
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'real-concept.md'), '---\nid: real-concept\ntitle: Real Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/real-source]]\n- [[concepts/real-concept]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l17 = findings.filter(f => f.id === 'L17-dangling-edge');
+    assert.equal(l17.length, 0, `expected no L17 findings, got: ${JSON.stringify(l17)}`);
+  });
+
+  test('edge endpoint file missing (e.g. after a delete/rename): exactly one L17 finding', async () => {
+    const edges = [{ from: 'sources/real-source', to: 'concepts/no-longer-exists', type: 'uses_concept' }];
+    await makeWiki(tmpDir, {
+      edgesContent: edges.map(e => JSON.stringify(e)).join('\n') + '\n',
+    });
+    const sourceFm = renderFm(validSourceFm({ id: 'real-source', title: 'Real Source' }));
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'real-source.md'), sourceFm + 'Body.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/real-source]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l17 = findings.filter(f => f.id === 'L17-dangling-edge');
+    assert.equal(l17.length, 1, `expected exactly 1 L17 finding, got: ${JSON.stringify(l17)}`);
+    assert.match(l17[0].message, /concepts\/no-longer-exists/);
+  });
+
+  test('see_also_url edge to an external URL: no L17 finding', async () => {
+    const edges = [{ from: 'sources/real-source', to: 'https://example.com/paper', type: 'see_also_url' }];
+    await makeWiki(tmpDir, {
+      edgesContent: edges.map(e => JSON.stringify(e)).join('\n') + '\n',
+    });
+    const sourceFm = renderFm(validSourceFm({ id: 'real-source', title: 'Real Source' }));
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'real-source.md'), sourceFm + 'Body.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/real-source]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l17 = findings.filter(f => f.id === 'L17-dangling-edge');
+    assert.equal(l17.length, 0, `expected no L17 findings for URL endpoint, got: ${JSON.stringify(l17)}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // INTEGRATION: runLint L09 fix idempotency
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -776,6 +852,36 @@ describe('runLint L09 fix idempotency', () => {
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
     const l09Again = r2.findings.filter(f => f.id === 'L09-index-stale');
     assert.equal(l09Again.length, 0, 'L09 violations should be gone after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: L09 does not require readings/ pages in the index
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L09 readings exemption', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('a readings page absent from index.md raises no L09 finding', async () => {
+    await makeWiki(tmpDir);
+    const readingDir = join(tmpDir, 'wiki', 'readings', 'deep-work');
+    await mkdir(readingDir, { recursive: true });
+    const fm = renderFm({
+      id: 'readings/deep-work/01-focus',
+      title: 'Part 1 - Focus',
+      type: 'reading',
+      created: '2026-01-01',
+      updated: '2026-01-01',
+      source: 'deep-work',
+      part: 1,
+    });
+    await writeFile(join(readingDir, '01-focus.md'), fm + 'Body. [[sources/deep-work]]\n');
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l09 = findings.filter(f => f.id === 'L09-index-stale');
+    assert.equal(l09.length, 0, `readings page must be exempt from index, got: ${JSON.stringify(l09)}`);
   });
 });
 
@@ -1588,5 +1694,64 @@ describe('L16 external-ids-mismatch', () => {
       external_ids: { arxiv: 'garbage' },
     });
     assert.deepEqual(checkL16('sources/x.md', fm), []);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L17: dangling-edge
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L17 dangling-edge', () => {
+  test('clean: both endpoints resolve to known slugs', () => {
+    const edges = [{ from: 'sources/a', to: 'concepts/b', type: 'uses_concept' }];
+    const knownSlugs = new Set(['sources/a', 'concepts/b']);
+    assert.equal(checkL17(edges, knownSlugs).length, 0);
+  });
+
+  test('violation: "to" endpoint does not resolve', () => {
+    const edges = [{ from: 'sources/a', to: 'concepts/deleted', type: 'uses_concept' }];
+    const knownSlugs = new Set(['sources/a']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
+    assert.equal(result[0].severity, 'error');
+    assert.equal(result[0].fixable, false);
+    assert.equal(result[0].file, 'sources/a');
+    assert.match(result[0].message, /concepts\/deleted/);
+  });
+
+  test('violation: "from" endpoint does not resolve', () => {
+    const edges = [{ from: 'sources/deleted', to: 'concepts/b', type: 'uses_concept' }];
+    const knownSlugs = new Set(['concepts/b']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.match(result[0].message, /sources\/deleted/);
+  });
+
+  test('violation: both endpoints dangling produces two findings', () => {
+    const edges = [{ from: 'sources/gone', to: 'concepts/gone', type: 'uses_concept' }];
+    const knownSlugs = new Set(['sources/a']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 2);
+  });
+
+  test('external URL "to" endpoint (see_also_url) is skipped, not flagged', () => {
+    const edges = [{ from: 'sources/a', to: 'https://example.com/paper', type: 'see_also_url' }];
+    const knownSlugs = new Set(['sources/a']);
+    assert.equal(checkL17(edges, knownSlugs).length, 0);
+  });
+
+  test('foundations/** endpoint that does resolve is not flagged (no invented exemption needed)', () => {
+    const edges = [{ from: 'sources/a', to: 'foundations/linear-algebra', type: 'grounded_in' }];
+    const knownSlugs = new Set(['sources/a', 'foundations/linear-algebra']);
+    assert.equal(checkL17(edges, knownSlugs).length, 0);
+  });
+
+  test('foundations/** endpoint that is missing IS flagged (dangling, not exempted)', () => {
+    const edges = [{ from: 'sources/a', to: 'foundations/deleted-topic', type: 'grounded_in' }];
+    const knownSlugs = new Set(['sources/a']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
   });
 });

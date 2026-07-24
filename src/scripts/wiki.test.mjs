@@ -243,6 +243,26 @@ describe('init', () => {
     }
   });
 
+  test('creates learning pack directories with --pack learning', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init', '--pack', 'learning'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.created.includes('wiki/reflections'));
+      await access(join(tmp, 'wiki/reflections'), fsConstants.F_OK);
+
+      // Idempotency: second call reports the dir as skipped, not re-created.
+      const r2 = runWiki(['init', '--pack', 'learning'], { cwd: tmp });
+      assert.equal(r2.status, 0, `second init failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.ok(json2.skipped.includes('wiki/reflections'));
+      assert.ok(!json2.created.includes('wiki/reflections'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('rejects invalid --pack value', async () => {
     const tmp = await makeTmp();
     try {
@@ -644,6 +664,27 @@ describe('add-edge', () => {
     }
   });
 
+  test('annotates edge from a nested readings slug writes annotated_by reverse', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(
+        ['add-edge', 'readings/deep-work/01-focus', 'annotates', 'sources/deep-work'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `add-edge failed: ${r.stderr}`);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().split('\n').map(l => JSON.parse(l));
+      const fwd = edges.find(e => e.from === 'readings/deep-work/01-focus' && e.type === 'annotates' && e.to === 'sources/deep-work');
+      const rev = edges.find(e => e.from === 'sources/deep-work' && e.type === 'annotated_by' && e.to === 'readings/deep-work/01-focus');
+      assert.ok(fwd, 'forward annotates edge present');
+      assert.ok(rev, 'reverse annotated_by edge present');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('exempt: add-edge with foundations target writes only forward edge', async () => {
     const tmp = await makeTmp();
     try {
@@ -770,6 +811,117 @@ describe('add-citation', () => {
     try {
       initWorkspace(tmp);
       const r = runWiki(['add-citation', '..', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: remove-citation
+// ---------------------------------------------------------------------------
+
+describe('remove-citation', () => {
+  test('removes a citation from citations.jsonl', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      runWiki(['add-citation', 'src-a', 'src-c'], { cwd: tmp });
+
+      const r = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'), 'utf8');
+      const citations = content.trim().split('\n').map(l => JSON.parse(l));
+      assert.ok(!citations.some(e => e.from === 'src-a' && e.to === 'src-b'), 'src-a -> src-b should be gone');
+      assert.ok(citations.some(e => e.from === 'src-a' && e.to === 'src-c'), 'src-a -> src-c should remain');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not modify citations.jsonl', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const hashBefore = await hashFile(citationsFile);
+
+      const r = runWiki(['remove-citation', 'src-a', 'src-b', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.removed, 1);
+      assert.equal(json.matched.length, 1);
+
+      const hashAfter = await hashFile(citationsFile);
+      assert.equal(hashBefore, hashAfter, 'citations.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('is idempotent when the citation is absent', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const hashBefore = await hashFile(citationsFile);
+
+      const r = runWiki(['remove-citation', 'src-x', 'src-y'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-citation failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+
+      const hashAfter = await hashFile(citationsFile);
+      assert.equal(hashBefore, hashAfter, 'citations.jsonl unchanged when citation absent');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('is safe to run twice', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-citation', 'src-a', 'src-b'], { cwd: tmp });
+
+      const r1 = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r1.status, 0, `remove-citation (1st) failed: ${r1.stderr}`);
+      const json1 = parseJson(r1.stdout);
+      assert.equal(json1.removed, 1);
+
+      const r2 = runWiki(['remove-citation', 'src-a', 'src-b'], { cwd: tmp });
+      assert.equal(r2.status, 0, `remove-citation (2nd) failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.removed, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects missing arguments', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-citation', 'src-a'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects slugs containing ..', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-citation', '../evil', 'src-b'], { cwd: tmp });
       assert.equal(r.status, 2);
     } finally {
       await cleanTmp(tmp);
@@ -925,6 +1077,291 @@ describe('dedup-edges', () => {
       const json = parseJson(r.stdout);
       assert.equal(json.before, 0);
       assert.equal(json.after, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: remove-edge
+// ---------------------------------------------------------------------------
+
+describe('remove-edge', () => {
+  test('removes forward+reverse for an asymmetric type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 1);
+      assert.equal(json.after, 0);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().length ? content.trim().split('\n').map(l => JSON.parse(l)) : [];
+      assert.equal(edges.length, 0, 'both forward and reverse edges gone');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('idempotent: removing a non-existent edge exits 0 with removed:0', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'ghost-a', 'uses_concept', 'ghost-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+      assert.equal(json.forwardRemoved, 0);
+      assert.equal(json.reverseRemoved, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('matches regardless of confidence', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-p', 'uses_concept', 'concept-q', '--confidence', 'high'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'source-p', 'uses_concept', 'concept-q'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('symmetric type removes the single canonical record', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-z', 'same_problem_as', 'source-a'], { cwd: tmp });
+
+      // Request removal in reversed argument order — canonical record is sorted.
+      const r = runWiki(['remove-edge', 'source-a', 'same_problem_as', 'source-z'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1, 'only the single canonical record is removed');
+      assert.equal(json.after, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('terminal/exempt type removes only forward (no reverse to remove)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'concept-x', 'grounded_in', 'foundations/theory-y'], { cwd: tmp });
+
+      const r = runWiki(['remove-edge', 'concept-x', 'grounded_in', 'foundations/theory-y'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 1);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 0);
+      assert.equal(json.after, 0);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects unknown edge type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'a', 'nonexistent_type', 'b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects cites (citations live in citations.jsonl)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', 'src-a', 'cites', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects .. in slug args', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['remove-edge', '..', 'uses_concept', 'target'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not modify the file', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.removed, 2);
+      assert.equal(json.forwardRemoved, 1);
+      assert.equal(json.reverseRemoved, 1);
+      assert.equal(json.matched.length, 2);
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('advisory flags a surviving wikilink after removal', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+
+      const sourceDir = join(tmp, 'wiki', 'sources');
+      await mkdir(sourceDir, { recursive: true });
+      await writeFile(
+        join(sourceDir, 'source-a.md'),
+        '---\nid: source-a\ntitle: Source A\ntype: source\ncreated: 2024-01-01\nupdated: 2024-01-01\nauthors: []\nyear: 2024\nimportance: 3\n---\n\nSee [[concept-b]] for details.\n',
+        'utf8',
+      );
+
+      const r = runWiki(['remove-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `remove-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.advisories.length, 1);
+      assert.match(json.advisories[0], /source-a.*\[\[concept-b\]\]/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: replace-edge
+// ---------------------------------------------------------------------------
+
+describe('replace-edge', () => {
+  test('introduces_concept -> uses_concept swaps both forward and reverse, preserves confidence', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'introduces_concept', 'concept-b', '--confidence', 'high'], { cwd: tmp });
+
+      const r = runWiki(['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 0, `replace-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 2);
+      assert.equal(json.added, true);
+      assert.equal(json.confidence, 'high');
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().split('\n').map(l => JSON.parse(l));
+
+      assert.equal(edges.length, 2);
+      const fwd = edges.find(e => e.from === 'source-a' && e.type === 'uses_concept' && e.to === 'concept-b');
+      const rev = edges.find(e => e.from === 'concept-b' && e.type === 'used_in' && e.to === 'source-a');
+      assert.ok(fwd, 'new forward uses_concept edge present');
+      assert.ok(rev, 'new reverse used_in edge present');
+      assert.equal(fwd.confidence, 'high');
+
+      const oldFwd = edges.find(e => e.type === 'introduces_concept');
+      const oldRev = edges.find(e => e.type === 'introduced_in');
+      assert.ok(!oldFwd, 'old forward edge removed');
+      assert.ok(!oldRev, 'old reverse edge removed');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects unknown edge type', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['replace-edge', 'a', 'nonexistent_type', 'b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 2);
+
+      const r2 = runWiki(['replace-edge', 'a', 'uses_concept', 'b', 'nonexistent_type'], { cwd: tmp });
+      assert.equal(r2.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects cites/cited_by retyping (citations live in citations.jsonl)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['replace-edge', 'src-a', 'cites', 'src-b', 'builds_on'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run does not write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      runWiki(['add-edge', 'source-a', 'introduces_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(
+        ['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept', '--dry-run'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `replace-edge --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.willRemove, 2);
+      assert.equal(json.willAdd.forward.type, 'uses_concept');
+      assert.equal(json.willAdd.reverse.type, 'used_in');
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('convergent when already in target state', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      // Old edge never existed; new edge already present.
+      runWiki(['add-edge', 'source-a', 'uses_concept', 'concept-b'], { cwd: tmp });
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      const hashBefore = await hashFile(edgesFile);
+
+      const r = runWiki(['replace-edge', 'source-a', 'introduces_concept', 'concept-b', 'uses_concept'], { cwd: tmp });
+      assert.equal(r.status, 0, `replace-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.removed, 0);
+      assert.equal(json.added, false);
+
+      const hashAfter = await hashFile(edgesFile);
+      assert.equal(hashBefore, hashAfter, 'edges.jsonl unchanged when already convergent');
     } finally {
       await cleanTmp(tmp);
     }
@@ -1196,6 +1633,24 @@ describe('list-entities', () => {
       assert.equal(json.count, 1);
       assert.equal(json.entities[0].slug, 'chapters/great-gatsby/chapter-1');
       assert.equal(json.entities[0].path, 'chapters/great-gatsby/chapter-1');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('lists nested readings entities with --type readings', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await mkdir(join(tmp, 'wiki', 'readings', 'deep-work'), { recursive: true });
+      await writeFile(join(tmp, 'wiki', 'readings', 'deep-work', '01-focus.md'), '---\nid: readings/deep-work/01-focus\ntitle: Part 1 - Focus\ntype: reading\ncreated: 2026-01-01\nupdated: 2026-01-01\nsource: deep-work\npart: 1\n---\n', 'utf8');
+
+      const r = runWiki(['list-entities', '--type', 'readings'], { cwd: tmp });
+      assert.equal(r.status, 0, `list-entities failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.count, 1);
+      assert.equal(json.entities[0].slug, 'readings/deep-work/01-focus');
+      assert.equal(json.entities[0].type, 'readings');
     } finally {
       await cleanTmp(tmp);
     }

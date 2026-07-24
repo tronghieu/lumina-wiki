@@ -7,11 +7,11 @@ CLI:
 
 `<id>` accepts a DOI, an OpenAlex Work ID (W…), or a full openalex.org URL.
 
-OpenAlex is anonymous-tier by default (10 req/s). Set OPENALEX_MAILTO to opt
-into the polite-pool (100k req/day, higher priority). The email value is
-attached as `?mailto=…` to outbound requests and stripped from the cache
-key so the same logical request collapses onto the same disk entry
-regardless of who is asking.
+OpenAlex accepts unauthenticated requests for some endpoints, but current
+OpenAlex docs use `api_key=...` for authentication, rate limits, and usage
+tracking. Set OPENALEX_API_KEY to attach that query parameter. The key is
+stripped from cache keys so the same logical request collapses onto the same
+disk entry regardless of who is asking.
 
 JSON emitted to stdout on success. Errors → stderr; exit codes:
     0  success
@@ -70,7 +70,7 @@ REQUEST_TIMEOUT = 30
 WORK_CACHE_TTL = 7 * 86400  # 7 days
 SEARCH_CACHE_TTL = 3600     # 1 hour
 
-ENV_KEY_NAME = "OPENALEX_MAILTO"
+ENV_KEY_NAME = "OPENALEX_API_KEY"
 PROVIDER = "openalex"
 
 # Lumina-Wiki UA tag — fall back to a generic version if package.json is
@@ -91,41 +91,42 @@ def _ua() -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
-_MAILTO_WARN_EMITTED = False
+_API_KEY_WARN_EMITTED = False
 
 
 def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _warn_anonymous_once() -> None:
-    """Emit a single warning per process when OPENALEX_MAILTO is unset.
+def _warn_unauthenticated_once() -> None:
+    """Emit a single warning per process when OPENALEX_API_KEY is unset.
 
     The value itself is never logged — only the namespace presence.
     """
-    global _MAILTO_WARN_EMITTED
-    if _MAILTO_WARN_EMITTED:
+    global _API_KEY_WARN_EMITTED
+    if _API_KEY_WARN_EMITTED:
         return
     _err(
-        "Warning: OPENALEX_MAILTO is not set; using OpenAlex anonymous tier "
-        "(10 req/s cap). Set it in your .env to opt into the polite-pool "
-        "(higher quota, better priority)."
+        "Warning: OPENALEX_API_KEY is not set; using unauthenticated OpenAlex "
+        "requests. Set it in your .env for OpenAlex's free daily API budget "
+        "and usage visibility."
     )
-    _MAILTO_WARN_EMITTED = True
+    _API_KEY_WARN_EMITTED = True
 
 
-def _get_mailto() -> str:
+def _get_api_key() -> str:
     env = load_env()
     raw = env.get(ENV_KEY_NAME, "").strip()
     return raw if raw else ""
 
 
-def _make_session(mailto: str, *, namespace: str, ttl_seconds: int) -> requests.Session:
-    """Build a retry-mounted, polite-pool-aware, cache-wrapped session.
+def _make_session(api_key: str, *, namespace: str, ttl_seconds: int) -> requests.Session:
+    """Build a retry-mounted, API-key-aware, cache-wrapped session.
 
     `namespace` selects the cache bucket (`openalex-work` or `openalex-search`).
-    `mailto` is stripped from the cache key so anonymous vs polite-pool runs
-    of the same logical request collapse onto the same on-disk slot.
+    `api_key` is stripped from the cache key so authenticated and
+    unauthenticated runs of the same logical request collapse onto the same
+    on-disk slot.
     """
     session = requests.Session()
     session.headers.update({"User-Agent": _ua()})
@@ -146,15 +147,15 @@ def _make_session(mailto: str, *, namespace: str, ttl_seconds: int) -> requests.
         session,
         namespace=namespace,
         ttl_seconds=ttl_seconds,
-        strip_params=["mailto"],
+        strip_params=["api_key"],
     )
 
 
-def _params_with_mailto(params: dict[str, Any], mailto: str) -> dict[str, Any]:
-    """Return a copy of `params` with `mailto` appended if set; pristine otherwise."""
-    if mailto:
+def _params_with_api_key(params: dict[str, Any], api_key: str) -> dict[str, Any]:
+    """Return a copy of `params` with `api_key` appended if set."""
+    if api_key:
         merged = dict(params)
-        merged["mailto"] = mailto
+        merged["api_key"] = api_key
         return merged
     return params
 
@@ -175,6 +176,8 @@ def _request_json(session: requests.Session, url: str, params: dict[str, Any]) -
 
     if resp.status_code == 404:
         raise ValueError(f"OpenAlex returned 404 for {url}")
+    if resp.status_code in (401, 403):
+        raise ValueError("OpenAlex rejected the API key. Check OPENALEX_API_KEY.")
     if resp.status_code == 429:
         raise RuntimeError("OpenAlex rate-limited after retry.")
     if resp.status_code >= 500:
@@ -345,10 +348,10 @@ def normalize_record(raw: dict[str, Any]) -> dict[str, Any]:
 # Subcommands
 # ---------------------------------------------------------------------------
 
-def cmd_work(raw_id: str, mailto: str) -> dict[str, Any]:
+def cmd_work(raw_id: str, api_key: str) -> dict[str, Any]:
     path = _path_for_id(raw_id)
-    session = _make_session(mailto, namespace="openalex-work", ttl_seconds=WORK_CACHE_TTL)
-    params = _params_with_mailto({}, mailto)
+    session = _make_session(api_key, namespace="openalex-work", ttl_seconds=WORK_CACHE_TTL)
+    params = _params_with_api_key({}, api_key)
     data = _request_json(session, OPENALEX_API_BASE + path, params)
     return normalize_record(data)
 
@@ -366,12 +369,12 @@ def _validate_filter(value: str) -> tuple[str, str]:
     return (k, v)
 
 
-def cmd_search(query: str, limit: int, filters: Iterable[tuple[str, str]], mailto: str) -> list[dict[str, Any]]:
-    session = _make_session(mailto, namespace="openalex-search", ttl_seconds=SEARCH_CACHE_TTL)
-    params: dict[str, Any] = {"search": query, "per_page": max(1, min(limit, 200))}
+def cmd_search(query: str, limit: int, filters: Iterable[tuple[str, str]], api_key: str) -> list[dict[str, Any]]:
+    session = _make_session(api_key, namespace="openalex-search", ttl_seconds=SEARCH_CACHE_TTL)
+    params: dict[str, Any] = {"search": query, "per_page": max(1, min(limit, 100))}
     if filters:
         params["filter"] = ",".join(f"{k}:{v}" for k, v in filters)
-    params = _params_with_mailto(params, mailto)
+    params = _params_with_api_key(params, api_key)
     data = _request_json(session, OPENALEX_API_BASE + "/works", params)
     results = data.get("results", []) if isinstance(data, dict) else []
     if not isinstance(results, list):
@@ -387,8 +390,8 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="fetch_openalex.py",
         description=(
-            "Fetch metadata from OpenAlex. Polite-pool via OPENALEX_MAILTO env "
-            "(anonymous tier 10 req/s used otherwise)."
+            "Fetch metadata from OpenAlex. Set OPENALEX_API_KEY to attach the "
+            "current OpenAlex api_key query parameter."
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -398,7 +401,7 @@ def main(argv: list[str] | None = None) -> None:
 
     s = sub.add_parser("search", help="Search works by keyword.")
     s.add_argument("query", help="Search query string.")
-    s.add_argument("--limit", type=int, default=10, help="Max results per page (1–200, default 10).")
+    s.add_argument("--limit", type=int, default=10, help="Max results per page (1–100, default 10).")
     s.add_argument(
         "--filter",
         dest="filters",
@@ -410,23 +413,23 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    mailto = _get_mailto()
-    if not mailto:
-        _warn_anonymous_once()
+    api_key = _get_api_key()
+    if not api_key:
+        _warn_unauthenticated_once()
 
     try:
         if args.command == "work":
             if not args.id.strip():
                 _err("Error: id must not be empty.")
                 sys.exit(2)
-            result = cmd_work(args.id.strip(), mailto)
+            result = cmd_work(args.id.strip(), api_key)
             print(json.dumps(result, ensure_ascii=False, indent=2))
 
         else:  # search
             if not args.query.strip():
                 _err("Error: query must not be empty.")
                 sys.exit(2)
-            result = cmd_search(args.query.strip(), args.limit, args.filters, mailto)
+            result = cmd_search(args.query.strip(), args.limit, args.filters, api_key)
             print(json.dumps(result, ensure_ascii=False, indent=2))
 
         sys.exit(0)

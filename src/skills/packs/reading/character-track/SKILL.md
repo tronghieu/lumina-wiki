@@ -117,7 +117,7 @@ slug. The engine is idempotent: re-adding a correctly formed edge is a safe no-o
 Update `wiki/index.md` if new character pages were created, append the activity via:
 
 ```bash
-node _lumina/scripts/wiki.mjs log character-track "<book-slug> ch<N> -> <K> characters updated, <M> edges added"
+node _lumina/scripts/wiki.mjs log reading-character-track "<book-slug> ch<N> -> <K> characters updated, <M> edges added"
 ```
 
 Run `node _lumina/scripts/lint.mjs --json` when available; use `--fix` only for
@@ -133,7 +133,7 @@ index/frontmatter fixes within this skill's scope.
 - All inter-character edges use namespaced slugs.
 - `wiki/index.md` updated when character pages were created.
 - `wiki/log.md` has a new entry:
-  `## [YYYY-MM-DD] character-track | <book-slug> ch<N> → <K> characters updated, <M> edges added`
+  `## [YYYY-MM-DD] reading-character-track | <book-slug> ch<N> → <K> characters updated, <M> edges added`
 - Lint/check run where available; unresolved issues are reported with exact slugs.
 
 ## Guardrails

@@ -28,6 +28,257 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   race gates, plus native package checks for macOS, Windows, and Linux,
   installer validation on Windows and Linux, and launch checks on all three.
 
+## [1.9.2] - 2026-07-18
+
+### Added
+
+- `wiki.mjs remove-citation <from> <to> [--dry-run]` — idempotently removes
+  the matching forward `cites` record from `wiki/graph/citations.jsonl`,
+  mirroring `add-citation`. Idempotent when the citation is absent
+  (`removed: 0`) and supports `--dry-run`. Citations store no reverse
+  record (`cited_by` is derived at read time), so only the single forward
+  record is removed.
+
+### Changed
+
+- Reworded the `remove-edge` and `replace-edge` citation guard messages to
+  point at the correct `add-citation` / `remove-citation` commands.
+
+## [1.9.1] - 2026-07-18
+
+### Added
+
+- `wiki.mjs remove-edge <from> <type> <to> [--dry-run]` — idempotently removes
+  a single relationship from `wiki/graph/edges.jsonl`, including its reverse
+  edge (respecting the terminal/exempt/symmetric gate). Matches regardless of
+  stored confidence; no-op (exit 0) if the edge is already absent; rejects
+  `cites`/`cited_by` and unknown edge types (exit 2). Emits a best-effort
+  `advisories` warning when a page body still contains the corresponding
+  `[[wikilink]]` after removal, since page bodies do not encode relation type
+  and are not auto-edited.
+- `wiki.mjs replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]`
+  — corrects a relationship's type as a single convergent write (remove old +
+  add new, both directions), preserving the old edge's confidence unless
+  overridden. Lets an ingest mistake like recording `introduces_concept` when
+  the source only `uses_concept` be fixed without any page edit, since bodies
+  list concepts in a type-agnostic `## Concepts` section.
+- Lint check L17: flags any edge in `edges.jsonl` whose `from` or `to`
+  endpoint is an internal slug that does not resolve to an existing wiki file
+  (URL endpoints are skipped), catching edges left pointing at deleted or
+  renamed entities.
+
+## [1.9.0] - 2026-07-16
+
+### Added
+
+- Long-source ingest pipeline: `/lumi-ingest` now detects 50+ page / ~50k+
+  token sources (whole books, theses) and switches to a multi-pass reading
+  workflow (`references/long-source.md`) — structure map first, then one
+  page-anchored reading note per chapter/part under
+  `wiki/readings/<source-slug>/`, then a source page synthesized from the
+  notes instead of a single-pass summary. Resumable per unit via the
+  existing ingest checkpoint.
+- New core page type `readings` (Reading note) with `annotates`/`annotated_by`
+  edge pair linking notes to their source page. Reading notes are exempt
+  from the `wiki/index.md` catalog (like `reflections/`); the source page is
+  their entry point.
+- New core tool `_lumina/tools/verify_quotes.py` — mechanically checks
+  page-cited quotes (`(p. N)`, `(pp. A-B)`, `(tr. N)`) in reading notes and
+  source pages against the source PDF (OK / NEAR / FAIL verdicts, JSON
+  output). Wired into ingest step-03 as a pre-check before grounding
+  verification.
+- `extract_pdf.py` gains `--markers` (emit `[[page N]]` page markers with
+  absolute page numbers) and `--info` (JSON page/char/token size summary).
+
+### Changed
+
+- `/lumi-reading-chapter-ingest` and `/lumi-ingest` now route between each
+  other: a finished book ingested whole goes to `/lumi-ingest`; a novel the
+  user is still reading stays chapter-by-chapter so plot recaps remain
+  spoiler-safe.
+
+## [1.8.0] - 2026-07-07
+
+### Added
+
+- `npx lumina-wiki install` run again over an existing installation now
+  offers a "Quick update" vs "Modify installation" menu (interactive
+  terminals only, skipped when `--yes` or `--packs`/`--ide-targets`/`--lang`
+  are passed). Quick update keeps the current configuration exactly as
+  before; Modify installation re-runs the pack, IDE-target, and language
+  prompts prefilled with the current config, without re-asking for the
+  install directory or research purpose.
+- After every install/upgrade, if packs exist that aren't installed yet
+  (e.g. one added in a newer release), a one-line hint now points at
+  "Modify installation" so they stay discoverable instead of silently
+  skipped on `--yes`/headless upgrades.
+
+### Fixed
+
+- The interactive locale-switch confirmation during install prompts didn't
+  propagate the user's confirmation, so the `LOCALE_SWITCH_REFUSED` safety
+  gate could incorrectly abort an upgrade the user had just approved.
+
+## [1.7.3] - 2026-07-05
+
+### Fixed
+
+- `/lumi-ask` was missing `Write` in `allowed-tools`, so Step 6 ("file the
+  answer as an output page") could not actually create the page.
+- `/lumi-ask` Step 6 filed a new `outputs/`/`summary/` page without adding it
+  to `wiki/index.md`, leaving a stale-index warning (L09) after every filed
+  answer.
+- `/lumi-ask` subgraph traversal (Step 3) could silently miss half of a
+  symmetric edge (`related_to`/`same_problem_as`/`appears_with`): these are
+  stored once with sorted endpoints, so a page whose slug sorts later only
+  ever saw the edge under `inbound`, never `outbound`.
+
+### Added
+
+- `/lumi-ask` now lists the matching `raw/sources/` filenames (names only,
+  contents unread) when a question can't be answered from the wiki, so the
+  user can open them directly instead of only being pointed at
+  `/lumi-ingest`.
+- `/lumi-ask` confidence calibration now reads each cited page's
+  `confidence` and `verify_status` frontmatter and downgrades or flags the
+  answer when a source is `low`/`unverified` confidence or has
+  `findings_pending`/`drift_detected` verify status, suggesting
+  `/lumi-verify <slug>`.
+
+## [1.7.2] - 2026-07-05
+
+### Fixed
+
+- `/lumi-ingest` step-03-verify referenced `src/skills/core/verify/` — the
+  repo source tree — instead of the installed workspace path. On any
+  non-Claude-Code IDE target (Codex, Gemini, Cursor, generic), the file
+  never existed post-install, so grounding verification silently had
+  nothing to follow. Fixed all three references to
+  `.agents/skills/lumi-verify/`, which the installer copies unconditionally
+  for every IDE target.
+- Added an `ingest_status` handler for the `not_applicable` verify verdict,
+  which was previously unhandled during ingest.
+
+### Added
+
+- `/lumi-ingest` now checks external identifiers (DOI/arxiv/S2) for an
+  existing source page before generating a slug, so the same paper
+  ingested under a different title no longer creates a duplicate page.
+- Concept stub creation now scans existing concepts for acronym/expansion
+  and singular/plural variants before creating a new one.
+- Key Claims in drafted source pages now require a source locator
+  (section/page/heading), so the grounding reviewer in step-03 no longer
+  has to re-scan the whole raw file to check a claim.
+- A concept-count rubric (roughly 3-7 per source) to keep the graph from
+  being diluted by over-extracted keyword stubs.
+- PDF preprocessing now runs before type detection in step-01, so runtimes
+  without native PDF reading don't fail attempting to read the raw binary.
+
+## [1.7.1] - 2026-07-02
+
+### Added
+
+- `wiki.mjs init --pack learning` now creates `wiki/reflections/`, matching the
+  learning pack's entity schema. Valid `--pack` values are derived from the
+  schema instead of hardcoded, so future packs stay in sync automatically.
+
+### Fixed
+
+- `/lumi-research-topic` previously failed every `add-edge` call with "Unknown
+  edge type" because the topic-organization edges it relies on
+  (`includes_source`/`included_in_topic`, `covers_concept`/`covered_by_topic`)
+  were missing from the schema. Added all four to `EDGE_TYPES`.
+- Corrected skill-prompt and documentation drift: the reset skill's dry-run
+  output format, the internal lint-check reference table (was missing
+  L10-L12), and the documented behavior of ingest phase checkpoints (keyed
+  by file basename, not slug, since the checkpoint exists before slug
+  generation; the checkpoint JSON's `slug` field, written once the slug
+  phase completes, is now documented as the way other skills match a
+  checkpoint to its wiki entry).
+
+## [1.7.0] - 2026-06-16
+
+### Added
+
+- **Advanced paper ranking** via the new research-pack skill
+  `/lumi-research-rank`. It scores an already-ingested paper and records the
+  results on its source page, both as a machine-readable `ranking:` frontmatter
+  block and a human-readable `## Ranking` scorecard. Re-running refreshes the
+  ranking and preserves any notes inside `<!-- user-edited -->` markers.
+- **Citation influence signal**: surfaces Semantic Scholar's influential-citation
+  count alongside the raw citation count (reuses the existing `fetch_s2.py`; no
+  new key required).
+- **4C qualitative rubric** (Correctness, Clarity, Contribution, Context, each
+  scored 1-5) produced with a three-pass reading method to keep the assessment
+  efficient. Scores are explicitly recorded as LLM-assessed with a timestamp.
+- **Venue prestige** recorded from the agent's own knowledge and explicitly
+  flagged as an estimate (`venue_source: llm-estimated`) — no live API or
+  bundled dataset.
+- **Optional, key-gated influence fetchers** `fetch_scite.py` (Scite.ai Smart
+  Citation tallies) and `fetch_altmetric.py` (Altmetric attention score). Both
+  degrade gracefully: with no key set they exit with a clear message and the
+  skill simply skips that signal. New `.env` keys `SCITE_API_KEY` and
+  `ALTMETRIC_API_KEY`.
+
+### Changed
+
+- Source page schema gains an optional `ranking` frontmatter object (no change
+  required for existing un-ranked pages).
+
+## [1.6.2] - 2026-06-15
+
+### Fixed
+
+- Repaired stale Claude skill links during upgrades by validating their real
+  targets instead of trusting the previously recorded link strategy.
+- Made POSIX skill links relative so copied, moved, or renamed workspaces can
+  be upgraded without retaining links to their old absolute location.
+- Reconciled removed packs and IDE targets by deleting obsolete
+  installer-managed skills, tools, links, and unchanged generated stubs while
+  preserving modified or user-owned files.
+- Made `npx lumina-wiki install` detect and upgrade an enclosing workspace when
+  invoked from a nested directory, while explicit `--directory` and `--cwd`
+  targets remain exact.
+- Fixed interactive locale switching for existing and legacy workspaces,
+  including default-language cascading and confirmation binding to the final
+  resolved locale.
+- Made installation fail clearly when required Claude skill links cannot be
+  created instead of writing successful state for a partial install.
+
+## [1.6.1] - 2026-05-18
+
+### Fixed
+
+- Restored v1.6 research tool scripts to the npm package allowlist so
+  upgrades include OpenAlex, Unpaywall, CORE, RSS, and PDF resolution tools
+  (fixes #20).
+- Expanded the package-readiness check (`scripts/ci-package.mjs`) to require
+  every Python tool copied by the installer, preventing future research-pack
+  tarball omissions.
+
+### Changed
+
+- OpenAlex research tooling now authenticates via `OPENALEX_API_KEY` /
+  `api_key` query parameter instead of the deprecated `OPENALEX_MAILTO`
+  polite-pool flow. The new key enables OpenAlex's free daily API budget and
+  usage tracking. Existing users should rename `OPENALEX_MAILTO` to
+  `OPENALEX_API_KEY` in their local `.env` — the old variable is ignored.
+- `fetch_openalex.py` search `per_page` is now clamped to 100 (the OpenAlex
+  documented maximum) and explicit 401/403 handling surfaces a clear error
+  message when the key is rejected.
+
+### CI
+
+- Dropped Node 22 from the test matrix across all OSes due to an upstream
+  `node:test` IPC bug (`ERR_TEST_FAILURE` / structured-clone deserialization)
+  that surfaced intermittently on Windows, macOS, and Linux runners.
+- Cold-start budget gate now runs only on `ubuntu-latest`; Windows and macOS
+  hosted runners have filesystem latency that makes the 350 ms threshold
+  infeasible regardless of code changes.
+- `Node 20 / windows-latest` marked `continue-on-error: true` to surface a
+  remaining Windows-only `node:test` flake as a warning instead of blocking
+  the build (tracked in #23).
+
 ## [1.6.0] - 2026-05-15
 
 ### Added — Multi-provider PDF resolution + RSS / Atom feeds (research pack)

@@ -3,7 +3,7 @@
 ## RULES
 
 - Read `README.md` at the project root before this step if you have not already in this session.
-- Reuse the existing `/lumi-verify` skill in grounding-only mode. Do not inline a duplicate grounding reviewer here — single source of truth for grounding logic lives in `src/skills/core/verify/`.
+- Reuse the existing `/lumi-verify` skill in grounding-only mode. Do not inline a duplicate grounding reviewer here — single source of truth for grounding logic lives in `.agents/skills/lumi-verify/`.
 - All frontmatter writes go through `wiki.mjs set-meta`. Never write to `wiki/*.md` directly.
 - Drift is a hard halt: a missing `raw_paths` file is a stronger signal than any finding and should not be silently downgraded.
 - This step asks the user only when there are source-check findings, missing source files, or a confidence downgrade. If the source check passes, continue automatically.
@@ -18,13 +18,36 @@ When speaking to the user, call this "checking against the source" or the equiva
 
 ## INSTRUCTIONS
 
+### Phase 8.4 — Mechanical quote check (long sources only)
+
+If `wiki/readings/<slug>/` exists and the entry's first `raw_paths` file is a
+PDF, run the quote checker before spawning the grounding reviewer:
+
+```bash
+python3 _lumina/tools/verify_quotes.py --source <raw-pdf-path> wiki/sources/<slug>.md wiki/readings/<slug>/
+```
+
+- `fail: 0, near: 0` → mention nothing; proceed to Phase 8.5.
+- Any `NEAR` → fix the page number in the cited file yourself (the quote is
+  real, the citation is one page off), re-run, then proceed.
+- Any `FAIL` → fix what you can by re-reading the cited pages
+  (`extract_pdf.py --pages <n>-<n> --markers`). A FAIL you cannot resolve is
+  a finding: carry it into the Phase 8.6 findings presentation alongside the
+  grounding results (claim = the quote head, evidence = "quote not found on
+  cited page", action = re-quote or drop).
+
+This is cheap and mechanical; it only checks verbatim quotes. Paraphrased
+claims are the grounding reviewer's job — never skip Phase 8.5 because this
+check passed. Skip this phase entirely when there is no readings directory or
+no PDF raw file.
+
 ### Phase 8.5 — Run grounding verification
 
 Invoke `/lumi-verify` on the entry restricted to the grounding reviewer. Three runtime tiers, in order of preference:
 
 **Tier 1 — Agent tool available (Claude Code):**
 
-Spawn a sub-agent with the verify SKILL prompt and the slug, instructing it to run grounding only (skip blind, skip external). Wait for completion, then read the writeback:
+Spawn a sub-agent instructed to read and follow `.agents/skills/lumi-verify/SKILL.md` with this slug as the target, grounding only (skip blind, skip external). The sub-agent is deliberate: it activates the verify skill in a blank context, so the verdict is not anchored by the reasoning chain that just drafted the pages. Do not invoke the verify skill inline in this conversation (e.g. via a skill-invocation tool) — same-context verification inherits drafting bias. Wait for completion, then read the writeback:
 
 ```bash
 node _lumina/scripts/wiki.mjs read-meta sources/<slug>
@@ -32,9 +55,9 @@ node _lumina/scripts/wiki.mjs read-meta sources/<slug>
 
 **Tier 2 — Bash-only runtime (Codex, Gemini, Cursor, generic):**
 
-Read fully and follow `src/skills/core/verify/SKILL.md` Grounding pipeline (Section: "Grounding reviewer"), with this slug as the target. The verify skill's writeback contract is the same — `verify_status` and `findings` written to the entry frontmatter. After the grounding pass returns, control returns to this step's Phase 8.6.
+Read fully and follow `.agents/skills/lumi-verify/SKILL.md` Grounding pipeline (Section: "Grounding reviewer"), with this slug as the target. The verify skill's writeback contract is the same — `verify_status` and `findings` written to the entry frontmatter. After the grounding pass returns, control returns to this step's Phase 8.6.
 
-If `src/skills/core/verify/references/reviewers.md` exists, it is the canonical Grounding reviewer prompt; load it as part of following the verify SKILL.
+If `.agents/skills/lumi-verify/references/reviewers.md` exists, it is the canonical Grounding reviewer prompt; load it as part of following the verify SKILL.
 
 **Tier 3 — User opts out:**
 
@@ -54,6 +77,7 @@ Inspect `verify_status` and `findings`:
 | `findings_pending` | Patch/defer findings written | Present findings inline; user chooses A/E/W/Q |
 | `drift_detected` | `raw_paths` resolves to missing files | **Hard HALT** — do not present standard menu; force user to repair raw or set `provenance: missing` explicitly |
 | `skipped` | Tier 3 opt-out | Write verified status and continue automatically; the user already opted out |
+| `not_applicable` | Verify refused: target is not a `sources/*` entry | Should never happen during ingest (the target is always `sources/<slug>`). Treat as an internal error: HALT, report the slug that was passed to verify, and do not advance `ingest_status`. |
 
 For `passed`, tell the user in one short sentence that the page matched the source closely enough to continue. Then write `ingest_status: verified` and go to NEXT:
 

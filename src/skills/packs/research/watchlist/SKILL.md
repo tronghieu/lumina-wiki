@@ -79,8 +79,9 @@ Use this mapping:
 - `query`: the research phrase to search for.
 - `sources`: use `arxiv` by default; add `s2` when the user has Semantic
   Scholar set up; add `openalex` when broader coverage (cross-walk metadata,
-  humanities/biomedicine, older work) is requested. OpenAlex works
-  anonymously — set `OPENALEX_MAILTO` only to opt into the polite-pool.
+  humanities/biomedicine, older work) is requested. OpenAlex can work without
+  local credentials for small checks; set `OPENALEX_API_KEY` for the free daily
+  API budget and usage tracking.
 - `schedule`: `manual`, `daily`, `weekly`, or `monthly`.
 - `limit`: how many candidates to fetch before deduping.
 - `max_new`: how many new candidates the user wants to see per run.
@@ -159,14 +160,17 @@ Tell the user:
 - papers are downloaded later during `/lumi-ingest`, after the user chooses a
   candidate.
 
-If the user asks how to schedule it, point them to
-`docs/user-guide/advanced-scheduled-discovery.{en,vi,zh}.md` (trilingual
-cron / launchd / Actions / Task Scheduler patterns) and the
-`/lumi-research-watch-run` skill which runs one pass over the watchlist on
-demand. They can also follow an RSS / Atom feed by adding a `type: feed`
-item (https URL required) — the advanced-scheduled-discovery guide §7 has
-the YAML example, and `docs/user-guide/research-watch.md` carries the v1.4
-technical deep-dive (English).
+If the user asks how to schedule it, point them to the online guide at
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/advanced-scheduled-discovery.en.md
+(also available in Vietnamese at
+.../advanced-scheduled-discovery.vi.md and Simplified Chinese at
+.../advanced-scheduled-discovery.zh.md — trilingual cron / launchd / Actions /
+Task Scheduler patterns) and the `/lumi-research-watch-run` skill which runs
+one pass over the watchlist on demand. They can also follow an RSS / Atom feed
+by adding a `type: feed` item (https URL required) — the advanced-scheduled-
+discovery guide §7 has the YAML example, and the online guide at
+https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/research-watch.md
+carries the v1.4 technical deep-dive (English).
 
 ## Constraints
 

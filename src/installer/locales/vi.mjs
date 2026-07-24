@@ -60,6 +60,13 @@ export default {
   'prompt.readme_merge.option.abort.label':    'Hủy cài đặt',
   'prompt.readme_merge.option.abort.hint':     'Thoát mà không thay đổi gì',
 
+  // ── Upgrade mode prompt ────────────────────────────────────────────────────
+  'prompt.upgrade_mode.message':               'Đã có bản cài đặt trước đó. Bạn muốn tiếp tục thế nào?',
+  'prompt.upgrade_mode.option.quick.label':    'Cập nhật nhanh',
+  'prompt.upgrade_mode.option.quick.hint':     'giữ nguyên gói, IDE và ngôn ngữ hiện tại',
+  'prompt.upgrade_mode.option.modify.label':   'Tùy chỉnh cài đặt',
+  'prompt.upgrade_mode.option.modify.hint':    'thêm hoặc bớt gói và IDE, đổi ngôn ngữ',
+
   // ── Progress ───────────────────────────────────────────────────────────────
   'progress.installing':                       'Đang cài đặt Lumina Wiki tại: {dir}',
   'progress.upgrading':                        'Đang nâng cấp Lumina Wiki tại: {dir}',
@@ -70,10 +77,13 @@ export default {
   'success.summary.packs':                     '  Gói:      {packs}',
   'success.summary.ide':                       '  IDE:      {ide}',
   'success.summary.skills':                    '  Kỹ năng:  {count} đã cài',
+  'hint.packs_available':                      '  Mẹo: còn các gói chưa cài: {packs}. Chạy lại "npx lumina-wiki install" và chọn "Tùy chỉnh cài đặt" để thêm.',
 
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[cảnh báo] Không đọc được manifest hiện tại: {message}. Coi như cài đặt mới.',
   'warn.copied_skills':                        '  [cảnh báo] Một số kỹ năng được sao chép thay vì symlink. Chạy "lumina install --re-link" sau khi bật Windows Developer Mode.',
+  'warn.relocated':                            '  [cảnh báo] Workspace đã chuyển từ {from} sang {to}; các liên kết do Lumina quản lý sẽ được làm mới.',
+  'warn.preserved_modified_file':               '  [cảnh báo] Giữ lại tệp đã được chỉnh sửa dù không còn được chọn: {path}',
   'warn.upgrade_header':                       '[cảnh báo] Lumina đã nâng cấp v{from} -> v{to} — phát hiện chênh lệch schema:',
   'warn.upgrade_errors':                       '       {errors} lỗi, {warnings} cảnh báo trên các mục cũ.',
   'warn.upgrade_fix_quick':                    '     Sửa nhanh (xác định):',

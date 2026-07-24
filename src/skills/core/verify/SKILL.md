@@ -61,6 +61,7 @@ Accepted invocations:
 - `/lumi-verify --all` — verify every `sources/*` entry
 - `/lumi-verify --since <date>` — verify entries whose `updated` >= `<date>` (ISO 8601 date or datetime). Reject malformed dates with exit 1.
 - `/lumi-verify --external` — additionally run the External reviewer (open-web check). Default is offline-only (Blind + Grounding).
+- `/lumi-verify --stage <...>` — run the reviewers and report findings but do not write anything to the page (see Step 5); useful for a preview pass.
 
 Resolve the target list:
 

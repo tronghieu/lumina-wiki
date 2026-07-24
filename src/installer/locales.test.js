@@ -176,6 +176,25 @@ test('zh contains CJK characters', async () => {
   assert.match(out, /[一-鿿]/);
 });
 
+// ── Upgrade menu (BMAD-style) new keys ──────────────────────────────────────
+
+test('t() interpolates hint.packs_available with the packs list', async () => {
+  const { t } = await loadLocale('en');
+  const out = t('hint.packs_available', { packs: 'research, reading, learning' });
+  assert.match(out, /research, reading, learning/);
+  assert.match(out, /Modify installation/);
+});
+
+test('prompt.upgrade_mode.* keys present in en', async () => {
+  const { keys } = await loadLocale('en');
+  const k = keys();
+  assert.ok(k.includes('prompt.upgrade_mode.message'));
+  assert.ok(k.includes('prompt.upgrade_mode.option.quick.label'));
+  assert.ok(k.includes('prompt.upgrade_mode.option.quick.hint'));
+  assert.ok(k.includes('prompt.upgrade_mode.option.modify.label'));
+  assert.ok(k.includes('prompt.upgrade_mode.option.modify.hint'));
+});
+
 test('runtime fallback: missing key in vi falls back to EN with warn', async () => {
   // Inject a temporary missing-key scenario: vi has all keys, so simulate by
   // using a key not in any map and asserting throw (no fallback either).

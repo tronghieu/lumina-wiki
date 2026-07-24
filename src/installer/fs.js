@@ -29,6 +29,7 @@ import {
   stat,
   readdir,
   symlink,
+  realpath,
   lstat,
   rm,
   copyFile,
@@ -186,6 +187,18 @@ export function fileHash(filePath) {
 // linkDirectory — symlink ladder
 // ---------------------------------------------------------------------------
 
+async function linkPointsToTarget(linkPath, target) {
+  try {
+    const [currentTarget, expectedTarget] = await Promise.all([
+      realpath(linkPath),
+      realpath(target),
+    ]);
+    return currentTarget === expectedTarget;
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * @typedef {'symlink'|'junction'|'copy'} LinkStrategy
  */
@@ -206,9 +219,10 @@ export function fileHash(filePath) {
  *   2. fs.symlink(target, linkPath, 'junction')    — Windows directory junctions
  *   3. copyDir(target, linkPath) + warn            — final fallback
  *
- * When `linkPath` already exists and matches the same strategy recorded in
- * `existingStrategy` (from manifest), the function returns early (idempotent).
- * When `linkPath` already exists with a different strategy, it is removed first.
+ * When `linkPath` already exists and points to `target` with the same link
+ * strategy recorded in `existingStrategy`, the function returns early.
+ * Stale links are removed and recreated. Copy fallbacks are refreshed because
+ * their source target cannot be verified from filesystem metadata.
  *
  * @param {string}          target           - Real directory the link should point to.
  * @param {string}          linkPath         - Where the link/copy will be created.
@@ -220,20 +234,28 @@ export async function linkDirectory(target, linkPath, existingStrategy = null) {
   let existingStat = null;
   try {
     existingStat = await lstat(linkPath);
-  } catch (_) {
-    // Does not exist — proceed with creation
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
   }
 
   if (existingStat) {
     // If it is a symlink or junction pointing to the right target, keep it
-    if (existingStat.isSymbolicLink() && existingStrategy === 'symlink') {
-      return { strategy: 'symlink', message: `symlink already exists: ${linkPath}`, warning: false };
-    }
-    if (existingStat.isSymbolicLink() && existingStrategy === 'junction') {
-      return { strategy: 'junction', message: `junction already exists: ${linkPath}`, warning: false };
+    if (
+      existingStat.isSymbolicLink()
+      && (existingStrategy === 'symlink' || existingStrategy === 'junction')
+    ) {
+      if (await linkPointsToTarget(linkPath, target)) {
+        return {
+          strategy: existingStrategy,
+          message: `${existingStrategy} already exists: ${linkPath}`,
+          warning: false,
+        };
+      }
     }
     if (existingStat.isDirectory() && existingStrategy === 'copy') {
-      return { strategy: 'copy', message: `copy already exists: ${linkPath}`, warning: false };
+      await rm(linkPath, { recursive: true, force: true });
+      await copyDir(target, linkPath);
+      return { strategy: 'copy', message: `copy refreshed: ${linkPath}`, warning: false };
     }
     // Stale or mismatched — remove and recreate
     if (existingStat.isSymbolicLink()) {
@@ -249,8 +271,11 @@ export async function linkDirectory(target, linkPath, existingStrategy = null) {
 
   // Attempt 1: native symlink (macOS / Linux / Windows with Developer Mode)
   try {
-    await symlink(target, linkPath);
-    return { strategy: 'symlink', message: `symlink created: ${linkPath} -> ${target}`, warning: false };
+    const symlinkTarget = process.platform === 'win32'
+      ? resolve(target)
+      : (relative(dirname(linkPath), target) || '.');
+    await symlink(symlinkTarget, linkPath);
+    return { strategy: 'symlink', message: `symlink created: ${linkPath} -> ${symlinkTarget}`, warning: false };
   } catch (err1) {
     // EPERM on Windows without Developer Mode, or other platform restriction
     const isPermError = err1.code === 'EPERM' || err1.code === 'EACCES';
@@ -259,7 +284,7 @@ export async function linkDirectory(target, linkPath, existingStrategy = null) {
 
   // Attempt 2: Windows directory junction
   try {
-    await symlink(target, linkPath, 'junction');
+    await symlink(resolve(target), linkPath, 'junction');
     return { strategy: 'junction', message: `junction created: ${linkPath} -> ${target}`, warning: false };
   } catch (err2) {
     // Junction also failed — fall through to copy

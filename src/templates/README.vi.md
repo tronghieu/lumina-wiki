@@ -41,6 +41,7 @@ Ghi nhớ bản đồ tư duy này trong ngữ cảnh tức thì:
 - `wiki/people/` — những người được đề cập trong các nguồn
 - `wiki/summary/` — tổng hợp cấp vùng
 - `wiki/outputs/` — các tạo phẩm được tạo ra (so sánh, xuất bản)
+- `wiki/readings/` — ghi chú đọc có neo số trang cho nguồn dài (sách, luận án), mỗi nguồn một thư mục; do `/lumi-ingest` tạo, truy cập từ trang nguồn thay vì từ mục lục
 - `wiki/graph/` — trạng thái dẫn xuất; không bao giờ chỉnh sửa thủ công
 {{#if pack_research}}
 - `wiki/topics/`, `wiki/foundations/` (gói: research)
@@ -77,7 +78,7 @@ Ghi nhớ bản đồ tư duy này trong ngữ cảnh tức thì:
 - `_lumina/config/lumina.config.yaml` — cấu hình workspace; có thể chỉnh sửa
 - `_lumina/schema/` — tài liệu tham chiếu sâu hơn; mở khi tệp này hướng bạn đến đó
 - `_lumina/scripts/` — bộ máy Node (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
-- `_lumina/tools/` — công cụ Python (luôn có: `extract_pdf.py`, `fetch_pdf.py`, `requirements.txt`{{#if pack_research}}; gói research thêm `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py` và các công cụ fetcher{{/if}})
+- `_lumina/tools/` — công cụ Python (luôn có: `extract_pdf.py`, `fetch_pdf.py`, `verify_quotes.py`, `requirements.txt`{{#if pack_research}}; gói research thêm `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py` và các công cụ fetcher{{/if}})
 - `_lumina/_state/` — trạng thái checkpoint installer/skill; bị gitignore
 - `_lumina/manifest.json` — trạng thái installer; không bao giờ chỉnh sửa thủ công
 
@@ -93,6 +94,7 @@ Mỗi trang wiki có loại, frontmatter và cấu trúc phần được định
 | Concept    | `concepts/`  | Ý tưởng hoặc kỹ thuật xuyên nguồn với các biến thể và so sánh            |
 | Person     | `people/`    | Hồ sơ của người được đề cập với các nguồn chính và mối quan hệ           |
 | Summary    | `summary/`   | Tổng hợp cấp vùng trải rộng nhiều nguồn và khái niệm                     |
+| Reading note | `readings/` | Ghi chú theo từng chương của một nguồn dài, có trích trang; viết trong quá trình ingest nguồn dài |
 {{#if pack_research}}| Topic      | `topics/`     | Cụm chủ đề nhóm các khái niệm và nguồn liên quan; tạo qua `/lumi-research-topic` (research) |
 | Foundation | `foundations/`| Kiến thức nền tảng/tiên quyết; trang cuối cùng (research)               |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Ghi chú theo chương cho sách hoặc tác phẩm dài (reading)                |
@@ -129,6 +131,7 @@ Khi bạn viết một liên kết chiều đi, **luôn viết liên kết ngư�
 | `concepts/K` viết `[[source-E]]`                | `sources/E` thêm K vào `Related concepts`         |
 | `summary/S` viết `[[concept-K]]`                | `concepts/K` thêm S vào `Mentioned in`            |
 {{#if pack_research}}| `topics/T` viết `[[concept-K]]`                 | `concepts/K` thêm T vào `Topics`                  |
+| `topics/T` viết `[[source-A]]`                  | `sources/A` thêm T vào `Topics`                   |
 {{/if}}{{#if pack_reading}}| `chapters/Ch` viết `[[character-X]]`            | `characters/X` thêm Ch vào `Key chapters`         |
 | `chapters/Ch` viết `[[theme-Y]]`                | `themes/Y` thêm Ch vào `Traced in`                |
 {{/if}}
@@ -188,7 +191,7 @@ Các skill nằm trong `.agents/skills/` và được gọi qua lệnh slash. C�
 |----------------|----------------|-------------------------------------------------------------------------|
 | `/lumi-init`   | thủ công, lần đầu | Khởi động wiki từ nội dung `raw/` hiện có                            |
 | `/lumi-ingest` | thủ công       | Đọc nguồn và viết trang wiki. Yêu cầu bạn xem xét bản nháp, rồi tiếp tục tự động trừ khi cần phán đoán của bạn |
-| `/lumi-ask`    | thủ công       | Truy vấn wiki, tổng hợp câu trả lời, tùy chọn tạo trang              |
+| `/lumi-ask`    | thủ công       | Trả lời dựa trên những gì wiki đã biết, trích dẫn các trang nguồn; nếu thiếu thông tin, liệt kê các tệp raw/sources/ phù hợp và gợi ý /lumi-ingest; tùy chọn lưu câu trả lời thành trang |
 | `/lumi-edit`   | thủ công       | Thêm/xóa/sửa nội dung wiki theo yêu cầu người dùng                   |
 | `/lumi-check`  | thủ công/hàng tuần | Lint: liên kết hỏng, trang mồ côi, thiếu liên kết ngược           |
 | `/lumi-reset`  | thủ công       | Dọn dẹp phá hủy có phạm vi                                            |
@@ -196,7 +199,7 @@ Các skill nằm trong `.agents/skills/` và được gọi qua lệnh slash. C�
 
 {{#if pack_research}}### Gói: research
 
-Thêm `/lumi-research-discover` (danh sách ứng viên được xếp hạng), `/lumi-research-watchlist` (chọn chủ đề để khám phá theo lịch với sự hỗ trợ AI), `/lumi-research-watch-run` (chạy một lượt khám phá theo lịch trên watchlist — chủ đề + nguồn RSS / Atom — chỉ khi bạn yêu cầu), `/lumi-research-survey` (tổng hợp dạng tường thuật), `/lumi-research-prefill` (tạo nền tảng để ngăn trùng lặp khái niệm), `/lumi-research-topic` (nhóm các khái niệm và nguồn hiện có thành trang chủ đề; AI đề xuất cụm từ đồ thị, bạn xác nhận trước khi ghi bất cứ thứ gì), `/lumi-research-setup` (cấu hình API key tương tác).
+Thêm `/lumi-research-discover` (danh sách ứng viên được xếp hạng), `/lumi-research-watchlist` (chọn chủ đề để khám phá theo lịch với sự hỗ trợ AI), `/lumi-research-watch-run` (chạy một lượt khám phá theo lịch trên watchlist — chủ đề + nguồn RSS / Atom — chỉ khi bạn yêu cầu), `/lumi-research-survey` (tổng hợp dạng tường thuật), `/lumi-research-prefill` (tạo nền tảng để ngăn trùng lặp khái niệm), `/lumi-research-topic` (nhóm các khái niệm và nguồn hiện có thành trang chủ đề; AI đề xuất cụm từ đồ thị, bạn xác nhận trước khi ghi bất cứ thứ gì), `/lumi-research-rank` (chấm điểm mức độ ảnh hưởng trích dẫn và chất lượng 4C của một bài báo đã nạp, ghi vào trang nguồn của nó; có thêm tín hiệu Scite/Altmetric khi đã đặt key), `/lumi-research-setup` (cấu hình API key tương tác).
 {{/if}}
 {{#if pack_reading}}### Gói: reading
 
@@ -217,6 +220,7 @@ Thêm `/lumi-learning-reflect` (hướng dẫn phiên phản tư; tạo hoặc c
 {{#if pack_research}}- **`_lumina/scripts/discover-runner.mjs`** — trình chạy khám phá theo lịch một lần; thu thập ứng viên được chấm điểm nhưng không nạp hay tải xuống bài báo.
 {{/if}}
 - **`_lumina/tools/extract_pdf.py`** — trình trích xuất văn bản PDF (dựa trên pypdf); dùng bởi `/lumi-ingest` và `/lumi-reading-chapter-ingest` khi IDE chủ không thể đọc PDF tự nhiên.
+- **`_lumina/tools/verify_quotes.py`** — kiểm tra các trích dẫn có ghi số trang trong ghi chú đọc và trang nguồn so với PDF gốc; dùng bởi `/lumi-ingest` cho nguồn dài.
 - **`_lumina/tools/fetch_pdf.py`** — tải xuống PDF từ URL sang `raw/download/<resource>/` (streaming, nguyên tử, idempotent); dùng bởi `/lumi-ingest` Chế độ B khi đầu vào là URL hoặc định danh bài báo.
 - **`_lumina/tools/requirements.txt`** — các phụ thuộc Python cho công cụ đi kèm. Chạy `pip install -r _lumina/tools/requirements.txt` khi công cụ báo thiếu gói.
 {{#if pack_research}}- **`_lumina/tools/_env.py`** — trình tải `.env` dùng chung cho công cụ research.

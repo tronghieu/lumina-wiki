@@ -14,8 +14,8 @@ python3 _lumina/tools/init_discovery.py --topic "<topic>" --project-root . --pha
 OpenAlex is the preferred fetcher for cross-walk metadata (DOI ↔ arXiv ↔ s2 ↔
 openalex in one record). Add `openalex` to `--fetchers` whenever a topic has
 broad coverage outside arXiv and Semantic Scholar (humanities, biomedicine,
-older work). It works anonymously; set `OPENALEX_MAILTO=<email>` to opt into
-the polite-pool with higher quota.
+older work). It can work without local credentials for small checks; set
+`OPENALEX_API_KEY=<key>` for the free daily API budget and usage tracking.
 
 Use `--resume` only when continuing existing
 `_lumina/_state/discovery-*.json` checkpoints. Narrow phases deliberately:

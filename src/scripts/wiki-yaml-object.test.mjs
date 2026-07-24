@@ -61,6 +61,56 @@ test('set-meta external_ids object → block-mapping round-trip', () => {
   }
 });
 
+test('set-meta ranking flat object → block-mapping round-trip', () => {
+  const root = setupProject();
+  try {
+    writeSource(root, 'attention', [
+      'id: attention',
+      'title: Attention is All You Need',
+      'type: source',
+      'created: 2017-06-12',
+      'updated: 2017-06-12',
+      'authors: [Vaswani]',
+      'year: 2017',
+      'importance: 5',
+      'provenance: replayable',
+    ].join('\n'));
+
+    const ranking = {
+      influential_citations: 42,
+      citation_count: 318,
+      citation_source: 'semantic-scholar',
+      citation_fetched: '2026-06-16',
+      venue_name: 'NeurIPS',
+      venue_tier: 'CORE A*',
+      venue_source: 'llm-estimated',
+      quality_correctness: 4,
+      quality_clarity: 5,
+      quality_source: 'llm',
+    };
+    const r1 = runWiki(root, ['set-meta', 'attention', 'ranking',
+      JSON.stringify(ranking), '--json-value']);
+    assert.equal(r1.status, 0, r1.stderr);
+
+    const r2 = runWiki(root, ['read-meta', 'attention']);
+    assert.equal(r2.status, 0, r2.stderr);
+    const out = JSON.parse(r2.stdout).frontmatter.ranking;
+    assert.equal(out.influential_citations, 42);
+    assert.equal(out.citation_source, 'semantic-scholar');
+    assert.equal(out.venue_tier, 'CORE A*');
+    assert.equal(out.quality_clarity, 5);
+
+    // Idempotency: a second identical write round-trips to the same values.
+    const r3 = runWiki(root, ['set-meta', 'attention', 'ranking',
+      JSON.stringify(ranking), '--json-value']);
+    assert.equal(r3.status, 0, r3.stderr);
+    const r4 = runWiki(root, ['read-meta', 'attention']);
+    assert.equal(JSON.parse(r4.stdout).frontmatter.ranking.influential_citations, 42);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('set-meta strips __proto__ and unknown namespaces', () => {
   const root = setupProject();
   try {

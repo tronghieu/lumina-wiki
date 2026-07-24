@@ -15,6 +15,7 @@ These apply in all workspaces regardless of installed packs.
 | `sources/A` -> `people/C`           | `people/C` -> `sources/A`               | No         |
 | `concepts/K` -> `sources/E`         | `sources/E` -> `concepts/K`             | No         |
 | `summary/S` -> `concepts/K`         | `concepts/K` -> `summary/S`             | No         |
+| `readings/R` -> `sources/A`         | `sources/A` -> `readings/R`             | No         |
 | Any -> `outputs/**`                  | (no reverse required)                   | Yes        |
 | Any -> `*://*`                       | (no reverse required — external URL)    | Yes        |
 {{#if pack_research}}

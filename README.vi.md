@@ -28,6 +28,14 @@
   <a href="docs/user-guide/vi.md">Hướng dẫn sử dụng</a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">
+    <img src="https://img.youtube.com/vi/XuhhjbwoNeQ/maxresdefault.jpg" alt="Video hướng dẫn Lumina-Wiki" width="560">
+  </a>
+  <br>
+  <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ Xem video hướng dẫn</a>
+</p>
+
 ## Menu
 
 - [Bắt đầu & Cài đặt](#2-bắt-đầu)
@@ -92,6 +100,8 @@ Agent sẽ hướng dẫn bạn kiểm tra công cụ nghiên cứu và lưu key
 ### **Bước 3 (Khi nâng cấp): Migrate các entry wiki cũ**
 
 Nếu bạn cài lại Lumina-Wiki trên một dự án đã có `wiki/` từ phiên bản trước, cứ chạy lại `npx lumina-wiki install`. Installer cập nhật scripts, schemas và skills; **nội dung của bạn trong `wiki/`, `raw/`, `log.md` không bị chỉnh sửa**.
+
+Bạn có thể chạy lệnh tại thư mục gốc hoặc một thư mục con của dự án. Nếu bỏ một gói hoặc công cụ AI khỏi thiết lập, Lumina sẽ dọn các lệnh cũ và những tệp thiết lập chưa được bạn sửa. Tệp đã chỉnh sửa được giữ lại kèm cảnh báo. Nếu toàn bộ dự án được sao chép, di chuyển hoặc đổi tên, Lumina sẽ sửa lại các liên kết do hệ thống quản lý khi nâng cấp.
 
 Nếu installer cảnh báo entry cũ thiếu frontmatter mới, có hai cách backfill:
 
@@ -183,6 +193,7 @@ Xem [Hướng dẫn Nâng cao](docs/user-guide/advanced-qmd.vi.md) để biết 
 | | `/lumi-research-survey` | Tạo một bài tổng quan/khảo sát từ kiến thức hiện có. |
 | | `/lumi-research-prefill` | Tạo trước các khái niệm nền tảng để tránh trùng lặp. |
 | | `/lumi-research-topic` | Gom các khái niệm và nguồn liên quan trong wiki thành một trang chủ đề tại `wiki/topics/<slug>.md`. AI đề xuất danh sách để bạn xem và xác nhận trước khi trang được tạo. Dùng sau khi đã nạp nhiều tài liệu và muốn tổng hợp một nhóm ý tưởng thành trang riêng. |
+| | `/lumi-research-rank` | Chấm điểm một bài báo bạn đã nạp để biết nên đọc gì trước. Nó tra mức độ ảnh hưởng của bài (tín hiệu trích dẫn), ước lượng uy tín nơi công bố, và đánh giá chất lượng theo bốn tiêu chí — Tính đúng đắn, Sự rõ ràng, Đóng góp, và Bối cảnh — rồi thêm một bảng điểm rõ ràng vào trang của bài báo. Các con số đo được và ước lượng của AI luôn được tách bạch. |
 | | `/lumi-research-setup` | Giúp cấu hình API key cho các công cụ nghiên cứu. |
 | | `/lumi-research-watch-run` | Chạy một lượt khám phá theo lịch dựa trên watchlist (chủ đề + nguồn RSS / Atom). Chỉ chạy khi bạn yêu cầu. |
 | **Reading** | `/lumi-reading-chapter-ingest`| Nạp kiến thức sách theo từng chương. |
@@ -207,7 +218,7 @@ Lumina-Wiki đang phát triển nhanh chóng. Dưới đây là lộ trình hư�
 - [x] **Cải thiện CI/CD:** Hỗ trợ chính thức cho môi trường Bun và Node 22. *(đã phát hành trong v1.2)*
 - [x] **Mở rộng nguồn dữ liệu toàn cầu:** Tích hợp trực tiếp với OpenAlex, CORE và Unpaywall để tra cứu DOI-to-PDF đáng tin cậy. *(ra mắt trong v1.6)*
 - [x] **Theo dõi RSS & Blog:** Tự động phát hiện bài báo mới từ các blog phòng thí nghiệm và tạp chí yêu thích qua các mục `type: feed` trong watchlist. *(ra mắt trong v1.6)*
-- [ ] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn.
+- [x] **Xếp hạng bài báo nâng cao:** Xem điểm số ảnh hưởng và tín hiệu chất lượng cho các nghiên cứu của bạn qua `/lumi-research-rank`. *(ra mắt ở v1.7)*
 
 **Dài hạn (Nghiên cứu sâu & Tích hợp)**
 - [ ] **OCR ảnh & PDF scan:** Nạp ảnh chụp màn hình và PDF dạng scan vào wiki.

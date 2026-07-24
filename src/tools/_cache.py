@@ -104,9 +104,9 @@ def _canonical_url(
     like `id=DOI%3A10.x/y`).
 
     `strip_params`: optional list of query-string keys to drop before
-    canonicalization. Use for non-functional params like polite-pool
-    `mailto=` so the same logical request hits the same cache slot
-    regardless of whose email is attached.
+    canonicalization. Use for credential or non-content-affecting params
+    so the same logical request hits the same cache slot regardless of who
+    is asking.
     """
     pr = requests.PreparedRequest()
     pr.prepare_url(url, params)  # type: ignore[arg-type]
@@ -305,8 +305,8 @@ def wrap_session(
     fallback) or `CachedSession` (delegating wrapper).
 
     `strip_params`: query-string keys removed before the cache key is
-    computed. Useful for non-functional params (e.g. polite-pool `mailto=`)
-    so repeated requests collapse onto the same cache slot.
+    computed. Useful for credential or non-content-affecting params so
+    repeated requests collapse onto the same cache slot.
     """
     if ttl_seconds is None:
         env_ttl = os.environ.get("LUMINA_CACHE_TTL")

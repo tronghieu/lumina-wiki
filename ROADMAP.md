@@ -1,6 +1,6 @@
 # Lumina-Wiki Roadmap
 
-Lumina-Wiki has reached **v1.5.0** stable.
+Lumina-Wiki has reached **v1.7.0** stable.
 This roadmap tracks intentions and planned upgrades, categorized by timeframe and impact.
 
 **Shipped in v1.2 (2026-05-07):** Multilingual installer (EN/VI/ZH) · Bun smoke + Node 22 LTS in CI · Schema parity for cross-source IDs (`external_ids` namespace) · Persistent HTTP GET cache for fetchers.
@@ -8,6 +8,8 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 **Shipped in v1.4 (2026-05-09):** `/lumi-help` RAG-based orientation skill · Learning Pack (`/lumi-learning-reflect` self-reflection infrastructure).
 
 **Shipped in v1.6 (pending release):** Research & Discovery Expansion — multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) · RSS / Atom feed monitoring (`type: feed` watchlist items, etag caching, XXE rejection) · `/lumi-research-watch-run` skill · `cron-daily.sh` wrapper.
+
+**Shipped in v1.7 (2026-06-16):** Advanced Paper Ranking — `/lumi-research-rank` skill · Semantic Scholar influential-citation signal · 4C qualitative rubric (Correctness / Clarity / Contribution / Context) via three-pass reading · LLM-estimated venue prestige (flagged) · optional key-gated `fetch_scite.py` + `fetch_altmetric.py` fetchers · optional `ranking` source frontmatter block.
 
 ---
 
@@ -26,11 +28,39 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - ~~**Schema Parity:** Standardize cross-source ID handling across all core and research skills.~~ **Shipped in v1.2** (`external_ids` namespace, `sources[]` provenance, lint L13/L14/L16).
 - ~~**Research & Discovery Expansion:** Broaden coverage to OpenAlex, CORE, Unpaywall, and RSS feeds.~~ **Shipped in v1.6 (pending release).** Multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) with always-on OpenAlex metadata anchor; RSS / Atom feed monitoring as first-class watchlist items; `/lumi-research-watch-run` skill for on-demand polling; `cron-daily.sh` wrapper for scheduled invocation.
   - *Spec:* [Research Source & Discovery Expansion](./docs/planning-artifacts/specs/spec-research-expansion.md)
-- **Desktop companion app (unreleased):** The Wails workspace interface and
-  optional AI assistant are implemented, including cross-platform package,
-  install, and launch verification. Signed distribution remains before release.
+- **Lumina Desktop app-only (unreleased):** Evolve the implemented Wails
+  workspace interface and optional AI assistant into a self-contained product.
+  Users install only Lumina Desktop; normal use must not require Node.js, npm,
+  the Lumina CLI, or a terminal.
+  - *Current implementation:* The workspace shell, graph, source import,
+    checks, AI services, and cross-platform packaging gates are complete.
+  - *Next milestone — standalone onboarding:* Create a standard workspace from
+    a native folder picker, validate it, connect it automatically, and reopen
+    the most recent valid workspace on the next launch.
+  - *Workspace lifecycle:* Add native upgrade, repair, reset, and pack
+    management without invoking an externally installed CLI.
+  - *Knowledge workflows:* Bring accepted source-processing, note, graph,
+    research, reading, and learning workflows into the app with the same user
+    approval and data-safety boundaries as their canonical workspace
+    contracts.
+  - *Release:* Complete signing, notarization, distribution, update, and
+    recovery validation for supported desktop platforms.
   - *Development guide:* [Lumina Desktop](./apps/desktop/README.md)
-- **Advanced Ranking:** Integrate influential citation counts and altmetrics into the core discovery flow.
+
+### Desktop synchronization policy
+
+- The CLI and installed workspace contracts remain the capability reference and
+  schema authority. Desktop creates and maintains compatible workspaces but
+  implements user-facing behavior inside the packaged app.
+- Do not add speculative Desktop parity work. When an accepted user-facing CLI
+  or installed-workspace capability changes, assess its Desktop impact and add
+  the corresponding native app work to this roadmap.
+- CLI changes do not silently expand a Desktop release. Each native equivalent
+  still requires its own safety, interaction, compatibility, and packaged-app
+  validation.
+- Sharing generated templates, schemas, and conformance fixtures is encouraged;
+  requiring users to install or execute the CLI is not.
+- ~~**Advanced Ranking:** Integrate influential citation counts and altmetrics into the core discovery flow.~~ **Shipped in v1.7 (2026-06-16).** `/lumi-research-rank` records a Semantic Scholar influential-citation signal, optional key-gated Scite/Altmetric signals, an LLM-estimated (flagged) venue tier, and a 4C qualitative scorecard onto each source page.
   - *Outcome:* Surface quality and influence signals to prioritize research reading.
   - *Spec:* [Paper Ranking & Quality](./docs/planning-artifacts/specs/spec-paper-ranking.md)
 

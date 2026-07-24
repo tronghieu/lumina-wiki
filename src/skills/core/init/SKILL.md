@@ -69,6 +69,11 @@ For reading pack (if installed):
 node _lumina/scripts/wiki.mjs init --pack reading
 ```
 
+For learning pack (if installed):
+```bash
+node _lumina/scripts/wiki.mjs init --pack learning
+```
+
 Each call returns `{ ok: true, created: [...], skipped: [...] }`. Report which
 directories were newly created and which already existed.
 
@@ -168,6 +173,8 @@ node _lumina/scripts/lint.mjs --json
 node _lumina/scripts/wiki.mjs log init "Wiki initialized. Packs: core, research. Created: 8 dirs."
 ```
 Additional dirs created: `wiki/foundations/`, `wiki/topics/`, `raw/discovered/`
+(research pack). The learning pack (`init --pack learning`) additionally
+creates `wiki/reflections/`.
 </example>
 
 <example>

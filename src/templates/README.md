@@ -41,6 +41,7 @@ Keep this mental map in immediate context:
 - `wiki/people/` — people referenced across sources
 - `wiki/summary/` — area-level syntheses
 - `wiki/outputs/` — generated artifacts (comparisons, exports)
+- `wiki/readings/` — page-anchored reading notes for long sources (books, theses), one folder per source; created by `/lumi-ingest`, reached from the source page rather than the index
 - `wiki/graph/` — derived state; never edit manually
 {{#if pack_research}}
 - `wiki/topics/`, `wiki/foundations/` (pack: research)
@@ -77,7 +78,7 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs; open when this file points you there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
-- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
+- `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `verify_quotes.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
 - `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer state; never edit by hand
 
@@ -93,6 +94,7 @@ Every wiki page has a defined type, frontmatter, and section structure. **Open `
 | Concept    | `concepts/`   | Cross-source idea or technique with variants and comparisons         |
 | Person     | `people/`     | Profile of a referenced person with key sources and relationships    |
 | Summary    | `summary/`    | Area-level synthesis spanning multiple sources and concepts          |
+| Reading note | `readings/` | Per-chapter notes for a long source, page-cited; written during long-source ingest |
 {{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources; created via `/lumi-research-topic` (research) |
 | Foundation | `foundations/`| Prerequisite/background knowledge; terminal page (research)          |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Per-chapter notes for a book or long-form work (reading)             |
@@ -129,6 +131,7 @@ When you write a forward link, **always write the reverse link in the same opera
 | `concepts/K` writes `[[source-E]]`          | `sources/E` appends K to `Related concepts`|
 | `summary/S` writes `[[concept-K]]`          | `concepts/K` appends S to `Mentioned in`   |
 {{#if pack_research}}| `topics/T` writes `[[concept-K]]`           | `concepts/K` appends T to `Topics`         |
+| `topics/T` writes `[[source-A]]`            | `sources/A` appends T to `Topics`          |
 {{/if}}{{#if pack_reading}}| `chapters/Ch` writes `[[character-X]]`      | `characters/X` appends Ch to `Key chapters`|
 | `chapters/Ch` writes `[[theme-Y]]`          | `themes/Y` appends Ch to `Traced in`       |
 {{/if}}
@@ -188,7 +191,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 |---------------|---------------|-------------------------------------------------------|
 | `/lumi-init`   | manual, first  | Bootstrap wiki from existing `raw/` content          |
 | `/lumi-ingest` | manual         | Read a source and write a wiki page. It asks you to review the draft, then continues on its own unless something needs your judgment |
-| `/lumi-ask`    | manual         | Query wiki, synthesize answer, optionally file page   |
+| `/lumi-ask`    | manual         | Answer from what the wiki already knows, citing the source pages; if something's missing, lists matching raw/sources/ files and suggests /lumi-ingest; optionally files the answer as a page |
 | `/lumi-edit`   | manual         | Add/remove/revise wiki content per user request       |
 | `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
 | `/lumi-reset`  | manual         | Scoped destructive cleanup                            |
@@ -197,7 +200,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 
 {{#if pack_research}}### Pack: research
 
-Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-watch-run` (run one scheduled-discovery pass over the watchlist — topics + RSS / Atom feeds — only when you ask), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-topic` (cluster existing concepts and sources into a thematic topic page; AI proposes the cluster from the graph, you confirm before anything is written), `/lumi-research-setup` (interactive API key configuration).
+Adds `/lumi-research-discover` (ranked candidate shortlist), `/lumi-research-watchlist` (choose topics for scheduled discovery with AI help), `/lumi-research-watch-run` (run one scheduled-discovery pass over the watchlist — topics + RSS / Atom feeds — only when you ask), `/lumi-research-survey` (narrative synthesis), `/lumi-research-prefill` (seed foundations/ to prevent concept duplication), `/lumi-research-topic` (cluster existing concepts and sources into a thematic topic page; AI proposes the cluster from the graph, you confirm before anything is written), `/lumi-research-rank` (score an already-ingested paper's citation influence and 4C quality, recorded on its source page; optional Scite/Altmetric signals when keys are set), `/lumi-research-setup` (interactive API key configuration).
 {{/if}}
 {{#if pack_reading}}### Pack: reading
 
@@ -218,6 +221,7 @@ Adds `/lumi-learning-reflect` (guide a self-reflection session; creates or updat
 {{#if pack_research}}- **`_lumina/scripts/discover-runner.mjs`** — one-shot scheduled discovery runner; collects scored candidates but does not ingest or download papers.
 {{/if}}
 - **`_lumina/tools/extract_pdf.py`** — PDF text extractor (pypdf-based); used by `/lumi-ingest` and `/lumi-reading-chapter-ingest` when the host IDE cannot read PDFs natively.
+- **`_lumina/tools/verify_quotes.py`** — checks page-cited quotes in reading notes and source pages against the source PDF; used by `/lumi-ingest` for long sources.
 - **`_lumina/tools/fetch_pdf.py`** — URL → `raw/download/<resource>/` PDF downloader (streaming, atomic, idempotent); used by `/lumi-ingest` Mode B when the input is a URL or paper identifier.
 - **`_lumina/tools/requirements.txt`** — Python dependencies for bundled tools. Run `pip install -r _lumina/tools/requirements.txt` when a tool reports a missing package.
 {{#if pack_research}}- **`_lumina/tools/_env.py`** — shared `.env` loader for research tools.

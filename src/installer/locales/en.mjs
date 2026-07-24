@@ -61,6 +61,13 @@ export default {
   'prompt.readme_merge.option.abort.label':    'Abort install',
   'prompt.readme_merge.option.abort.hint':     'Exit without changes',
 
+  // ── Upgrade mode prompt ────────────────────────────────────────────────────
+  'prompt.upgrade_mode.message':               'Existing installation found. How would you like to proceed?',
+  'prompt.upgrade_mode.option.quick.label':    'Quick update',
+  'prompt.upgrade_mode.option.quick.hint':     'keep current packs, IDE targets, and languages',
+  'prompt.upgrade_mode.option.modify.label':   'Modify installation',
+  'prompt.upgrade_mode.option.modify.hint':    'add or remove packs and IDE targets, change languages',
+
   // ── Progress ───────────────────────────────────────────────────────────────
   'progress.installing':                       'Installing Lumina Wiki in: {dir}',
   'progress.upgrading':                        'Upgrading Lumina Wiki in: {dir}',
@@ -71,10 +78,13 @@ export default {
   'success.summary.packs':                     '  Packs:    {packs}',
   'success.summary.ide':                       '  IDE:      {ide}',
   'success.summary.skills':                    '  Skills:   {count} installed',
+  'hint.packs_available':                      '  Tip: more packs are available: {packs}. Run "npx lumina-wiki install" again and choose "Modify installation" to add them.',
 
   // ── Warnings ───────────────────────────────────────────────────────────────
   'warn.manifest_read':                        '[warn] Could not read existing manifest: {message}. Treating as fresh install.',
   'warn.copied_skills':                        '  [warn] Some skills were copied instead of symlinked. Run "lumina install --re-link" after enabling Windows Developer Mode.',
+  'warn.relocated':                            '  [warn] Workspace moved from {from} to {to}; managed links will be refreshed.',
+  'warn.preserved_modified_file':               '  [warn] Kept modified file that is no longer selected: {path}',
   'warn.upgrade_header':                       '[warn] Lumina upgraded v{from} -> v{to} — schema gap detected:',
   'warn.upgrade_errors':                       '       {errors} error(s), {warnings} warning(s) across legacy entries.',
   'warn.upgrade_fix_quick':                    '     Quick fix (deterministic):',
