@@ -1,8 +1,9 @@
 name: Desktop
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
 
 permissions:
