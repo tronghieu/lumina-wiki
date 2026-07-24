@@ -93,7 +93,12 @@ jobs:
 
       - name: Install Linux WebView prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential libgtk-3-dev libwebkit2gtk-4.1-dev xvfb
+        run: sudo apt-get update && sudo apt-get install -y build-essential desktop-file-utils libgtk-3-dev libwebkit2gtk-4.1-dev xvfb
+
+      - name: Install Windows packaging prerequisites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install nsis --no-progress -y
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.78
@@ -111,18 +116,51 @@ jobs:
         # Ignore only end-of-line whitespace; API/model changes still fail.
         run: git diff --ignore-space-at-eol --exit-code -- frontend/bindings
 
-      - name: Build native package
-        run: wails3 build
+      - name: Package native application
+        run: wails3 package
+        env:
+          GIT_COMMITTER_NAME: GitHub Actions
+          GIT_COMMITTER_EMAIL: actions@github.com
 
       - name: Verify packaged artifact
         shell: bash
-        run: test -n "$(find bin -maxdepth 3 -type f -print -quit)"
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              test -n "$(find bin -maxdepth 1 -type f -name '*.deb' -print -quit)"
+              test -n "$(find bin -maxdepth 1 -type f -name '*.rpm' -print -quit)"
+              test -n "$(find bin -maxdepth 1 -type f -name '*.pkg.tar.zst' -print -quit)"
+              ;;
+            macOS)
+              test -x bin/lumina-desktop.app/Contents/MacOS/lumina-desktop
+              ;;
+            Windows)
+              test -n "$(find bin -maxdepth 1 -type f -name '*-installer.exe' -print -quit)"
+              ;;
+          esac
+
+      - name: Install packaged application
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo dpkg -i "$(find bin -maxdepth 1 -type f -name '*.deb' -print -quit)"
+
+      - name: Install packaged application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Resolve-Path (Get-ChildItem bin -Filter '*-installer.exe' | Select-Object -First 1).FullName
+          $install = Start-Process -FilePath $installer.Path -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with code $($install.ExitCode)" }
 
       - name: Smoke launch packaged artifact
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          artifact="$(find bin -maxdepth 3 -type f -perm -111 -print -quit)"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            artifact="bin/lumina-desktop.app/Contents/MacOS/lumina-desktop"
+          else
+            artifact="/usr/local/bin/lumina-desktop"
+          fi
           test -n "$artifact"
           if [ "$RUNNER_OS" = "Linux" ]; then
             xvfb-run -a "$artifact" > package-smoke.log 2>&1 &
@@ -139,9 +177,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $artifact = Get-ChildItem bin -Recurse -Filter *.exe | Select-Object -First 1
-          if (-not $artifact) { throw "No packaged executable found" }
-          $process = Start-Process -FilePath $artifact.FullName -PassThru
+          $artifact = Resolve-Path "$env:ProgramFiles\Lumina Wiki\Lumina Wiki\lumina-desktop.exe" -ErrorAction Stop
+          $process = Start-Process -FilePath $artifact.Path -PassThru
           Start-Sleep -Seconds 5
           if ($process.HasExited) { throw "Packaged executable exited during smoke launch" }
           Stop-Process -Id $process.Id
@@ -150,6 +187,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lumina-desktop-${{ runner.os }}
-          path: apps/desktop/bin/
+          path: |
+            apps/desktop/bin/
+            apps/desktop/package-smoke.log
           if-no-files-found: error
           retention-days: 14
