@@ -517,21 +517,23 @@ Reach for this if you keep more than one wiki (for example, one for work reading
     npx lumina-wiki install --yes --agents openclaw
     ```
 
-    (swap `openclaw` for `hermes` if that is your assistant). This step only teaches the assistant how to find your wikis — each wiki still needs its own normal install, following the steps earlier in this guide.
+    (swap `openclaw` for `hermes` if that is your assistant). This step teaches the assistant how to find and manage your wikis — you don't need to install anything separately per wiki, the assistant can set one up for you from chat.
 
-2. Tell it about each wiki you already have:
+2. Tell it about a wiki, right in chat — an existing one, or a brand-new one you want it to create:
 
-    ```bash
-    lumina wikis add /path/to/your/wiki --name "AI Engineering" --alias "AI"
-    ```
+    > "Register the wiki at /path/to/your/wiki, call it AI Engineering."
+    >
+    > "Set up a new wiki for cooking notes at ~/projects/cooking-notes."
 
-    Give it a clear name and, if you like, a short alias — pick words you would naturally say when chatting.
+    Give it a clear name and, if you like, a short alias — pick words you would naturally say when chatting. The assistant always looks at the folder first before doing anything: if it's already a wiki, it just registers it; if the folder already has your own files in it, it tells you what's there and waits for you to say go-ahead before adding a wiki on top; if there's nothing there yet, it asks what the wiki is for and sets it up in one step.
 
 3. Just start chatting. Name the wiki when you ask for something ("add this PDF to my AI Engineering wiki", "what does Cooking say about knife care?"), and the assistant will ask you which one you mean if it is not sure.
 
 ### What you get back
 
 Documents you send land in the right wiki's inbox and get filed properly, the same as if you had added them yourself. At any time you can ask things like "which wikis do I have?" or "is everything healthy?", and the assistant checks and reports back in plain language. This health check-up can also be set to run on a schedule, so small problems get noticed and fixed before they pile up.
+
+A wiki the assistant sets up this way is deliberately lightweight — just the wiki itself, since the assistant's skills already live on your chat platform, not inside the wiki folder. If you later want to open that same wiki in a code editor (Claude Code, Cursor, and so on), run the normal install from earlier in this guide inside that folder — that's a separate, optional step you take when you want it.
 
 A few practical things worth knowing:
 

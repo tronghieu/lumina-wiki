@@ -19,7 +19,9 @@ import { constants as fsConstants } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Directories always present after a core install (mirrors commands.js:
-// CORE_WIKI_DIRS, CORE_RAW_DIRS, LUMINA_DIRS, plus '.agents/skills').
+// CORE_WIKI_DIRS, CORE_RAW_DIRS, LUMINA_DIRS). '.agents/skills' is NOT here
+// — it's a full-profile-only directory (see fullProfileDirs below); a
+// minimal-profile install has no per-project skill copies at all.
 // ---------------------------------------------------------------------------
 
 export const baseDirs = [
@@ -27,8 +29,16 @@ export const baseDirs = [
   'wiki/outputs', 'wiki/graph', 'wiki/readings',
   'raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download',
   '_lumina/config', '_lumina/schema', '_lumina/scripts', '_lumina/tools', '_lumina/_state',
-  '.agents/skills',
 ];
+
+// ---------------------------------------------------------------------------
+// Directories only present under the 'full' install profile (mirrors
+// commands.js's `if (profile === 'full') dirsToCreate.push('.agents/skills')`).
+// A 'minimal' profile install never creates these — the workspace is managed
+// entirely by globally-installed agent skills, with no per-project copies.
+// ---------------------------------------------------------------------------
+
+export const fullProfileDirs = ['.agents/skills'];
 
 // ---------------------------------------------------------------------------
 // Extra directories created only when a given pack is selected (mirrors
@@ -67,10 +77,18 @@ export const engineCriticalPaths = ['_lumina/scripts', '_lumina/config', 'README
  *
  * @param {string} rootAbs - Absolute path to the workspace root.
  * @param {string[]} [packs] - Installed packs; 'core' is implicit/ignored.
+ * @param {object} [options]
+ * @param {'full'|'minimal'} [options.profile='full'] - Install profile. A
+ *   'minimal' profile never expects '.agents/skills' (no per-project skill
+ *   copies) — see fullProfileDirs. Default 'full' preserves pre-profile
+ *   behavior for existing 2-arg call sites.
  * @returns {Promise<{ok: boolean, missingDirs: string[], missingSeedFiles: string[], missingEngine: string[]}>}
  */
-export async function checkLayout(rootAbs, packs = ['core']) {
+export async function checkLayout(rootAbs, packs = ['core'], { profile = 'full' } = {}) {
   const dirsToCheck = [...baseDirs];
+  if (profile === 'full') {
+    dirsToCheck.push(...fullProfileDirs);
+  }
   for (const pack of packs) {
     if (pack === 'core') continue;
     if (packDirs[pack]) dirsToCheck.push(...packDirs[pack]);

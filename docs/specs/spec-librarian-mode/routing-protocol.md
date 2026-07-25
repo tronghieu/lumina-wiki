@@ -19,6 +19,17 @@ OpenClaw injects workspace files (`AGENTS.md`, `TOOLS.md`) into its system promp
 6. **One-shot commands.** Prefix every shell command with `cd "<path>" && …`. Never rely on cwd persisting from a previous command.
 7. **Say which wiki.** Every reply that mutates a wiki names the target wiki, so the user can catch a mis-route immediately.
 
+## Registering a new wiki (CAP-3, CAP-10)
+
+Routing above assumes the target wiki is already registered — step 3 only
+ever picks among what `wikis list` already returns. Creating or registering a
+wiki in the first place is a separate, three-phase flow (`inspect` a path →
+ask the user what's missing → commit with `add [--provision] --yes`), owned
+in full by the `lumi-hub` skill (`src/skills/agents/hub/SKILL.md`). When a
+request needs a wiki that does not exist yet, or names a path routing cannot
+resolve to any registered wiki, hand off to that flow instead of improvising
+steps here.
+
 ## Chat inbox flow (CAP-7)
 
 When the user sends a document via a chat platform and asks to ingest it (verified for Telegram and Lark/Feishu on both platforms):
@@ -35,7 +46,7 @@ Size caveats live in `platform-integration.md` (Telegram bot API 20MB ceiling; O
 
 | Situation | Required behavior |
 |---|---|
-| No registry / empty registry in librarian mode | Tell the user; offer `lumina wikis add` (or wiki creation, CAP-3). |
+| No registry / empty registry in librarian mode | Tell the user; hand off to the `lumi-hub` registration flow ("Registering a new wiki" above). |
 | Resolver exit 2 (unknown/ambiguous) | Ask, presenting the candidates from the JSON error. |
 | Target wiki fails manifest check | Surface it; suggest `lumina wikis doctor`. Do not operate on the directory. |
 | Skill needs a pack the wiki lacks (per registry `packs`, which is fresh after the resolve in the same turn) | Refuse early; suggest installing the pack in that wiki. |

@@ -140,6 +140,8 @@ Examples:
   lumina discover run --dry-run
   lumina uninstall
   lumina wikis add /path/to/wiki --name "AI Engineering"
+  lumina wikis inspect /path/to/maybe-a-wiki --json
+  lumina wikis add /path/to/new-wiki --provision --yes --name "AI Engineering"
   lumina wikis list
   lumina wikis resolve "ai engineering"
   lumina wikis doctor --fix
@@ -318,15 +320,41 @@ const wikis = program
 
 wikis
   .command('add <path>')
-  .description('register an existing Lumina wiki directory')
+  .description('register an existing Lumina wiki directory (add --provision to create one first)')
   .option('--name <name>', 'display name (defaults to the directory name)')
   .option('--alias <alias>', 'alternative name to match on resolve (repeatable)', (val, prev) => prev.concat([val]), [])
   .option('--description <text>', 'short description of what this wiki covers')
+  .option('--provision', 'create a new Lumina wiki at <path> before registering it (requires --yes)')
+  .option('--packs <list>', 'comma-separated packs to install when provisioning (default: core)')
+  .option('-y, --yes', 'confirm that provisioning may write files')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (path, cmdOpts) => {
+    try {
+      // The program-level `-y, --yes` (used by install/uninstall) shares its
+      // flags with this subcommand's own `-y, --yes` — commander attaches
+      // the parsed value to the program's opts() in that case, not to
+      // cmdOpts, so it must be merged in explicitly (same pattern as the
+      // install/uninstall actions' directory/yes merges above).
+      const mergedOpts = { ...cmdOpts, yes: cmdOpts.yes ?? program.opts().yes ?? false };
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('add', [path], mergedOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('inspect <path>')
+  .description('read-only: classify a bare path for the inspect -> ask -> add --provision chat flow')
+  .option('--packs <list>', 'comma-separated packs to evaluate against (default: core)')
   .option('--json', 'print machine-readable JSON')
   .action(async (path, cmdOpts) => {
     try {
       const { wikisCommand } = await import('../src/installer/wikis-command.js');
-      const code = await wikisCommand('add', [path], cmdOpts);
+      const code = await wikisCommand('inspect', [path], cmdOpts);
       process.exit(code);
     } catch (err) {
       console.error(`[error] ${err.message}`);

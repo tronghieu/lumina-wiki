@@ -54,6 +54,9 @@ jobs:
       - name: Python tool tests
         run: npm run test:python
 
+      - name: Catalog + doc-count integrity
+        run: npm run test:catalog
+
       - name: CLI smoke
         run: node bin/lumina.js --version --no-update
 

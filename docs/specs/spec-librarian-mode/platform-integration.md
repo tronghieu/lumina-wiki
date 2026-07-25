@@ -4,7 +4,7 @@ Companion to SPEC-librarian-mode (CAP-8, CAP-9). Platform facts verified against
 
 ## Global skill directories
 
-The AI Agents installer targets install **skills only** — no workspace payload (`_lumina/`, `wiki/`, entry-point stubs). Each wiki still gets its own full install via the normal flow; the global skills are the trigger surface, each wiki's own `_lumina/scripts/` remain the executing truth.
+The AI Agents installer targets install **skills only** — no workspace payload (`_lumina/`, `wiki/`, entry-point stubs) is written to the global skills directory itself. A wiki the agent creates or adopts through chat (`lumi-hub`'s inspect → ask → `add --provision` flow) gets the installer's `minimal` profile — no per-wiki skill copies or IDE stubs, since the global skills already cover it. Someone who also wants to open that same wiki in a code editor runs a normal (full-profile) install inside it separately, on their own initiative — that's the one case where "each wiki gets its own install" is still accurate. Either way, the global skills are the trigger surface; each wiki's own `_lumina/scripts/` remain the executing truth.
 
 | Platform | Location | Authority |
 |---|---|---|
@@ -43,10 +43,10 @@ The ingest/hub skill instruction is therefore transport-free: use the path from 
 ## Installer UX (CAP-8)
 
 - Prompt: new "AI Agents" choice group, entries OpenClaw and Hermes — its own flag and prompt group, deliberately separate from `--ide` (Q3 resolved).
-- After install for these targets, print a next-steps notice (plain language, per project-context §3 rule 21):
-  1. Register your wikis: `lumina wikis add <path> --name "..."` (or create one first).
-  2. How routing works: name your wiki when asking; the agent asks when unsure.
-  3. Optional: schedule a periodic health check (`lumina wikis doctor`).
+- After install for these targets, print a next-steps notice (plain language, per project-context §3 rule 21). Verified verbatim against the shipped `printAgentInstallNotice()` (`src/installer/commands.js`):
+  1. Open a chat with the assistant and tell it about a folder to remember as a wiki — existing or brand new. It asks a couple of quick questions and sets it up (`lumi-hub`'s three-phase inspect → ask → `add --provision` flow; not a raw CLI command the user runs themselves).
+  2. From then on, just say which wiki you mean when you chat — it asks if it is not sure.
+  3. Optional: check on all your wikis any time with `lumina wikis doctor`.
 - Interactive mode: pause with "Enter to acknowledge". Under `--yes`: print without pausing.
 - These targets write nothing into OpenClaw/Hermes workspace files (`AGENTS.md`, `SOUL.md`, `TOOLS.md`).
 

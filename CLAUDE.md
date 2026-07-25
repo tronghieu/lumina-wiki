@@ -69,7 +69,7 @@ No `devDependencies`. Tests use built-in `node --test` (`node:test` + `node:asse
 
 ### Workspace contract (single source of truth: `src/scripts/schemas.mjs`)
 
-`schemas.mjs` is **pure data, no I/O, no side effects** — entity types, edge types (28 directed), required frontmatter per type, exemption globs. Both `wiki.mjs` and `lint.mjs` import it. Schema changes propagate from here.
+`schemas.mjs` is **pure data, no I/O, no side effects** — entity types, edge types (42 directed), required frontmatter per type, exemption globs. Both `wiki.mjs` and `lint.mjs` import it. Schema changes propagate from here.
 
 Two write paths into the workspace, both `atomicWrite`-discipline:
 
@@ -86,13 +86,15 @@ Two write paths into the workspace, both `atomicWrite`-discipline:
 - **`log.md` append-only**, **`index.md`** updated on every ingest.
 - Sections marked `<!-- user-edited -->` are preserved on upgrade — append, don't overwrite.
 
-### Skills (v0.1 = 14 total)
+### Skills — authoritative source is `_lumina/schema/lumi-help.csv` (rendered by the installer, read by `/lumi-help skills` at runtime); `src/skills/**/SKILL.md` is what it's derived from. The list below is for orientation only — do not cite a count from it anywhere; see `docs/project-context.md` §6 for detail.
 
-- Core (6, always installed): `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`
-- Research pack (4, opt-in): `/lumi-discover`, `/lumi-survey`, `/lumi-prefill`, `/lumi-setup`
-- Reading pack (4, opt-in): `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-plot-recap`
+- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`
+- Research pack, opt-in: `/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`, `/lumi-research-topic`, `/lumi-research-rank`, `/lumi-research-watchlist`, `/lumi-research-watch-run`
+- Reading pack, opt-in: `/lumi-reading-chapter-ingest`, `/lumi-reading-character-track`, `/lumi-reading-theme-map`, `/lumi-reading-plot-recap`
+- Learning pack, opt-in: `/lumi-learning-reflect`
+- Agent-host only, never installed into a project: `lumi-hub` — see `docs/specs/spec-librarian-mode/`
 
-Each skill is `src/skills/<subtree>/<name>/SKILL.md` with frontmatter (`name`, `description`, `allowed-tools`). Body opens with "Read `README.md` at the project root before this SKILL.md."
+Each skill is `src/skills/<subtree>/<name>/SKILL.md` with frontmatter (`name`, `description`, `allowed-tools`). Body opens with "Read `README.md` at the project root before this SKILL.md." — except `lumi-hub`, which is agent-host-only, has no project root, and is exempt (copied byte-verbatim; see `ci-agent-host-isolation.mjs`).
 
 ### Entry-point stub pattern
 

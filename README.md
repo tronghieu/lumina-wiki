@@ -122,10 +122,9 @@ If you want a chat assistant such as OpenClaw or Hermes (reachable through Teleg
 npx lumina-wiki install --yes --agents openclaw   # or --agents hermes
 ```
 
-Then register each wiki and check on the fleet with the `lumina wikis` command:
+From then on, tell the assistant about a wiki right in chat — an existing one, or a brand-new one you want it to set up — and it takes care of the rest, checking the folder first and asking before it creates anything:
 
 ```bash
-lumina wikis add <path> --name "..." --alias "..."
 lumina wikis list
 lumina wikis resolve "<name or alias>"
 lumina wikis doctor

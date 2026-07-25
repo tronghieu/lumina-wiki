@@ -17,14 +17,71 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   platform's global skills directory so an always-on assistant (OpenClaw,
   Hermes) can route requests to the right wiki. This target writes no
   workspace payload (`_lumina/`, `wiki/`, entry-point stubs) — only skills.
-- Non-destructive skill install/uninstall: the installer now manages only the
-  `lumi-*` entries it owns, in any skills directory (global or project-level)
-  it touches. Foreign skills already present are never deleted, overwritten,
-  or renamed; removal is limited to previously-installed `lumi-*` skills
-  dropped from the current selection.
+- Non-destructive skill install, made real: Lumina now checks what is
+  actually sitting at each of its skill locations before touching it,
+  instead of trusting its own installation record that something there is
+  safe to replace. If the content doesn't match what Lumina itself put
+  there — a folder, a linked shortcut, or a plain file — it is left alone
+  with a warning, never deleted or overwritten. This protection applies
+  every time Lumina writes skills, not just the first time: on a fresh
+  install, a later reinstall or upgrade, removing an optional pack, or
+  switching which AI tool a wiki targets. It covers a project's own skills
+  folder as well as OpenClaw's and Hermes's shared global skills folder. If
+  removing an old entry ever fails partway through (a locked file, a
+  permissions problem), Lumina reports it and keeps going instead of
+  aborting the whole install or uninstall over one stuck file.
 - `lumina wikis doctor [name] [--fix]`: a structure and lint health check for
   one or every registered wiki, with an additive-only repair mode that only
   ever creates missing pieces — it never rewrites or deletes existing content.
+- `lumina wikis inspect <path> [--packs <list>] --json`: a read-only,
+  zero-side-effect classification of any path — `missing`, `empty`,
+  `unmanaged` (has files, but none of them are a Lumina wiki), `wiki-partial`,
+  or `wiki-ok` — plus existing file counts/samples and an `asks` list of what
+  still needs collecting before registering it. First step of the new
+  chat-driven "inspect → ask the user → register" wiki-onboarding flow, owned
+  end to end by the `lumi-hub` skill.
+- `lumina wikis add <path> --provision --yes [--name ...] [--alias ...]
+  [--description ...] [--packs ...]`: creates a new wiki at `<path>` (using a
+  lightweight setup — just the wiki itself: `README.md`, `_lumina/`, `wiki/`,
+  `raw/`, `graph/`; no per-project skill copies, no IDE entry-point files,
+  since the skills already live globally; recorded on the wiki as
+  `profile: "minimal"` so it's never mistaken for an incomplete regular
+  install) and registers it in one step; or, if `<path>` already contains a
+  valid wiki, registers it in place without installing or upgrading
+  anything, reporting a `versionSkew` when the wiki's own engine version
+  differs from the running one. Additive-only in both cases — nothing
+  pre-existing is ever overwritten. `--provision` without `--yes` exits 2 on
+  purpose, so an agent can never write files without the user having agreed
+  in chat first.
+- `lumina wikis add --provision` now handles repeats and mix-ups safely.
+  Running the exact same registration a second time (same name, same
+  folder) — which a chat assistant does routinely after a dropped
+  connection or a repeated message — succeeds quietly instead of returning
+  an error. Trying to register the same folder a second time under a
+  different name is rejected, so one wiki can never end up listed twice
+  under two different names. Both checks recognize the folder correctly
+  even when it's reached through a different letter case, a shortcut/
+  symlink, or a mounted drive pointing at the same place.
+
+### Fixed
+
+- `lumina uninstall` no longer deletes an entry-point file (`CLAUDE.md`,
+  `AGENTS.md`, `GEMINI.md`, etc.) if you've edited it since Lumina wrote it —
+  it's checked and preserved instead, the same protection re-running the
+  installer with an AI tool removed already had. This bug has existed since
+  entry-point files were introduced: uninstalling always deleted them
+  outright, silently taking any of your own notes in them with it.
+- `/lumi-migrate-legacy` — a core skill that has shipped since v0.7.0 — was
+  missing from the catalog `/lumi-help skills` reads, so it never showed up
+  in that list even though the skill itself always worked when called by
+  name. It is now listed like every other skill.
+
+### CI
+
+- The skill-catalog integrity check (`npm run test:catalog`, shipped since
+  v1.4.0) now actually runs in CI and as part of `npm run test:all`. It had
+  never been wired into either, so a catalog problem like the one above
+  could ship without any automated test catching it.
 
 ## [1.9.2] - 2026-07-18
 

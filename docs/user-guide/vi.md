@@ -573,21 +573,23 @@ Dùng cách này nếu bạn có nhiều hơn một wiki (ví dụ một wiki ch
     npx lumina-wiki install --yes --agents openclaw
     ```
 
-    (đổi `openclaw` thành `hermes` nếu bạn dùng Hermes). Bước này chỉ giúp trợ lý biết cách tìm các wiki của bạn — từng wiki vẫn cần được cài đặt bình thường như các bước ở phần trước của hướng dẫn này.
+    (đổi `openclaw` thành `hermes` nếu bạn dùng Hermes). Bước này giúp trợ lý biết cách tìm và quản lý các wiki của bạn — bạn không cần cài đặt riêng cho từng wiki nữa, trợ lý có thể tự thiết lập giúp bạn ngay trong lúc nhắn tin.
 
-2. Cho nó biết về từng wiki bạn đã có:
+2. Cho nó biết về một wiki, ngay trong lúc nhắn tin — một wiki bạn đã có sẵn, hoặc một wiki hoàn toàn mới bạn muốn nó tạo ra:
 
-    ```bash
-    lumina wikis add /duong-dan/den/wiki-cua-ban --name "Kỹ Thuật AI" --alias "kỹ thuật AI"
-    ```
+    > "Đăng ký wiki ở /duong-dan/den/wiki-cua-ban, đặt tên là Kỹ Thuật AI."
+    >
+    > "Tạo giúp tôi một wiki mới cho ghi chép nấu ăn ở ~/projects/cooking-notes."
 
-    Đặt cho wiki một tên rõ ràng và, nếu muốn, một tên gọi tắt — chọn từ ngữ bạn sẽ tự nhiên nói ra khi nhắn tin.
+    Đặt cho wiki một tên rõ ràng và, nếu muốn, một tên gọi tắt — chọn từ ngữ bạn sẽ tự nhiên nói ra khi nhắn tin. Trợ lý luôn xem qua thư mục trước khi làm bất cứ điều gì: nếu đó đã là một wiki, nó chỉ đăng ký lại; nếu thư mục đã có sẵn file của bạn, nó sẽ cho bạn biết trong đó có gì và chờ bạn đồng ý trước khi thêm wiki vào; nếu thư mục còn trống, nó sẽ hỏi wiki này dùng để làm gì rồi thiết lập luôn trong một bước.
 
 3. Sau đó chỉ cần nhắn tin bình thường. Gọi tên wiki khi bạn nhờ việc gì đó ("thêm file PDF này vào wiki kỹ thuật AI", "wiki Nấu Ăn nói gì về cách giữ dao?"), và trợ lý sẽ hỏi lại nếu chưa chắc bạn muốn nói đến wiki nào.
 
 ### Bạn nhận được gì
 
 Tài liệu bạn gửi sẽ được đưa vào đúng wiki và sắp xếp gọn gàng, giống như khi bạn tự thêm vào vậy. Bất cứ lúc nào bạn cũng có thể hỏi "tôi có những wiki nào?" hoặc "mọi thứ có ổn không?", và trợ lý sẽ kiểm tra rồi báo lại bằng lời lẽ dễ hiểu. Việc kiểm tra sức khỏe này cũng có thể được đặt chạy theo lịch, để các vấn đề nhỏ được phát hiện và xử lý sớm trước khi chồng chất.
+
+Một wiki được trợ lý thiết lập theo cách này sẽ gọn nhẹ có chủ đích — chỉ có phần wiki mà thôi, vì các kỹ năng của trợ lý đã sẵn có trên nền tảng chat của bạn rồi, không cần đặt thêm trong thư mục wiki. Nếu sau này bạn muốn mở đúng wiki đó trong một trình soạn thảo mã (Claude Code, Cursor, v.v.), hãy chạy lệnh cài đặt thông thường ở phần trước của hướng dẫn này ngay trong thư mục đó — đây là một bước riêng, tùy chọn, khi nào bạn cần thì làm.
 
 Vài điều thực tế cần biết:
 

@@ -8,17 +8,36 @@
  *   3. ids and menu codes are unique within each rendering,
  *   4. `phase`, `pack`, and `required` values are in the known sets,
  *   5. pack gating matches the template flags,
- *   6. every `after`/`before` reference resolves to an id in the same render.
+ *   6. every `after`/`before` reference resolves to an id in the same render,
+ *   7. **completeness**: the rendered id set exactly matches the shipped
+ *      project-installable skills — no skill is missing from the catalog, no
+ *      stale/renamed id lingers in it.
  *
  * Wired into `npm run test:catalog` and `npm run test:all`. Catches:
  *   - typos in `after`/`before` (would silently break Mode A's DAG),
  *   - duplicate `menu` codes (would alias keyboard shortcuts in /lumi-help),
  *   - invalid phase strings (would skip the row in phase-ordered iteration),
- *   - pack mis-conditioning (would leak research/reading rows into core-only installs).
+ *   - pack mis-conditioning (would leak research/reading rows into core-only installs),
+ *   - a shipped skill silently absent from `/lumi-help skills` (found in the
+ *     wild: `/lumi-migrate-legacy` shipped, installed, and symlinked on every
+ *     install, but had no catalog row — undiscoverable via `/lumi-help`).
+ *
+ * Check 7's expected-id set is derived by walking `src/skills/core/<name>`
+ * and `src/skills/packs/<pack>/<name>` and reading each `SKILL.md`'s `name:`
+ * frontmatter —
+ * NOT by importing `getSkillDefs()` from `src/installer/commands.js`. That
+ * function is private (not exported) and commands.js is a live edit target
+ * for other work; walking SKILL.md directly is both independent of its
+ * internal state and, arguably, a stronger check — SKILL.md is the actual
+ * shipped artifact, so this catches drift between commands.js's own hardcoded
+ * list and the CSV too, not just between the CSV and one particular list.
+ * `src/skills/agents/**` (`lumi-hub`) is deliberately excluded: it is
+ * agent-host-only, never installed into a project, and never belongs in this
+ * project-installable catalog.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { render } from '../src/installer/template-engine.js';
@@ -26,6 +45,7 @@ import { render } from '../src/installer/template-engine.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const TEMPLATE = join(REPO, 'src/templates/_lumina/schema/lumi-help.csv');
+const SKILLS_DIR = join(REPO, 'src/skills');
 
 const EXPECTED_HEADER = 'id,menu,pack,phase,after,before,required,args,outputs,description';
 const EXPECTED_COLUMNS = EXPECTED_HEADER.split(',');
@@ -70,6 +90,52 @@ function parseCsv(text) {
   });
   return { header, rows };
 }
+
+/**
+ * Extract the `name:` frontmatter value from a SKILL.md's leading `---`
+ * block. Minimal by design — this is not a general YAML parser, just enough
+ * to read one scalar field that project-context.md documents as required to
+ * equal the installed canonicalId verbatim.
+ */
+function extractSkillName(content) {
+  const fm = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return null;
+  const nameLine = fm[1].match(/^name:\s*(.+?)\s*$/m);
+  return nameLine ? nameLine[1].trim() : null;
+}
+
+/**
+ * canonicalIds of every skill directly under `dirPath` (one level of leaf
+ * directories, each containing a SKILL.md) — e.g. `src/skills/core` or
+ * `src/skills/packs/research`.
+ */
+async function skillIdsUnder(dirPath) {
+  let entries;
+  try {
+    entries = await readdir(dirPath, { withFileTypes: true });
+  } catch (_) {
+    return [];
+  }
+  const ids = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    let content;
+    try {
+      content = await readFile(join(dirPath, entry.name, 'SKILL.md'), 'utf8');
+    } catch (_) {
+      continue; // not a skill leaf (no SKILL.md)
+    }
+    const name = extractSkillName(content);
+    if (name) ids.push(name);
+  }
+  return ids;
+}
+
+// Read once, up front — independent of any per-case pack combination.
+const CORE_IDS     = await skillIdsUnder(join(SKILLS_DIR, 'core'));
+const RESEARCH_IDS = await skillIdsUnder(join(SKILLS_DIR, 'packs', 'research'));
+const READING_IDS  = await skillIdsUnder(join(SKILLS_DIR, 'packs', 'reading'));
+const LEARNING_IDS = await skillIdsUnder(join(SKILLS_DIR, 'packs', 'learning'));
 
 const cases = [
   { name: 'core only',                          vars: { pack_research: false, pack_reading: false, pack_learning: false } },
@@ -146,5 +212,22 @@ for (const c of cases) {
         );
       }
     }
+
+    // 6. completeness: the rendered id set must exactly match the shipped
+    // project-installable skills for this case's pack selection — see the
+    // module doc for why this is derived from SKILL.md, not getSkillDefs().
+    const expectedIds = new Set([
+      ...CORE_IDS,
+      ...(c.vars.pack_research ? RESEARCH_IDS : []),
+      ...(c.vars.pack_reading  ? READING_IDS  : []),
+      ...(c.vars.pack_learning ? LEARNING_IDS : []),
+    ]);
+    const missing = [...expectedIds].filter(id => !idsInCase.has(id)).sort();
+    const extra   = [...idsInCase].filter(id => !expectedIds.has(id)).sort();
+    assert.deepEqual(
+      { missing, extra }, { missing: [], extra: [] },
+      `catalog id set does not match shipped skills for "${c.name}" ` +
+      `(missing: shipped but no catalog row; extra: catalog row but not a shipped skill for this pack selection)`,
+    );
   });
 }

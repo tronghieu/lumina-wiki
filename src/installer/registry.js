@@ -15,8 +15,8 @@
  * err.code = 3.
  */
 
-import { readFile } from 'node:fs/promises';
-import { join, basename, isAbsolute } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { join, basename, isAbsolute, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { atomicWrite, ensureDir } from './fs.js';
 
@@ -150,6 +150,117 @@ export async function writeRegistry(reg) {
 }
 
 // ---------------------------------------------------------------------------
+// pathsEqual
+// ---------------------------------------------------------------------------
+
+/**
+ * True when `a` and `b` are the same absolute path, independent of
+ * Unicode normalization form. macOS/APFS commonly hands filesystem-derived
+ * strings back NFD-decomposed (diacritics split into base letter + combining
+ * mark) even when the path was originally typed/stored NFC-composed — e.g.
+ * Vietnamese "dự án" — so a plain `===` on two otherwise-identical paths can
+ * spuriously disagree. `resolve()` first so `.`/`..`/trailing-slash
+ * differences don't cause a false negative either.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+export function pathsEqual(a, b) {
+  return resolve(a).normalize('NFC') === resolve(b).normalize('NFC');
+}
+
+// ---------------------------------------------------------------------------
+// sameDirectory
+// ---------------------------------------------------------------------------
+
+/**
+ * True when two `fs.Stats`-like objects (or plain `{dev, ino}` pairs) refer
+ * to the same file/directory. Both inode numbers must be truthy — on
+ * Windows, `ino` (populated from `BY_HANDLE_FILE_INFORMATION`) can come
+ * back as `0` on some filesystems/configurations, and so can `dev`. Treating
+ * a falsy value as a real identifier would make two genuinely DIFFERENT
+ * directories that both happen to report `ino: 0` on the same `dev` compare
+ * as identical — the opposite failure mode from the one dev+ino exists to
+ * fix, and a worse one: a user registering their second real wiki would be
+ * told it's already registered as the first, with no way to proceed.
+ * Falsy/missing `dev` or `ino` is therefore INCONCLUSIVE, not a match.
+ *
+ * Pure and synchronous on purpose — this is the part of the identity check
+ * that can't be exercised against a real zero-inode filesystem in CI, so it
+ * is unit-tested directly with injected stat-like objects rather than
+ * through a real `stat()` call.
+ *
+ * @param {{dev?: number, ino?: number}} statA
+ * @param {{dev?: number, ino?: number}} statB
+ * @returns {boolean}
+ */
+export function sameFileIdentity(statA, statB) {
+  if (!statA || !statB) return false;
+  if (!statA.ino || !statB.ino) return false;
+  if (statA.dev == null || statB.dev == null) return false;
+  return statA.dev === statB.dev && statA.ino === statB.ino;
+}
+
+/**
+ * True when `a` and `b` refer to the same directory. `pathsEqual` alone is
+ * not enough to protect the "one directory, one registry entry" invariant:
+ * three ways the same directory still compares unequal as strings —
+ *   1. Case. macOS (APFS default) and Windows are case-insensitive:
+ *      "/Users/x/Wiki" and "/Users/x/wiki" are the same directory.
+ *   2. Symlinks. "/tmp/w" vs "/private/tmp/w" on macOS, or any path reached
+ *      through a symlinked parent — same directory, different string.
+ *   3. Hardlinked/bind-mounted paths — rarer, same class of problem.
+ * `stat().dev` + `.ino` (via `sameFileIdentity`) is definitive on every
+ * platform and immune to all three, with no case-sensitivity detection or
+ * platform branching needed — EXCEPT that `ino`/`dev` themselves are not
+ * always trustworthy (see `sameFileIdentity`), which is why that comparison
+ * is a separate, explicitly-inconclusive-aware step rather than a bare
+ * `===`.
+ *
+ * Fast path: `pathsEqual` first — no `stat` calls when the strings already
+ * match, so a fleet with many registered wikis doesn't pay a stat per
+ * existing entry when the common case (identical string) already resolves
+ * it. Slow path, only when the strings differ: stat both sides and defer to
+ * `sameFileIdentity`.
+ *
+ * Fallback to the (already-computed, negative) string comparison — never a
+ * bare hardcoded `false` — covers two distinct situations, kept as separate
+ * branches for clarity even though both currently resolve to the same
+ * value: (a) `ENOENT`, meaning a path genuinely doesn't exist (a registered
+ * wiki's directory may have been moved or deleted since it was added;
+ * addWiki() itself guarantees the NEW dirPath being registered always
+ * exists, since it already required the manifest to be readable there) —
+ * here the string comparison's answer is simply correct; (b) any other stat
+ * failure (e.g. a permissions error), where identity is genuinely UNKNOWN,
+ * not "different" — silently assuming "different" would let the same
+ * protected directory register twice under two different names, so this
+ * still defers to the string comparison rather than inventing a "not a
+ * duplicate" answer from an error it can't interpret.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {Promise<boolean>}
+ */
+export async function sameDirectory(a, b) {
+  const stringsEqual = pathsEqual(a, b);
+  if (stringsEqual) return true;
+
+  let statA;
+  let statB;
+  try {
+    [statA, statB] = await Promise.all([stat(a), stat(b)]);
+  } catch (err) {
+    if (err.code === 'ENOENT') return stringsEqual;
+    // Non-ENOENT (permissions, ENOTDIR, ...): identity unknown — fall back
+    // rather than silently answering "different".
+    return stringsEqual;
+  }
+
+  return sameFileIdentity(statA, statB);
+}
+
+// ---------------------------------------------------------------------------
 // Internal resolution helper (shared by resolveWiki / removeWiki)
 // ---------------------------------------------------------------------------
 
@@ -237,6 +348,30 @@ export async function addWiki({ dirPath, name, aliases = [], description = '' })
     const err = new Error(`A wiki is already registered under key "${key}".`);
     err.code = 1;
     throw err;
+  }
+
+  // A directory that is already registered under a DIFFERENT key must not
+  // get a second entry: nothing downstream benefits from it — wikis list
+  // would show the same wiki twice, doctor would check and report it
+  // twice, and an agent summarizing the fleet in chat would overcount. The
+  // key/alias checks above already catch "same name, different directory";
+  // this is the mirror case, "same directory, different name". It applies
+  // to every caller of addWiki (plain `add` and `add --provision` alike) —
+  // this is a registry invariant, not something specific to one CLI path.
+  // sameDirectory() (not just pathsEqual()) so case-insensitive filesystems,
+  // symlinked parents, and hardlinks are all caught, not just literal
+  // string/Unicode-normalization matches.
+  for (const [existingKey, entry] of Object.entries(reg.wikis)) {
+    if (await sameDirectory(entry.path, dirPath)) {
+      const err = new Error(
+        `"${dirPath}" is already registered as "${entry.name}" (key "${existingKey}"). ` +
+        `A directory can only be registered once — add "${displayName}" as an alias on that ` +
+        `entry instead of registering it again, or run "lumina wikis remove ${existingKey}" ` +
+        `first if you want to re-register this path under a different name.`,
+      );
+      err.code = 1;
+      throw err;
+    }
   }
 
   const candidates = [normalizeKey(displayName), ...aliases.map((a) => normalizeKey(a))];

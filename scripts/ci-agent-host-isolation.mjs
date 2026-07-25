@@ -15,11 +15,14 @@
  *      files survive untouched (proving no file is ever run through the
  *      template engine).
  *   3. A foreign skill directory already present in the global skills
- *      directory survives an agent install byte-identical.
+ *      directory survives an agent install byte-identical, including when
+ *      it collides with one of Lumina's own lumi-* skill names (e.g. a
+ *      non-Lumina directory sitting at "lumi-ask") — a narrower, name-only
+ *      variant of the CAP-9 defect that the skills-manifest guard closes.
  *   4. A second, identical agent install is idempotent.
  */
 
-import { mkdtemp, mkdir, rm, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile, readdir, stat, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve, relative } from 'node:path';
@@ -285,6 +288,37 @@ async function main() {
     }
     console.log('[ok] foreign skill directory survives agent install byte-identical');
 
+    // (d2) A colliding-name variant: a foreign directory sitting at one of
+    // Lumina's own lumi-* canonicalIds, in a *fresh* global skills directory
+    // (no prior agents-manifest record for it) — the case the audit found
+    // unprotected. Its own fake HOME keeps it independent of the agents
+    // manifest state built up by the earlier steps above.
+    const collisionHome = join(root, 'fake-home-collision');
+    await mkdir(collisionHome, { recursive: true });
+    const collisionHomeEnv = { HOME: collisionHome, USERPROFILE: collisionHome };
+    const collisionAgentDir = join(root, 'agent-install-collision');
+    await mkdir(collisionAgentDir, { recursive: true });
+
+    const collisionSkillsDir = join(collisionHome, '.openclaw', 'skills');
+    const collidingDir = join(collisionSkillsDir, 'lumi-ask');
+    await mkdir(collidingDir, { recursive: true });
+    const collidingMarker = join(collidingDir, 'marker.txt');
+    await writeFile(collidingMarker, 'not a Lumina skill, just shares the "lumi-ask" name\n', 'utf8');
+    const collidingBefore = await hashFile(collidingMarker);
+
+    // run() throws on a non-zero exit status, so reaching the next line
+    // already proves the collision did not abort the install (still exits 0).
+    run(process.execPath, [cliPath, ...CLASSIC_ARGS, '--agents', 'openclaw', '--directory', collisionAgentDir], { cwd: repoRoot, env: collisionHomeEnv });
+
+    const collidingAfter = await hashFile(collidingMarker);
+    if (collidingBefore !== collidingAfter) {
+      throw new Error('A foreign directory colliding with a real Lumina skill name (lumi-ask) was modified by the agent install');
+    }
+    // Every other skill still installed normally alongside the collision.
+    await access(join(collisionSkillsDir, 'lumi-init', 'SKILL.md'));
+    await access(join(collisionSkillsDir, 'lumi-hub', 'SKILL.md'));
+    console.log('[ok] a foreign directory colliding with a real lumi-* skill name survives, every other skill still installs, and the run exits 0');
+
     // (e) Snapshot, re-run once more with the same selection, confirm
     // byte-identical output (idempotency).
     const before = await snapshotPath(openclawDir, openclawDir);
@@ -292,6 +326,19 @@ async function main() {
     const after = await snapshotPath(openclawDir, openclawDir);
     assertSnapshotsEqual(before, after, 'agent install idempotency');
     console.log('[ok] agent install is idempotent');
+
+    // (f) A plain project uninstall must never reach into the global agent
+    // skills directory. sandboxA shares the same fake HOME as the OpenClaw
+    // agent install above — the real-world shape this pins: a user with
+    // OpenClaw skills installed globally and several wiki projects on the
+    // same machine. If a project uninstall ever reached into the global
+    // directory, it would take out the skills serving every one of their
+    // wikis at once, not just the one project being removed.
+    const beforeUninstall = await snapshotPath(openclawDir, openclawDir);
+    run(process.execPath, [cliPath, 'uninstall', '--yes', '--directory', sandboxA], { cwd: repoRoot, env: homeEnv });
+    const afterUninstall = await snapshotPath(openclawDir, openclawDir);
+    assertSnapshotsEqual(beforeUninstall, afterUninstall, 'openclaw global skills directory after an unrelated project uninstall');
+    console.log('[ok] a plain project uninstall leaves the --agents openclaw global skills directory untouched');
 
     console.log('[ok] ci-agent-host-isolation passed');
   } finally {

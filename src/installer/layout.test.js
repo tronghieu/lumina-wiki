@@ -10,13 +10,14 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, rm as rmPath } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, rm as rmPath, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { checkLayout, baseDirs, packDirs, seedFiles, engineCriticalPaths } from './layout.js';
+import { checkLayout, baseDirs, fullProfileDirs, packDirs, seedFiles, engineCriticalPaths } from './layout.js';
+import { installCommand } from './commands.js';
 
 const CLI = fileURLToPath(new URL('../../bin/lumina.js', import.meta.url));
 
@@ -139,6 +140,46 @@ describe('checkLayout — anti-drift gate against the real installer', () => {
 
       const report = await checkLayout(workspace);
       assert.equal(report.ok, true);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('minimal-profile install round-trips through checkLayout({ profile: "minimal" }) and omits full-only entries', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'minimal-wiki');
+    await mkdir(workspace, { recursive: true });
+    try {
+      // installCommand direct call (not the CLI) — the CLI has no --profile
+      // flag; minimal is a programmatic-only install path (multi-wiki hub).
+      await installCommand({
+        directory: workspace,
+        yes: true,
+        noUpdate: true,
+        profile: 'minimal',
+        packs: ['core', 'research'],
+        ideTargets: ['generic'],
+      });
+
+      const report = await checkLayout(workspace, ['core', 'research'], { profile: 'minimal' });
+      assert.deepEqual(report.missingDirs, []);
+      assert.deepEqual(report.missingSeedFiles, []);
+      assert.deepEqual(report.missingEngine, []);
+      assert.equal(report.ok, true);
+
+      // A minimal install genuinely has none of these — checked directly
+      // against the filesystem, not just against checkLayout's own data.
+      await assert.rejects(() => access(join(workspace, '.agents', 'skills')));
+      await assert.rejects(() => access(join(workspace, 'CLAUDE.md')));
+      await assert.rejects(() => access(join(workspace, 'AGENTS.md')));
+      await assert.rejects(() => access(join(workspace, 'GEMINI.md')));
+      await assert.rejects(() => access(join(workspace, '.cursor')));
+
+      // Checking a minimal install against the 'full' profile (default) must
+      // correctly report the full-only dir as missing, not silently pass.
+      const fullReport = await checkLayout(workspace, ['core', 'research']);
+      assert.equal(fullReport.ok, false);
+      assert.deepEqual(fullReport.missingDirs, fullProfileDirs);
     } finally {
       await cleanTmp(tmp);
     }
