@@ -26,7 +26,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { join, extname, relative } from 'node:path';
+import { join, extname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
@@ -47,6 +47,10 @@ async function hashFile(path) {
   return createHash('sha256').update(await readFile(path)).digest('hex');
 }
 
+function toPosix(p) {
+  return p.split(sep).join('/');
+}
+
 async function walkFiles(base, root = base, out = []) {
   let entries;
   try {
@@ -60,7 +64,7 @@ async function walkFiles(base, root = base, out = []) {
     if (entry.isDirectory()) {
       await walkFiles(abs, root, out);
     } else if (entry.isFile()) {
-      out.push(relative(root, abs));
+      out.push(toPosix(relative(root, abs)));
     }
   }
   return out;
@@ -359,7 +363,7 @@ test(
         assert.deepEqual(diffA.changed, [], 'wiki A must not have any file mutated');
         assert.deepEqual(
           diffA.added,
-          [relative(wikiA, firstCopyPath), relative(wikiA, secondCopyPath)].sort(),
+          [toPosix(relative(wikiA, firstCopyPath)), toPosix(relative(wikiA, secondCopyPath))].sort(),
           'wiki A must only gain the two chat-inbox attachment drops',
         );
         assert.ok(diffA.added.every((p) => p.startsWith('raw/tmp/')));
