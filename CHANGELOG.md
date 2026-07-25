@@ -65,6 +65,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `lumina install --agents openclaw|hermes` now does exactly what the docs
+  promise: a global, skills-only install. Previously it also scaffolded a
+  full wiki project (`README.md`, `wiki/`, `raw/`, `_lumina/`, …) into
+  whatever directory you happened to run it from, so running the documented
+  command from your home directory would scatter project files there. The
+  directory you run it from is now left completely untouched.
+- `lumina wikis resolve` no longer reports success for a wiki whose folder
+  has been deleted, moved, or replaced since it was registered. It used to
+  return the last-known path as if everything were fine, which could send
+  an assistant to work inside a folder that is no longer a wiki. It now
+  fails clearly (exit 2), includes the last-known path and the reason, and
+  suggests `lumina wikis doctor` or re-registering if the wiki moved.
+- Registering a wiki whose name is written entirely in a script without
+  Latin letters (for example Chinese, Cyrillic, or Japanese) used to be
+  silently filed under an empty identifier, which made a second such wiki
+  impossible to add and could route lookups to the wrong wiki. Such names
+  (and aliases) are now rejected up front with a clear message asking for
+  a `--name` or `--alias` containing Latin characters — Vietnamese with
+  diacritics works fine and is unaffected.
 - `lumina uninstall` no longer deletes an entry-point file (`CLAUDE.md`,
   `AGENTS.md`, `GEMINI.md`, etc.) if you've edited it since Lumina wrote it —
   it's checked and preserved instead, the same protection re-running the

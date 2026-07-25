@@ -136,9 +136,40 @@ describe('AI-agent global install (CAP-8)', () => {
       assert.equal(await exists(join(fakeHome, '.openclaw', 'wiki')), false);
       assert.equal(await exists(join(fakeHome, '.openclaw', '_lumina')), false);
 
-      // The classic project payload still happened normally alongside it.
-      await access(join(workspace, '_lumina', 'manifest.json'));
-      await access(join(workspace, 'wiki', 'index.md'));
+      // --agents is documented as a GLOBAL, skills-only install: the classic
+      // per-project payload must NOT be scaffolded, even though --directory
+      // pointed at a real workspace directory. --directory is accepted but
+      // unused in agents-only mode (CAP-10 fix).
+      assert.equal(await exists(join(workspace, '_lumina')), false, '--agents must not scaffold _lumina/ into --directory');
+      assert.equal(await exists(join(workspace, 'wiki')), false, '--agents must not scaffold wiki/ into --directory');
+      assert.equal(await exists(join(workspace, 'README.md')), false, '--agents must not scaffold README.md into --directory');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('with no --directory at all, the process cwd stays pristine while the global skills dir is populated', async () => {
+    const tmp = await makeTmpDir('lumina-agents-nocwd-');
+    const cwdSandbox = join(tmp, 'cwd-sandbox');
+    const fakeHome = join(tmp, 'home');
+    await mkdir(cwdSandbox, { recursive: true });
+    await mkdir(fakeHome, { recursive: true });
+    try {
+      // No --directory/--cwd flag at all: bin/lumina.js defaults it to
+      // process.cwd(), which here is cwdSandbox (via runCli's `cwd` option).
+      // Before the CAP-10 fix, this is exactly the shape of the documented
+      // bug — the classic per-project install ran into whatever directory
+      // the user happened to be in.
+      const result = runCli(
+        ['install', '--yes', '--no-update', '--agents', 'openclaw'],
+        { cwd: cwdSandbox, env: { HOME: fakeHome, USERPROFILE: fakeHome } },
+      );
+      assert.equal(result.status, 0, result.stderr);
+
+      const entries = await readdir(cwdSandbox);
+      assert.deepEqual(entries, [], `cwd must stay pristine under --agents, found: ${entries.join(', ')}`);
+
+      await access(join(fakeHome, '.openclaw', 'skills', 'lumi-init', 'SKILL.md'));
     } finally {
       await cleanTmp(tmp);
     }

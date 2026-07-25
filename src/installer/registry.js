@@ -277,13 +277,24 @@ function resolveAgainst(reg, query) {
   const normQuery = normalizeKey(query);
   const entries = Object.entries(reg.wikis);
 
-  let matches = entries.filter(([key]) => normalizeKey(key) === normQuery);
-  if (matches.length === 0) {
-    matches = entries.filter(([, entry]) => normalizeKey(entry.name) === normQuery);
-  }
-  if (matches.length === 0) {
-    matches = entries.filter(([, entry]) =>
-      (entry.aliases || []).some((alias) => normalizeKey(alias) === normQuery));
+  // An empty normalized query (e.g. a name/alias made entirely of
+  // characters normalizeKey() strips, such as CJK or Cyrillic script) must
+  // never match anything. Without this guard, a query that itself
+  // normalizes to "" would compare equal to a stored key/name/alias that
+  // also (incorrectly) normalized to "" and resolve to the wrong wiki. This
+  // is now a defense-in-depth backstop — addWiki() refuses to create a ""
+  // key or alias in the first place — but resolveAgainst() must not assume
+  // every registry entry was written after that guard existed.
+  let matches = [];
+  if (normQuery) {
+    matches = entries.filter(([key]) => normalizeKey(key) === normQuery);
+    if (matches.length === 0) {
+      matches = entries.filter(([, entry]) => normalizeKey(entry.name) === normQuery);
+    }
+    if (matches.length === 0) {
+      matches = entries.filter(([, entry]) =>
+        (entry.aliases || []).some((alias) => normalizeKey(alias) === normQuery));
+    }
   }
 
   if (matches.length === 1) {
@@ -341,6 +352,36 @@ export async function addWiki({ dirPath, name, aliases = [], description = '' })
   const packs = Object.keys(manifest.packs || {});
   const displayName = name || basename(dirPath);
   const key = normalizeKey(displayName);
+
+  // normalizeKey() only keeps [a-z0-9] (plus the đ/Đ -> d remap and NFD
+  // diacritic-stripping, which is why Vietnamese names are fine). A name
+  // written entirely in a script with no Latin/digit characters at all —
+  // Chinese, Japanese, Cyrillic, etc. — normalizes to "". Letting that
+  // through would register the wiki under key "" and let ANY other
+  // all-non-Latin name/query collide with it via resolveAgainst(), so it is
+  // rejected up front with a clear, actionable message instead.
+  if (!key) {
+    const err = new Error(
+      `Wiki name "${displayName}" contains no Latin letters or digits after normalization. ` +
+      'Provide a --name or --alias containing Latin characters (Vietnamese with diacritics is fine).',
+    );
+    err.code = 1;
+    throw err;
+  }
+
+  // Aliases are matched by the same normalizeKey() identity (see the
+  // collision check below and resolveAgainst()), so an alias that normalizes
+  // to "" has the identical collision problem as an empty key.
+  for (const alias of aliases) {
+    if (!normalizeKey(alias)) {
+      const err = new Error(
+        `Alias "${alias}" contains no Latin letters or digits after normalization. ` +
+        'Provide an alias containing Latin characters (Vietnamese with diacritics is fine).',
+      );
+      err.code = 1;
+      throw err;
+    }
+  }
 
   const reg = await readRegistry();
 
@@ -460,16 +501,25 @@ export async function resolveWiki(query) {
 /**
  * Re-read a registered wiki's own _lumina/manifest.json packs and persist
  * the refreshed list only if it changed. Tolerates an unreachable wiki path
- * (returns {refreshed: false, reason} instead of throwing).
+ * (returns {refreshed: false, reason, code} instead of throwing).
+ *
+ * `code` gives callers a stable, non-string-matched way to tell "the wiki
+ * itself is invalid" (its directory is gone/replaced, or its manifest is
+ * missing/corrupt — `code: 'manifest-unreadable'`) apart from reasons that
+ * are NOT a sign of an invalid wiki (`'not-found'`: the key vanished from the
+ * registry between the caller's lookup and this call; `'unchanged'`: nothing
+ * to persist). Callers like `resolve` in wikis-command.js need exactly this
+ * distinction to decide whether a refresh failure should fail the whole
+ * operation or just fall back to the last-known packs.
  *
  * @param {string} key
- * @returns {Promise<{refreshed: boolean, reason?: string, packs?: string[]}>}
+ * @returns {Promise<{refreshed: boolean, reason?: string, code?: 'not-found'|'manifest-unreadable'|'unchanged', packs?: string[]}>}
  */
 export async function refreshPacks(key) {
   const reg = await readRegistry();
   const entry = reg.wikis[key];
   if (!entry) {
-    return { refreshed: false, reason: `No wiki registered under key "${key}".` };
+    return { refreshed: false, reason: `No wiki registered under key "${key}".`, code: 'not-found' };
   }
 
   const manifestPath = join(entry.path, '_lumina', 'manifest.json');
@@ -478,13 +528,17 @@ export async function refreshPacks(key) {
     const raw = await readFile(manifestPath, 'utf8');
     manifest = JSON.parse(raw);
   } catch (err) {
-    return { refreshed: false, reason: `Could not read "${manifestPath}": ${err.message}` };
+    return {
+      refreshed: false,
+      reason: `Could not read "${manifestPath}": ${err.message}`,
+      code: 'manifest-unreadable',
+    };
   }
 
   const packs = Object.keys(manifest.packs || {});
   const unchanged = JSON.stringify(packs) === JSON.stringify(entry.packs || []);
   if (unchanged) {
-    return { refreshed: false, reason: 'packs unchanged' };
+    return { refreshed: false, reason: 'packs unchanged', code: 'unchanged' };
   }
 
   entry.packs = packs;

@@ -474,6 +474,50 @@ describe('addWiki', () => {
       );
     }
   });
+
+  test('rejects (err.code = 1) a name that normalizes to empty (all non-Latin script, e.g. Chinese)', async () => {
+    const dirPath = await makeFakeWiki();
+    await assert.rejects(() => addWiki({ dirPath, name: '维基百科' }), (err) => {
+      assert.equal(err.code, 1);
+      assert.match(err.message, /no Latin letters or digits/);
+      return true;
+    });
+
+    const reg = await readRegistry();
+    assert.deepEqual(reg.wikis, {}, 'nothing must be written to the registry');
+  });
+
+  test('rejects (err.code = 1) an alias that normalizes to empty, even when the name is fine', async () => {
+    const dirPath = await makeFakeWiki();
+    await assert.rejects(
+      () => addWiki({ dirPath, name: 'Wikipedia', aliases: ['维基百科'] }),
+      (err) => {
+        assert.equal(err.code, 1);
+        assert.match(err.message, /no Latin letters or digits/);
+        return true;
+      },
+    );
+
+    const reg = await readRegistry();
+    assert.deepEqual(reg.wikis, {}, 'nothing must be written to the registry');
+  });
+
+  test('a second all-non-Latin name is rejected the same way, not treated as a duplicate of the first', async () => {
+    const dirPath1 = await makeFakeWiki();
+    await assert.rejects(() => addWiki({ dirPath: dirPath1, name: '维基百科' }), (err) => {
+      assert.equal(err.code, 1);
+      return true;
+    });
+
+    const dirPath2 = await makeFakeWiki();
+    await assert.rejects(() => addWiki({ dirPath: dirPath2, name: 'Википедия' }), (err) => {
+      assert.equal(err.code, 1);
+      return true;
+    });
+
+    const reg = await readRegistry();
+    assert.deepEqual(reg.wikis, {});
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -516,6 +560,24 @@ describe('resolveWiki', () => {
       assert.ok(Array.isArray(err.candidates));
       assert.equal(err.candidates.length, 1);
       assert.equal(err.candidates[0].key, 'ai-engineering');
+      return true;
+    });
+  });
+
+  test('an all-non-Latin query (normalizes to empty) never matches anything — unknown-query error, not a silent match', async () => {
+    const dirPath = await makeFakeWiki();
+    await addWiki({ dirPath, name: 'AI Engineering' });
+
+    // Force a "" key into the registry directly, bypassing addWiki()'s own
+    // guard, to prove resolveAgainst() itself refuses to match an empty
+    // normalized query rather than relying solely on the write-side guard.
+    const reg = await readRegistry();
+    reg.wikis[''] = { name: '维基百科', aliases: [], path: dirPath, description: '', packs: [], addedAt: 'now' };
+    await writeRegistry(reg);
+
+    await assert.rejects(() => resolveWiki('维基百科'), (err) => {
+      assert.equal(err.code, 2);
+      assert.match(err.message, /No wiki found/);
       return true;
     });
   });

@@ -147,6 +147,55 @@ describe('lumina wikis — add / list / resolve', () => {
     assert.deepEqual(keys, keys.slice().sort((a, b) => a.localeCompare(b)));
   });
 
+  test('resolve exits 2 when the registered wiki directory has been deleted', async () => {
+    const workspace = await installSandboxWiki('gone-wiki');
+    const addResult = run(['wikis', 'add', workspace, '--name', 'Gone Wiki', '--json']);
+    assert.equal(addResult.status, 0, addResult.stderr);
+
+    await rm(workspace, { recursive: true, force: true });
+
+    const result = run(['wikis', 'resolve', 'Gone Wiki', '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.equal(err.code, 2);
+    assert.equal(err.lastKnownPath, workspace);
+    assert.ok(err.reason);
+    assert.match(err.error, /could not be resolved/i);
+  });
+
+  test('resolve exits 2 when the registered path exists but has no _lumina/manifest.json', async () => {
+    const workspace = await installSandboxWiki('replaced-wiki');
+    const addResult = run(['wikis', 'add', workspace, '--name', 'Replaced Wiki', '--json']);
+    assert.equal(addResult.status, 0, addResult.stderr);
+
+    // Simulate the directory being replaced by an unrelated, non-wiki folder
+    // (same path, no _lumina/manifest.json).
+    await rm(workspace, { recursive: true, force: true });
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, 'notes.txt'), 'unrelated content', 'utf8');
+
+    const result = run(['wikis', 'resolve', 'Replaced Wiki', '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.equal(err.code, 2);
+    assert.equal(err.lastKnownPath, workspace);
+  });
+
+  test('resolve exits 2 when the registered wiki manifest is corrupt JSON', async () => {
+    const workspace = await installSandboxWiki('corrupt-wiki');
+    const addResult = run(['wikis', 'add', workspace, '--name', 'Corrupt Wiki', '--json']);
+    assert.equal(addResult.status, 0, addResult.stderr);
+
+    const manifestPath = join(workspace, '_lumina', 'manifest.json');
+    await writeFile(manifestPath, '{ not valid json', 'utf8');
+
+    const result = run(['wikis', 'resolve', 'Corrupt Wiki', '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.equal(err.code, 2);
+    assert.equal(err.lastKnownPath, workspace);
+  });
+
   test('add rejects a directory that is not a Lumina wiki (exit 2)', async () => {
     const notWiki = await mkdtemp(join(tmpdir(), 'lumina-not-a-wiki-'));
     trackedDirs.push(notWiki);
@@ -155,6 +204,21 @@ describe('lumina wikis — add / list / resolve', () => {
     assert.equal(result.status, 2);
     const err = JSON.parse(result.stderr);
     assert.equal(err.code, 2);
+  });
+
+  test('add rejects an all-non-Latin name that normalizes to empty (exit 1), clean CLI error not a crash', async () => {
+    const workspace = await installSandboxWiki('all-non-latin-name');
+
+    const result = run(['wikis', 'add', workspace, '--name', '维基百科', '--json']);
+    assert.equal(result.status, 1, result.stderr);
+    const err = JSON.parse(result.stderr);
+    assert.equal(err.code, 1);
+    assert.match(err.error, /no Latin letters or digits/);
+
+    const listResult = run(['wikis', 'list', '--json']);
+    assert.equal(listResult.status, 0, listResult.stderr);
+    const listed = JSON.parse(listResult.stdout);
+    assert.deepEqual(listed.wikis, {});
   });
 
   test('add rejects a name/alias that already resolves to a different wiki (exit 1)', async () => {

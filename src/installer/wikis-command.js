@@ -104,6 +104,9 @@ function emitError(json, message, code, extra = {}) {
       process.stderr.write('Created before the failure (not rolled back):\n');
       for (const c of extra.created) process.stderr.write(`  ${c}\n`);
     }
+    if (extra.lastKnownPath) {
+      process.stderr.write(`Last-known path: ${extra.lastKnownPath}\n`);
+    }
   }
   return code;
 }
@@ -583,9 +586,24 @@ async function runResolve(args, options, json) {
   try {
     const { key, entry } = await resolveWiki(query);
     // AD-3 side effect: refresh this wiki's packs from its live manifest.
-    // Refresh failures are tolerated — resolve still succeeds with the
-    // last-known packs.
+    // Most refresh failures are tolerated — resolve still succeeds with the
+    // last-known packs (e.g. 'unchanged', or a registry read failure caught
+    // below). But `code: 'manifest-unreadable'` means the registered
+    // directory has been deleted, moved, or replaced, or its
+    // _lumina/manifest.json is missing/corrupt — i.e. the resolved path is
+    // no longer a valid wiki at all. Silently falling back there would hand
+    // a global agent skill a stale path it would treat as a live wiki, so
+    // that class must fail resolve outright instead of degrading quietly.
     const refreshResult = await refreshPacks(key).catch(() => null);
+    if (refreshResult && !refreshResult.refreshed && refreshResult.code === 'manifest-unreadable') {
+      return emitError(
+        json,
+        `Wiki "${key}" could not be resolved: its registered directory may have been deleted, moved, or replaced, or its manifest is unreadable (${refreshResult.reason}). ` +
+        `Run "lumina wikis doctor ${key}" to diagnose, or re-register with "lumina wikis add" if it moved.`,
+        2,
+        { key, lastKnownPath: entry.path, reason: refreshResult.reason },
+      );
+    }
     const packs = refreshResult && refreshResult.refreshed ? refreshResult.packs : entry.packs;
     const result = { key, ...entry, packs };
 

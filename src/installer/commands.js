@@ -184,9 +184,14 @@ async function readManifestForInstall(projectRoot) {
  * @param {string|string[]} [opts.ide]      - Alias for `opts.ideTargets`; the
  *   latter wins when both are given
  * @param {string} [opts.agents]       - Comma-separated AI-agent platform targets
- *   (CAP-8): 'openclaw', 'hermes'. Additive to the classic project install —
- *   each selected platform gets a skills-only install into its documented
- *   global skills directory; never persisted into lumina.config.yaml.
+ *   (CAP-8): 'openclaw', 'hermes'. When present, the install is AGENTS-ONLY:
+ *   the entire per-project payload (steps 1-18 below) is skipped and only a
+ *   skills-only install into each platform's documented global skills
+ *   directory runs — `opts.directory`/`opts.cwd` are accepted but unused in
+ *   this mode. Never persisted into lumina.config.yaml. (The interactive
+ *   install prompt has its own, unrelated agent-target multiselect that
+ *   remains additive to a full project install — this flag is the only
+ *   thing that triggers the agents-only fast path.)
  * @param {string} [opts.projectName]  - Hidden escape hatch; default = basename(directory)
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
@@ -200,6 +205,35 @@ async function readManifestForInstall(projectRoot) {
  *   Purpose' text; equivalent to the interactive research-purpose prompt.
  */
 export async function installCommand(opts = {}) {
+  // --agents-only fast path (CAP-8/CAP-10 fix): `--agents` documents a
+  // GLOBAL, skills-only install (README.md / user-guides "AI-agent
+  // installs"). Previously it ran the ENTIRE classic per-project install
+  // (steps 1-18 below) into the resolved directory — defaulting to
+  // process.cwd() — before ever reaching the global agent-skill install.
+  // That scaffolded README.md/wiki//raw//_lumina/ into whatever directory
+  // the user happened to be in when they ran the documented command.
+  // Fixed semantics: when `--agents` is passed, skip the whole per-project
+  // payload and run ONLY the global agent-skill install (the former step
+  // 19 logic below). `opts.directory`/`opts.cwd` are accepted but unused
+  // here. The programmatic `profile: 'minimal'` path (used by
+  // `wikis add --provision`) never sets `opts.agents`, so it is unaffected.
+  const agentTargetsOverride = parseListOption(opts.agents, '--agents');
+  if (agentTargetsOverride) {
+    validateValues(agentTargetsOverride, VALID_AGENT_TARGETS, 'agent target');
+    const agentTargets = unique(agentTargetsOverride);
+    const colors = await getColorFns();
+    const yes = Boolean(opts.yes);
+    const preambleContent = await readFile(
+      join(TEMPLATES_DIR, 'partials', 'librarian-preamble.md'), 'utf8',
+    );
+    for (const platform of agentTargets) {
+      await copySkillsToAgentPlatform(platform, preambleContent, colors);
+      printAgentInstallNotice(platform);
+      await runAgentInstallAcknowledgment({ acceptDefaults: yes });
+    }
+    return;
+  }
+
   const profile = opts.profile === 'minimal' ? 'minimal' : 'full';
   // Minimal is always non-interactive — it's driven by the global hub, never
   // a human at a terminal, so it must never reach getClack() even if the
@@ -528,6 +562,12 @@ export async function installCommand(opts = {}) {
   // global skills directory (never anything under projectRoot). Guarded
   // behind agentTargets so a classic install (no --agents / no selection)
   // is byte-identical to today (AD-7/AD-9).
+  //
+  // `opts.agents` (the CLI/programmatic flag) never reaches here — it takes
+  // the agents-only fast-path return at the top of this function instead.
+  // `agentTargets` can only be non-empty here via the interactive install's
+  // own agent-target multiselect prompt, which stays intentionally additive
+  // to a full project install.
   if (agentTargets.length > 0) {
     const preambleContent = await readFile(
       join(TEMPLATES_DIR, 'partials', 'librarian-preamble.md'), 'utf8',

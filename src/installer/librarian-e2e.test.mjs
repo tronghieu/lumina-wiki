@@ -214,7 +214,7 @@ test(
       // -----------------------------------------------------------------
       // Step 1 — agent-host install
       // -----------------------------------------------------------------
-      await t.test('step 1: agent-host install places global skills + a classic project install', async () => {
+      await t.test('step 1: agent-host install places global skills only — no project payload lands in the target directory', async () => {
         scratch = join(root, 'agent-scratch');
         await mkdir(scratch, { recursive: true });
         const result = runCli(['install', '--yes', '--no-update', '--agents', 'openclaw'], {
@@ -242,9 +242,13 @@ test(
         assert.ok(manifest.skills.includes('lumi-hub'));
         for (const name of lumiSkills) assert.ok(manifest.skills.includes(name), `manifest missing ${name}`);
 
-        // The classic project payload happened normally alongside the global install.
-        await access(join(scratch, '_lumina', 'manifest.json'));
-        await access(join(scratch, 'wiki', 'index.md'));
+        // --agents is a GLOBAL, skills-only install (CAP-10 fix): the target
+        // directory (`scratch`, passed only as the process cwd, no
+        // --directory flag) must gain no per-project payload at all.
+        assert.equal(await pathExists(join(scratch, '_lumina')), false, '--agents must not scaffold _lumina/ into the cwd');
+        assert.equal(await pathExists(join(scratch, 'wiki')), false, '--agents must not scaffold wiki/ into the cwd');
+        assert.equal(await pathExists(join(scratch, 'README.md')), false, '--agents must not scaffold README.md into the cwd');
+        assert.deepEqual(await readdir(scratch), [], 'the cwd must stay pristine under an agents-only install');
       });
 
       // -----------------------------------------------------------------

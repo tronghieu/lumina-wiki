@@ -181,6 +181,10 @@ hand off to the matching `/lumi-*` skill (`/lumi-ingest`, `/lumi-ask`,
 `/lumi-edit`, `/lumi-check`, and so on) so the request is handled by the
 skill that actually owns that workflow.
 
+If `resolve` exits 2, the registered wiki's directory is gone or its manifest
+is unreadable — do not hand off to a content skill on the stale path. Tell the
+user plainly and suggest `lumina wikis doctor` (or re-registering if it moved).
+
 ## Examples
 
 <example>
