@@ -650,6 +650,14 @@ describe('linkDirectory — options.isOwned guard', () => {
       t.skip('running as root bypasses directory permission bits');
       return;
     }
+    if (process.platform === 'win32') {
+      // chmod(dir, 0o000) does not restrict directory traversal on Windows —
+      // NTFS access checks aren't driven by the POSIX mode bits Node's chmod
+      // sets, so the child lstat below succeeds instead of failing with
+      // EACCES/EPERM, and there is no throw for assert.rejects to catch.
+      t.skip('chmod cannot reproduce a blocked-traversal lstat failure on Windows');
+      return;
+    }
 
     const dir = await makeTmpDir();
     const target = join(dir, 'target-dir');
