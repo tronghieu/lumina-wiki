@@ -19,7 +19,7 @@ knowledge; they surface relationships that already exist in the graph.
 
 ## Context
 
-Read `README.md` first. Work only from wiki pages and graph edges that are
+Read `README.md` at the project root before this SKILL.md. Work only from wiki pages and graph edges that are
 already in the workspace. Do not read `raw/` source files and do not invent
 entries that lack a wiki page. If the user wants to include something not yet
 ingested, tell them to run `/lumi-ingest` first, then return here.

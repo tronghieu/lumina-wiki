@@ -24,6 +24,10 @@ All graph and frontmatter mutations go through `_lumina/scripts/wiki.mjs`. Never
 `wiki/graph/edges.jsonl` directly. `add-edge` is idempotent and writes reverse edges
 automatically except terminal/symmetric cases.
 
+## Context
+
+Read `README.md` at the project root before this SKILL.md.
+
 ## When to use
 
 Invoke when the user hands you a book chapter — either as raw text pasted inline, a

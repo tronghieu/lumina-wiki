@@ -113,7 +113,7 @@ lumina-wiki/
 **`src/scripts/schemas.mjs`** defines the entire wiki contract:
 
 - **Entity types:** `source`, `concept`, `person`, `summary`, `topic` (+ pack-specific).
-- **Edge types:** 28 directed relationships (e.g., `cites`, `defines`, `relates_to`).
+- **Edge types:** 42 directed relationships (e.g., `cites`, `builds_on`, `related_to`).
 - **Frontmatter requirements:** Mandatory fields per entity type.
 - **Exemption globs:** Paths that don't require bidirectional reverse links (foundations/\*\*, outputs/\*\*, external URLs).
 

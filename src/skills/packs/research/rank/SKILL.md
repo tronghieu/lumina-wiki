@@ -23,7 +23,7 @@ You score papers; you never change a paper's summary, claims, or other content.
 
 ## Context
 
-Read `README.md` first. This skill is available only when the research pack is
+Read `README.md` at the project root before this SKILL.md. This skill is available only when the research pack is
 installed. It works on papers already in `wiki/sources/`; if a paper has not
 been ingested yet, suggest `/lumi-ingest` first.
 

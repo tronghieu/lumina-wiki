@@ -23,6 +23,8 @@ Lumina-Wiki is an **npm-published, multi-IDE wiki scaffolder** that installs an 
 
 The installer projects a single source-of-truth template tree onto whichever CLI agent the user picks (Claude Code, AGENTS.md-compatible CLIs — Codex/Amp/Crush/Goose/Auggie/OpenCode/etc., Gemini CLI, Cursor, generic). After install, agents drive the wiki by invoking skills (`/lumi-*` slash commands) which call the Node/Python tools via Bash.
 
+A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/installer/wikis-command.js` + `src/installer/registry.js`) lets an always-on chat agent (OpenClaw, Hermes) register, create, and health-check many wikis across arbitrary paths from one shared registry (`~/.lumina/wikis.json`). A wiki created this way does **not** need a separate `lumina-wiki install` step — `lumina wikis add --provision --yes` scaffolds it directly, using the installer's `minimal` profile (no per-wiki skill copies, no IDE stub files, since the skills already live in the platform's global skills directory). Full contract: `docs/specs/spec-librarian-mode/`.
+
 ---
 
 ## 2. Technology stack & versions
@@ -192,21 +194,25 @@ Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edg
 
 Single source of truth. **Pure data, no I/O, no side effects.** Safe to import anywhere.
 
-**Entity types (per pack):**
-- core: `sources`, `concepts`, `people`, `summary`, `outputs`, `graph`
+**Entity types (per pack)** — derived from `ENTITY_DIRS` in `schemas.mjs`:
+- core: `sources`, `concepts`, `people`, `summary`, `outputs`, `graph`, `readings`
 - research: `foundations`, `topics`
 - reading: `chapters`, `characters`, `themes`, `plot`
+- learning: `reflections`
 
-**Edge types:** 28 directed types. Symmetric edges (`same_problem_as`, `related_to`, `appears_with`) stored once with sorted endpoints. Terminal edges (`grounded_in`, `produced`, `see_also_url`) have `reverse: null`. `cites`/`cited_by` go to `citations.jsonl`; everything else to `edges.jsonl`.
+**Edge types:** 42 directed types. Symmetric edges (`same_problem_as`, `similar_method_to`, `complementary_to`, `compares_against`, `related_to`, `appears_with`) stored once with sorted endpoints. Terminal edges (`grounded_in`, `produced`, `see_also_url`, `appears_in`) have `reverse: null`. `cites`/`cited_by` go to `citations.jsonl`; everything else to `edges.jsonl`.
 
 **Exemption globs:** `foundations/**`, `outputs/**`, `*://*` — the `exempt-only` bidi mode default.
 
-**Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO):
+**Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO) — `outputs` and `graph` have no `REQUIRED_FRONTMATTER` entry (not schema-enforced, absent from the table below by design, not by omission):
 - `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?, ns?, value?}]` — append on every (re-)ingest, never replace; `ns/value` (added 2026-05) record *which* external identifier the provider returned, must appear together or both are dropped)
 - `concepts`: + `key_sources[]`, `related_concepts[]`
 - `people`: + `key_sources[]`, optional `affiliations[]`
 - `summary`: + `covers[]`
-- pack-gated: `chapters` (+ `book`, `number`), `characters` (+ `book`, optional `first_seen`), `themes` (+ `book`), `plot` (+ `book`, `up_to_chapter`)
+- `readings`: + `source` (parent source slug), `part` (unit order within the source), optional `pages`
+- pack-gated, research: `foundations` (optional `aliases[]`), `topics` (+ `key_sources[]`)
+- pack-gated, reading: `chapters` (+ `book`, `number`), `characters` (+ `book`, optional `first_seen`), `themes` (+ `book`), `plot` (+ `book`, `up_to_chapter`)
+- pack-gated, learning: `reflections` (+ `related_concepts[]`, `related_sources[]`, `evolution_count`)
 
 No edge type currently has `confidenceRequired: true` — L08 always passes on stock schemas.
 
@@ -345,9 +351,11 @@ All tools follow these contracts:
 
 ---
 
-## 6. Skill inventory (v0.1 = 14 skills total)
+## 6. Skill inventory (grows over time — treat this as a snapshot, not a ceiling)
 
-**Core (6) — always installed:**
+`_lumina/schema/lumi-help.csv` (rendered by the installer from `src/templates/_lumina/schema/lumi-help.csv`, read at runtime by `/lumi-help skills`) is the **authoritative, currently-installed** skill catalog. The table below is for orientation only — do not hardcode a total count anywhere else from it; the count has already gone stale once (the old "v0.1 = 14 skills total" heading). Skills have been added steadily post-v0.1: `/lumi-migrate-legacy` (v0.7), `/lumi-verify` (v0.9), `/lumi-help` (v1.4), the Learning pack (v1.5), and several research-pack skills (`/lumi-research-topic` v1.1, `/lumi-research-watchlist` v1.0, `/lumi-research-watch-run` v1.6, `/lumi-research-rank` v1.7) — see `CHANGELOG.md` for the full, exact history.
+
+**Core — always installed:**
 
 | Skill | Slash command | Purpose |
 |---|---|---|
@@ -357,18 +365,24 @@ All tools follow these contracts:
 | edit | `/lumi-edit` | Edit one wiki page with schema validation + edge integrity preserved |
 | check | `/lumi-check` | Run `lint.mjs`, auto-fix safe checks (L01/L03/L06/L07/L09), surface advisory issues |
 | reset | `/lumi-reset` | Dry-run-first destructive reset across 5 scopes |
+| verify | `/lumi-verify` | Cross-check wiki claims against their cited raw sources; advisory only, never auto-edits |
+| migrate-legacy | `/lumi-migrate-legacy` | LLM-driven backfill of provenance/confidence and other legacy-schema gaps on existing entries |
+| help | `/lumi-help` | Orient the user, recommend next action, answer Lumina-itself questions; renders the skill catalog |
 
-**Research pack (5) — opt-in, adds Python tools + `topics/`, `foundations/` page types:**
+**Research pack — opt-in, adds Python tools + `topics/`, `foundations/` page types:**
 
 | Skill | Purpose |
 |---|---|
 | `/lumi-research-setup` | Check Python deps, populate API-key env files |
 | `/lumi-research-discover` | Find + rank candidate sources; stops at shortlist |
 | `/lumi-research-watchlist` | Help users configure topics for scheduled discovery |
+| `/lumi-research-watch-run` | Run one scheduled-discovery pass over the watchlist (topics + RSS/Atom feeds) |
 | `/lumi-research-prefill` | Seed `wiki/foundations/` terminal pages |
 | `/lumi-research-survey` | Narrative synthesis from existing wiki |
+| `/lumi-research-topic` | Cluster existing concepts and sources into a thematic topic page |
+| `/lumi-research-rank` | Score a source's citation influence and 4C quality onto its own page |
 
-**Reading pack (4) — opt-in, no new tools, adds `chapters/`, `characters/`, `themes/`, `plot/` page types:**
+**Reading pack — opt-in, no new tools, adds `chapters/`, `characters/`, `themes/`, `plot/` page types:**
 
 | Skill | Purpose |
 |---|---|
@@ -377,12 +391,25 @@ All tools follow these contracts:
 | `/lumi-reading-theme-map` | Build theme cluster pages; threshold ≥2 chapters |
 | `/lumi-reading-plot-recap` | Spoiler-safe recap up to (not including) cursor chapter |
 
+**Learning pack — opt-in, adds `reflections/` page type (v1.5):**
+
+| Skill | Purpose |
+|---|---|
+| `/lumi-learning-reflect` | Guide a self-reflection session; create or update a personal reflection page |
+
+**Agent-host only — never installed into a project; ships into a chat platform's global skills directory instead (`--agents openclaw\|hermes`):**
+
+| Skill | Purpose |
+|---|---|
+| `lumi-hub` | Knowledge-assistant front door: list/inspect/register/create wikis, fleet health — contract in `docs/specs/spec-librarian-mode/` |
+
 ### Skill naming convention (canonical IDs)
 
-Source tree is hierarchical (`src/skills/core/<name>/`, `src/skills/packs/<pack>/<name>/`); the **installed `canonicalId`** is flat under `.agents/skills/` and follows a pack-prefix rule:
+Source tree is hierarchical (`src/skills/core/<name>/`, `src/skills/packs/<pack>/<name>/`, `src/skills/agents/<name>/`); the **installed `canonicalId`** is flat under `.agents/skills/` (or, for `lumi-hub`, a platform's global skills directory) and follows a pack-prefix rule:
 
-- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`.
-- **Pack skills** insert the pack name between `lumi-` and the leaf: `lumi-<pack>-<name>`. Examples: `lumi-research-discover`, `lumi-research-survey`, `lumi-reading-chapter-ingest`, `lumi-reading-plot-recap`.
+- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`, `lumi-verify`, `lumi-migrate-legacy`, `lumi-help`.
+- **Pack skills** insert the pack name between `lumi-` and the leaf: `lumi-<pack>-<name>`. Examples: `lumi-research-discover`, `lumi-research-survey`, `lumi-reading-chapter-ingest`, `lumi-reading-plot-recap`, `lumi-learning-reflect`.
+- **`lumi-hub`** is the one skill with neither prefix pattern — it is not part of any pack and is never installed into `.agents/skills/`.
 
 The slash command equals the `canonicalId` verbatim (`/lumi-research-discover`). The source leaf directory (`src/skills/packs/research/discover/`) does **not** carry the pack prefix — only the rendered output does. The mapping is centralized in `getSkillDefs()` in `src/installer/commands.js`; SKILL.md `name:` frontmatter must match the `canonicalId`, not the leaf.
 
@@ -403,7 +430,7 @@ allowed-tools:              # explicit allowlist (Bash, Read, Write, Edit)
 ---
 ```
 
-Body opens with: "Read `README.md` at the project root before this SKILL.md." then `## Role`, `## Context`, procedural steps.
+Body opens with: "Read `README.md` at the project root before this SKILL.md." then `## Role`, `## Context`, procedural steps. **Exception: `lumi-hub`** — it runs outside any single wiki, has no project root to read a README from, and is exempt by design; `ci-agent-host-isolation.mjs` asserts it is copied byte-verbatim with no anchor line and no routing-preamble injection. Do not add the opening line to it.
 
 (historical — fixed; all pack skills now declare `allowed-tools`.) New pack skills should include it explicitly.
 

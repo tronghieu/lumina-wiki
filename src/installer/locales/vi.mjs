@@ -30,6 +30,13 @@ export default {
   'prompt.ide.option.generic.label':           'Chung',
   'prompt.ide.option.generic.hint':            'Chỉ README.md',
 
+  // ── Nền tảng trợ lý AI ──────────────────────────────────────────────────────
+  'prompt.agent_targets.message':              'Nền tảng trợ lý AI (tùy chọn — cài kỹ năng ở phạm vi toàn máy cho trợ lý chat luôn hoạt động)',
+  'prompt.agent_targets.option.openclaw.label':'OpenClaw',
+  'prompt.agent_targets.option.openclaw.hint': 'cài kỹ năng vào ~/.openclaw/skills',
+  'prompt.agent_targets.option.hermes.label':  'Hermes Agent',
+  'prompt.agent_targets.option.hermes.hint':   'cài kỹ năng vào ~/.hermes/skills',
+
   // ── Packs ──────────────────────────────────────────────────────────────────
   'prompt.packs.message':                      'Gói cài đặt (core luôn được bao gồm)',
   'prompt.packs.option.research.label':        'Research',

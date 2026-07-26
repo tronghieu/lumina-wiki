@@ -31,6 +31,13 @@ export default {
   'prompt.ide.option.generic.label':           'Generic',
   'prompt.ide.option.generic.hint':            'README.md only',
 
+  // ── AI agent platforms ──────────────────────────────────────────────────────
+  'prompt.agent_targets.message':              'AI agent platforms (optional — installs skills globally for an always-on chat assistant)',
+  'prompt.agent_targets.option.openclaw.label':'OpenClaw',
+  'prompt.agent_targets.option.openclaw.hint': 'installs skills to ~/.openclaw/skills',
+  'prompt.agent_targets.option.hermes.label':  'Hermes Agent',
+  'prompt.agent_targets.option.hermes.hint':   'installs skills to ~/.hermes/skills',
+
   // ── Packs ──────────────────────────────────────────────────────────────────
   'prompt.packs.message':                      'Packs to install (core is always included)',
   'prompt.packs.option.research.label':        'Research',

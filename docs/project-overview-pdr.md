@@ -59,10 +59,12 @@ Three-step loop:
 - **Installer** (`bin/lumina.js`): Cross-platform, atomic file writes, symlink fallback ladder (Windows compat).
 - **Wiki Engine** (`src/scripts/wiki.mjs`): Graph mutation, frontmatter validation, bidirectional link enforcement.
 - **Linter** (`src/scripts/lint.mjs`): 9 checks for schema compliance, slug format, missing reverse links, index freshness.
-- **Skills** (14 total; v1.1.0):
-  - **Core** (6, always installed): `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`
-  - **Research pack** (4, opt-in): `/lumi-discover`, `/lumi-survey`, `/lumi-prefill`, `/lumi-research-topic`
-  - **Reading pack** (4, opt-in): `/lumi-chapter-ingest`, `/lumi-character-track`, `/lumi-theme-map`, `/lumi-plot-recap`
+- **Skills** (grows over time — `_lumina/schema/lumi-help.csv`, rendered by the installer and read by `/lumi-help skills`, is the authoritative current list; see `docs/project-context.md` §6):
+  - **Core** (always installed): `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`
+  - **Research pack** (opt-in): `/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`, `/lumi-research-topic`, `/lumi-research-rank`, `/lumi-research-watchlist`, `/lumi-research-watch-run`
+  - **Reading pack** (opt-in): `/lumi-reading-chapter-ingest`, `/lumi-reading-character-track`, `/lumi-reading-theme-map`, `/lumi-reading-plot-recap`
+  - **Learning pack** (opt-in): `/lumi-learning-reflect`
+  - **Agent-host only**, never installed into a project (`--agents openclaw|hermes`): `lumi-hub`
 - **Python Tools**:
   - **Core:** `extract_pdf.py` (text extraction from PDFs; shipped with all installs).
   - **Research pack:** `prepare_source.py` (local source preparation — .pdf, .tex, .html, .md, .txt), `fetch_arxiv.py`, `fetch_s2.py`, `fetch_wikipedia.py`, `fetch_deepxiv.py`.

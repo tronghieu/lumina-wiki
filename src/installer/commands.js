@@ -14,15 +14,17 @@
  *   7. Print summary tree
  */
 
-import { readFile, writeFile, rename, unlink, rm, access, copyFile } from 'node:fs/promises';
-import { join, resolve, relative, dirname, basename } from 'node:path';
+import { readFile, writeFile, rename, unlink, rm, access, lstat, realpath, readlink } from 'node:fs/promises';
+import { join, resolve, relative, dirname, basename, isAbsolute } from 'node:path';
 import { constants as fsConstants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 import {
   atomicWrite,
+  atomicCopyFile,
   safePath,
   ensureDir,
   copyDir,
@@ -51,10 +53,12 @@ import {
   runUninstallConfirm,
   runReadmeMergePrompt,
   runUpgradeModePrompt,
+  runAgentInstallAcknowledgment,
   LOCALE_LANGUAGE_NAME,
 } from './prompts.js';
 import { VALID_LOCALES, loadLocale } from './locales.js';
 import { checkForUpdate } from './update-check.js';
+import { readAgentsManifest, writeAgentsManifest } from './agents-manifest.js';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -128,6 +132,10 @@ const LUMINA_DIRS = [
 
 const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
+// AI-agent global-skills targets (CAP-8). Deliberately a separate set from
+// VALID_IDE_TARGETS — these never write a project workspace payload, only a
+// platform's documented global skills directory (see platform-integration.md).
+const VALID_AGENT_TARGETS = new Set(['openclaw', 'hermes']);
 const RESEARCH_TOOL_FILES = [
   '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
   'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
@@ -173,13 +181,65 @@ async function readManifestForInstall(projectRoot) {
  * @param {boolean} opts.noUpdate      - Skip update check
  * @param {string|string[]} [opts.packs] - Pack override for non-interactive installs
  * @param {string|string[]} [opts.ideTargets] - IDE target override
+ * @param {string|string[]} [opts.ide]      - Alias for `opts.ideTargets`; the
+ *   latter wins when both are given
+ * @param {string} [opts.agents]       - Comma-separated AI-agent platform targets
+ *   (CAP-8): 'openclaw', 'hermes'. When present, the install is AGENTS-ONLY:
+ *   the entire per-project payload (steps 1-18 below) is skipped and only a
+ *   skills-only install into each platform's documented global skills
+ *   directory runs — `opts.directory`/`opts.cwd` are accepted but unused in
+ *   this mode. Never persisted into lumina.config.yaml. (The interactive
+ *   install prompt has its own, unrelated agent-target multiselect that
+ *   remains additive to a full project install — this flag is the only
+ *   thing that triggers the agents-only fast path.)
  * @param {string} [opts.projectName]  - Hidden escape hatch; default = basename(directory)
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
  * @param {boolean} [opts.searchParents] - Find an enclosing Lumina workspace when no directory flag was used
+ * @param {'full'|'minimal'} [opts.profile] - Install profile. 'full' (default)
+ *   is today's behavior, byte-identical. 'minimal' scaffolds a wiki managed
+ *   entirely by globally-installed agent skills (CAP-8): no .agents/skills,
+ *   no per-project skill copies, no IDE stub files. Implies non-interactive
+ *   (never reaches the @clack/prompts UI), same as --yes.
+ * @param {string} [opts.purpose] - Non-interactive README '## Project
+ *   Purpose' text; equivalent to the interactive research-purpose prompt.
  */
 export async function installCommand(opts = {}) {
-  const { yes = false, reLink = false } = opts;
+  // --agents-only fast path (CAP-8/CAP-10 fix): `--agents` documents a
+  // GLOBAL, skills-only install (README.md / user-guides "AI-agent
+  // installs"). Previously it ran the ENTIRE classic per-project install
+  // (steps 1-18 below) into the resolved directory — defaulting to
+  // process.cwd() — before ever reaching the global agent-skill install.
+  // That scaffolded README.md/wiki//raw//_lumina/ into whatever directory
+  // the user happened to be in when they ran the documented command.
+  // Fixed semantics: when `--agents` is passed, skip the whole per-project
+  // payload and run ONLY the global agent-skill install (the former step
+  // 19 logic below). `opts.directory`/`opts.cwd` are accepted but unused
+  // here. The programmatic `profile: 'minimal'` path (used by
+  // `wikis add --provision`) never sets `opts.agents`, so it is unaffected.
+  const agentTargetsOverride = parseListOption(opts.agents, '--agents');
+  if (agentTargetsOverride) {
+    validateValues(agentTargetsOverride, VALID_AGENT_TARGETS, 'agent target');
+    const agentTargets = unique(agentTargetsOverride);
+    const colors = await getColorFns();
+    const yes = Boolean(opts.yes);
+    const preambleContent = await readFile(
+      join(TEMPLATES_DIR, 'partials', 'librarian-preamble.md'), 'utf8',
+    );
+    for (const platform of agentTargets) {
+      await copySkillsToAgentPlatform(platform, preambleContent, colors);
+      printAgentInstallNotice(platform);
+      await runAgentInstallAcknowledgment({ acceptDefaults: yes });
+    }
+    return;
+  }
+
+  const profile = opts.profile === 'minimal' ? 'minimal' : 'full';
+  // Minimal is always non-interactive — it's driven by the global hub, never
+  // a human at a terminal, so it must never reach getClack() even if the
+  // caller forgot --yes.
+  const yes = Boolean(opts.yes) || profile === 'minimal';
+  const { reLink = false } = opts;
   const initialDir = opts.directory ?? opts.cwd ?? process.cwd();
   const requestedRoot = resolve(initialDir);
   let projectRoot = opts.searchParents
@@ -249,8 +309,15 @@ export async function installCommand(opts = {}) {
     isUpgrade = existingManifest !== null;
   }
   answers = applyInstallOverrides(answers, opts);
+  // Raw skills-manifest.csv rows (not the synthesized previousManagedSkillRows
+  // below, which back-fills a row for every currently-defined skill whether
+  // or not it was actually recorded — unsuitable for the ownership guard,
+  // which needs to know precisely what Lumina previously recorded owning).
+  // readSkillsManifest already returns [] when the file is missing, so this
+  // is safe to call unconditionally, not just on upgrade.
+  const rawSkillsManifestRows = await readSkillsManifest(projectRoot);
   const previousSkillRows = isUpgrade
-    ? previousManagedSkillRows(await readSkillsManifest(projectRoot), existingManifest)
+    ? previousManagedSkillRows(rawSkillsManifestRows, existingManifest)
     : [];
   const previousFileRows = isUpgrade ? await readFilesManifest(projectRoot) : [];
 
@@ -287,7 +354,7 @@ export async function installCommand(opts = {}) {
     }
   }
 
-  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
+  const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale, agentTargets = [] } = answers;
   const hasResearch = packs.includes('research');
   const hasReading  = packs.includes('reading');
   const hasLearning = packs.includes('learning');
@@ -310,8 +377,10 @@ export async function installCommand(opts = {}) {
     ...CORE_WIKI_DIRS,
     ...CORE_RAW_DIRS,
     ...LUMINA_DIRS,
-    '.agents/skills',
   ];
+  if (profile === 'full') {
+    dirsToCreate.push('.agents/skills');
+  }
   if (hasResearch) {
     dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS);
   }
@@ -369,11 +438,21 @@ export async function installCommand(opts = {}) {
   // 8.5. Copy CHANGELOG.md so /lumi-migrate-legacy can read it offline
   await copyChangelog(projectRoot);
 
-  // 9. Copy skills
-  const skillRows = await copySkills(projectRoot, packs, {
-    claudeCode: ideTargets.includes('claude_code'),
-  });
-  await reconcileRemovedSkills(projectRoot, previousSkillRows, skillRows);
+  // 9. Copy skills — minimal profile has no per-project skill copies at all
+  // (the workspace is managed entirely by globally-installed agent skills).
+  const skillRows = profile === 'full'
+    ? await copySkills(projectRoot, packs, {
+        claudeCode: ideTargets.includes('claude_code'),
+        colors,
+      })
+    : [];
+  // minimal profile installs no per-project skills at all, so nothing from
+  // the current pack selection is "wanted" at this call site — everything
+  // previously managed is obsolete, same as before this guard existed.
+  const wantedSkillIds = profile === 'full'
+    ? new Set(getSkillDefs(packs).map(skill => skill.canonicalId))
+    : new Set();
+  await reconcileRemovedSkills(projectRoot, previousSkillRows, skillRows, wantedSkillIds, colors);
 
   // 10. Copy Python tools (core: extract_pdf; research pack: discovery/fetchers)
   await copyTools(projectRoot, { research: hasResearch });
@@ -431,6 +510,7 @@ export async function installCommand(opts = {}) {
     updatedAt:        now,
     packs:            Object.fromEntries(packs.map(p => [p, { version: PKG.version, source: 'built-in' }])),
     ideTargets,
+    profile,
     symlinkStrategies,
     resolvedPaths: {
       projectRoot,
@@ -476,6 +556,28 @@ export async function installCommand(opts = {}) {
   if (!sawPackPrompt && uninstalledPacks.length > 0) {
     console.log(t('hint.packs_available', { packs: uninstalledPacks.join(', ') }));
   }
+
+  // 19. AI-agent global skill installs (CAP-8) — fully independent of the
+  // project payload above: writes only into each platform's documented
+  // global skills directory (never anything under projectRoot). Guarded
+  // behind agentTargets so a classic install (no --agents / no selection)
+  // is byte-identical to today (AD-7/AD-9).
+  //
+  // `opts.agents` (the CLI/programmatic flag) never reaches here — it takes
+  // the agents-only fast-path return at the top of this function instead.
+  // `agentTargets` can only be non-empty here via the interactive install's
+  // own agent-target multiselect prompt, which stays intentionally additive
+  // to a full project install.
+  if (agentTargets.length > 0) {
+    const preambleContent = await readFile(
+      join(TEMPLATES_DIR, 'partials', 'librarian-preamble.md'), 'utf8',
+    );
+    for (const platform of agentTargets) {
+      await copySkillsToAgentPlatform(platform, preambleContent, colors);
+      printAgentInstallNotice(platform);
+      await runAgentInstallAcknowledgment({ acceptDefaults: yes });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,31 +616,46 @@ export async function uninstallCommand(opts = {}) {
   try {
     manifest = await readManifest(projectRoot);
   } catch (_) {}
+  // files-manifest.csv (SHA256 per managed file) lives under _lumina/_state/
+  // and is about to be deleted along with the rest of _lumina/ — read it
+  // now, before that happens, so the stub-file removal below can still tell
+  // an unmodified CLAUDE.md/AGENTS.md/etc. from one the user has edited.
+  const previousFileRows = await readFilesManifest(projectRoot).catch(() => []);
 
   // Remove _lumina/ (except we preserve wiki/ and raw/)
   await rm(join(projectRoot, '_lumina'), { recursive: true, force: true });
   console.log(colors.green(t('uninstall.removed_lumina')));
 
-  // Remove .agents/
-  await rm(join(projectRoot, '.agents'), { recursive: true, force: true });
+  // Remove .claude/skills/lumi-* links BEFORE .agents/skills/<id> — the
+  // .claude side judges ownership partly by resolving each symlink against
+  // its .agents/skills/<id> target (see isLuminaOwnedSkillEntry). Deleting
+  // .agents/skills first would make that target vanish out from under a
+  // perfectly legitimate link, misjudging Lumina's own symlink as foreign
+  // and leaving it behind, dangling, on every single uninstall.
+  await removeOwnedClaudeSkillLinks(projectRoot, colors);
+
+  // Remove only the lumi-* skills this install owns (CAP-9 / AD-8) — never a
+  // whole-directory wipe, which would destroy any foreign skill a user or
+  // another tool placed in .agents/skills/.
+  await removeOwnedAgentsSkills(projectRoot, colors);
   console.log(colors.green(t('uninstall.removed_agents')));
 
-  // Remove .claude/skills/lumi-* symlinks
-  try {
-    const claudeSkillsDir = join(projectRoot, '.claude', 'skills');
-    const entries = await readdir_safe(claudeSkillsDir);
-    for (const entry of entries) {
-      if (entry.startsWith('lumi-')) {
-        await rm(join(claudeSkillsDir, entry), { recursive: true, force: true });
-      }
-    }
-  } catch (_) {}
-
-  // Remove IDE stub files
+  // Remove IDE stub files — but CLAUDE.md/AGENTS.md/etc. are not purely
+  // Lumina artifacts the way _lumina/ or a lumi-* skill directory is.
+  // Lumina only owns a small rendered stub inside them; a user routinely
+  // adds their own project instructions to the same file. Confirming the
+  // uninstall confirms removing Lumina — it says nothing about the user's
+  // own notes, which they never thought of as ours to delete. Use the same
+  // SHA256 content-integrity check the upgrade path already applies when an
+  // IDE target is dropped (removeManagedFileIfUnchanged): unmodified since
+  // install -> remove; modified -> preserve, with a warning. This makes
+  // uninstall at least as careful as a routine upgrade, not less — losing
+  // unsaved work should never be easier during the permanent, one-way
+  // operation than during a routine reinstall.
   const ideTargets = manifest?.ideTargets ?? ['claude_code'];
   const stubFiles = ideTargetStubFiles(ideTargets);
   for (const f of stubFiles) {
-    await unlink(join(projectRoot, f)).catch(() => {});
+    await removeManagedFileIfUnchanged(projectRoot, f, previousFileRows, colors, t);
   }
 
   // Handle README
@@ -822,10 +939,25 @@ function applyInstallOverrides(answers, opts) {
     next.packs = unique(['core', ...(next.packs || []).filter(p => p !== 'core')]);
   }
 
-  const ideOverride = parseListOption(opts.ideTargets, '--ide-targets');
+  // `opts.ide` is accepted as an alias for `opts.ideTargets` — some callers
+  // (e.g. the multi-wiki hub's provisioning path) spell it that way. The
+  // canonical `opts.ideTargets` wins when both are present.
+  const ideOverride = parseListOption(opts.ideTargets ?? opts.ide, '--ide-targets');
   if (ideOverride) {
     validateValues(ideOverride, VALID_IDE_TARGETS, 'IDE target');
     next.ideTargets = unique(ideOverride);
+  }
+
+  // AI-agent global-skills targets (CAP-8). --agents is a raw comma-separated
+  // string (see bin/lumina.js); never persisted into lumina.config.yaml (AD-9)
+  // — every invocation decides fresh, so an upgrade path with no override
+  // simply defaults to none selected.
+  const agentOverride = parseListOption(opts.agents, '--agents');
+  if (agentOverride) {
+    validateValues(agentOverride, VALID_AGENT_TARGETS, 'agent target');
+    next.agentTargets = unique(agentOverride);
+  } else {
+    next.agentTargets = unique(next.agentTargets || []);
   }
 
   if (opts.projectName) next.projectName = String(opts.projectName);
@@ -836,10 +968,17 @@ function applyInstallOverrides(answers, opts) {
     next.documentOutputLang = validateLanguageInput(opts.documentOutputLang, '--document-output-language');
   }
 
+  // Non-interactive equivalent of the research-purpose prompt (used by the
+  // global hub's minimal-profile installs, but not restricted to them).
+  // Absent/empty → unchanged, preserving today's '' fallback.
+  if (opts.purpose !== undefined && opts.purpose !== null && opts.purpose !== '') {
+    next.researchPurpose = String(opts.purpose);
+  }
+
   return next;
 }
 
-export { applyInstallOverrides, validateLanguageInput };
+export { applyInstallOverrides, validateLanguageInput, removeManagedSkillLink, removeOwnedAgentsSkills, removeOwnedClaudeSkillLinks };
 
 /**
  * If the loaded locale module has `_meta.translation_status === 'ai-draft'`,
@@ -974,7 +1113,7 @@ async function renderAndWriteReadme(projectRoot, templateVars, purpose, isUpgrad
       process.exit(0);
     }
     if (action === 'backup') {
-      await copyFile(readmePath, readmePath + '.bak');
+      await atomicCopyFile(readmePath, readmePath + '.bak');
     }
     if (action === 'merge') {
       const newSchemaContent = render(extractSchemaTemplate(templateContent), templateVars);
@@ -1093,10 +1232,40 @@ function previousManagedSkillRows(previousSkillRows, existingManifest) {
   }));
 }
 
-async function removeManagedSkillLink(projectRoot, skill) {
+/**
+ * Remove the `.claude/skills/<canonical_id>` link for a skill that is no
+ * longer managed (its IDE target was dropped, or the skill itself was
+ * removed by a pack change). Guarded the same way as every other
+ * skill-deletion site: an entry whose on-disk fingerprint doesn't match
+ * survives, with a warning, rather than being deleted just because its
+ * name happens to match a `canonical_id` we once managed.
+ *
+ * @param {string} projectRoot
+ * @param {SkillRow} skill
+ * @param {object} [colors] - Color functions for the foreign-collision warning.
+ */
+async function removeManagedSkillLink(projectRoot, skill, colors = null, rmImpl = rm) {
   if (skill.managed_link === false) return;
   const relPath = skill.target_link_path || join('.claude', 'skills', skill.canonical_id);
-  await rm(safePath(projectRoot, relPath), { recursive: true, force: true });
+  const entryPath = safePath(projectRoot, relPath);
+  const expectedTarget = skill.relative_path
+    ? safePath(projectRoot, skill.relative_path)
+    : join(projectRoot, '.agents', 'skills', skill.canonical_id);
+
+  const owned = await isLuminaOwnedSkillEntry({
+    entryPath,
+    canonicalId: skill.canonical_id,
+    expectedTarget,
+  });
+  if (!owned) {
+    if (colors) warnForeignSkillEntry(colors, relPath, skill.canonical_id);
+    return;
+  }
+
+  const removed = await removeSkillEntry(entryPath, rmImpl);
+  if (!removed.ok && colors) {
+    warnSkillDeletionFailed(colors, relPath, skill.canonical_id, removed.error);
+  }
 }
 
 async function reconcileRemovedIdeTargets({
@@ -1111,7 +1280,7 @@ async function reconcileRemovedIdeTargets({
   const removedTargets = previousIdeTargets.filter(target => !currentIdeTargets.includes(target));
   for (const target of removedTargets) {
     if (target === 'claude_code') {
-      await Promise.all(previousSkillRows.map(skill => removeManagedSkillLink(projectRoot, skill)));
+      await Promise.all(previousSkillRows.map(skill => removeManagedSkillLink(projectRoot, skill, colors)));
     }
 
     const relPath = ideTargetStubFiles([target])[0];
@@ -1121,15 +1290,52 @@ async function reconcileRemovedIdeTargets({
   }
 }
 
-async function reconcileRemovedSkills(projectRoot, previousSkillRows, currentSkillRows) {
-  const currentIds = new Set(currentSkillRows.map(row => row.canonical_id));
-  const obsolete = previousSkillRows.filter(row => !currentIds.has(row.canonical_id));
+/**
+ * Delete any previously-managed skill that is no longer part of the current
+ * pack selection.
+ *
+ * `wantedIds` — the full set of canonicalIds the current `packs` selection
+ * asks for (from `getSkillDefs(packs)`) — is the "still wanted" signal, NOT
+ * `currentSkillRows` alone. A skill can be part of the current selection yet
+ * absent from `currentSkillRows` because `copySkills` skipped it this run
+ * (a foreign directory occupies its `.agents/skills/<id>` path — see the
+ * skill-ownership guard); that is a "leave it alone" outcome, not a "pack
+ * was deselected, clean it up" outcome, and must not be reconciled away.
+ *
+ * The `.agents/skills/<id>` deletion below is guarded the same way as
+ * `removeManagedSkillLink`'s `.claude/skills/<id>` deletion: an obsolete
+ * row whose path no longer fingerprints as Lumina's own (e.g. a user
+ * deleted the skill and dropped unrelated content in its place) survives,
+ * with a warning, instead of being deleted just because it used to be
+ * managed.
+ *
+ * @param {string} projectRoot
+ * @param {SkillRow[]} previousSkillRows
+ * @param {SkillRow[]} currentSkillRows
+ * @param {Set<string>} wantedIds
+ * @param {object} [colors] - Color functions for the foreign-collision warning.
+ */
+async function reconcileRemovedSkills(projectRoot, previousSkillRows, currentSkillRows, wantedIds, colors = null, rmImpl = rm) {
+  const stillWanted = new Set([...wantedIds, ...currentSkillRows.map(row => row.canonical_id)]);
+  const obsolete = previousSkillRows.filter(row => !stillWanted.has(row.canonical_id));
 
   for (const skill of obsolete) {
     if (skill.relative_path) {
-      await rm(safePath(projectRoot, skill.relative_path), { recursive: true, force: true });
+      const entryPath = safePath(projectRoot, skill.relative_path);
+      const owned = await isLuminaOwnedSkillEntry({
+        entryPath,
+        canonicalId: skill.canonical_id,
+      });
+      if (owned) {
+        const removed = await removeSkillEntry(entryPath, rmImpl);
+        if (!removed.ok && colors) {
+          warnSkillDeletionFailed(colors, skill.relative_path, skill.canonical_id, removed.error);
+        }
+      } else if (colors) {
+        warnForeignSkillEntry(colors, skill.relative_path, skill.canonical_id);
+      }
     }
-    await removeManagedSkillLink(projectRoot, skill);
+    await removeManagedSkillLink(projectRoot, skill, colors, rmImpl);
   }
 }
 
@@ -1172,7 +1378,7 @@ async function copyScripts(projectRoot) {
   // Parallel: each copy is independent; destDir is created earlier.
   await Promise.all(scriptFiles.map(async file => {
     try {
-      await copyFile(join(SCRIPTS_DIR, file), join(destDir, file));
+      await atomicCopyFile(join(SCRIPTS_DIR, file), join(destDir, file));
     } catch (_) {
       // Scripts may not exist yet (P4+ work); skip gracefully
     }
@@ -1183,7 +1389,7 @@ async function copyScripts(projectRoot) {
   const libFiles = ['watchlist-config.mjs', 'discovery-state.mjs'];
   await Promise.all(libFiles.map(async file => {
     try {
-      await copyFile(join(SCRIPTS_DIR, 'lib', file), join(libDir, file));
+      await atomicCopyFile(join(SCRIPTS_DIR, 'lib', file), join(libDir, file));
     } catch (_) {
       // Script libs may not exist yet; skip gracefully
     }
@@ -1194,13 +1400,221 @@ async function copyChangelog(projectRoot) {
   const src = join(PACKAGE_ROOT, 'CHANGELOG.md');
   const dest = join(projectRoot, '_lumina', 'CHANGELOG.md');
   try {
-    await copyFile(src, dest);
+    await atomicCopyFile(src, dest);
   } catch (_) {
     // CHANGELOG may not exist in older snapshots; skip gracefully
   }
 }
 
-async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
+// ---------------------------------------------------------------------------
+// Skill ownership guard — foreign-collision protection
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract the frontmatter `name:` value from a SKILL.md's raw content, or
+ * null when there is no frontmatter block or no `name:` key.
+ *
+ * @param {string} content
+ * @returns {string|null}
+ */
+function extractSkillFrontmatterName(content) {
+  const normalized = content.replace(/\r\n/g, '\n');
+  if (!normalized.startsWith('---\n')) return null;
+  const end = normalized.indexOf('\n---', 4);
+  if (end === -1) return null;
+  const frontmatter = normalized.slice(4, end);
+  const match = frontmatter.match(/^name:\s*(.+)$/m);
+  if (!match) return null;
+  return match[1].trim().replace(/^["']|["']$/g, '');
+}
+
+/**
+ * True when `dirPath/SKILL.md` exists and its frontmatter `name:` equals
+ * `canonicalId` — the fingerprint half of `isLuminaOwnedSkillEntry`.
+ *
+ * @param {string} dirPath
+ * @param {string} canonicalId
+ * @returns {Promise<boolean>}
+ */
+async function skillMdNameMatches(dirPath, canonicalId) {
+  let content;
+  try {
+    content = await readFile(join(dirPath, 'SKILL.md'), 'utf8');
+  } catch (_) {
+    return false;
+  }
+  return extractSkillFrontmatterName(content) === canonicalId;
+}
+
+/**
+ * Decide whether an on-disk entry sitting at one of Lumina's own lumi-*
+ * skill paths is something Lumina itself put there, vs. genuinely foreign
+ * content that happens to occupy the same name.
+ *
+ * The on-disk fingerprint is authoritative: a symlink/junction whose
+ * realpath resolves to `expectedTarget` (Lumina's own source-of-truth
+ * copy), or a directory containing a SKILL.md whose frontmatter `name:`
+ * equals `canonicalId`.
+ *
+ * There is deliberately NO manifest-membership shortcut here. A canonicalId
+ * having been written into some ownership manifest in the past
+ * (skills-manifest.csv, manifest.symlinkStrategies, a platform's agents
+ * manifest) proves only that Lumina once installed something at this path —
+ * never that what occupies the path *right now* is still that thing. A user
+ * can delete a Lumina-installed skill and drop unrelated content in its
+ * place without ever touching the manifest; trusting the manifest alone
+ * would silently blow that content away on the next install. (An earlier
+ * version of this function did exactly that — `if (recordedInManifest)
+ * return true` before any fingerprint check — which meant the fingerprint
+ * protection only ever fired on a skill's *first* collision; every
+ * `lumi-*` id gets recorded on the very first install, so from the second
+ * install onward it was an unconditional bypass. Do not reintroduce it.)
+ *
+ * Deliberate non-goal — do not "fix" this: a user who edits the *body* of a
+ * genuine `lumi-ask` while leaving its SKILL.md frontmatter `name: lumi-ask`
+ * intact still fingerprint-matches and will be overwritten on the next
+ * upgrade. That is correct — it is still Lumina's skill, and refreshing it
+ * is the point of an upgrade. Only content whose fingerprint doesn't match
+ * (wrong/missing frontmatter name, or a symlink resolving somewhere else)
+ * is protected.
+ *
+ * Only ever call this about a path that already exists on disk; the caller
+ * is responsible for the "nothing there yet" fast path.
+ *
+ * @param {object} opts
+ * @param {string}  opts.entryPath        - Absolute path to the existing entry.
+ * @param {string}  opts.canonicalId      - The Lumina skill id expected at this path.
+ * @param {string}  [opts.expectedTarget] - For symlink fingerprinting: the
+ *   real directory this entry should resolve to if Lumina created it.
+ * @param {(path: string) => Promise<import('node:fs').Stats>} [opts.lstatImpl] -
+ *   Test seam only; production callers never pass this and always get the
+ *   real `lstat`. Node's ESM named imports from built-in modules can't be
+ *   intercepted by `node:test`'s `mock.method` (the module namespace object
+ *   is non-configurable), so this is the only way to deterministically
+ *   exercise an `lstat` failure in a test.
+ * @param {(path: string) => Promise<string>} [opts.readlinkImpl] -
+ *   Test seam only, same reason as `lstatImpl`.
+ * @returns {Promise<boolean>}
+ */
+export async function isLuminaOwnedSkillEntry({ entryPath, canonicalId, expectedTarget, lstatImpl = lstat, readlinkImpl = readlink }) {
+  let st;
+  try {
+    st = await lstatImpl(entryPath);
+  } catch (err) {
+    if (err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) {
+      return true; // genuinely nothing there — no collision to protect against
+    }
+    // Something IS there and we could not look at it (EACCES, EPERM, EIO,
+    // ...) — refusing to delete is the only safe answer. Matches the
+    // discrimination fs.js's own linkDirectory already makes on the same
+    // kind of lstat (`if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR')
+    // throw err`); this function can't re-throw (its contract is "always
+    // resolve a verdict"), so the equivalent safe choice here is "foreign."
+    return false;
+  }
+
+  if (st.isSymbolicLink()) {
+    if (!expectedTarget) return false;
+    try {
+      const [current, expected] = await Promise.all([
+        realpath(entryPath),
+        realpath(expectedTarget),
+      ]);
+      return current === expected;
+    } catch (_) {
+      // realpath needs the WHOLE chain to exist end-to-end, including
+      // `expectedTarget` itself. A link whose target has already been
+      // removed — out-of-order cleanup, a corrupted install, a user who
+      // deleted .agents/skills/<id> by hand — still IS Lumina's link if it
+      // still points at where Lumina put it; requiring the target to
+      // additionally exist right now would misjudge a perfectly legitimate,
+      // if orphaned, Lumina symlink as foreign. Fall back to comparing the
+      // link's own stored target path against `expectedTarget` directly —
+      // pure path resolution, no existence check on either side.
+      try {
+        const rawTarget = await readlinkImpl(entryPath);
+        const resolvedRawTarget = isAbsolute(rawTarget) ? rawTarget : resolve(dirname(entryPath), rawTarget);
+        return resolve(resolvedRawTarget) === resolve(expectedTarget);
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
+  if (st.isDirectory()) {
+    return skillMdNameMatches(entryPath, canonicalId);
+  }
+
+  // A plain file (or anything else) sitting at a Lumina skill path is never
+  // something Lumina itself creates — treat as foreign.
+  return false;
+}
+
+/**
+ * Print the standard "found content Lumina doesn't recognize" warning for a
+ * foreign collision at one of Lumina's own lumi-* skill paths. Plain
+ * English via colors.yellow, matching the existing non-localized
+ * symlink-ladder warnings (see createSkillSymlinks) rather than the locale
+ * system — this is a rare defensive-only path, not everyday installer copy.
+ *
+ * @param {object} colors
+ * @param {string} pathLabel   - Path to show the user (relative preferred).
+ * @param {string} canonicalId
+ */
+function warnForeignSkillEntry(colors, pathLabel, canonicalId) {
+  console.log(colors.yellow(
+    `  [warn] Found an existing directory at "${pathLabel}" that Lumina does not recognize as its own ` +
+    `(its content doesn't match a Lumina skill). Lumina will not touch content it does not recognize ` +
+    `— move or delete it yourself if you want Lumina's "${canonicalId}" skill installed there.`,
+  ));
+}
+
+/**
+ * Attempt to remove an already-ownership-confirmed skill entry, converting
+ * a real deletion failure (permissions, a read-only mount, quota, an
+ * immutable flag — or simply permissions changing between the ownership
+ * check and this call) into a reported-but-non-fatal outcome instead of an
+ * unhandled rejection that would abort the whole install. One unwritable
+ * entry must never cost a user their whole install — the same principle a
+ * foreign-collision skip already gets.
+ *
+ * @param {string} entryPath
+ * @param {(path: string, options: object) => Promise<void>} [rmImpl] -
+ *   Test seam only; production callers never pass this and always get the
+ *   real `rm` (see isLuminaOwnedSkillEntry's `lstatImpl` for why a real
+ *   permission fixture can't isolate a single sibling entry here either).
+ * @returns {Promise<{ ok: true } | { ok: false, error: Error }>}
+ */
+async function removeSkillEntry(entryPath, rmImpl = rm) {
+  try {
+    await rmImpl(entryPath, { recursive: true, force: true });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Print the "could not remove this" warning when a deletion that already
+ * passed the ownership check still fails at the filesystem level. Distinct
+ * from warnForeignSkillEntry, which covers content deliberately left alone
+ * because it isn't Lumina's — this one is Lumina's own content that simply
+ * couldn't be removed.
+ *
+ * @param {object} colors
+ * @param {string} pathLabel
+ * @param {string} canonicalId
+ * @param {Error}  error
+ */
+function warnSkillDeletionFailed(colors, pathLabel, canonicalId, error) {
+  console.log(colors.yellow(
+    `  [warn] Could not remove "${pathLabel}" (${error?.code || error?.message || 'unknown error'}). ` +
+    `Lumina left it in place — if you want Lumina's "${canonicalId}" skill installed there, fix its ` +
+    `permissions (or remove it yourself) and reinstall.`,
+  ));
+}
+
+export async function copySkills(projectRoot, packs, { claudeCode = false, colors = null, rmImpl = rm } = {}) {
   const skillRows = [];
   const skillDefs = getSkillDefs(packs);
 
@@ -1210,7 +1624,21 @@ async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
     const destDir = join(projectRoot, '.agents', 'skills', skill.canonicalId);
 
     await access(join(srcDir, 'SKILL.md'), fsConstants.F_OK);
-    await rm(destDir, { recursive: true, force: true });
+
+    const owned = await isLuminaOwnedSkillEntry({
+      entryPath: destDir,
+      canonicalId: skill.canonicalId,
+    });
+    if (!owned) {
+      if (colors) warnForeignSkillEntry(colors, join('.agents', 'skills', skill.canonicalId), skill.canonicalId);
+      continue; // leave the foreign directory untouched; this skill is not installed this run
+    }
+
+    const removed = await removeSkillEntry(destDir, rmImpl);
+    if (!removed.ok) {
+      if (colors) warnSkillDeletionFailed(colors, join('.agents', 'skills', skill.canonicalId), skill.canonicalId, removed.error);
+      continue; // could not remove existing content; skip this skill, don't abort the whole install
+    }
     await ensureDir(destDir);
     await copyDir(srcDir, destDir);
 
@@ -1226,6 +1654,296 @@ async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
   }
 
   return skillRows;
+}
+
+// ---------------------------------------------------------------------------
+// AI-agent global skill installs (CAP-8, AD-7, AD-8)
+// ---------------------------------------------------------------------------
+
+// The exact opening sentence used as the anchor for AD-7's literal injection.
+// Line-anchored, prefix-compared (trim-compare in the style of
+// template-engine's `line.trim() === marker`): a shipped SKILL.md may
+// continue the same line with more of that paragraph (e.g.
+// "...before this SKILL.md. The Repository Layout section..."), so matching
+// is done against the start of the trimmed line, not full-line equality.
+// Any SKILL.md whose opening does not use this exact sentence (e.g.
+// lumi-hub, or skills phrased differently) is left byte-identical — this
+// injection only ever substitutes this one literal anchor, never a
+// template-engine render.
+const LIBRARIAN_PREAMBLE_ANCHOR = 'Read `README.md` at the project root before this SKILL.md.';
+
+/**
+ * Documented global skills directory for an AI-agent platform target.
+ * Based on the real OS home directory (`os.homedir()`, which honors HOME /
+ * USERPROFILE overrides) — never LUMINA_HOME, which is a separate Lumina hub
+ * concern (see agents-manifest.js).
+ *
+ * @param {string} platform - 'openclaw' | 'hermes'
+ * @returns {string|null}
+ */
+function agentGlobalSkillsDir(platform) {
+  switch (platform) {
+    case 'openclaw': return join(homedir(), '.openclaw', 'skills');
+    case 'hermes':   return join(homedir(), '.hermes', 'skills');
+    default:         return null;
+  }
+}
+
+/**
+ * Substitute the literal LIBRARIAN_PREAMBLE_ANCHOR line in a copied SKILL.md
+ * with the full content of the routing-preamble partial. No-op (file left
+ * exactly as copied) when the anchor line is absent — this never runs the
+ * file through the template engine, so any `{{...}}` placeholders the skill
+ * body already contains survive untouched.
+ *
+ * @param {string} skillMdPath  - Path to the already-copied SKILL.md.
+ * @param {string} preambleRaw  - Raw content of librarian-preamble.md.
+ * @returns {Promise<void>}
+ */
+async function injectLibrarianPreamble(skillMdPath, preambleRaw) {
+  let content;
+  try {
+    content = await readFile(skillMdPath, 'utf8');
+  } catch (_) {
+    return;
+  }
+  const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalized.split('\n');
+  const idx = lines.findIndex(line => line.trimStart().startsWith(LIBRARIAN_PREAMBLE_ANCHOR));
+  if (idx === -1) return; // e.g. lumi-hub — no anchor line, copy stands verbatim
+
+  const line = lines[idx];
+  const trimmedStart = line.trimStart();
+  const leading = line.slice(0, line.length - trimmedStart.length);
+  const trailing = trimmedStart.slice(LIBRARIAN_PREAMBLE_ANCHOR.length).trim();
+
+  const preambleLines = preambleRaw
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\n$/, '')
+    .split('\n');
+
+  // Any prose that continued on the same line after the anchor sentence is
+  // real content (not filler) — preserve it as its own line right after the
+  // preamble instead of discarding it.
+  const replacement = trailing ? [...preambleLines, '', leading + trailing] : preambleLines;
+  const newLines = [...lines.slice(0, idx), ...replacement, ...lines.slice(idx + 1)];
+  await atomicWrite(skillMdPath, newLines.join('\n'));
+}
+
+/**
+ * Install the full fixed skill set (all packs + the lumi-hub front door) into
+ * one AI-agent platform's documented global skills directory. Skills-only:
+ * never writes anything under a project root. Plain copy — no symlink
+ * ladder (AD-7). Non-destructive: only ever creates/removes directories
+ * named after our own `lumi-*` canonicalIds, tracked via the platform's
+ * agents manifest (AD-2/AD-8) — any other entry in the directory is
+ * untouched. A `lumi-*`-named directory is only ever a fixed canonicalId of
+ * ours, but that name is still just a string — a real, unrelated directory
+ * (e.g. from a different tool, or a user's own experiment) can legitimately
+ * occupy it too, so each target is still checked via
+ * `isLuminaOwnedSkillEntry` before anything is deleted.
+ *
+ * @param {string} platform      - 'openclaw' | 'hermes'
+ * @param {string} preambleRaw   - Raw content of librarian-preamble.md.
+ * @param {object} [colors]      - Color functions for the foreign-collision warning.
+ * @returns {Promise<void>}
+ */
+async function copySkillsToAgentPlatform(platform, preambleRaw, colors = null, rmImpl = rm) {
+  const destRoot = agentGlobalSkillsDir(platform);
+  if (!destRoot) return;
+
+  const allPackSkills = getSkillDefs(['core', 'research', 'reading', 'learning']);
+  const targets = [
+    ...allPackSkills.map(skill => ({
+      canonicalId: skill.canonicalId,
+      srcDir: join(SKILLS_DIR, ...skill.srcPackPath.split('/'), skill.name),
+    })),
+    { canonicalId: 'lumi-hub', srcDir: join(SKILLS_DIR, 'agents', 'hub') },
+  ];
+
+  const previousManifest = await readAgentsManifest(platform);
+  const ownedBefore = new Set(previousManifest?.skills ?? []);
+  const selected = new Set(targets.map(target => target.canonicalId));
+
+  await ensureDir(destRoot);
+
+  // Tracks only the canonicalIds actually (re)installed this run — a
+  // foreign-blocked skill must never be recorded as owned, or the AD-8
+  // deselection cleanup below could delete it on a later run once it's no
+  // longer "selected".
+  const installedIds = new Set();
+
+  for (const { canonicalId, srcDir } of targets) {
+    await access(join(srcDir, 'SKILL.md'), fsConstants.F_OK);
+    const destDir = join(destRoot, canonicalId);
+
+    const owned = await isLuminaOwnedSkillEntry({
+      entryPath: destDir,
+      canonicalId,
+    });
+    if (!owned) {
+      if (colors) warnForeignSkillEntry(colors, destDir, canonicalId);
+      continue; // leave the foreign directory untouched; this skill is not installed this run
+    }
+
+    const removed = await removeSkillEntry(destDir, rmImpl);
+    if (!removed.ok) {
+      if (colors) warnSkillDeletionFailed(colors, destDir, canonicalId, removed.error);
+      continue; // could not remove existing content; skip this skill, don't abort the whole install
+    }
+    await ensureDir(destDir);
+    await copyDir(srcDir, destDir);
+    await injectLibrarianPreamble(join(destDir, 'SKILL.md'), preambleRaw);
+    installedIds.add(canonicalId);
+  }
+
+  // AD-8: remove only entries we owned previously that are no longer part
+  // of the (currently always-full) selection — never touch anything else.
+  // `selected` is every shipped skill today, so nothing is ever in
+  // `ownedBefore` but absent from it and this loop is currently unreachable
+  // in practice — but that's an incidental property of how `selected` is
+  // computed, not a guarantee, so it still goes through the same
+  // fingerprint guard as every other deletion site rather than trusting
+  // `ownedBefore` alone.
+  for (const canonicalId of ownedBefore) {
+    if (selected.has(canonicalId)) continue;
+    const entryPath = join(destRoot, canonicalId);
+    const owned = await isLuminaOwnedSkillEntry({ entryPath, canonicalId });
+    if (!owned) {
+      if (colors) warnForeignSkillEntry(colors, entryPath, canonicalId);
+      continue;
+    }
+    const removed = await removeSkillEntry(entryPath, rmImpl);
+    if (!removed.ok && colors) {
+      warnSkillDeletionFailed(colors, entryPath, canonicalId, removed.error);
+    }
+  }
+
+  await writeAgentsManifest(platform, [...installedIds]);
+}
+
+const AGENT_PLATFORM_LABELS = { openclaw: 'OpenClaw', hermes: 'Hermes Agent' };
+
+/**
+ * Plain-language next-steps notice after an AI-agent global skill install
+ * (CAP-8 / platform-integration.md "Installer UX"). English source only —
+ * this notice is not routed through the locale system.
+ *
+ * The registration step is chat-driven, not a command the user types
+ * themselves: they tell the agent about a folder in conversation, and the
+ * agent's own lumi-hub skill runs `lumina wikis inspect`/`add` on their
+ * behalf. Don't hand the user a `lumina wikis add ...` command to type —
+ * that instruction is wrong now, since nothing about it is theirs to run.
+ *
+ * @param {string} platform
+ */
+function printAgentInstallNotice(platform) {
+  const label = AGENT_PLATFORM_LABELS[platform] ?? platform;
+  console.log('');
+  console.log(`[done] Installed Lumina skills globally for ${label}.`);
+  console.log('');
+  console.log('Next steps:');
+  console.log(`  1. Open a chat with ${label} and tell it about a folder you want it to remember as a wiki — existing or brand new. It will ask a couple of quick questions and set it up for you.`);
+  console.log('  2. From then on, just say which wiki you mean when you chat — it will ask if it is not sure.');
+  console.log('  3. Optional: check on all your wikis any time with: lumina wikis doctor');
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// Uninstall helpers (CAP-9 / AD-8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove only the `.agents/skills/<canonicalId>` entries this install owns,
+ * then remove `.agents/skills` and `.agents` themselves only if left empty.
+ * Never a recursive wipe of `.agents/` — that would take any foreign skill
+ * with it (the CAP-9 defect this replaces).
+ *
+ * Every entry is judged on its Lumina fingerprint (a directory containing a
+ * SKILL.md whose frontmatter `name:` matches the lumi-* directory name it
+ * sits in) via `isLuminaOwnedSkillEntry`, rather than a bare `lumi-*` name
+ * prefix — a name a foreign directory could just as easily use. (By the
+ * time this runs, uninstallCommand has already deleted `_lumina/` anyway,
+ * so a manifest-based check would have nothing to read here regardless.)
+ *
+ * A deletion that fails at the filesystem level (permissions, a read-only
+ * mount, ...) after passing the ownership check degrades the same way
+ * every install-side delete site does: warn, leave that one entry in
+ * place, and keep going — an uninstall that aborts partway leaves the user
+ * in a half-removed state with no obvious way forward, which is worse than
+ * one skill surviving with a warning.
+ *
+ * @param {string} projectRoot
+ * @param {object} [colors] - Color functions for the foreign-collision/deletion-failure warning.
+ * @param {(path: string, options: object) => Promise<void>} [rmImpl] - Test seam; see removeSkillEntry.
+ * @returns {Promise<void>}
+ */
+async function removeOwnedAgentsSkills(projectRoot, colors = null, rmImpl = rm) {
+  const agentsSkillsDir = join(projectRoot, '.agents', 'skills');
+  const entries = (await readdir_safe(agentsSkillsDir)).filter(name => name.startsWith('lumi-'));
+
+  for (const canonicalId of entries) {
+    const entryPath = join(agentsSkillsDir, canonicalId);
+    const owned = await isLuminaOwnedSkillEntry({
+      entryPath,
+      canonicalId,
+    });
+    if (!owned) {
+      if (colors) warnForeignSkillEntry(colors, join('.agents', 'skills', canonicalId), canonicalId);
+      continue;
+    }
+    const removed = await removeSkillEntry(entryPath, rmImpl);
+    if (!removed.ok && colors) {
+      warnSkillDeletionFailed(colors, join('.agents', 'skills', canonicalId), canonicalId, removed.error);
+    }
+  }
+
+  await removeDirIfEmpty(agentsSkillsDir);
+  await removeDirIfEmpty(join(projectRoot, '.agents'));
+}
+
+/**
+ * Remove only the `.claude/skills/<canonicalId>` symlinks this install
+ * owns. A "lumi-*" name is still just a string, not proof of ownership —
+ * check each entry's on-disk fingerprint before deleting anything, so a
+ * foreign directory that happens to share one of our skill names survives.
+ * Same degrade-and-continue treatment as `removeOwnedAgentsSkills` for a
+ * deletion that fails after passing the ownership check.
+ *
+ * @param {string} projectRoot
+ * @param {object} [colors] - Color functions for the foreign-collision/deletion-failure warning.
+ * @param {(path: string, options: object) => Promise<void>} [rmImpl] - Test seam; see removeSkillEntry.
+ * @returns {Promise<void>}
+ */
+async function removeOwnedClaudeSkillLinks(projectRoot, colors = null, rmImpl = rm) {
+  try {
+    const claudeSkillsDir = join(projectRoot, '.claude', 'skills');
+    const entries = await readdir_safe(claudeSkillsDir);
+    for (const entry of entries) {
+      if (!entry.startsWith('lumi-')) continue;
+      const entryPath = join(claudeSkillsDir, entry);
+      const owned = await isLuminaOwnedSkillEntry({
+        entryPath,
+        canonicalId: entry,
+        expectedTarget: join(projectRoot, '.agents', 'skills', entry),
+      });
+      if (!owned) {
+        if (colors) warnForeignSkillEntry(colors, join('.claude', 'skills', entry), entry);
+        continue;
+      }
+      const removed = await removeSkillEntry(entryPath, rmImpl);
+      if (!removed.ok && colors) {
+        warnSkillDeletionFailed(colors, join('.claude', 'skills', entry), entry, removed.error);
+      }
+    }
+  } catch (_) {}
+}
+
+async function removeDirIfEmpty(dirPath) {
+  const entries = await readdir_safe(dirPath);
+  if (entries.length === 0) {
+    await rm(dirPath, { recursive: true, force: true });
+  }
 }
 
 function replaceOrAppendSchemaRegion(existingContent, newSchemaContent) {
@@ -1309,13 +2027,13 @@ async function copyTools(projectRoot, { research }) {
   // (~30 ms per file × 14 files dominates on NTFS + Defender).
   await Promise.all(toolFiles.map(async file => {
     try {
-      await copyFile(join(TOOLS_DIR, file), join(destDir, file));
+      await atomicCopyFile(join(TOOLS_DIR, file), join(destDir, file));
     } catch (_) {
       // Tool not yet authored; skip
     }
   }));
   try {
-    await copyFile(join(TOOLS_DIR, 'requirements.txt'), join(destDir, 'requirements.txt'));
+    await atomicCopyFile(join(TOOLS_DIR, 'requirements.txt'), join(destDir, 'requirements.txt'));
   } catch (_) {
     // requirements.txt missing in dev; skip
   }
@@ -1414,7 +2132,12 @@ async function writeGitignore(projectRoot) {
   }
 }
 
-async function seedWikiFiles(projectRoot) {
+// Exported for src/installer/wikis-command.js's `doctor --fix` (AD-6): the
+// only correct way to recreate missing seed files is the installer's own
+// seeding source, never a hand-written stand-in. This function already
+// no-ops on any path that exists (exists→skip), so it is safe to call as a
+// pure repair step.
+export async function seedWikiFiles(projectRoot) {
   const indexPath = join(projectRoot, 'wiki', 'index.md');
   const logPath   = join(projectRoot, 'wiki', 'log.md');
 
@@ -1430,19 +2153,29 @@ async function seedWikiFiles(projectRoot) {
 async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors, t = null) {
   const strategies = {};
   const errors = [];
+  const recordedStrategies = existingManifest?.symlinkStrategies ?? {};
 
   for (const skill of skillRows) {
     const target   = resolve(projectRoot, skill.relative_path);
     const linkPath = resolve(projectRoot, '.claude', 'skills', skill.canonical_id);
 
-    const existingStrategy = reLink ? null : (existingManifest?.symlinkStrategies?.[skill.canonical_id] ?? null);
+    const existingStrategy = reLink ? null : (recordedStrategies[skill.canonical_id] ?? null);
 
     try {
-      const result = await linkDirectory(target, linkPath, existingStrategy);
-      strategies[skill.canonical_id] = result.strategy;
+      const result = await linkDirectory(target, linkPath, existingStrategy, {
+        isOwned: () => isLuminaOwnedSkillEntry({
+          entryPath: linkPath,
+          canonicalId: skill.canonical_id,
+          expectedTarget: target,
+        }),
+      });
       if (result.warning) {
         console.log(colors.yellow(`  [warn] ${result.message}`));
       }
+      if (result.foreign) {
+        continue; // leave the foreign directory untouched; no strategy to record
+      }
+      strategies[skill.canonical_id] = result.strategy;
     } catch (err) {
       errors.push({ skill: skill.canonical_id, error: err });
       const msg = t

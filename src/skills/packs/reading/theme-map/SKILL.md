@@ -27,7 +27,7 @@ theme pages meaningful and prevents noise.
 
 ## Context
 
-Read `README.md` at the project root for the full schema. Theme pages live under
+Read `README.md` at the project root before this SKILL.md. The full schema reference lives there. Theme pages live under
 `wiki/themes/<book-slug>/` — namespaced per book. Themes link to chapters via
 `tagged_with`/`appears_in` edges (written by chapter-ingest) and to characters via
 `associated_with`/`expresses_theme` edges (written by this skill).

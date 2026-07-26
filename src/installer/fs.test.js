@@ -9,13 +9,14 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, stat, lstat, unlink, rm, symlink, readlink, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, stat, lstat, unlink, rm, symlink, readlink, access, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { constants as fsConstants } from 'node:fs';
 
 import {
   atomicWrite,
+  atomicCopyFile,
   safePath,
   ensureDir,
   copyDir,
@@ -99,6 +100,91 @@ describe('atomicWrite', () => {
     await atomicWrite(target, content);
     const result = await readFile(target, 'utf8');
     assert.equal(result, content);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// atomicCopyFile
+// ---------------------------------------------------------------------------
+
+describe('atomicCopyFile', () => {
+  test('copies source content to destination', async () => {
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.txt');
+    const dest = join(dir, 'dest.txt');
+    await writeFile(src, 'skill content', 'utf8');
+    await atomicCopyFile(src, dest);
+    const result = await readFile(dest, 'utf8');
+    assert.equal(result, 'skill content');
+  });
+
+  test('overwrites an existing destination file', async () => {
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.txt');
+    const dest = join(dir, 'dest.txt');
+    await writeFile(src, 'new content', 'utf8');
+    await writeFile(dest, 'old content', 'utf8');
+    await atomicCopyFile(src, dest);
+    const result = await readFile(dest, 'utf8');
+    assert.equal(result, 'new content');
+  });
+
+  test('creates parent directories if they do not exist', async () => {
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.txt');
+    const dest = join(dir, 'nested', 'deep', 'dest.txt');
+    await writeFile(src, 'deep content', 'utf8');
+    await atomicCopyFile(src, dest);
+    const result = await readFile(dest, 'utf8');
+    assert.equal(result, 'deep content');
+  });
+
+  test('leaves no .tmp file on success', async () => {
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.txt');
+    const dest = join(dir, 'dest.txt');
+    await writeFile(src, 'content', 'utf8');
+    await atomicCopyFile(src, dest);
+    const tmpExists = await fileExists(dest + '.tmp');
+    assert.equal(tmpExists, false);
+  });
+
+  test('copies binary content byte-for-byte, not as a UTF-8 string', async () => {
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.bin');
+    const dest = join(dir, 'dest.bin');
+    // Bytes that are not valid UTF-8 on their own (would get mangled by a
+    // string round-trip) — proves atomicCopyFile reads/writes a Buffer.
+    const bytes = Buffer.from([0x00, 0xff, 0xfe, 0x80, 0x81, 0x0a, 0x00]);
+    await writeFile(src, bytes);
+    await atomicCopyFile(src, dest);
+    const result = await readFile(dest);
+    assert.ok(result.equals(bytes), 'destination bytes must exactly match source bytes');
+  });
+
+  test('[regression] leaves the original destination content untouched when interrupted before rename (simulated crash) — this is the fix for the truncated-SKILL.md bug', async () => {
+    // Same simulation technique as atomicWrite's crash test above: the real
+    // bug (kill -9 during copySkills leaving a 0-byte SKILL.md, permanently
+    // "foreign" on every subsequent reinstall) came from a bare fs.copyFile
+    // writing directly into the final path. atomicCopyFile writes to a
+    // .tmp path first and only touches the real destPath via rename — so
+    // an interruption at any point before rename must leave the ORIGINAL
+    // content in place, never a truncated one.
+    const dir = await makeTmpDir();
+    const src = join(dir, 'source.txt');
+    const dest = join(dir, 'dest.txt');
+    const tmpPath = dest + '.tmp';
+
+    await writeFile(src, 'complete NEW skill content', 'utf8');
+    await writeFile(dest, 'complete OLD skill content', 'utf8'); // pre-existing, complete file
+
+    // Simulate what happens when the process dies after the .tmp write but
+    // before the rename.
+    await writeFile(tmpPath, 'partial', 'utf8');
+    await unlink(tmpPath); // as if a crash happened right here
+
+    const result = await readFile(dest, 'utf8');
+    assert.equal(result, 'complete OLD skill content', 'the original file must never be partially overwritten');
   });
 });
 
@@ -432,5 +518,160 @@ describe('linkDirectory', () => {
     // Should not throw; parent dirs should have been created
     const s = await lstat(linkPath).catch(() => null);
     assert.ok(s !== null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// linkDirectory — options.isOwned guard (foreign-collision protection)
+// ---------------------------------------------------------------------------
+
+describe('linkDirectory — options.isOwned guard', () => {
+  test('a real directory rejected by isOwned survives untouched, and a "foreign" result is returned', async () => {
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const linkPath = join(dir, 'link');
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, 'SKILL.md'), 'lumina content', 'utf8');
+    await mkdir(linkPath, { recursive: true });
+    await writeFile(join(linkPath, 'marker.txt'), 'user content, not ours', 'utf8');
+
+    const result = await linkDirectory(target, linkPath, null, { isOwned: async () => false });
+
+    assert.equal(result.strategy, 'foreign');
+    assert.equal(result.foreign, true);
+    assert.equal(result.warning, true);
+    assert.match(result.message, /does not look like it was installed by Lumina/);
+    // The directory and its content must be completely untouched.
+    const stillThere = await readFile(join(linkPath, 'marker.txt'), 'utf8');
+    assert.equal(stillThere, 'user content, not ours');
+  });
+
+  test('isOwned=true still deletes and re-links as before (guard is opt-in, not a new blocker)', async () => {
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const linkPath = join(dir, 'link');
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, 'file.txt'), 'v2', 'utf8');
+    await mkdir(linkPath, { recursive: true });
+    await writeFile(join(linkPath, 'file.txt'), 'v1', 'utf8');
+
+    const result = await linkDirectory(target, linkPath, null, { isOwned: async () => true });
+
+    assert.notEqual(result.strategy, 'foreign');
+    const content = await readFile(join(linkPath, 'file.txt'), 'utf8');
+    assert.equal(content, 'v2');
+  });
+
+  test('omitting options.isOwned keeps today\'s unconditional behavior (default caller unaffected)', async () => {
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const linkPath = join(dir, 'link');
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, 'file.txt'), 'v2', 'utf8');
+    await mkdir(linkPath, { recursive: true });
+    await writeFile(join(linkPath, 'file.txt'), 'v1', 'utf8');
+
+    const result = await linkDirectory(target, linkPath, null);
+
+    assert.notEqual(result.strategy, 'foreign');
+    const content = await readFile(join(linkPath, 'file.txt'), 'utf8');
+    assert.equal(content, 'v2');
+  });
+
+  test('isOwned is not consulted when the existing symlink already matches the recorded strategy', async (t) => {
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const linkPath = join(dir, 'link');
+    await mkdir(target, { recursive: true });
+
+    const first = await linkDirectory(target, linkPath, null);
+    if (first.strategy !== 'symlink' && first.strategy !== 'junction') {
+      t.skip('host fell back to copy strategy; symlink early-return path not exercised');
+      return;
+    }
+
+    let called = false;
+    const result = await linkDirectory(target, linkPath, first.strategy, {
+      isOwned: async () => { called = true; return false; },
+    });
+
+    assert.equal(called, false, 'isOwned must not be consulted on the already-matching early-return path');
+    assert.equal(result.strategy, first.strategy);
+  });
+
+  // [regression] `.claude/skills` and `.agents/skills` must degrade the same
+  // way when lstat on a skill entry itself fails (e.g. a chmod-000 parent
+  // directory blocking traversal): warn and skip, never abort the install.
+  // Before this fix, linkDirectory's own initial lstat re-threw any error
+  // other than ENOENT/ENOTDIR, so a caller with an isOwned guard (the only
+  // real caller, createSkillSymlinks) never got a chance to fail closed to
+  // "foreign" the way isLuminaOwnedSkillEntry already does for the same
+  // condition on the .agents/skills side (see commands.test.js's
+  // "lstat failing with EACCES yields foreign" tests).
+  test('[regression] lstat failing with EACCES on linkPath itself resolves to foreign, not a throw', async (t) => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      t.skip('running as root bypasses directory permission bits');
+      return;
+    }
+
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const parent = join(dir, 'skills-parent');
+    const linkPath = join(parent, 'lumi-test');
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, 'SKILL.md'), 'lumina content', 'utf8');
+    await mkdir(parent, { recursive: true });
+    await mkdir(linkPath, { recursive: true });
+    await writeFile(join(linkPath, 'SKILL.md'), 'lumina content', 'utf8');
+
+    // Remove traverse permission on the shared parent — lstat on the child
+    // path now fails with EACCES without the child itself being touched.
+    await chmod(parent, 0o000);
+
+    try {
+      let isOwnedCalls = 0;
+      const result = await linkDirectory(target, linkPath, null, {
+        isOwned: async () => { isOwnedCalls += 1; return false; },
+      });
+
+      assert.equal(result.strategy, 'foreign');
+      assert.equal(result.foreign, true);
+      assert.equal(result.warning, true);
+      assert.equal(isOwnedCalls, 1, 'isOwned must still be consulted so it can independently fail closed');
+    } finally {
+      await chmod(parent, 0o755);
+      // Nothing should have been destroyed or modified.
+      assert.equal(await readFile(join(linkPath, 'SKILL.md'), 'utf8'), 'lumina content');
+    }
+  });
+
+  test('omitting options.isOwned still throws when the initial lstat itself fails', async (t) => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      t.skip('running as root bypasses directory permission bits');
+      return;
+    }
+    if (process.platform === 'win32') {
+      // chmod(dir, 0o000) does not restrict directory traversal on Windows —
+      // NTFS access checks aren't driven by the POSIX mode bits Node's chmod
+      // sets, so the child lstat below succeeds instead of failing with
+      // EACCES/EPERM, and there is no throw for assert.rejects to catch.
+      t.skip('chmod cannot reproduce a blocked-traversal lstat failure on Windows');
+      return;
+    }
+
+    const dir = await makeTmpDir();
+    const target = join(dir, 'target-dir');
+    const parent = join(dir, 'skills-parent');
+    const linkPath = join(parent, 'lumi-test');
+    await mkdir(target, { recursive: true });
+    await mkdir(parent, { recursive: true });
+    await mkdir(linkPath, { recursive: true });
+
+    await chmod(parent, 0o000);
+    try {
+      await assert.rejects(() => linkDirectory(target, linkPath, null), /EACCES|EPERM/);
+    } finally {
+      await chmod(parent, 0o755);
+    }
   });
 });

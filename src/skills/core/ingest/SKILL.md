@@ -32,7 +32,9 @@ allowed-tools:
 
 # /lumi-ingest
 
-You are the wiki's primary knowledge compiler. Read `README.md` at the project root before doing anything else — bidirectional-link discipline drives the whole workflow.
+You are the wiki's primary knowledge compiler.
+
+Read `README.md` at the project root before this SKILL.md. Do this before doing anything else — bidirectional-link discipline drives the whole workflow.
 
 The work is split across four stage files under `references/`. Each stage ends with a human-in-the-loop gate so the user can review before changes commit. Gate state is durable on the source entry's frontmatter (`ingest_status`) so the workflow survives session restarts; fine-grained phase resume lives in `_lumina/_state/ingest-<file-basename>.json` and is handled inside step-01.
 

@@ -139,6 +139,12 @@ Examples:
   lumina install --directory /path/to/project
   lumina discover run --dry-run
   lumina uninstall
+  lumina wikis add /path/to/wiki --name "AI Engineering"
+  lumina wikis inspect /path/to/maybe-a-wiki --json
+  lumina wikis add /path/to/new-wiki --provision --yes --name "AI Engineering"
+  lumina wikis list
+  lumina wikis resolve "ai engineering"
+  lumina wikis doctor --fix
   lumina --version
 `);
 
@@ -197,6 +203,7 @@ program
   .option('--document-output-language <language>', 'language used for wiki documents')
   .option('--lang <code>', 'installer UI locale: en, vi, zh')
   .option('--force-locale-switch', 'allow switching installer locale during upgrade')
+  .option('--agents <targets>', 'install skills globally for AI agent platforms (openclaw, hermes)')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
     const hasExplicitDirectory = (
@@ -227,6 +234,7 @@ program
         lang: cmdOpts.lang,
         forceLocaleSwitch: Boolean(cmdOpts.forceLocaleSwitch),
         searchParents: !hasExplicitDirectory,
+        agents: cmdOpts.agents,
       });
     } catch (err) {
       // Top-level catch: locale may not be resolved yet (pre-loadLocale path).
@@ -298,6 +306,125 @@ discover
       // Unhandled exceptions from discover-runner are by definition not user
       // errors (main() handles those), so default unknown → 3 (internal).
       process.exit(exitCodeFor(err, 3));
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// wikis subcommand group — global registry of Lumina wikis on this machine
+// (see docs/specs/spec-librarian-mode/registry-and-cli.md). Lazy-loaded
+// per AD-9: importing wikis-command.js only happens inside these actions.
+// ---------------------------------------------------------------------------
+const wikis = program
+  .command('wikis')
+  .description('manage the wikis registered on this machine (add, list, resolve, doctor)');
+
+wikis
+  .command('add <path>')
+  .description('register an existing Lumina wiki directory (add --provision to create one first)')
+  .option('--name <name>', 'display name (defaults to the directory name)')
+  .option('--alias <alias>', 'alternative name to match on resolve (repeatable)', (val, prev) => prev.concat([val]), [])
+  .option('--description <text>', 'short description of what this wiki covers')
+  .option('--provision', 'create a new Lumina wiki at <path> before registering it (requires --yes)')
+  .option('--packs <list>', 'comma-separated packs to install when provisioning (default: core)')
+  .option('-y, --yes', 'confirm that provisioning may write files')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (path, cmdOpts) => {
+    try {
+      // The program-level `-y, --yes` (used by install/uninstall) shares its
+      // flags with this subcommand's own `-y, --yes` — commander attaches
+      // the parsed value to the program's opts() in that case, not to
+      // cmdOpts, so it must be merged in explicitly (same pattern as the
+      // install/uninstall actions' directory/yes merges above).
+      const mergedOpts = { ...cmdOpts, yes: cmdOpts.yes ?? program.opts().yes ?? false };
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('add', [path], mergedOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('inspect <path>')
+  .description('read-only: classify a bare path for the inspect -> ask -> add --provision chat flow')
+  .option('--packs <list>', 'comma-separated packs to evaluate against (default: core)')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (path, cmdOpts) => {
+    try {
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('inspect', [path], cmdOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('remove <query>')
+  .description('remove a wiki from the registry (its files are never touched)')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (query, cmdOpts) => {
+    try {
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('remove', [query], cmdOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('list')
+  .description('list every wiki registered on this machine')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (cmdOpts) => {
+    try {
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('list', [], cmdOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('resolve <query>')
+  .description('find the wiki matching a name, alias, or registry key')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (query, cmdOpts) => {
+    try {
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('resolve', [query], cmdOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
+    }
+  });
+
+wikis
+  .command('doctor [name]')
+  .description('check the health of one wiki, or every registered wiki')
+  .option('--fix', 'repair missing folders and seed files (never overwrites existing files)')
+  .option('--json', 'print machine-readable JSON')
+  .action(async (name, cmdOpts) => {
+    try {
+      const { wikisCommand } = await import('../src/installer/wikis-command.js');
+      const code = await wikisCommand('doctor', name ? [name] : [], cmdOpts);
+      process.exit(code);
+    } catch (err) {
+      console.error(`[error] ${err.message}`);
+      if (process.env.DEBUG) console.error(err.stack);
+      process.exit(exitCodeFor(err));
     }
   });
 

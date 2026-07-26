@@ -6,10 +6,11 @@
  *
  * Exports:
  *   atomicWrite(filePath, content)               — temp + datasync + rename
+ *   atomicCopyFile(srcPath, destPath)            — same discipline, for copying an existing file
  *   linkDirectory(target, linkPath, manifest)    — symlink → junction → copy
  *   safePath(root, candidate)                    — reject traversal attacks
  *   ensureDir(dirPath)                           — recursive mkdir, idempotent
- *   copyDir(src, dest)                           — recursive directory copy
+ *   copyDir(src, dest)                           — recursive directory copy, atomic per file
  *   fileHash(filePath)                           — sha256 hex of a file
  *
  * Symlink ladder behavior:
@@ -32,7 +33,6 @@ import {
   realpath,
   lstat,
   rm,
-  copyFile,
 } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
@@ -69,6 +69,57 @@ export async function atomicWrite(filePath, content) {
       try { await fd.close(); } catch (_) { /* ignore */ }
     }
     // Best-effort cleanup of orphaned .tmp
+    await unlink(tmpPath).catch(() => {});
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// atomicCopyFile
+// ---------------------------------------------------------------------------
+
+/**
+ * Copy a file atomically: read the full source content, write it to
+ * `<destPath>.tmp`, fsync, then rename over `destPath`. Same discipline as
+ * `atomicWrite`, but for copying an existing file's bytes rather than
+ * writing a string — used everywhere the installer copies its own payload
+ * (skills, scripts, tools) into a user's workspace.
+ *
+ * A bare `fs.copyFile` writes directly into the destination path; an
+ * interruption partway through (process kill, power loss, OOM, a CI
+ * timeout) can leave a truncated file sitting at that path permanently —
+ * on a skill's SKILL.md, a truncated file fails the ownership fingerprint
+ * on every subsequent reinstall and is never repaired (see
+ * isLuminaOwnedSkillEntry: a skill whose content doesn't match is treated
+ * as foreign, deliberately, with no special case for "looks corrupted").
+ * With the temp+rename discipline, `destPath` is always either the
+ * complete old file or the complete new file — an interruption at any
+ * point leaves the OLD content in place (nothing has touched `destPath`
+ * itself yet) or the fully-written NEW content (if interrupted after the
+ * rename, which is atomic at the filesystem level) — never a partial write
+ * at the real path. Reads/writes raw bytes (a Buffer), not a UTF-8 string,
+ * so binary payloads (if any are ever added) survive intact too.
+ *
+ * @param {string} srcPath  - Source file to copy from.
+ * @param {string} destPath - Destination path (absolute or CWD-relative).
+ * @returns {Promise<void>}
+ */
+export async function atomicCopyFile(srcPath, destPath) {
+  const content = await readFile(srcPath);
+  const tmpPath = destPath + '.tmp';
+  await ensureDir(dirname(destPath));
+  let fd;
+  try {
+    fd = await open(tmpPath, 'w');
+    await fd.writeFile(content);
+    await fd.datasync();
+    await fd.close();
+    fd = null;
+    await rename(tmpPath, destPath);
+  } catch (err) {
+    if (fd) {
+      try { await fd.close(); } catch (_) { /* ignore */ }
+    }
     await unlink(tmpPath).catch(() => {});
     throw err;
   }
@@ -143,7 +194,9 @@ export async function ensureDir(dirPath) {
 /**
  * Recursively copy a directory tree from src to dest.
  * Creates dest and all intermediate directories.
- * Overwrites existing files at dest.
+ * Overwrites existing files at dest — atomically per file (via
+ * `atomicCopyFile`), so an interruption mid-copy can never leave a
+ * truncated file at any path under `dest`.
  *
  * @param {string} src  - Source directory path.
  * @param {string} dest - Destination directory path.
@@ -158,7 +211,7 @@ export async function copyDir(src, dest) {
     if (entry.isDirectory()) {
       await copyDir(srcPath, destPath);
     } else {
-      await copyFile(srcPath, destPath);
+      await atomicCopyFile(srcPath, destPath);
     }
   }
 }
@@ -224,24 +277,66 @@ async function linkPointsToTarget(linkPath, target) {
  * Stale links are removed and recreated. Copy fallbacks are refreshed because
  * their source target cannot be verified from filesystem metadata.
  *
+ * This is a generic helper with no manifest access, so it does not decide
+ * ownership itself. When the caller passes `options.isOwned`, it is
+ * consulted exactly once (as `isOwned(linkPath, existingStat) =>
+ * Promise<boolean>`) whenever `linkPath` already exists and the fast
+ * "already matches the recorded strategy" early return does not apply —
+ * i.e. before any of the destructive/overwriting steps that follow:
+ * refreshing a recorded copy-strategy fallback, or removing a
+ * stale/mismatched entry. The check runs once for whatever is actually
+ * there, BEFORE branching on its shape (symlink, junction, directory, or
+ * plain file) — never shape-then-ask, which previously left two of those
+ * three shapes unguarded (only the "existing entry is a directory" branch
+ * consulted `isOwned`; a plain file or a symlink pointing outside Lumina's
+ * own tree was unlinked/deleted unconditionally). If `isOwned` resolves
+ * false, `linkPath` is left completely untouched and a `{ strategy:
+ * 'foreign', foreign: true }` result is returned instead of linking.
+ * Callers that omit `isOwned` keep today's unconditional behavior.
+ *
  * @param {string}          target           - Real directory the link should point to.
  * @param {string}          linkPath         - Where the link/copy will be created.
  * @param {LinkStrategy|null} existingStrategy - Strategy from previous install (null = fresh).
+ * @param {object}          [options]
+ * @param {(linkPath: string, existingStat: import('node:fs').Stats) => Promise<boolean>} [options.isOwned] -
+ *   Ownership guard consulted before overwriting or deleting anything at `linkPath`.
  * @returns {Promise<LinkResult>}
  */
-export async function linkDirectory(target, linkPath, existingStrategy = null) {
+export async function linkDirectory(target, linkPath, existingStrategy = null, options = {}) {
+  const { isOwned = null } = options;
+
   // Check if linkPath already exists
   let existingStat = null;
+  let lstatError = null;
   try {
     existingStat = await lstat(linkPath);
   } catch (err) {
-    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') {
+      // Something IS there and we could not look at it (EACCES, EPERM,
+      // EIO, ...) — e.g. the shared parent directory lost traverse
+      // permission. When the caller supplied an ownership guard, defer the
+      // verdict to it instead of aborting the whole install here: isOwned
+      // performs its own lstat and independently fails closed to "not
+      // owned" on this exact condition (see isLuminaOwnedSkillEntry), so
+      // the safe outcome is the same "foreign, leave it alone" result a
+      // rejected isOwned already produces below — not a hard throw.
+      // Callers that omit isOwned have no such fallback and keep today's
+      // unconditional behavior.
+      if (!isOwned) throw err;
+      lstatError = err;
+    }
   }
 
-  if (existingStat) {
-    // If it is a symlink or junction pointing to the right target, keep it
+  if (existingStat || lstatError) {
+    // Fast path: already a symlink/junction pointing at the right target,
+    // under the strategy we last recorded — this check IS the ownership
+    // proof for a symlink (same realpath comparison isOwned would make),
+    // so it returns early without ever consulting isOwned. This keeps
+    // ordinary reinstalls fast and silent rather than paying for an extra
+    // stat/readFile on every run. Skipped entirely when the initial lstat
+    // itself failed — there is no stat to fast-path on.
     if (
-      existingStat.isSymbolicLink()
+      existingStat?.isSymbolicLink()
       && (existingStrategy === 'symlink' || existingStrategy === 'junction')
     ) {
       if (await linkPointsToTarget(linkPath, target)) {
@@ -252,12 +347,36 @@ export async function linkDirectory(target, linkPath, existingStrategy = null) {
         };
       }
     }
+
+    // Everything from here on is about to overwrite or delete whatever
+    // currently sits at `linkPath` — refreshing a recorded copy fallback,
+    // or removing a stale/mismatched entry of ANY shape. `existingStrategy`
+    // is only ever a manifest's memory of what USED to be here, never proof
+    // of what's there now, so ask once — for whichever shape actually
+    // exists — before doing anything to it.
+    if (isOwned && !(await isOwned(linkPath, existingStat))) {
+      return {
+        strategy: 'foreign',
+        message: `Found an existing entry at ${linkPath} that does not look like it was installed by Lumina (its content doesn't match a Lumina skill). Lumina will not touch content it does not recognize — move or delete it yourself if you want Lumina's skill linked there.`,
+        warning: true,
+        foreign: true,
+      };
+    }
+
+    if (lstatError) {
+      // isOwned resolved true despite our own lstat failing — shouldn't
+      // happen in practice (isOwned's independent lstat hits the identical
+      // failure and fails closed above), but without a stat we don't know
+      // what shape is sitting at linkPath and cannot safely act on it.
+      throw lstatError;
+    }
+
     if (existingStat.isDirectory() && existingStrategy === 'copy') {
       await rm(linkPath, { recursive: true, force: true });
       await copyDir(target, linkPath);
       return { strategy: 'copy', message: `copy refreshed: ${linkPath}`, warning: false };
     }
-    // Stale or mismatched — remove and recreate
+    // Stale or mismatched — remove and recreate.
     if (existingStat.isSymbolicLink()) {
       await unlink(linkPath);
     } else if (existingStat.isDirectory()) {

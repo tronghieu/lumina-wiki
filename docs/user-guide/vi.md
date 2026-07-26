@@ -38,6 +38,7 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 - [Research Pack Cho Công Việc Nghiên Cứu](#research-pack-cho-công-việc-nghiên-cứu)
 - [Các Lệnh Thường Dùng](#các-lệnh-thường-dùng)
 - [Dùng Với OpenAI CodexApp (ChatGPT), Claude Code, Gemini CLI](#dùng-với-openai-codexapp-chatgpt-claude-code-gemini-cli)
+- [Dùng Wiki Của Bạn Từ Trợ Lý Chat (OpenClaw Hoặc Hermes)](#dùng-wiki-của-bạn-từ-trợ-lý-chat-openclaw-hoặc-hermes)
 - [Dùng Obsidian Để Đọc Wiki](#dùng-obsidian-để-đọc-wiki)
 - [Nâng Cấp Lumina-Wiki](#nâng-cấp-lumina-wiki)
 - [Câu Hỏi Thường Gặp](#câu-hỏi-thường-gặp)
@@ -555,6 +556,46 @@ Với Claude Code, mở project đã cài Lumina-Wiki và dùng các lệnh `/lu
 ### Gemini CLI
 
 Với Gemini CLI, mở terminal ở project đã cài Lumina-Wiki, sau đó chat với Gemini trong đúng thư mục đó. Lumina-Wiki có entry file cho Gemini CLI để agent hiểu cấu trúc wiki và các lệnh Lumina.
+
+## Dùng Wiki Của Bạn Từ Trợ Lý Chat (OpenClaw Hoặc Hermes)
+
+Nếu bạn dùng một trợ lý chat luôn hoạt động như OpenClaw hoặc Hermes — có thể nhắn qua Telegram hay Lark — nó có thể chăm sóc nhiều wiki của bạn cùng lúc. Bạn gửi cho nó một tài liệu hoặc một câu hỏi từ bất cứ đâu bạn vẫn hay nhắn tin với nó, và nó sẽ đưa tài liệu vào đúng wiki hoặc trả lời từ đúng wiki, mà bạn không cần mở project nào cả.
+
+### Khi nào nên dùng
+
+Dùng cách này nếu bạn có nhiều hơn một wiki (ví dụ một wiki cho công việc và một wiki cho dự án cá nhân), hoặc nếu bạn muốn nhắn tin với wiki của mình thay vì phải mở trình soạn thảo mỗi lần có tài liệu hay câu hỏi.
+
+### Cách thiết lập
+
+1. Cài đặt phần hỗ trợ cho trợ lý của bạn, một lần cho mỗi trợ lý bạn dùng:
+
+    ```bash
+    npx lumina-wiki install --yes --agents openclaw
+    ```
+
+    (đổi `openclaw` thành `hermes` nếu bạn dùng Hermes). Bước này giúp trợ lý biết cách tìm và quản lý các wiki của bạn — bạn không cần cài đặt riêng cho từng wiki nữa, trợ lý có thể tự thiết lập giúp bạn ngay trong lúc nhắn tin.
+
+2. Cho nó biết về một wiki, ngay trong lúc nhắn tin — một wiki bạn đã có sẵn, hoặc một wiki hoàn toàn mới bạn muốn nó tạo ra:
+
+    > "Đăng ký wiki ở /duong-dan/den/wiki-cua-ban, đặt tên là Kỹ Thuật AI."
+    >
+    > "Tạo giúp tôi một wiki mới cho ghi chép nấu ăn ở ~/projects/cooking-notes."
+
+    Đặt cho wiki một tên rõ ràng và, nếu muốn, một tên gọi tắt — chọn từ ngữ bạn sẽ tự nhiên nói ra khi nhắn tin. Trợ lý luôn xem qua thư mục trước khi làm bất cứ điều gì: nếu đó đã là một wiki, nó chỉ đăng ký lại; nếu thư mục đã có sẵn file của bạn, nó sẽ cho bạn biết trong đó có gì và chờ bạn đồng ý trước khi thêm wiki vào; nếu thư mục còn trống, nó sẽ hỏi wiki này dùng để làm gì rồi thiết lập luôn trong một bước.
+
+3. Sau đó chỉ cần nhắn tin bình thường. Gọi tên wiki khi bạn nhờ việc gì đó ("thêm file PDF này vào wiki kỹ thuật AI", "wiki Nấu Ăn nói gì về cách giữ dao?"), và trợ lý sẽ hỏi lại nếu chưa chắc bạn muốn nói đến wiki nào.
+
+### Bạn nhận được gì
+
+Tài liệu bạn gửi sẽ được đưa vào đúng wiki và sắp xếp gọn gàng, giống như khi bạn tự thêm vào vậy. Bất cứ lúc nào bạn cũng có thể hỏi "tôi có những wiki nào?" hoặc "mọi thứ có ổn không?", và trợ lý sẽ kiểm tra rồi báo lại bằng lời lẽ dễ hiểu. Việc kiểm tra sức khỏe này cũng có thể được đặt chạy theo lịch, để các vấn đề nhỏ được phát hiện và xử lý sớm trước khi chồng chất.
+
+Một wiki được trợ lý thiết lập theo cách này sẽ gọn nhẹ có chủ đích — chỉ có phần wiki mà thôi, vì các kỹ năng của trợ lý đã sẵn có trên nền tảng chat của bạn rồi, không cần đặt thêm trong thư mục wiki. Nếu sau này bạn muốn mở đúng wiki đó trong một trình soạn thảo mã (Claude Code, Cursor, v.v.), hãy chạy lệnh cài đặt thông thường ở phần trước của hướng dẫn này ngay trong thư mục đó — đây là một bước riêng, tùy chọn, khi nào bạn cần thì làm.
+
+Vài điều thực tế cần biết:
+
+- Telegram không cho gửi file lớn hơn khoảng 20 MB, dù bạn dùng trợ lý nào.
+- OpenClaw mặc định chỉ nhận file đính kèm khá nhỏ — nếu bạn định gửi tài liệu lớn hơn, bạn sẽ cần tự tăng giới hạn này lên (tìm mục cài đặt tên `mediaMaxMb` trong cấu hình riêng của OpenClaw).
+- Nếu bạn chạy Hermes trong Docker, các thư mục wiki của bạn cần được chia sẻ vào bên trong container trước khi trợ lý có thể thấy chúng — xem tài liệu thiết lập riêng của Hermes để biết cách làm.
 
 ## Dùng Obsidian Để Đọc Wiki
 

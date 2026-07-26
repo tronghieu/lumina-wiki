@@ -114,6 +114,24 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 
 有关各版本 schema 变更的细节，请查看 [`CHANGELOG.md`](CHANGELOG.md) 或安装后的本地副本 `_lumina/CHANGELOG.md`。
 
+### **第四步（可选）：连接聊天助手**
+
+如果你想让 OpenClaw 或 Hermes 这类全天候在线的聊天助手（通过 Telegram 或飞书联系）同时照看你的好几个 wiki，把它的辅助功能安装到全局，而不是安装进单个项目：
+
+```bash
+npx lumina-wiki install --yes --agents openclaw   # 或 --agents hermes
+```
+
+之后，直接在聊天里告诉助手一个 wiki——可以是你已经有的，也可以是你想让它新建的——它会处理剩下的一切：先看一眼那个文件夹，然后在创建任何东西之前先问你：
+
+```bash
+lumina wikis list
+lumina wikis resolve "<名称或别名>"
+lumina wikis doctor
+```
+
+完整流程和各聊天平台的文件大小限制说明，请参见[用户指南](docs/user-guide/zh.md#从聊天助手使用你的-wikiopenclaw-或-hermes)。
+
 ## 3. 您的第一组指令（核心技能）
 
 在 AI Agent 的聊天界面中使用这些指令与 wiki 交互，例如 Gemini CLI、Claude 等。
