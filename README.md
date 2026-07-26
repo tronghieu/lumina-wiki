@@ -114,23 +114,20 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 
 See [`CHANGELOG.md`](CHANGELOG.md) or the local `_lumina/CHANGELOG.md` after install for version-by-version schema changes.
 
-### **Step 4 (Optional): Connect a Chat Assistant**
+### **Step 4 (Optional): Connect a Chat Agent**
 
-If you want a chat assistant such as OpenClaw or Hermes (reachable through Telegram or Lark) to look after several of your wikis at once, install its helper globally instead of into one project:
-
-```bash
-npx lumina-wiki install --yes --agents openclaw   # or --agents hermes
-```
-
-From then on, tell the assistant about a wiki right in chat — an existing one, or a brand-new one you want it to set up — and it takes care of the rest, checking the folder first and asking before it creates anything:
+Want to use OpenClaw or Hermes through Telegram or Lark to look after several
+wikis? Install Lumina's helper globally, once for each agent:
 
 ```bash
-lumina wikis list
-lumina wikis resolve "<name or alias>"
-lumina wikis doctor
+npm install --global lumina-wiki
+lumina install --yes --agents openclaw   # or --agents hermes
 ```
 
-See the [User Guide](docs/user-guide/en.md#using-your-wikis-from-a-chat-assistant-openclaw-or-hermes) for the full walkthrough, including chat-platform file-size notes.
+Then tell the agent about an existing wiki or a folder for a new one. It
+checks the folder and asks before adding anything. See the [full installation
+and integration guide](docs/user-guide/openclaw-hermes-integration.en.md) for
+the complete workflow.
 
 ## 3. Your First Commands (Core Skills)
 

@@ -114,23 +114,20 @@ node _lumina/scripts/wiki.mjs migrate --add-defaults
 
 Xem [`CHANGELOG.md`](CHANGELOG.md) hoặc bản local `_lumina/CHANGELOG.md` sau khi cài để biết chi tiết thay đổi schema theo phiên bản.
 
-### **Bước 4 (Tùy chọn): Kết nối Trợ lý Chat**
+### **Bước 4 (Tùy chọn): Kết nối Agent Chat**
 
-Nếu bạn muốn một trợ lý chat luôn hoạt động như OpenClaw hoặc Hermes (nhắn qua Telegram hoặc Lark) chăm sóc nhiều wiki của bạn cùng lúc, hãy cài phần hỗ trợ của nó ở phạm vi toàn máy thay vì cài cho từng project:
-
-```bash
-npx lumina-wiki install --yes --agents openclaw   # hoặc --agents hermes
-```
-
-Từ đó, cứ nói cho trợ lý biết về một wiki ngay trong lúc nhắn tin — một wiki bạn đã có, hoặc một wiki hoàn toàn mới bạn muốn nó tạo — trợ lý sẽ tự lo phần còn lại: xem qua thư mục trước rồi mới hỏi bạn trước khi tạo bất cứ thứ gì:
+Muốn dùng OpenClaw hoặc Hermes qua Telegram hay Lark để chăm sóc nhiều wiki?
+Hãy cài phần hỗ trợ Lumina ở phạm vi toàn máy, một lần cho mỗi agent:
 
 ```bash
-lumina wikis list
-lumina wikis resolve "<tên hoặc alias>"
-lumina wikis doctor
+npm install --global lumina-wiki
+lumina install --yes --agents openclaw   # hoặc --agents hermes
 ```
 
-Xem [Hướng dẫn sử dụng](docs/user-guide/vi.md#dùng-wiki-của-bạn-từ-trợ-lý-chat-openclaw-hoặc-hermes) để có hướng dẫn đầy đủ, gồm cả lưu ý về giới hạn dung lượng file trên từng nền tảng chat.
+Sau đó, nói cho agent biết một wiki có sẵn hoặc thư mục bạn muốn tạo wiki mới.
+Agent sẽ xem qua thư mục và hỏi bạn trước khi thêm bất cứ thứ gì. Xem [hướng
+dẫn cài đặt và tích hợp đầy đủ](docs/user-guide/openclaw-hermes-integration.vi.md)
+để biết toàn bộ quy trình.
 
 ## 3. Các lệnh đầu tiên của bạn (Kỹ năng cốt lõi)
 

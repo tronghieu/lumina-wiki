@@ -30,7 +30,7 @@ Lumina-Wiki 帮你把 AI 变成个人知识助手：你把文档、笔记、论�
 - [面向研究工作的 Research Pack](#面向研究工作的-research-pack)
 - [常用命令](#常用命令)
 - [与 OpenAI CodexApp (ChatGPT)、Claude Code、Gemini CLI 一起使用](#与-openai-codexapp-chatgptclaude-codegemini-cli-一起使用)
-- [从聊天助手使用你的 Wiki（OpenClaw 或 Hermes）](#从聊天助手使用你的-wikiopenclaw-或-hermes)
+- [从聊天 Agent 使用你的 Wiki（OpenClaw 或 Hermes）](#从聊天-agent-使用你的-wikiopenclaw-或-hermes)
 - [用 Obsidian 阅读 Wiki](#用-obsidian-阅读-wiki)
 - [升级 Lumina-Wiki](#升级-lumina-wiki)
 - [常见问题](#常见问题)
@@ -497,9 +497,11 @@ CodexApp 会自动识别文件夹中的 `AGENTS.md` 文件来激活 Lumina-Wiki 
 
 使用 Gemini CLI 时，在已安装 Lumina-Wiki 的项目中打开 terminal，然后在正确文件夹内与 Gemini 聊天。Lumina-Wiki 为 Gemini CLI 提供了 entry file，让 agent 理解 wiki 结构和 Lumina 命令。
 
-## 从聊天助手使用你的 Wiki（OpenClaw 或 Hermes）
+## 从聊天 Agent 使用你的 Wiki（OpenClaw 或 Hermes）
 
-如果你使用像 OpenClaw 或 Hermes 这样全天候在线的聊天助手 —— 通过 Telegram 或飞书（Lark）联系 —— 它可以同时照看你的好几个 wiki。你可以在平时聊天的地方直接发给它一份文档或提一个问题，它会把文档放进正确的 wiki 收件位置，或者从正确的 wiki 里回答你，全程不需要你打开任何项目文件夹。
+如果你使用像 OpenClaw 或 Hermes 这样全天候在线的聊天 Agent —— 通过 Telegram 或飞书（Lark）联系 —— 它可以同时照看你的好几个 wiki。你可以在平时聊天的地方直接发给它一份文档或提一个问题，它会把文档放进正确的 wiki 收件位置，或者从正确的 wiki 里回答你，全程不需要你打开任何项目文件夹。
+
+关于完整的安装和集成流程，请参阅[安装并集成 Lumina-Wiki、OpenClaw 与 Hermes](openclaw-hermes-integration.zh.md)。
 
 ### 什么时候用
 
@@ -507,13 +509,14 @@ CodexApp 会自动识别文件夹中的 `AGENTS.md` 文件来激活 Lumina-Wiki 
 
 ### 怎么设置
 
-1. 先为你使用的每个助手全局安装一次辅助功能：
+1. 先为你使用的每个 Agent 全局安装一次辅助功能：
 
     ```bash
-    npx lumina-wiki install --yes --agents openclaw
+    npm install --global lumina-wiki
+    lumina install --yes --agents openclaw
     ```
 
-    （如果你用的是 Hermes，把 `openclaw` 换成 `hermes`）。这一步让助手知道去哪里找、以及怎么管理你的 wiki —— 你不需要再单独为每个 wiki 安装一次，助手可以直接在聊天里帮你建好一个。
+    （如果你用的是 Hermes，把 `openclaw` 换成 `hermes`）。这一步让 Agent 知道去哪里找、以及怎么管理你的 wiki —— 你不需要再单独为每个 wiki 安装一次，Agent 可以直接在聊天里帮你建好一个。
 
 2. 在聊天里直接告诉它一个 wiki —— 可以是你已经有的，也可以是你想让它新建的：
 
@@ -521,21 +524,15 @@ CodexApp 会自动识别文件夹中的 `AGENTS.md` 文件来激活 Lumina-Wiki 
     >
     > "在 ~/projects/cooking-notes 帮我新建一个美食笔记的 wiki。"
 
-    给它起一个清楚的名字，如果愿意也可以加一个简短的别名 —— 用你聊天时会自然说出的词。助手每次都会先看一眼那个文件夹再动手：如果那里已经是一个 wiki，它就直接登记；如果文件夹里已经有你自己的文件，它会先告诉你里面有什么，等你同意了才会在上面加一个 wiki；如果那里什么都没有，它会问清楚这个 wiki 是用来做什么的，然后一步到位建好。
+    给它起一个清楚的名字，如果愿意也可以加一个简短的别名 —— 用你聊天时会自然说出的词。Agent 每次都会先看一眼那个文件夹再动手：如果那里已经是一个 wiki，它就直接登记；如果文件夹里已经有你自己的文件，它会先告诉你里面有什么，等你同意了才会在上面加一个 wiki；如果那里什么都没有，它会问清楚这个 wiki 是用来做什么的，然后一步到位建好。
 
-3. 之后正常聊天就好。请求时说出 wiki 的名字（比如"把这份 PDF 加到我的 AI 工程 wiki"、"我的美食 wiki 里关于刀具保养怎么说"），如果助手不确定你指的是哪一个，它会反过来问你。
+3. 之后正常聊天就好。请求时说出 wiki 的名字（比如"把这份 PDF 加到我的 AI 工程 wiki"、"我的美食 wiki 里关于刀具保养怎么说"），如果 Agent 不确定你指的是哪一个，它会反过来问你。
 
 ### 你会得到什么
 
-你发过去的文档会被放进正确 wiki 的收件位置并妥善归档，就跟你自己动手添加一样。你随时可以问"我有哪些 wiki？"或者"一切都正常吗？"，助手会检查一遍，然后用大白话告诉你结果。这种健康检查也可以设置成按计划自动运行，让小问题在积累变大之前就被发现和处理。
+你发过去的文档会被放进正确 wiki 的收件位置并妥善归档，就跟你自己动手添加一样。你随时可以问"我有哪些 wiki？"或者"一切都正常吗？"，Agent 会检查一遍，然后用大白话告诉你结果。这种健康检查也可以设置成按计划自动运行，让小问题在积累变大之前就被发现和处理。
 
-助手用这种方式建好的 wiki 会特意保持精简 —— 只有 wiki 本身，因为助手的技能已经装在你的聊天平台上了，不需要再放进 wiki 文件夹里。如果你以后想在代码编辑器（Claude Code、Cursor 等）里打开同一个 wiki，只要在那个文件夹里运行本指南前面提到的常规安装即可 —— 这是你以后需要时才做的一个独立、可选的步骤。
-
-还有几点实际使用中要注意的：
-
-- 不管你用哪个助手，Telegram 都不会传送大于约 20 MB 的文件。
-- OpenClaw 默认只接受比较小的附件 —— 如果你打算发送更大的文档，需要自己把这个上限调大（在 OpenClaw 自己的设置里找一个叫 `mediaMaxMb` 的选项）。
-- 如果你在 Docker 里运行 Hermes，你的 wiki 文件夹需要先共享进容器，助手才能看到它们 —— 具体做法请参考 Hermes 自己的安装文档。
+Agent 用这种方式建好的 wiki 会特意保持精简 —— 只有 wiki 本身，因为 Agent 的技能已经装在你的聊天平台上了，不需要再放进 wiki 文件夹里。如果你以后想在代码编辑器（Claude Code、Cursor 等）里打开同一个 wiki，只要在那个文件夹里运行本指南前面提到的常规安装即可 —— 这是你以后需要时才做的一个独立、可选的步骤。
 
 ## 用 Obsidian 阅读 Wiki
 
