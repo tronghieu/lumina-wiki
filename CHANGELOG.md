@@ -3,6 +3,25 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.10.1] - 2026-07-26
+
+### Changed
+
+- Reorganized the README and user guides in English, Vietnamese, and Simplified
+  Chinese around clearer beginner, research, command-reference, and advanced
+  paths. The beginner guides now start with `/lumi-help`; the Vietnamese guide
+  also links to the Lumina-Wiki video walkthrough.
+- Packaged the watchlist schema, scheduler patterns, and runner guidance with
+  the scheduled-discovery skills themselves, so installed skills do not depend
+  on repository documentation that may be absent or on a different version.
+
+### Fixed
+
+- Scheduled-discovery guidance no longer uses a feed dry-run immediately before
+  a real run, which could otherwise mark feed entries as seen before candidates
+  are recorded.
+- Synchronized the package lockfile version with the published package version.
+
 ## [1.10.0] - 2026-07-26
 
 ### Added

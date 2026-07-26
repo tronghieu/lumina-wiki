@@ -1,95 +1,98 @@
-# 📚 Advanced Guide: Accelerate AI Queries with QMD
+# How to search a large wiki locally with QMD
 
-**QMD (Query Markup Documents)** is a local search tool that helps AI speed up information retrieval within your Wiki. Instead of reading through files sequentially, the AI uses an index created by QMD to quickly identify the most relevant text segments.
+Use this guide when your wiki has enough Markdown notes that you want faster local search. QMD is optional: Lumina-Wiki does not install it or automatically use it for `/lumi-ask`.
 
-This tool combines **keyword search** (BM25) and **semantic search** (Vector) to provide accurate results, making commands like `/lumi-ask` more effective on large knowledge bases.
+## Prerequisites
 
----
+- Node.js 22 or later; check with `node --version`.
+- A terminal and permission to install global npm packages.
+- On macOS, Homebrew and its SQLite package. QMD needs Homebrew SQLite for extensions.
+- A Lumina-Wiki workspace with a `wiki/` folder.
 
-## 1. Why do you need QMD?
+## Install and check QMD
 
-*   **Performance**: Save time by using a pre-built index instead of having the AI manually scan through entire file contents.
-*   **Intelligent Search**: Supports semantic search, helping find relevant content even if it doesn't contain the exact keywords you provided.
-*   **Security**: The entire indexing and search process runs 100% locally on your machine.
-
----
-
-## 2. Installation Steps
-
-### Step 1: Install the QMD Tool
-
-Follow the instructions for your operating system:
-
-#### **On macOS**
-While Macs come with SQLite pre-installed, the system version does not support the Vector search features QMD requires. Therefore, you need to install a more complete version via Homebrew:
-1.  Open your **Terminal**.
-2.  Install SQLite & QMD:
-    ```bash
-    brew install sqlite
-    npm install -g @tobilu/qmd
-    ```
-
-#### **On Windows**
-1.  Open **PowerShell** or **Command Prompt** (as Administrator).
-2.  Install QMD:
-    ```bash
-    npm install -g @tobilu/qmd
-    ```
-    *Note: Ensure **Developer Mode** is enabled in Windows settings to support file symlinking.*
-
----
-
-### Step 2: Install the AI Skill
-
-To let your AI know how to use QMD, you need to install the corresponding skill via your chat interface (Gemini CLI, Claude Code, etc.):
+On macOS, install SQLite first:
 
 ```bash
-npx skills add https://github.com/tobi/qmd --skill qmd
+brew install sqlite
 ```
 
----
+Then install QMD:
 
-## 3. Initial Configuration for Your Wiki
+```bash
+npm install -g @tobilu/qmd
+qmd --version
+qmd doctor
+```
 
-After installation, you need to let QMD index your knowledge base.
+`qmd doctor` reports missing requirements. If it reports a macOS SQLite problem, confirm that Homebrew SQLite is installed and follow the command's advice.
 
-**Tip: You can ask the AI to do this for you by pasting the following into the chat:**
-> "Help me set up QMD: add the wiki folder to the 'my-wiki' collection and run the embed command."
+## Add your wiki and create its search index
 
-If you want to do it manually:
-1.  Open your Terminal in the root directory of your Lumina-Wiki project.
-2.  Add the `wiki/` folder to QMD's management list:
-    ```bash
-    qmd collection add wiki --name my-wiki
-    ```
-3.  Start the indexing process (Embedding):
-    ```bash
-    qmd embed
-    ```
-    *   **Note:** On the first run, QMD will download the necessary AI models (about 2GB). It will then read all content in `wiki/` to build the index. This process may take a few minutes.
+From the workspace root, add the wiki as a collection. Pick a short name that does not clash with another collection on your computer.
 
----
+```bash
+qmd collection add wiki --name my-wiki
+qmd update
+qmd embed
+```
 
-## 4. How to Use
+The first embedding run downloads local models and can take time and disk space. Leave the terminal open until it completes.
 
-### Using via AI (Automatic)
-Once the Skill is installed, every time you use `/lumi-ask` or other query commands, the AI will automatically prioritize using QMD for faster and more accurate results.
+## Verify the result
 
-### Manual Use (Command Line)
-If you want to perform quick searches yourself, you can use these commands:
-*   `qmd search "keywords"`: Search for exact keywords.
-*   `qmd vsearch "content you're looking for"`: Search by meaning.
+Check the collection and search for a phrase that occurs in one of your notes:
 
----
+```bash
+qmd status
+qmd collection show my-wiki
+qmd search "a phrase from my notes" -c my-wiki
+qmd query "a question about my notes" -c my-wiki
+```
 
-## 5. Notes for Non-GPU Systems (CPU-only)
+Use `qmd search` for quick keyword matches. Use `qmd query` for a broader, meaning-based search with ranking. Paths and excerpts from your wiki confirm that QMD can read the collection.
 
-QMD is optimized to run well on CPUs:
-*   **Automatic Detection**: QMD will detect your machine's configuration and use the CPU if no suitable GPU is found.
-*   **Updating the Index**: Whenever your wiki has new content (after running `/lumi-ingest`), you should run the following command to update the index:
-    ```bash
-    qmd update && qmd embed
-    ```
+## Refresh the index after changing notes
 
----
-*I hope this guide helps you optimize your Lumina-Wiki experience. If you run into issues, don't hesitate to ask the AI for help or check the [official QMD documentation](https://github.com/tobi/qmd).*
+After adding or editing notes, run:
+
+```bash
+qmd update
+qmd embed
+```
+
+These commands refresh QMD's results; they do not change your wiki notes.
+
+## Use QMD with an AI assistant, if you choose
+
+Tell an assistant explicitly what to run, for example:
+
+```text
+Use `qmd query` in the `my-wiki` collection to find notes relevant to this question, then cite the notes you used.
+```
+
+Whether an assistant can run QMD depends on its permissions and setup. Configure an integration separately if needed; installing QMD does not automatically change Lumina-Wiki commands.
+
+## Update QMD
+
+Update the tool, check its health, and refresh the collection:
+
+```bash
+npm update -g @tobilu/qmd
+qmd doctor
+qmd status
+qmd update
+qmd embed
+```
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| `qmd: command not found` | Reopen the terminal. If it remains unavailable, add npm's global bin directory to `PATH`, then reinstall QMD. |
+| `qmd doctor` reports an unsupported Node version | Install Node.js 22 or later, reopen the terminal, and run `node --version` again. |
+| macOS reports an SQLite or extension problem | Run `brew install sqlite`, reopen the terminal, and run `qmd doctor` again. |
+| The collection has no expected notes | Run commands from the workspace root, check `qmd collection show my-wiki`, then run `qmd update` and `qmd embed`. |
+| A recent note is absent from semantic results | Run `qmd update` followed by `qmd embed`; keyword search may find it first. |
+
+For QMD command details and supported integrations, see the [official QMD documentation](https://github.com/tobi/qmd).

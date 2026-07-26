@@ -107,6 +107,10 @@ describe('AI-agent global install (CAP-8)', () => {
       // Research/reading/learning pack skills are all present too (every pack,
       // not just core — agent installs are not pack-selectable).
       await access(join(globalDir, 'lumi-research-discover', 'SKILL.md'));
+      await access(join(globalDir, 'lumi-research-watchlist', 'references', 'watchlist-schema.md'));
+      await access(join(globalDir, 'lumi-research-watchlist', 'references', 'scheduler-patterns.md'));
+      await access(join(globalDir, 'lumi-research-watch-run', 'references', 'runner-behavior.md'));
+      await access(join(globalDir, 'lumi-research-watch-run', 'references', 'scheduler-patterns.md'));
       await access(join(globalDir, 'lumi-reading-chapter-ingest', 'SKILL.md'));
       await access(join(globalDir, 'lumi-learning-reflect', 'SKILL.md'));
 

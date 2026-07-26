@@ -1,95 +1,98 @@
-# 📚 Hướng dẫn Nâng cao: Tăng tốc truy vấn AI với QMD
+# Cách tìm kiếm cục bộ trong wiki lớn bằng QMD
 
-**QMD (Query Markup Documents)** là một công cụ tìm kiếm cục bộ, giúp AI tăng tốc độ truy vấn thông tin trong Wiki của bạn. Thay vì đọc tuần tự qua các file, AI sẽ sử dụng chỉ mục (index) do QMD tạo ra để nhanh chóng xác định các đoạn văn bản liên quan nhất.
+Dùng hướng dẫn này khi wiki có nhiều ghi chú Markdown và bạn muốn tìm nhanh trong máy. QMD là công cụ tùy chọn: Lumina-Wiki không tự cài QMD và không tự dùng QMD cho `/lumi-ask`.
 
-Công cụ này kết hợp **tìm kiếm từ khóa** (keyword search) và **tìm kiếm ngữ nghĩa** (semantic search) để đưa ra kết quả chính xác, giúp các lệnh như `/lumi-ask` hoạt động hiệu quả hơn trên các kho tri thức lớn.
+## Điều kiện cần có
 
----
+- Node.js 22 trở lên; kiểm tra bằng `node --version`.
+- Terminal và quyền cài gói npm toàn cục.
+- Trên macOS: Homebrew và gói SQLite của Homebrew. QMD cần SQLite này cho phần mở rộng.
+- Không gian làm việc Lumina-Wiki có thư mục `wiki/`.
 
-## 1. Tại sao bạn cần QMD?
+## Cài và kiểm tra QMD
 
-*   **Hiệu suất**: Tiết kiệm thời gian bằng cách sử dụng chỉ mục có sẵn, thay vì để AI phải quét qua toàn bộ nội dung file theo cách thủ công.
-*   **Tìm kiếm thông minh**: Hỗ trợ tìm kiếm theo ngữ nghĩa, giúp tìm ra nội dung liên quan ngay cả khi không chứa chính xác từ khóa bạn cung cấp.
-*   **Bảo mật**: Toàn bộ quá trình tạo chỉ mục và tìm kiếm đều chạy 100% trên máy tính của bạn.
-
----
-
-## 2. Các bước cài đặt
-
-### Bước 1: Cài đặt công cụ QMD
-
-Tùy vào hệ điều hành, bạn thực hiện như sau:
-
-#### **Trên macOS**
-Máy Mac có sẵn SQLite, nhưng phiên bản đó không hỗ trợ các tính năng tìm kiếm Vector mà QMD cần. Do đó, bạn cần cài bản đầy đủ hơn qua Homebrew:
-1.  Mở **Terminal**.
-2.  Cài đặt SQLite & QMD:
-    ```bash
-    brew install sqlite
-    npm install -g @tobilu/qmd
-    ```
-
-#### **Trên Windows**
-1.  Mở **PowerShell** hoặc **Command Prompt** (với quyền Admin).
-2.  Cài đặt QMD:
-    ```bash
-    npm install -g @tobilu/qmd
-    ```
-    *Lưu ý: Đảm bảo bạn đã bật **Developer Mode** trong cài đặt Windows để hỗ trợ tạo liên kết file.*
-
----
-
-### Bước 2: Cài đặt Skill cho AI
-
-Để AI của bạn biết cách sử dụng QMD, bạn cần cài đặt skill tương ứng qua lệnh sau trong giao diện chat (Gemini CLI, Claude Code, v.v.):
+Trên macOS, cài SQLite trước:
 
 ```bash
-npx skills add https://github.com/tobi/qmd --skill qmd
+brew install sqlite
 ```
 
----
+Sau đó cài QMD:
 
-## 3. Cấu hình lần đầu cho Wiki
+```bash
+npm install -g @tobilu/qmd
+qmd --version
+qmd doctor
+```
 
-Sau khi cài đặt, bạn cần cho QMD tạo chỉ mục cho kho tri thức của mình.
+`qmd doctor` cho biết điều kiện nào còn thiếu. Nếu macOS báo vấn đề SQLite, hãy kiểm tra SQLite của Homebrew rồi làm theo gợi ý của lệnh.
 
-**Mẹo: Bạn có thể yêu cầu chính AI thực hiện việc này bằng cách dán câu lệnh sau vào ô chat:**
-> "Hãy giúp tôi thiết lập QMD: thêm thư mục wiki vào collection 'my-wiki' và chạy lệnh embed."
+## Thêm wiki và tạo chỉ mục tìm kiếm
 
-Nếu bạn muốn tự làm thủ công:
-1.  Mở Terminal tại thư mục gốc của dự án Lumina-Wiki.
-2.  Thêm thư mục `wiki/` vào danh sách quản lý của QMD:
-    ```bash
-    qmd collection add wiki --name my-wiki
-    ```
-3.  Bắt đầu quá trình tạo chỉ mục (Embedding):
-    ```bash
-    qmd embed
-    ```
-    *   **Lưu ý:** Lần đầu tiên chạy, QMD sẽ tải về các mô hình AI cần thiết (khoảng 2GB). Sau đó, nó sẽ đọc toàn bộ nội dung trong `wiki/` để xây dựng chỉ mục. Quá trình này có thể mất vài phút.
+Trong thư mục gốc của không gian làm việc, thêm wiki thành một bộ sưu tập. Chọn tên ngắn không trùng với bộ sưu tập khác trên máy.
 
----
+```bash
+qmd collection add wiki --name my-wiki
+qmd update
+qmd embed
+```
 
-## 4. Cách sử dụng
+Lần tạo chỉ mục ngữ nghĩa đầu tiên sẽ tải mô hình cục bộ, có thể tốn thời gian và dung lượng đĩa. Giữ Terminal mở đến khi xong.
 
-### Sử dụng qua AI (Tự động)
-Sau khi đã cài Skill, mỗi khi bạn dùng lệnh `/lumi-ask` hoặc các lệnh truy vấn khác, AI sẽ tự động ưu tiên sử dụng QMD để có kết quả nhanh và chính xác hơn.
+## Xác minh kết quả
 
-### Sử dụng thủ công (Dòng lệnh)
-Nếu muốn tự tìm kiếm nhanh, bạn có thể dùng các lệnh:
-*   `qmd search "từ khóa"`: Tìm chính xác từ khóa.
-*   `qmd vsearch "nội dung cần tìm"`: Tìm theo ý nghĩa.
+Kiểm tra bộ sưu tập, rồi tìm một cụm từ có trong ghi chú:
 
----
+```bash
+qmd status
+qmd collection show my-wiki
+qmd search "một cụm từ trong ghi chú" -c my-wiki
+qmd query "một câu hỏi về ghi chú" -c my-wiki
+```
 
-## 5. Lưu ý cho máy không có Card đồ họa (CPU-only)
+Dùng `qmd search` để tìm từ khóa nhanh. Dùng `qmd query` để tìm theo ý nghĩa và có xếp hạng. Đường dẫn cùng đoạn trích từ wiki xác nhận QMD đang đọc được bộ sưu tập.
 
-QMD được tối ưu để chạy tốt trên CPU:
-*   **Tự động nhận diện**: QMD sẽ tự phát hiện cấu hình máy và sử dụng CPU nếu không có GPU phù hợp.
-*   **Cập nhật chỉ mục**: Mỗi khi wiki có nội dung mới (sau khi chạy `/lumi-ingest`), bạn nên chạy lệnh sau để QMD cập nhật lại chỉ mục:
-    ```bash
-    qmd update && qmd embed
-    ```
+## Làm mới sau khi thay đổi ghi chú
 
----
-*Hy vọng hướng dẫn này giúp bạn tối ưu hóa trải nghiệm sử dụng Lumina-Wiki. Nếu gặp khó khăn, đừng ngần ngại yêu cầu AI hỗ trợ hoặc kiểm tra thêm tại [tài liệu chính của QMD](https://github.com/tobi/qmd).*
+Sau khi thêm hoặc sửa ghi chú, chạy:
+
+```bash
+qmd update
+qmd embed
+```
+
+Hai lệnh này làm mới kết quả QMD; chúng không sửa ghi chú trong wiki.
+
+## Dùng QMD với trợ lý AI nếu bạn muốn
+
+Nói rõ với trợ lý lệnh cần chạy, ví dụ:
+
+```text
+Hãy dùng `qmd query` trong bộ sưu tập `my-wiki` để tìm các ghi chú liên quan đến câu hỏi này, rồi nêu các ghi chú đã dùng.
+```
+
+Việc trợ lý có chạy được QMD hay không tùy vào quyền và cách thiết lập. Nếu cần, hãy tự cấu hình kết nối; đừng cho rằng cài QMD sẽ tự thay đổi lệnh Lumina-Wiki.
+
+## Cập nhật QMD
+
+Cập nhật công cụ, kiểm tra lại rồi làm mới bộ sưu tập:
+
+```bash
+npm update -g @tobilu/qmd
+qmd doctor
+qmd status
+qmd update
+qmd embed
+```
+
+## Khắc phục sự cố
+
+| Vấn đề | Cách xử lý |
+| --- | --- |
+| `qmd: command not found` | Đóng rồi mở lại Terminal. Nếu vẫn không có, thêm thư mục bin toàn cục của npm vào `PATH`, rồi cài lại QMD. |
+| `qmd doctor` báo Node không được hỗ trợ | Cài Node.js 22 trở lên, mở lại Terminal và chạy `node --version`. |
+| macOS báo lỗi SQLite hoặc phần mở rộng | Chạy `brew install sqlite`, mở lại Terminal rồi chạy `qmd doctor`. |
+| Bộ sưu tập thiếu ghi chú mong đợi | Chạy lệnh từ thư mục gốc của không gian làm việc, kiểm tra `qmd collection show my-wiki`, rồi chạy `qmd update` và `qmd embed`. |
+| Ghi chú mới chưa xuất hiện khi tìm theo ý nghĩa | Chạy `qmd update` rồi `qmd embed`; tìm từ khóa có thể thấy ghi chú trước. |
+
+Xem chi tiết lệnh và cách kết nối tại [tài liệu chính thức của QMD](https://github.com/tobi/qmd).

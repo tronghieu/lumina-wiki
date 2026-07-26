@@ -1,96 +1,77 @@
-# 高级：定期查找研究资料
+# 如何定期查找研究资料而不自动填满 wiki
 
-定期查找研究资料可以让 Lumina-Wiki 偶尔为你关心的主题查找更多论文或研究资料。每次
-运行只会生成一份建议阅读的资料列表，供你查看。它不会把资料加入 wiki，也不会下载
-论文文件。
+当你已经知道要跟踪哪些研究主题或资料源时，请使用本指南。流程包括：在聊天中描述跟踪清单，安全地试运行一次，审阅新候选资料，只把你选择的来源加入 wiki。
 
-你可以这样理解：Lumina-Wiki 先帮你找资料，但仍然由你决定哪些资料值得读。
+## 前提条件
 
-## 推荐流程
+- 已安装 research pack 的 Lumina-Wiki 工作区。
+- 已通过 `/lumi-research-watchlist` 创建跟踪清单。
+- 若要自动运行：一台能运行 `lumina` 并可访问工作区的电脑，或一个 GitHub 仓库。
 
-1. 选择几个想跟踪的主题。
-2. Lumina-Wiki 为这些主题查找新资料。
-3. 你查看新列表，或者请助手帮你先读一遍。
-4. 你选择值得阅读的资料。
-5. 用 `/lumi-ingest` 把选中的资料加入 wiki。
+查找步骤只会在 `raw/discovered/` 中创建候选记录。它不会把资料加入 wiki、下载全文，也不会替你决定该读什么。
 
-定期查找只做到第 2 步。仔细阅读、下载论文文件、写摘要、创建 wiki 页面，以及和旧笔记
-建立链接，仍然发生在 `/lumi-ingest` 步骤。
+## 1. 在聊天中创建跟踪清单
 
-## 1. 选择要跟踪的主题
-
-在和助手的对话中运行：
+先运行：
 
 ```text
 /lumi-research-watchlist
 ```
 
-你可以自然地描述，例如：
+描述主题、频率、优先资料源和每次想看到的新条目数量。例如：
 
 ```text
-我想跟踪“课堂上使用手机的影响”这个主题，每周查找一次，每次只显示大约 5 份值得看的资料。
+每周跟踪课堂上使用手机的研究。每次最多显示 5 条新资料，先使用 arXiv。
 ```
 
-助手会帮你把这个主题保存到跟踪列表里。你不需要记住配置文件名。
+如果你关注某个特定发布者，也可以用同一个命令添加 RSS 或 Atom 源。建议先从每周的小列表开始，以便轻松审阅。
 
-推荐起步设置：
+## 2. 安全地试运行
 
-- 对大多数主题来说，每周查找一次就够了。
-- 如果还没有配置其他来源，先使用 arXiv。
-- 每次显示大约 5 份新资料，这样列表更容易阅读。
-
-## 2. 先试运行一次
-
-正式运行前，先试运行：
+在工作区根目录中，先预览一次而不保存候选资料：
 
 ```bash
 lumina discover run --dry-run
 ```
 
-这个命令只检查 Lumina-Wiki 会查找什么。它不会写入新的结果。
-
-如果看起来没问题，再正式运行：
+如果主题和资料源正确，再正式运行：
 
 ```bash
 lumina discover run
 ```
 
-正式运行后，Lumina-Wiki 会把新资料列表保存到 `raw/discovered/`。
+新候选资料会出现在 `raw/discovered/`。你也可以在聊天中用 `/lumi-research-watch-run` 运行一次。
 
-## 3. 有了新列表之后做什么？
+## 3. 加入前先审阅
 
-这是最重要的一步：不要把所有结果都加入 wiki。
-
-你可以自己查看列表，也可以先请助手帮你筛选：
+请助手将新候选资料与你的目标进行比较。例如：
 
 ```text
-请查看 raw/discovered/ 里的新资料，并帮我选出 3 份最值得读的、关于课堂上使用手机影响的资料。
+请审阅新的研究候选资料，并为我的“课堂手机使用”主题推荐最有用的三份来源。说明每份为什么值得读，并标记重复或关联较弱的资料。
 ```
 
-助手应该帮你：
+把结果当作阅读清单，而不是自动导入。打开原始来源，选择哪些资料值得保留为长期笔记。
 
-- 按更小的主题给资料分组，
-- 解释为什么某份资料值得读，
-- 跳过重复或离主题太远的资料，
-- 建议哪些资料应该先加入 wiki。
+## 4. 加入你选择的来源
 
-然后选择一份资料加入 wiki：
+对每个选中的来源，使用：
 
 ```text
-/lumi-ingest <你选择的资料>
+/lumi-ingest <选中的来源>
 ```
 
-只有到这一步，Lumina-Wiki 才会下载完整内容、写摘要、创建 wiki 页面，并和旧笔记建立
-链接。
+只有这一步会深入读取选中的来源，并把生成的笔记加入 wiki。
 
-## 4. 用 GitHub Actions 定期运行
+## 5. 自动运行查找
 
-如果你的项目在 GitHub 上，并且希望电脑关机时也能查找资料，可以用这种方式。
+自动化是可选的。请先确保手动运行成功，并始终保留审阅与决定是否加入 wiki 的权利。
 
-创建 `.github/workflows/lumina-discovery.yml`，内容如下：
+### GitHub Actions
+
+当工作区位于 GitHub 仓库中，而且你希望电脑关闭时仍能查找资料，可使用 GitHub Actions。添加 `.github/workflows/lumina-discovery.yml`：
 
 ```yaml
-name: Lumina scheduled discovery
+name: Lumina discovery
 
 on:
   schedule:
@@ -109,128 +90,47 @@ jobs:
         with:
           node-version: 22
       - run: npm install -g lumina-wiki
-      - run: lumina discover run --json
+      - run: lumina discover run
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ -d raw/discovered ]; then git add raw/discovered; fi
-          if [ -f _lumina/_state/discovery-runner.json ]; then git add _lumina/_state/discovery-runner.json; fi
           git diff --cached --quiet || git commit -m "chore: add discovered research"
           git push
 ```
 
-这个例子每周一运行。GitHub 使用 UTC 时间，所以实际运行时间可能与你所在时区不同。
+GitHub 的计划使用 UTC。请手动运行一次工作流，并确认它只提交候选记录。如果仓库不允许直接推送，请按你的审阅流程调整最后一步。
 
-这个 workflow 会自动提交。如果某次运行没有找到新资料，`git commit` 步骤会因为没有
-内容可保存而自动跳过。
+### macOS 和 Linux
 
-## 5. 在 macOS 或 Linux 上用 cron 定期运行
-
-Cron 是一种简单方式，可以让电脑在固定时间运行一个命令。
-
-首先，在 Lumina-Wiki 项目的终端里运行：
-
-```bash
-pwd
-```
-
-这个命令会输出项目的完整路径。保留这个路径。例如：
-
-```text
-/Users/you/Projects/my-wiki
-```
-
-接着打开 cron：
+如果机器通常会在指定时间保持唤醒，可使用 cron。先用 `pwd` 找到工作区路径，再打开 crontab：
 
 ```bash
 crontab -e
 ```
 
-如果电脑要求你选择编辑器，不确定时可以选 `nano`。在 `nano` 中，按 `Ctrl+O`、Enter
-保存，再按 `Ctrl+X` 退出。
-
-在文件末尾添加类似这一行：
+添加一行，并将示例路径替换为你的工作区路径：
 
 ```cron
 0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
 ```
 
-记得把 `/Users/you/Projects/my-wiki` 换成你自己的真实项目路径。
+用 `crontab -l` 确认计划。笔记本休眠时，cron 不能可靠运行。若这很重要，请使用 GitHub Actions 或常开机器。
 
-这行的意思是：每周一早上 8:00，进入项目文件夹，然后运行查找研究资料的命令。
+### Windows
 
-你可以这样更改频率：
+使用 Windows Task Scheduler：
 
-```cron
-# 每天 8:00
-0 8 * * * cd /Users/you/Projects/my-wiki && lumina discover run
+1. 创建 **Basic Task**，并选择每周触发。
+2. 选择 **Start a program**。
+3. 将 **Program/script** 设为 `lumina`，**Add arguments** 设为 `discover run`。
+4. 将 **Start in** 设为工作区文件夹。
+5. 手动运行任务，并确认候选资料出现在 `raw/discovered/`。
 
-# 每周一 8:00
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
+电脑必须开机，或者任务需要配置为电脑下次启动后运行。
 
-# 每月第一天 8:00
-0 8 1 * * cd /Users/you/Projects/my-wiki && lumina discover run
-```
+## 验证与排查
 
-如果你想之后方便检查错误，可以使用带日志的版本：
+每次自动运行后，请在加入资料前审阅 `raw/discovered/`。如果没有候选资料，先在工作区根目录手动运行 `lumina discover run --dry-run`，然后在聊天中修正跟踪清单。如果计划任务找不到 `lumina`，请使用该命令的完整路径或修正工作文件夹，然后再手动运行任务。
 
-```cron
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run >> .lumina-discovery.log 2>&1
-```
-
-保存后，检查 cron 是否已经记录这个计划：
-
-```bash
-crontab -l
-```
-
-电脑需要在计划时间保持唤醒。如果笔记本正在睡眠，cron 可能不会运行。
-
-## 6. 在 Windows 上定期运行
-
-Windows 有 **Task Scheduler**。如果项目在 Windows 机器上，可以使用它。
-
-创建一个 Basic Task：
-
-- Trigger：每周，在你选择的时间。
-- Action：Start a program。
-- Program：`lumina`。
-- Arguments：`discover run`。
-- Start in：你的项目文件夹。
-
-电脑需要在计划时间处于开机状态。
-
-## 7. 跟踪 RSS / Atom 源（v1.4+）
-
-除了主题搜索之外，你还可以跟踪 RSS / Atom 源。每次按计划运行时，runner
-会一次性轮询 watchlist 中的所有 feed，基于每个 feed 的独立状态去重，并把
-新的候选条目写入 `raw/discovered/`，方式与主题搜索一样。
-
-通过 `/lumi-research-watchlist` 添加 `type: feed` 项，或直接编辑
-`_lumina/config/watchlist.yml`：
-
-```yaml
-items:
-  - id: arxiv-cs-lg
-    type: feed
-    enabled: true
-    url: "https://arxiv.org/rss/cs.LG"
-    name: "arXiv cs.LG"
-    schedule: daily
-    max_new: 20
-```
-
-原有的 `type: topic` 项继续按原样工作。Feed 的 URL 必须使用 `https://`，
-且不能以 `--` 开头。
-
-每个 feed 的状态保存在 `_lumina/_state/feeds/<feed-id>.json`（etag、
-last-seen guids、轮询计数）。Lumina 把 `last_seen_guids` 限制在 5000 条以内
-并清除超过 90 天的旧条目，因此即使长期使用，这个文件也会保持很小。
-
-如果你想直接在聊天里执行一次（不通过调度），使用
-`/lumi-research-watch-run`。它是 `lumina discover run` 的聊天内等价命令，
-并会用通俗语言报告新发现的内容。
-
-关于 v1.4 的 feed schema、etag 缓存、XXE 拒绝，以及把 `umask 077` 和日志
-轮转结合在一起的 `cron-daily.sh` 包装器，请参阅
-[Research Watch 深度参考](research-watch.md)（英文；v1.4 技术参考）。
+有关资料源的技术规则和命令细节，请参阅 [Research Watch 参考](../reference/research-watch.md)。

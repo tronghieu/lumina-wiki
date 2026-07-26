@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # cron-daily.sh — invoke /lumi-research-watch-run from a cron / launchd / Task
 # Scheduler job. The wrapper is INERT by default; nothing schedules it until
-# the user explicitly wires it into their scheduler (see
-# docs/user-guide/research-watch.md).
+# the user explicitly wires it into their scheduler. Use
+# /lumi-research-watch-run for operating guidance.
 #
 # Path-portability: cd into the project root via $(dirname "$0") so the same
 # script works regardless of where the scheduler invokes it from.

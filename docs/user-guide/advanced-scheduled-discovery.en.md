@@ -1,101 +1,77 @@
-# Advanced: Find Research Regularly
+# How to find research regularly without filling your wiki automatically
 
-Regular research discovery helps Lumina-Wiki occasionally find more papers or
-research material for topics you care about. Each run only creates a list of
-suggested material for you to review. It does not add material to the wiki and
-does not download paper files.
+Use this guide when you already know which research topics or feeds you want to follow. It gives you a repeatable flow: describe a watchlist in chat, run one safe test, review the new candidates, and ingest only sources you choose.
 
-Think of it this way: Lumina-Wiki searches first, and you still decide what is
-worth reading.
+## Prerequisites
 
-## Recommended Flow
+- A Lumina-Wiki workspace installed with the research pack.
+- A watchlist created through `/lumi-research-watchlist`.
+- For automation, a computer or GitHub repository that can run `lumina` and access the workspace.
 
-1. Choose a few topics to follow.
-2. Lumina-Wiki finds new material for those topics.
-3. You review the new list, or ask your assistant to help read it.
-4. You choose what is worth reading.
-5. Use `/lumi-ingest` to add the chosen material to the wiki.
+Discovery only creates candidate records in `raw/discovered/`. It does not add them to your wiki, download a full source, or decide what you should read.
 
-Regular discovery stops at step 2. Careful reading, paper download, summaries,
-wiki pages, and links to older notes still happen during `/lumi-ingest`.
+## 1. Create the watchlist in chat
 
-## 1. Choose Topics To Follow
-
-In your assistant chat, run:
+Start with:
 
 ```text
 /lumi-research-watchlist
 ```
 
-You can speak naturally, for example:
+Describe the topic, frequency, source preference, and number of new items. For example:
 
 ```text
-I want to follow research about the effects of phone use in classrooms. Search once a week and show about 5 useful items each time.
+Track research about phone use in classrooms every week. Show at most five new items and start with arXiv.
 ```
 
-The assistant will save this topic to your follow list. You do not need to
-remember the config file name.
+Use the same command to add an RSS or Atom feed from a specific publisher. Start with a small weekly list so review stays manageable.
 
-Good starting choices:
+## 2. Run a safe test
 
-- Weekly is enough for most topics.
-- Use arXiv first if you have not configured other sources.
-- Show about 5 new items each time, so the list stays readable.
-
-## 2. Test One Run
-
-Before running for real, test it:
+From the workspace root, preview one pass before saving candidates:
 
 ```bash
 lumina discover run --dry-run
 ```
 
-This only checks what Lumina-Wiki would search for. It does not write new
-results.
-
-If it looks right, run:
+If the topics and sources are correct, run the real pass:
 
 ```bash
 lumina discover run
 ```
 
-After a real run, Lumina-Wiki saves the new list under `raw/discovered/`.
+New candidates appear in `raw/discovered/`. You can also ask in chat for a single pass with `/lumi-research-watch-run`.
 
-## 3. What To Do After A New List Appears
+## 3. Review before adding anything
 
-This is the most important part: do not add every result to the wiki.
-
-You can review the list yourself, or ask your assistant to review it first:
+Ask your assistant to compare candidates against your goal. For example:
 
 ```text
-Look at the new material in raw/discovered/ and help me choose the 3 most useful items about the effects of phone use in classrooms.
+Review the new research candidates and recommend the three most useful sources for my classroom-phone topic. Explain why each is worth reading and flag duplicates or weak matches.
 ```
 
-The assistant should help you:
+Treat the result as a reading shortlist, not an automatic import. Open the original sources and choose what deserves a permanent note.
 
-- group material by smaller topics,
-- explain why something is worth reading,
-- skip duplicates or material too far from your topic,
-- suggest what to add to the wiki first.
+## 4. Ingest the sources you choose
 
-Then choose one item and add it to the wiki:
+For each selected source, use:
 
 ```text
-/lumi-ingest <the material you choose>
+/lumi-ingest <selected source>
 ```
 
-Only at this step does Lumina-Wiki download full content, summarize it, create a
-wiki page, and link it with your older notes.
+Only this step reads the selected source in depth and adds its notes to the wiki.
 
-## 4. Run Regularly With GitHub Actions
+## 5. Automate the discovery pass
 
-Use this if your project is on GitHub and you want discovery to run even when
-your computer is off.
+Automation is optional. Set it up only after a manual test works, and keep review and ingest under your control.
 
-Create `.github/workflows/lumina-discovery.yml` with this content:
+### GitHub Actions
+
+Use GitHub Actions when the workspace is in a GitHub repository and you want the check to run while your computer is off. Add `.github/workflows/lumina-discovery.yml`:
 
 ```yaml
-name: Lumina scheduled discovery
+name: Lumina discovery
 
 on:
   schedule:
@@ -114,133 +90,47 @@ jobs:
         with:
           node-version: 22
       - run: npm install -g lumina-wiki
-      - run: lumina discover run --json
+      - run: lumina discover run
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ -d raw/discovered ]; then git add raw/discovered; fi
-          if [ -f _lumina/_state/discovery-runner.json ]; then git add _lumina/_state/discovery-runner.json; fi
           git diff --cached --quiet || git commit -m "chore: add discovered research"
           git push
 ```
 
-This example runs every Monday. GitHub uses UTC time, so the real time may be
-different from your local time.
+GitHub schedules use UTC. Run the workflow manually once and verify that it commits only candidate records. If the repository blocks direct pushes, adapt the final step to your normal review process.
 
-This workflow does commit automatically. If a run finds nothing new, the
-`git commit` step skips itself because there is nothing to save.
+### macOS and Linux
 
-## 5. Run Regularly On macOS Or Linux With Cron
-
-Cron is a simple way to tell your computer to run a command at a fixed time.
-
-First, open a terminal in your Lumina-Wiki project and run:
-
-```bash
-pwd
-```
-
-This prints the full path to your project. Keep that path. Example:
-
-```text
-/Users/you/Projects/my-wiki
-```
-
-Next, open cron:
+Use cron when the machine is normally awake at the chosen time. Find the workspace path with `pwd`, then open your crontab:
 
 ```bash
 crontab -e
 ```
 
-If your computer asks you to choose an editor, choose `nano` if you are not
-sure. In `nano`, press `Ctrl+O`, Enter to save, then `Ctrl+X` to exit.
-
-Add a line like this at the end:
+Add one line, replacing the example path with your workspace path:
 
 ```cron
 0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
 ```
 
-Replace `/Users/you/Projects/my-wiki` with your real project path.
+Confirm the schedule with `crontab -l`. Cron does not reliably run while a laptop is asleep. Use GitHub Actions or an always-on machine if that matters.
 
-That line means: every Monday at 8:00 in the morning, go to the project folder
-and run the research discovery command.
+### Windows
 
-You can change the timing like this:
+Use Windows Task Scheduler:
 
-```cron
-# Every day at 8:00
-0 8 * * * cd /Users/you/Projects/my-wiki && lumina discover run
+1. Create a **Basic Task** with a weekly trigger.
+2. Choose **Start a program**.
+3. Set **Program/script** to `lumina` and **Add arguments** to `discover run`.
+4. Set **Start in** to the workspace folder.
+5. Run the task once and confirm that candidates appear in `raw/discovered/`.
 
-# Every Monday at 8:00
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
+The computer must be on, or the task must be configured to run after the next available start time.
 
-# First day of every month at 8:00
-0 8 1 * * cd /Users/you/Projects/my-wiki && lumina discover run
-```
+## Verify and troubleshoot
 
-If you want an easy place to check errors later, use the logging version:
+After an automated run, review `raw/discovered/` before ingesting. If no candidates appear, run `lumina discover run --dry-run` manually from the workspace root and correct the watchlist in chat. If a scheduled task cannot find `lumina`, use the full path to the command or fix its working folder, then run the task manually again.
 
-```cron
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run >> .lumina-discovery.log 2>&1
-```
-
-After saving, check that cron kept the schedule:
-
-```bash
-crontab -l
-```
-
-The computer must be awake at the scheduled time. If a laptop is asleep, cron
-may not run.
-
-## 6. Run Regularly On Windows
-
-Windows has **Task Scheduler**. Use it if your project is on a Windows machine.
-
-Create a Basic Task:
-
-- Trigger: weekly, at the time you choose.
-- Action: Start a program.
-- Program: `lumina`.
-- Arguments: `discover run`.
-- Start in: your project folder.
-
-The computer must be on at the scheduled time.
-
-## 7. Follow RSS / Atom Feeds (v1.4+)
-
-You can also follow an RSS / Atom feed alongside topic searches. The runner
-polls every feed in your watchlist once per scheduled invocation, dedups
-against per-feed state, and writes new candidates into `raw/discovered/`
-like any topic search.
-
-Add a `type: feed` item via `/lumi-research-watchlist`, or by editing
-`_lumina/config/watchlist.yml` directly:
-
-```yaml
-items:
-  - id: arxiv-cs-lg
-    type: feed
-    enabled: true
-    url: "https://arxiv.org/rss/cs.LG"
-    name: "arXiv cs.LG"
-    schedule: daily
-    max_new: 20
-```
-
-Existing `type: topic` items keep working with no change. The feed URL must
-use `https://` and must not begin with `--`.
-
-Per-feed state lives at `_lumina/_state/feeds/<feed-id>.json` (etag,
-last-seen guids, poll count). Lumina caps `last_seen_guids` at 5000 entries
-and evicts entries older than 90 days, so the file stays small even after
-years of polling.
-
-If you want a single one-shot pass from inside chat (no scheduler), use
-`/lumi-research-watch-run`. It is the in-chat equivalent of
-`lumina discover run` and reports a plain-language summary of what was new.
-
-For the v1.4 feed schema, etag caching, XXE rejection, and the
-`cron-daily.sh` wrapper that pairs `umask 077` with log rotation, see
-[Research Watch deep-dive](research-watch.md) (English; v1.4 technical reference).
+For technical feed rules and command details, see the [Research Watch reference](../reference/research-watch.md).

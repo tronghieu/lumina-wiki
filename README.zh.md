@@ -1,31 +1,26 @@
-<p align="center" lang="zh-Hans">
-  <img src="assets/lumina-logo.png" width="250" alt="Lumina-Wiki Logo">
+<p align="left" lang="zh-Hans">
+  <img src="assets/lumina-logo.png" width="250" alt="Lumina-Wiki 标志">
 </p>
 
 # Lumina-Wiki
 
 > **Where Knowledge Starts to Glow.**
->
-> 把 AI 变成您的个人知识助手和第二大脑。
+
+把读过的资料变成一个以后可以继续提问的知识库。
+
+Lumina-Wiki 为你的 AI 助手提供一个长期用于学习和研究的工作空间。你可以加入论文、书籍、报告、课程资料或个人笔记。助手会总结内容、连接相关观点，并把结果保存为电脑上的普通 Markdown 文件。
 
 <p align="center">
-  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/>
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg"/>
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-yellow.svg"/>
-  <img alt="Skills" src="https://img.shields.io/badge/Skills-Many-purple.svg"/>
-  <br>
-  <img alt="Powered by" src="https://img.shields.io/badge/Powered%20by-grey?style=flat"/>
-  <img alt="Claude" src="https://img.shields.io/badge/-Claude%20Code-orange?style=flat"/>
-  <img alt="Codex" src="https://img.shields.io/badge/-Codex-blueviolet?style=flat"/>
-  <img alt="Gemini" src="https://img.shields.io/badge/-Gemini-4285F4?style=flat"/>
+  <img alt="许可证" src="https://img.shields.io/badge/License-MIT-blue.svg">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg">
 </p>
 
 <p align="center">
-  <a href="README.md" lang="en">English</a> • <a href="README.vi.md" lang="vi">Tiếng Việt</a> • 简体中文
+  <a href="README.md" lang="en">English</a> · <a href="README.vi.md" lang="vi">Tiếng Việt</a> · 简体中文
 </p>
 
 <p align="center">
-  <a href="docs/user-guide/zh.md">用户指南</a>
+  <a href="docs/user-guide/zh.md">从使用指南开始</a>
 </p>
 
 <p align="center">
@@ -36,244 +31,158 @@
   <a href="https://www.youtube.com/watch?v=XuhhjbwoNeQ">▶ 观看视频教程（越南语）</a>
 </p>
 
-## 目录
+## 你可以用它做什么？
 
-- [快速开始与安装](#2-快速开始)
-- [用户指南](docs/user-guide/zh.md)
-- [核心工作流](#1-核心工作流)
-- [第一组指令](#3-您的第一组指令核心技能)
-- [目录结构指南](#4-目录结构指南)
-- [可用技能](#5-可用技能v01)
-- [未来规划](#6-未来规划)
-- [贡献与许可](#7-贡献与许可)
-- [其他语言](#8-其他语言)
+当你希望完成下面这些事情时，Lumina-Wiki 会很有用：
 
----
+- 把从多份资料中学到的内容保存在同一个地方；
+- 比较多个来源中的观点或证据；
+- 准备考试、论文、文献综述或长期研究项目；
+- 回到旧主题时，不必翻找以前的聊天记录；
+- 把重要答案和支持这些答案的来源保存在一起。
 
-## 1. 核心工作流
+你不需要手动建立 wiki。你负责选择资料和做出重要决定。AI 助手负责阅读、整理、建立联系和检查笔记等日常工作。
 
-Lumina-Wiki 遵循一个简单原则：将您的原始资料与 AI 的结构化知识分开。
+## 它如何工作？
+
+Lumina-Wiki 使用两个主要文件夹：
+
+- `raw/` 保存你的原始资料。
+- `wiki/` 保存根据这些资料整理出的笔记。
 
 ```text
-+-------------------------+      /lumi-ingest      +---------------------------+
-|      您的输入            | ---------------------> |      AGENT 的大脑         |
-|      (raw/ 文件夹)       |                        |      (wiki/ 文件夹)       |
-|                         | <--------------------- |                           |
-|  - paper.pdf            |       /lumi-ask        |  - paper.md (摘要)        |
-|  - notes.txt            |                        |  - concept-a.md           |
-+-------------------------+                        +---------------------------+
+raw/ 中的原始资料
+        |
+        |  lumi-ingest
+        v
+wiki/ 中整理好的笔记
+        |
+        |  lumi-ask
+        v
+根据已读资料生成的回答
 ```
 
-<p align="center">
-  <img src="assets/lumina-architecture-en.png" alt="Lumina-Wiki 架构" width="720">
-</p>
+原始资料与 AI 编写的笔记始终分开。这样更容易检查观点来自哪里，也方便在需要时修改 wiki。
 
-1.  **您提供：** 将文档（PDF、笔记）放入 `raw/` 目录。
-2.  **Agent 构建：** 在 AI 对话中使用指令（如 `/lumi-ingest`），让 Agent 从 `raw/` 读取内容，并在 `wiki/` 中构建结构化、互相关联的维基。
-3.  **您使用：** 通过 `/lumi-ask` 直接向 `wiki/` 中的 Agent“大脑”提问，获得更快、更贴合上下文的回答。
+## 几分钟内开始使用
 
-## 2. 快速开始
+### 开始前
 
-### **第一步：安装**
+请安装 [Node.js](https://nodejs.org/en/download) 的当前 LTS 版本。你还需要一个可以访问电脑文件夹的 AI 工具，例如 Codex、Claude Code 或 Gemini CLI。
 
-用一条命令把 wiki 工作区安装到当前项目中：
+### 1. 创建工作空间
 
-运行此命令前，您的电脑需要安装 **Node.js**。如果尚未安装，请从官方网站下载并安装推荐版本：[nodejs.org/en/download](https://nodejs.org/en/download)。
+在你想保存知识库的文件夹中打开命令行窗口，然后运行：
 
 ```bash
 npx lumina-wiki install
 ```
 
-> **Windows 用户注意：** 为了获得最佳体验，建议[启用开发者模式](https://learn.microsoft.com/zh-cn/windows/apps/get-started/enable-your-device-for-development)，以便安装程序正确使用符号链接。如果开发者模式关闭，安装程序会退回到复制 skill 文件；功能仍然可用，但对后续更新不如符号链接理想。
+设置过程会询问你使用哪种 AI 工具，以及是否需要可选功能。如果不确定，可以保留建议选项。以后再次运行同一命令即可更改设置。
 
-安装程序会引导您完成几个快速设置步骤，包括选择可选的 **Packs**，例如 `research`（研究）、`reading`（阅读）和 `learning`（学习）。
+### 2. 加入一份资料
 
-### **第二步（可选）：配置 Research Pack**
+把 PDF、Markdown 或文本文件放入：
 
-如果您安装了 `research` 包，部分技能可以使用 API key 来获得更好的在线搜索效果。在 AI 对话中运行：
-
-> **您：**
-> `/lumi-research-setup`
-
-Agent 会引导您检查研究工具，并在需要时把 key 保存到本地 `.env` 文件中。
-
-### **第三步（升级时）：迁移旧版 Wiki 条目**
-
-如果您在已经有旧版 `wiki/` 的项目上重新安装 Lumina-Wiki，直接再次运行 `npx lumina-wiki install` 即可。安装器会更新 scripts、schemas 和 skills；**您在 `wiki/`、`raw/`、`log.md` 中的内容不会被修改**。
-
-您可以在项目根目录或其子目录中运行该命令。如果从设置中移除某个包或 AI 工具，Lumina 会清理旧命令和未经您修改的设置文件。您修改过的文件会保留，并显示警告。如果整个项目被复制、移动或重命名，Lumina 会在升级时修复由系统管理的链接。
-
-如果安装器提示旧条目缺少新的 frontmatter 字段，可以用两种方式回填：
-
-- **推荐：** 打开 AI 对话并运行 `/lumi-migrate-legacy`。
-- **更快：** 运行终端命令：
-
-```bash
-node _lumina/scripts/wiki.mjs migrate --add-defaults
+```text
+raw/sources/
 ```
 
-有关各版本 schema 变更的细节，请查看 [`CHANGELOG.md`](CHANGELOG.md) 或安装后的本地副本 `_lumina/CHANGELOG.md`。
+例如：
 
-### **第四步（可选）：连接聊天 Agent**
-
-想通过 Telegram 或飞书使用 OpenClaw 或 Hermes 来照看多个 wiki？请为每个 Agent 在全局安装一次 Lumina 辅助功能：
-
-```bash
-npm install --global lumina-wiki
-lumina install --yes --agents openclaw   # 或 --agents hermes
+```text
+raw/sources/my-first-paper.pdf
 ```
 
-之后，在聊天中告诉 Agent 已有 wiki，或告诉它想用哪个文件夹建立新 wiki。它会先检查文件夹，并在添加任何内容前询问你。完整流程请参阅[安装和集成指南](docs/user-guide/openclaw-hermes-integration.zh.md)。
+### 3. 请 AI 助手阅读
 
-## 3. 您的第一组指令（核心技能）
+在 Codex 中输入：
 
-在 AI Agent 的聊天界面中使用这些指令与 wiki 交互，例如 Gemini CLI、Claude 等。
-
-**阶段一：导入与构建知识**
--   `/lumi-init`: 扫描 `raw/` 目录并执行首次 wiki 构建。
--   `/lumi-ingest [path/to/file]`: 把一份新文档加入知识库。AI 会先请你审阅草稿；如果没有需要你判断的问题，就会继续完成后续步骤。
-
-**阶段二：查询与维护**
--   `/lumi-ask [您的问题]`: 基于 `wiki/` 中的完整知识库提问。
--   `/lumi-edit [path/to/wiki/page]`: 要求修改或修正某个具体 wiki 页面。
--   `/lumi-check`: 检查整个 wiki 的问题（断链、孤立页面等）。
-
-*如果您安装了 `research`、`reading` 或 `learning` 等可选包，还会有额外技能可用。*
-
----
-
-## 4. 目录结构指南
-
-Lumina 会创建一个工作区，每个目录都有明确用途。
-
-<p align="center">
-  <img src="assets/lumina-env-en.png" alt="Lumina-Wiki 工作区环境" width="720">
-</p>
-
-| 路径 | 用途 | 管理方 |
-| :--- | :--- | :--- |
-| **`raw/`** | **您的不可变输入库。** Agent **只从这里读取**。 | **您** |
-| `raw/sources/` | 放置主要文档（PDF、论文）的位置。 | 您 |
-| `raw/notes/` | 您的个人笔记和未结构化想法。 | 您 |
-| `raw/assets/` | 笔记所需的图片或其他资产。 | 您 |
-| `raw/discovered/`| *(Research Pack)* `/lumi-research-discover` 找到的论文会保存在这里。 | Agent |
-| **`wiki/`** | **Agent 的大脑。** Agent 在这里**写入**结构化知识。 | **Agent** |
-| `wiki/sources/` | 为 `raw/sources` 中每个文档生成的 AI 摘要。 | Agent |
-| `wiki/concepts/` | 被抽取成独立页面的核心想法和定义。 | Agent |
-| `wiki/people/` | 作者、研究人员等人物资料。 | Agent |
-| `wiki/outputs/` | `/lumi-ask` 的详细回答会保存在这里，便于引用。 | Agent |
-| `wiki/index.md` | 整个 wiki 的主目录。 | Agent |
-| `...` | *(其他实体目录，如 `foundations/`、`characters/`，会随对应 pack 出现)* | Agent |
-| **`_lumina/`** | Lumina 管理的引擎、脚本和配置。 | **系统** |
-| **`.agents/`** | Agent 可以使用的 skills。 | **系统** |
-
-通常您只需要在 `raw/` 中工作，并阅读 `wiki/` 中的结果；不需要修改系统目录。
-
-### **使用 Obsidian 浏览 Wiki（可选）**
-
-[Obsidian](https://obsidian.md) 是一款本地 Markdown 笔记应用，可以帮助您阅读和浏览互相关联的笔记。由于 Lumina-Wiki 也生成 Markdown 文件，您可以用 Obsidian 打开**项目根目录**，更方便地阅读 wiki。更多信息请见[用户指南](docs/user-guide/zh.md#用-obsidian-阅读-wiki)。
-
-### **使用 qmd 进行本地搜索（高级，可选）**
-
-随着 Wiki 的增长，您可以使用 [qmd](https://github.com/tobi/qmd) 实现更快的本地 Markdown 搜索。如果您的 IDE 支持 Skill 格式，请安装官方 qmd skill：
-
-```bash
-npx skills add https://github.com/tobi/qmd --skill qmd
+```text
+$lumi-ingest raw/sources/my-first-paper.pdf
 ```
 
-有关详细的安装和配置，请参阅[高级指南](docs/user-guide/advanced-qmd.zh.md)。
+在使用 `/` 命令的工具中，例如 Claude Code 或 Gemini CLI，输入：
 
-
----
-
-## 5. 可用技能
-
-这些是您在与 AI 对话时可以使用的指令。
-
-| Pack | Skill | 用途 |
-| :--- | :--- | :--- |
-| **Core** | `/lumi-init` | 从 `raw/` 中的所有文件初始化 wiki。 |
-| | `/lumi-ingest` | 阅读一份文档并撰写 wiki 页面。AI 会先请你审阅草稿；如果没有需要你判断的问题，就会继续完成后续步骤。可跨会话续接。 |
-| | `/lumi-ask` | 基于整个知识库提问。 |
-| | `/lumi-edit` | 要求手动编辑 wiki 页面。 |
-| | `/lumi-check` | 检查 wiki 中的问题（断链等）。 |
-| | `/lumi-reset` | 安全地删除 wiki 的部分内容。 |
-| | `/lumi-verify` | 核查 wiki 里的笔记是否与引用的来源相符。把可疑之处报告给你审阅；不会替你修改笔记。 |
-| | `/lumi-help` | 读取工作区状态，给出下一步该做的一条建议。加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 自己的工作原理（例如 `/lumi-help explain bidirectional links`）。 |
-| **Research**| `/lumi-research-discover` | 发现并排序相关研究论文。 |
-| | `/lumi-research-watchlist` | 帮你选择要定期查找的研究主题。 |
-| | `/lumi-research-survey` | 从现有知识创建综述/调研。 |
-| | `/lumi-research-prefill` | 预先生成基础概念，避免重复。 |
-| | `/lumi-research-topic` | 把 wiki 中已有的相关概念和来源汇聚成一个主题页，保存在 `wiki/topics/<slug>.md`。AI 会提议收录哪些内容，由你确认后再生成页面。多次 `/lumi-ingest` 之后，用它把一组相关想法整理成独立的主题页。 |
-| | `/lumi-research-rank` | 给已经纳入的论文打分，帮你决定先读哪一篇。它会查询论文的影响力（引用信号）、估计发表场所的声望，并从四个方面评估质量——正确性、清晰度、贡献、背景——然后在论文页面上加上一份清晰的评分卡。实测数据与 AI 的估计始终分开标注。 |
-| | `/lumi-research-setup` | 帮助配置研究工具的 API key。 |
-| | `/lumi-research-watch-run` | 基于 watchlist 运行一次计划式发现（主题 + RSS / Atom 源）。仅在你要求时才运行。 |
-| **Reading** | `/lumi-reading-chapter-ingest`| 按章节导入书籍知识。 |
-| | `/lumi-reading-character-track`| 追踪故事中的角色及其关系。 |
-| | `/lumi-reading-theme-map` | 识别并映射故事主题。 |
-| | `/lumi-reading-plot-recap` | 提供情节的顺序回顾。 |
-| **Learning** | `/lumi-learning-reflect` | 引导一次针对某个概念或资料的自我反思（self-reflection）。在 `wiki/reflections/` 中创建个人反思页，包含可改写的"当前理解"部分和只能追加的"演变日志"。AI 充当认知镜——引用你过去说的话并提问——但从不替你撰写反思内容。 |
-
-后台脚本位于 `_lumina/scripts/` 和 `_lumina/tools/`；通常您不需要直接调用它们。
-
----
-
-## 6. 未来规划
-
-Lumina-Wiki 正在快速演进。这是我们的用户路线图：
-
-**近期计划（稳定性与新导入支持）**
-- [x] **`/lumi-help` 技能：** 智能助手读取工作区状态并告诉你下一步该做什么；加参数 `/lumi-help skills` 可查看全部命令清单，或 `/lumi-help explain <主题>` 询问 Lumina 本身的工作原理。*（v1.4 已发布）*
-- [x] **学习包（Learning Pack）：** 自我反思功能，帮助您追踪对某个概念的理解随时间的演变。*（v1.4 已发布）*
-- [x] **多语言安装：** 安装时可选英文、越南文或中文作为主语言。*（v1.2 已发布）*
-- [x] **原生 DOCX、RTF 与 EPUB 导入：** 通过 research pack 将 Word、Rich Text 与 EPUB 电子书直接导入维基。*（v1.x 已发布）*
-- [x] **改进的 CI/CD：** 正式支持 Bun 和 Node 22 环境。*（v1.2 已发布）*
-- [x] **全球数据源扩展：** 直接集成 OpenAlex、CORE 和 Unpaywall，实现可靠的 DOI-to-PDF 解析。*（在 v1.6 中发布）*
-- [x] **RSS 与博客监控：** 通过 watchlist 中的 `type: feed` 项，自动从您喜爱的实验室博客和期刊中发现新论文。*（在 v1.6 中发布）*
-- [x] **高级论文排名：** 通过 `/lumi-research-rank` 查看研究论文的影响力评分和质量信号。*（在 v1.7 中发布）*
-
-**长期计划（深度研究与集成）**
-- [ ] **图片 OCR 与扫描 PDF：** 将截图与扫描版 PDF 导入维基。
-- [ ] **论文版本追踪：** 当已导入的论文出现新修订版或正式发表版本时发出通知。
-- [ ] **Google Workspace：** 直接将 Google Docs 和 Sheets 导入知识图谱。
-- [ ] **多媒体支持：** 通过转录处理 YouTube 视频和音频录音。
-- [ ] **知识图谱审计：** 自动检测矛盾和结构偏移。
-
-**计划中**
-- [ ] **桌面端应用：** 专用的图形界面环境，方便管理维基。
-- [ ] **专业科学包：** 为生物医学和物理研究人员提供深度集成。
-
----
-*完整的技术细节请见 [`ROADMAP.md`](./ROADMAP.md)。想要贡献？欢迎在 GitHub 上加入我们！*
-
-
----
-
-## 7. 贡献与许可
-
-### CLI 契约
-
-CI 脚本和集成应参考 [`docs/cli-contract.md`](./docs/cli-contract.md) 了解 v1.x 稳定标志列表和退出码映射。未在其中列出的任何内容均为内部，可能在不另行通知的情况下更改。
-
-### 本地开发（贡献者）
-
-如果您想为 `lumina-wiki` 安装器做贡献：
-```bash
-# 1. 克隆并安装依赖
-git clone https://github.com/tronghieu/lumina-wiki.git
-cd lumina-wiki
-npm ci
-
-# 2. 运行测试
-npm run test:all
+```text
+/lumi-ingest raw/sources/my-first-paper.pdf
 ```
 
-## 8. 其他语言
+助手会在保存新笔记前让你查看草稿。你可以同意、要求修改，也可以停止并在以后继续。
 
-- [English（英文）](README.md)
-- [Tiếng Việt（越南语）](README.vi.md)
+### 4. 提出第一个问题
 
-**许可：** [MIT](LICENSE) © Lưu Trọng Hiếu.
+资料加入后，可以尝试：
+
+```text
+/lumi-ask 这份资料的主要观点是什么？
+```
+
+如果使用 Codex，请把开头的 `/` 改为 `$`。
+
+不知道下一步做什么时，可以使用 `/lumi-help` 或 `$lumi-help`。
+
+如需带有检查点和常见问题处理方法的完整引导，请阅读[使用指南](docs/user-guide/zh.md)。
+
+## 可选功能
+
+基础功能始终可用。设置时还可以加入：
+
+| 功能 | 适合这些需求 |
+| --- | --- |
+| 研究 | 查找论文、跟踪研究主题、评估来源和撰写文献综述。 |
+| 阅读 | 按章节阅读书籍，同时避免提前透露后面的情节。 |
+| 学习 | 记录自己在学习过程中理解发生的变化。 |
+
+以后可以再次运行 `npx lumina-wiki install` 来加入或移除可选功能。你的资料和 wiki 笔记会被保留。
+
+## 日常常用命令
+
+下面这些命令足以满足大多数需求：
+
+| 命令 | 用途 |
+| --- | --- |
+| `/lumi-help` | 获得一条适合当前情况的下一步建议。 |
+| `/lumi-ingest` | 把一份资料加入 wiki。 |
+| `/lumi-ask` | 根据 wiki 中已有的知识提问。 |
+| `/lumi-edit` | 修改或更新一个 wiki 页面。 |
+| `/lumi-verify` | 检查笔记是否与引用的来源一致。 |
+| `/lumi-check` | 检查失效链接和其他问题。 |
+
+所有命令请查看[命令参考](docs/user-guide/commands.zh.md)。
+
+## 其他指南
+
+- [新手教程](docs/user-guide/zh.md)
+- [研究流程](docs/user-guide/research.zh.md)
+- [命令参考](docs/user-guide/commands.zh.md)
+- [定期查找研究资料](docs/user-guide/advanced-scheduled-discovery.zh.md) — 高级
+- [使用 QMD 进行本机搜索](docs/user-guide/advanced-qmd.zh.md) — 高级
+- [连接 OpenClaw 或 Hermes](docs/user-guide/openclaw-hermes-integration.zh.md) — 高级
+
+你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹，以图形界面浏览 Markdown 笔记。
+
+## 更新或卸载
+
+如需更新 Lumina-Wiki 或更改设置，请运行：
+
+```bash
+npx lumina-wiki install
+```
+
+如需移除由 Lumina-Wiki 管理的文件，请运行：
+
+```bash
+npx lumina-wiki uninstall
+```
+
+卸载后，`raw/` 中的原始资料和 `wiki/` 中的知识笔记都会保留。
+
+## 参与贡献
+
+开发说明请见 [CONTRIBUTING.md](CONTRIBUTING.md)。稳定的命令行约定在 [docs/cli-contract.md](docs/cli-contract.md) 中，后续计划在 [ROADMAP.md](ROADMAP.md) 中。
+
+Lumina-Wiki 使用 [MIT 许可证](LICENSE)。
 
 ---
 

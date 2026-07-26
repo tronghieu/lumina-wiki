@@ -1,153 +1,156 @@
-# Install and Integrate Lumina-Wiki with OpenClaw and Hermes
+# Use Lumina-Wiki from OpenClaw or Hermes
 
-Use this guide to run one OpenClaw or Hermes agent across several
-Lumina-Wikis. You can send a document from chat, ask a question, or ask the
-agent to create a new wiki without opening its project folder.
+Connect your existing OpenClaw or Hermes chat agent to Lumina-Wiki once, then
+manage several wikis from the chat you already use. You can send a document to
+a named wiki, ask what it says, or ask the agent to adopt or create a wiki
+without opening that folder yourself.
 
-This is an integration guide. It assumes OpenClaw or Hermes is already
-installed, connected to your chat channel, and allowed to run commands. For
-platform setup, use the official [OpenClaw documentation](https://docs.openclaw.ai/)
-or [Hermes documentation](https://hermes-agent.nousresearch.com/docs/).
+This is an advanced how-to for people who already have OpenClaw or Hermes
+working. For installing the chat platform or connecting a channel, use the
+official [OpenClaw documentation](https://docs.openclaw.ai/) or [Hermes
+documentation](https://hermes-agent.nousresearch.com/docs/).
 
-## What you need
+## Before you begin
 
-- Node.js 20 or later in the environment where the agent runs.
-- OpenClaw or Hermes working with your chosen chat channel.
-- A stable folder for each wiki.
+- OpenClaw or Hermes can already receive your messages and run commands in its
+  own environment.
+- Node.js 20 or later is available in that same environment. Check with:
 
-Check Node.js first:
+  ```bash
+  node --version
+  ```
 
-```bash
-node --version
-```
+- The agent can read and write the folders you want to use for wikis.
+- If Hermes runs in Docker, mount both your wiki folders and `~/.lumina` into
+  the container before continuing.
 
-## 1. Install Lumina for your agent
+Use this guide when one chat agent needs to care for more than one wiki. For a
+single wiki that you always open in an editor, the regular Lumina-Wiki setup is
+usually simpler.
 
-Run these two commands in the environment where the agent runs. The first
-installs the `lumina` CLI; the second installs Lumina's skills for OpenClaw:
+## Install Lumina skills for the chat agent
+
+Run the following in the environment where the agent runs. Replace
+`<platform>` with `openclaw` or `hermes`:
 
 ```bash
 npm install --global lumina-wiki
-lumina install --yes --agents openclaw
+lumina install --yes --agents <platform>
 ```
 
-For Hermes, replace `openclaw` with `hermes`. If OpenClaw and Hermes both run
-in the same environment, use:
+If both platforms run in that same environment, use
+`--agents openclaw,hermes` in the second command.
 
-```bash
-lumina install --yes --agents openclaw,hermes
-```
+This installs Lumina's managed skills for the selected platform. It does not
+create a wiki or replace unrelated skills already installed for the agent.
 
-Open a new chat after installing and ask:
+### Checkpoint: confirm the agent can see Lumina
+
+Start a new chat, or restart the platform if it does not reload skills between
+chats. Ask:
 
 ```text
 What Lumina-Wiki tasks can you help me with?
 ```
 
-The agent should now be able to list, set up, check, and use your wikis
-through `/lumi-hub`.
+The agent should say it can manage a group of wikis and should be able to use
+`/lumi-hub`. If it cannot, see [Troubleshooting](#troubleshooting).
 
-## 2. Add an existing wiki or create a new one
+## Add your first wiki through chat
 
-Do this in chat, not by manually creating Lumina folders. The agent first
-looks at the path and asks only for information it still needs.
-
-To add an existing wiki, say:
-
-```text
-Remember the wiki at /Users/me/wikis/ai-engineering as AI Engineering.
-You can also call it AI wiki.
-```
-
-To create a new wiki, include the path, purpose, and any packs you want:
+Tell the agent about either a wiki you already have or a new folder. Include a
+natural name, a short alias, and—when creating a new wiki—its purpose and any
+optional packs you want.
 
 ```text
-Create a new wiki at /Users/me/wikis/cooking called Cooking.
-It is for recipes and kitchen notes. Add the research pack.
+Create a wiki at /Users/me/wikis/ai-engineering called AI Engineering.
+Call it AI wiki. It is for AI engineering notes and papers. Include the
+research pack.
 ```
 
-The agent checks the folder before changing it.
+The agent follows one safe chat-first path:
 
-- If it is already a Lumina-Wiki, it only adds it to your wiki list.
-- If it is empty or missing, it asks for a name, description, and optional
-  packs before setting it up.
-- If it already has your files, it tells you what it found and waits for your
-  explicit approval. It only adds missing Lumina files and never overwrites
-  your existing files.
+1. It checks the path without changing anything.
+2. If the folder already contains your files, it tells you what it found and
+   asks for explicit approval before adding Lumina files.
+3. It asks only for details still missing, then creates and registers the wiki
+   in one additive operation.
 
-Pick a short alias you would naturally use in conversation. `AI wiki` is often
-more convenient than a long project name.
+If the path is already a complete Lumina-Wiki, the agent registers it without
+reinstalling or upgrading it. A wiki created through chat is intentionally
+lightweight: the chat agent's skills stay global, while the wiki keeps its own
+notes and working files.
 
-## 3. Use the wiki from chat
+### Checkpoint: the wiki is ready for chat
 
-Once a wiki is known to the agent, name it when you make a request:
+Ask:
+
+```text
+Which wikis do I have?
+```
+
+You should see **AI Engineering** and its alias. If you use an alias in a
+later message, the agent resolves it to that wiki before doing work.
+
+## Work from chat
+
+Name the wiki whenever you send a document or ask for work:
 
 ```text
 Add this PDF to my AI wiki.
 
-What does Cooking say about keeping kitchen knives sharp?
+What does AI Engineering say about evaluation-driven development?
 
-Check my Reading Notes wiki for broken links.
+Check my AI wiki for broken links.
 ```
 
-If the request names one wiki clearly, the agent works there. If more than
-one wiki could fit, it asks you to choose instead of guessing. Each reply that
-changes something should name the wiki it changed.
+For each request, the agent resolves the wiki by its name or alias, reads that
+wiki's `README.md`, and then uses the normal Lumina workflow there. If exactly
+one wiki clearly matches the subject, it tells you which one it chose;
+otherwise, it asks you to choose.
 
-When you send a document through chat, the agent places a new copy in the
-selected wiki and follows the normal Lumina ingest flow. A file already in the
-wiki is never overwritten.
+When you attach a document, the agent first confirms that the platform made
+the attachment available, then places a new collision-safe copy in the chosen
+wiki before ingesting it. It does not overwrite an existing source file. Its
+reply should name the wiki that changed.
 
-## 4. Check all of your wikis
+### Checkpoint: test the whole route
 
-Ask “Which wikis do I have?” or “Are all my wikis healthy?”, or run:
+Send a small document and say, “Add this to my AI wiki.” After it finishes,
+ask one question answered by that document. A successful result confirms the
+attachment, wiki selection, ingestion, and question flow.
 
-```bash
-lumina wikis list
-lumina wikis resolve "AI wiki"
-lumina wikis doctor
-```
+## Keep the fleet healthy
 
-For a report that is convenient for an automation or another tool, add
-`--json`:
+Ask the agent, “Are all my wikis healthy?” It can run a read-only health check
+across the wikis it knows. If a wiki is missing expected Lumina pieces, ask it
+to repair that wiki. Repair creates only missing structure and applies safe
+link fixes; it never deletes or overwrites existing wiki content.
 
-```bash
-lumina wikis doctor --json
-```
+You may schedule the health check with your platform's scheduler. The command
+for an automation is `lumina wikis doctor --json`. Schedule checks, not
+automatic ingestion: deciding which documents to add remains your decision.
 
-If a check finds missing Lumina pieces, repair only those missing pieces:
-
-```bash
-lumina wikis doctor --fix
-```
-
-The repair does not delete or rewrite existing wiki content. Use it after a
-folder was partly copied, restored, or accidentally damaged.
-
-OpenClaw's scheduled tasks or Hermes scheduled tasks can run
-`lumina wikis doctor --json` regularly. Do not schedule automatic ingestion:
-choosing what to ingest remains your decision.
-
-## Troubleshooting and operating limits
+## Troubleshooting
 
 | Situation | What to do |
 | --- | --- |
-| The agent cannot find a wiki | Ask it to run `lumina wikis doctor`. If the wiki moved, register its new path in chat. |
-| The agent is unsure which wiki you mean | Reply with the wiki's name or alias. It should not choose for you. |
-| Lumina skills do not appear | Start a new chat or restart the platform, then run the matching `lumina install --yes --agents ...` command again. |
-| A health check finds missing pieces | Use `lumina wikis doctor --fix`; it only adds missing pieces. |
+| Lumina skills do not appear | Open a new chat or restart the platform. Confirm Node.js and the `lumina` command are available to the agent's own environment, then repeat the installation command for that platform. |
+| The agent cannot find a wiki | Use its exact name or alias. If the folder moved, tell the agent its new path so it can inspect and register it again. |
+| The agent asks before using a folder with files | This is expected. Review the files it reports and approve only if you want Lumina added alongside them. |
+| A document attachment cannot be read | Check the platform's attachment permissions and current size limit, then try a smaller file. Use the platform's official documentation because these limits can change. |
+| A health check reports problems | Ask the agent to run a repair for that named wiki. It adds missing pieces and safe fixes, but does not replace your notes or sources. |
 
-One agent should be the primary writer for a wiki at any given time. Do not
-have two agents ingest or edit the same wiki simultaneously. Lumina
-also keeps wikis separate: it does not create links between wikis or answer
-one combined question across all of them.
+## Operating limits and safety
 
-Only expose folders and chat channels that you are comfortable letting the
-agent access. Use each platform's permission and sandbox controls for
-stricter boundaries.
+- Keep one primary writing agent per wiki at a time. Do not have two agents
+  ingest or edit the same wiki simultaneously.
+- Wikis remain separate. Lumina does not create links between them or combine
+  them into one answer.
+- Give the agent access only to chat channels and folders you are comfortable
+  letting it use. Apply OpenClaw or Hermes permission and sandbox controls as
+  needed.
+- Chat-driven ingestion remains user-initiated. Use scheduled tasks only for
+  health checks unless you deliberately choose a different workflow.
 
-## Next steps
-
-Send a small document to your first wiki and ask a simple question about it.
-This confirms the full path: chat attachment, selected wiki, ingestion, and a
-useful answer. For day-to-day Lumina commands, return to the [User Guide](en.md).
+For everyday work inside a selected wiki, return to the [User Guide](en.md).

@@ -1,95 +1,98 @@
-# 📚 高级指南：使用 QMD 加速 AI 查询
+# 如何用 QMD 在大型 wiki 中进行本地搜索
 
-**QMD (Query Markup Documents)** 是一款本地搜索工具，可帮助 AI 加速在 Wiki 中检索信息的速度。AI 不再需要按顺序读取文件，而是利用 QMD 创建的索引来快速定位最相关的文本段落。
+当 wiki 中有很多 Markdown 笔记而你想在本机快速查找内容时，请使用本指南。QMD 是可选工具：Lumina-Wiki 不会安装它，也不会让 `/lumi-ask` 自动使用它。
 
-该工具结合了**关键词搜索** (BM25) 和**语义搜索** (Vector)，能够提供精准的结果，使 `/lumi-ask` 等命令在大型知识库上运行更加高效。
+## 前提条件
 
----
+- Node.js 22 或更高版本；用 `node --version` 检查。
+- 一个终端，以及安装全局 npm 包的权限。
+- 在 macOS 上：Homebrew 和 Homebrew 的 SQLite 包。QMD 的扩展需要它。
+- 一个包含 `wiki/` 文件夹的 Lumina-Wiki 工作区。
 
-## 1. 为什么需要 QMD？
+## 安装并检查 QMD
 
-*   **性能**：通过使用预建索引来节省时间，避免 AI 手动扫描整个文件内容。
-*   **智能搜索**：支持语义搜索，即使不包含您提供的精确关键词，也能找到相关内容。
-*   **安全**：整个索引和搜索过程 100% 在您的本地计算机上运行。
-
----
-
-## 2. 安装步骤
-
-### 第 1 步：安装 QMD 工具
-
-请根据您的操作系统执行以下说明：
-
-#### **在 macOS 上**
-虽然 Mac 预装了 SQLite，但系统版本不支持 QMD 所需的向量搜索功能。因此，您需要通过 Homebrew 安装更完整的版本：
-1.  打开**终端 (Terminal)**。
-2.  安装 SQLite 和 QMD：
-    ```bash
-    brew install sqlite
-    npm install -g @tobilu/qmd
-    ```
-
-#### **在 Windows 上**
-1.  以管理员身份打开 **PowerShell** 或**命令提示符 (Command Prompt)**。
-2.  安装 QMD：
-    ```bash
-    npm install -g @tobilu/qmd
-    ```
-    *注意：请确保在 Windows 设置中启用了**开发者模式**，以支持文件符号链接。*
-
----
-
-### 第 2 步：为 AI 安装 Skill
-
-为了让您的 AI 知道如何使用 QMD，您需要通过聊天界面（Gemini CLI、Claude Code 等）执行以下命令来安装相应的 Skill：
+在 macOS 上，先安装 SQLite：
 
 ```bash
-npx skills add https://github.com/tobi/qmd --skill qmd
+brew install sqlite
 ```
 
----
+然后安装 QMD：
 
-## 3. Wiki 的初始配置
+```bash
+npm install -g @tobilu/qmd
+qmd --version
+qmd doctor
+```
 
-安装完成后，您需要让 QMD 为您的知识库建立索引。
+`qmd doctor` 会说明缺少哪些条件。如果 macOS 报告 SQLite 问题，请确认已安装 Homebrew SQLite，再按该命令的提示处理。
 
-**提示：您可以直接在聊天中粘贴以下内容，让 AI 为您完成此操作：**
-> "请帮我设置 QMD：将 wiki 文件夹添加到 'my-wiki' 集合中并运行 embed 命令。"
+## 添加 wiki 并建立搜索索引
 
-如果您想手动操作：
-1.  在 Lumina-Wiki 项目的根目录下打开终端。
-2.  将 `wiki/` 文件夹添加到 QMD 的管理列表：
-    ```bash
-    qmd collection add wiki --name my-wiki
-    ```
-3.  开始索引过程 (Embedding)：
-    ```bash
-    qmd embed
-    ```
-    *   **注意**：首次运行时，QMD 会下载必要的 AI 模型（约 2GB）。随后，它将读取 `wiki/` 中的所有内容以构建索引。此过程可能需要几分钟。
+在工作区根目录中，将 wiki 添加为一个集合。选择一个不会和本机其他集合冲突的简短名称。
 
----
+```bash
+qmd collection add wiki --name my-wiki
+qmd update
+qmd embed
+```
 
-## 4. 如何使用
+第一次建立语义搜索索引会下载本地模型，可能需要时间和磁盘空间。完成前请不要关闭终端。
 
-### 通过 AI 使用（自动）
-安装 Skill 后，每当您使用 `/lumi-ask` 或其他查询命令时，AI 都会自动优先使用 QMD，以获得更快、更准确的结果。
+## 验证是否可用
 
-### 手动使用（命令行）
-如果您想自己进行快速搜索，可以使用以下命令：
-*   `qmd search "关键词"`：搜索精确关键词。
-*   `qmd vsearch "要查找的内容"`：按含义搜索。
+检查集合，然后搜索某篇笔记中确实出现过的短语：
 
----
+```bash
+qmd status
+qmd collection show my-wiki
+qmd search "笔记中的一个短语" -c my-wiki
+qmd query "关于笔记的一个问题" -c my-wiki
+```
 
-## 5. 针对非 GPU 系统（仅限 CPU）的说明
+用 `qmd search` 快速匹配关键词。用 `qmd query` 按含义搜索并获得排序结果。看到 wiki 中的路径和摘录，就说明 QMD 已能读取该集合。
 
-QMD 经过优化，可在 CPU 上良好运行：
-*   **自动检测**：QMD 将自动检测您的机器配置，如果没有找到合适的 GPU，将使用 CPU。
-*   **更新索引**：每当您的 wiki 有新内容时（运行 `/lumi-ingest` 后），您应该运行以下命令来更新索引：
-    ```bash
-    qmd update && qmd embed
-    ```
+## 在笔记变化后刷新索引
 
----
-*希望本指南能帮助您优化 Lumina-Wiki 的使用体验。如果遇到问题，请随时向 AI 寻求帮助，或查看 [QMD 官方文档](https://github.com/tobi/qmd)。*
+添加或编辑笔记后，运行：
+
+```bash
+qmd update
+qmd embed
+```
+
+这两个命令会刷新 QMD 的结果；它们不会修改 wiki 中的笔记。
+
+## 如果你想让 AI 助手使用 QMD
+
+明确告诉助手需要运行什么，例如：
+
+```text
+请在 `my-wiki` 集合中使用 `qmd query` 查找与这个问题有关的笔记，并说明使用了哪些笔记。
+```
+
+助手能否运行 QMD 取决于它的权限和设置。若有需要，请单独配置连接；不要假定安装 QMD 会自动改变 Lumina-Wiki 的命令行为。
+
+## 更新 QMD
+
+更新工具，检查运行状况，然后刷新集合：
+
+```bash
+npm update -g @tobilu/qmd
+qmd doctor
+qmd status
+qmd update
+qmd embed
+```
+
+## 排查问题
+
+| 问题 | 处理方法 |
+| --- | --- |
+| `qmd: command not found` | 关闭并重新打开终端。如果仍不可用，将 npm 的全局 bin 目录加入 `PATH`，然后重新安装 QMD。 |
+| `qmd doctor` 提示 Node 版本不受支持 | 安装 Node.js 22 或更高版本，重开终端后再次运行 `node --version`。 |
+| macOS 报告 SQLite 或扩展问题 | 运行 `brew install sqlite`，重开终端，然后运行 `qmd doctor`。 |
+| 集合中缺少应有的笔记 | 在工作区根目录运行命令，检查 `qmd collection show my-wiki`，然后运行 `qmd update` 和 `qmd embed`。 |
+| 最近的笔记没有出现在按含义搜索的结果中 | 先运行 `qmd update`，再运行 `qmd embed`；关键词搜索可能已能找到该笔记。 |
+
+命令细节和支持的连接方式请查看 [QMD 官方文档](https://github.com/tobi/qmd)。

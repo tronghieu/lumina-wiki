@@ -1,102 +1,77 @@
-# Nâng cao: Tìm tài liệu định kỳ
+# Cách tìm tài liệu nghiên cứu định kỳ mà không tự đưa vào wiki
 
-Tìm tài liệu định kỳ giúp Lumina-Wiki thỉnh thoảng tìm thêm bài báo hoặc tài
-liệu nghiên cứu cho những chủ đề bạn quan tâm. Mỗi lần chạy, nó chỉ tạo một
-danh sách tài liệu gợi ý để bạn xem. Nó chưa đưa tài liệu vào wiki và cũng chưa
-tải file bài báo.
+Dùng hướng dẫn này khi bạn đã biết chủ đề hoặc nguồn tin muốn theo dõi. Quy trình gồm: mô tả danh sách theo dõi trong chat, chạy thử an toàn, xem lại đề xuất mới và chỉ đưa vào wiki nguồn bạn chọn.
 
-Bạn có thể hiểu đơn giản thế này: Lumina-Wiki đi tìm trước, còn bạn vẫn là
-người chọn tài liệu nào đáng đọc.
+## Điều kiện cần có
 
-## Quy trình nên dùng
+- Không gian làm việc Lumina-Wiki đã cài gói Research.
+- Danh sách theo dõi được tạo qua `/lumi-research-watchlist`.
+- Nếu tự động hóa: máy tính hoặc kho GitHub có thể chạy `lumina` và truy cập không gian làm việc.
 
-1. Bạn chọn vài chủ đề muốn theo dõi.
-2. Lumina-Wiki tìm tài liệu mới cho các chủ đề đó.
-3. Bạn xem danh sách mới, hoặc nhờ trợ lý đọc giúp.
-4. Bạn chọn tài liệu đáng đọc.
-5. Bạn dùng `/lumi-ingest` để đưa tài liệu đã chọn vào wiki.
+Bước tìm chỉ tạo bản ghi đề xuất trong `raw/discovered/`. Nó không đưa tài liệu vào wiki, không tải toàn văn và không quyết định bạn nên đọc gì.
 
-Bước tìm định kỳ chỉ làm đến bước 2. Việc đọc kỹ, tải file bài báo, tóm tắt,
-tạo trang wiki và liên kết tri thức vẫn nằm ở bước `/lumi-ingest`.
+## 1. Tạo danh sách theo dõi trong chat
 
-## 1. Chọn chủ đề muốn theo dõi
-
-Trong cuộc trò chuyện với trợ lý, chạy:
+Bắt đầu bằng:
 
 ```text
 /lumi-research-watchlist
 ```
 
-Bạn có thể nói tự nhiên, ví dụ:
+Mô tả chủ đề, tần suất, nguồn ưu tiên và số tài liệu mới muốn xem. Ví dụ:
 
 ```text
-Tôi muốn theo dõi chủ đề ảnh hưởng của điện thoại trong lớp học, mỗi tuần tìm một lần, mỗi lần chỉ hiển thị khoảng 5 tài liệu đáng xem.
+Theo dõi nghiên cứu về việc dùng điện thoại trong lớp học mỗi tuần. Mỗi lần chỉ hiển thị tối đa 5 tài liệu mới và ưu tiên arXiv.
 ```
 
-Trợ lý sẽ giúp bạn lưu chủ đề này vào danh sách theo dõi. Bạn không cần tự nhớ
-tên file cấu hình.
+Dùng chính lệnh này để thêm nguồn RSS hoặc Atom của một nhà xuất bản cụ thể. Nên bắt đầu với danh sách ngắn mỗi tuần để dễ xem lại.
 
-Gợi ý ban đầu:
+## 2. Chạy thử an toàn
 
-- Tìm hằng tuần là đủ cho đa số chủ đề.
-- Dùng arXiv trước nếu bạn chưa cấu hình nguồn khác.
-- Mỗi lần chỉ nên hiển thị khoảng 5 tài liệu mới để dễ xem.
-
-## 2. Chạy thử một lần
-
-Trước khi chạy thật, hãy chạy thử:
+Tại thư mục gốc của không gian làm việc, xem trước một lượt trước khi lưu đề xuất:
 
 ```bash
 lumina discover run --dry-run
 ```
 
-Lệnh này chỉ kiểm tra xem Lumina-Wiki sẽ tìm gì. Nó chưa ghi kết quả mới.
-
-Nếu kết quả nhìn ổn, chạy thật:
+Nếu chủ đề và nguồn đã đúng, chạy thật:
 
 ```bash
 lumina discover run
 ```
 
-Sau lần chạy thật, Lumina-Wiki sẽ lưu danh sách tài liệu mới trong
-`raw/discovered/`.
+Đề xuất mới xuất hiện trong `raw/discovered/`. Bạn cũng có thể yêu cầu chạy một lượt trong chat bằng `/lumi-research-watch-run`.
 
-## 3. Sau khi có danh sách mới thì làm gì?
+## 3. Xem lại trước khi thêm bất cứ thứ gì
 
-Đây là phần quan trọng nhất: đừng đưa tất cả kết quả vào wiki ngay.
-
-Bạn có thể tự xem danh sách mới, hoặc nhờ trợ lý xem trước:
+Yêu cầu trợ lý so sánh các đề xuất mới với mục tiêu của bạn. Ví dụ:
 
 ```text
-Hãy xem các tài liệu mới trong raw/discovered/ và giúp tôi chọn 3 tài liệu đáng
-đọc nhất cho chủ đề ảnh hưởng của điện thoại trong lớp học.
+Hãy xem các tài liệu nghiên cứu mới và đề xuất 3 nguồn hữu ích nhất cho chủ đề điện thoại trong lớp học. Giải thích lý do nên đọc từng nguồn và đánh dấu nguồn trùng lặp hoặc ít liên quan.
 ```
 
-Trợ lý nên giúp bạn:
+Hãy xem kết quả như danh sách đọc ngắn, không phải nhập tự động. Mở nguồn gốc và chọn tài liệu nào xứng đáng có ghi chú lâu dài.
 
-- nhóm các tài liệu theo chủ đề nhỏ,
-- giải thích vì sao tài liệu đó đáng đọc,
-- bỏ qua tài liệu trùng hoặc quá xa chủ đề,
-- đề xuất tài liệu nào nên đưa vào wiki trước.
+## 4. Đưa các nguồn bạn chọn vào wiki
 
-Sau đó bạn chọn một tài liệu và đưa vào wiki:
+Với mỗi nguồn đã chọn, dùng:
 
 ```text
-/lumi-ingest <tài liệu bạn chọn>
+/lumi-ingest <nguồn đã chọn>
 ```
 
-Chỉ đến bước này Lumina-Wiki mới tải nội dung đầy đủ, tóm tắt, tạo trang wiki
-và liên kết với các ghi chú cũ.
+Chỉ bước này mới đọc kỹ nguồn đã chọn và thêm ghi chú vào wiki.
 
-## 4. Chạy định kỳ bằng GitHub Actions
+## 5. Tự động chạy lượt tìm
 
-Dùng cách này nếu project nằm trên GitHub và bạn muốn việc tìm tài liệu chạy
-ngay cả khi máy cá nhân đang tắt.
+Tự động hóa là tùy chọn. Chỉ thiết lập sau khi chạy thủ công thành công, và vẫn giữ quyền xem lại cùng quyết định đưa tài liệu vào wiki.
 
-Tạo file `.github/workflows/lumina-discovery.yml` với nội dung sau:
+### GitHub Actions
+
+Dùng GitHub Actions khi không gian làm việc nằm trong kho GitHub và bạn muốn việc tìm vẫn chạy khi máy tính tắt. Thêm `.github/workflows/lumina-discovery.yml`:
 
 ```yaml
-name: Lumina scheduled discovery
+name: Lumina discovery
 
 on:
   schedule:
@@ -115,133 +90,47 @@ jobs:
         with:
           node-version: 22
       - run: npm install -g lumina-wiki
-      - run: lumina discover run --json
+      - run: lumina discover run
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ -d raw/discovered ]; then git add raw/discovered; fi
-          if [ -f _lumina/_state/discovery-runner.json ]; then git add _lumina/_state/discovery-runner.json; fi
           git diff --cached --quiet || git commit -m "chore: add discovered research"
           git push
 ```
 
-Ví dụ này chạy mỗi thứ Hai. GitHub dùng giờ UTC, nên giờ chạy thực tế có thể
-lệch với giờ Việt Nam.
+Lịch của GitHub dùng giờ UTC. Hãy chạy tác vụ thủ công một lần và kiểm tra nó chỉ lưu đề xuất. Nếu kho chặn đẩy trực tiếp, hãy đổi bước cuối theo quy trình xem lại của bạn.
 
-Workflow này có tự commit. Nếu lần chạy không tìm thấy tài liệu mới, bước
-`git commit` sẽ tự bỏ qua vì không có gì để lưu.
+### macOS và Linux
 
-## 5. Chạy định kỳ trên macOS hoặc Linux bằng cron
-
-Cron là cách đơn giản để bảo máy tính tự chạy một lệnh vào một giờ cố định.
-
-Trước hết, mở terminal trong project Lumina-Wiki của bạn và chạy:
-
-```bash
-pwd
-```
-
-Lệnh này in ra đường dẫn đầy đủ của project. Hãy giữ lại đường dẫn đó. Ví dụ:
-
-```text
-/Users/you/Projects/my-wiki
-```
-
-Tiếp theo, mở cron:
+Dùng cron khi máy thường thức vào giờ đã chọn. Tìm đường dẫn của không gian làm việc bằng `pwd`, rồi mở crontab:
 
 ```bash
 crontab -e
 ```
 
-Nếu máy hỏi chọn editor, chọn `nano` nếu bạn không chắc nên chọn gì. Trong
-`nano`, nhấn `Ctrl+O`, Enter để lưu, rồi `Ctrl+X` để thoát.
-
-Thêm một dòng như sau vào cuối file:
+Thêm một dòng, thay đường dẫn ví dụ bằng đường dẫn thật của bạn:
 
 ```cron
 0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
 ```
 
-Nhớ thay `/Users/you/Projects/my-wiki` bằng đường dẫn thật của bạn.
+Xác nhận lịch bằng `crontab -l`. Cron không chạy ổn định khi laptop đang ngủ. Nếu điều đó quan trọng, dùng GitHub Actions hoặc máy luôn bật.
 
-Dòng trên có nghĩa là: mỗi thứ Hai lúc 8:00 sáng, vào đúng thư mục project rồi
-chạy lệnh tìm tài liệu.
+### Windows
 
-Bạn có thể đổi lịch như sau:
+Dùng Windows Task Scheduler:
 
-```cron
-# Mỗi ngày lúc 8:00
-0 8 * * * cd /Users/you/Projects/my-wiki && lumina discover run
+1. Tạo **Basic Task** với lịch hằng tuần.
+2. Chọn **Start a program**.
+3. Đặt **Program/script** là `lumina` và **Add arguments** là `discover run`.
+4. Đặt **Start in** là thư mục Lumina-Wiki.
+5. Chạy thử task và kiểm tra đề xuất xuất hiện trong `raw/discovered/`.
 
-# Mỗi thứ Hai lúc 8:00
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run
+Máy phải bật, hoặc task phải được cấu hình để chạy khi máy mở lại.
 
-# Ngày đầu mỗi tháng lúc 8:00
-0 8 1 * * cd /Users/you/Projects/my-wiki && lumina discover run
-```
+## Xác minh và khắc phục sự cố
 
-Nếu muốn dễ kiểm tra khi có lỗi, dùng bản có ghi log:
+Sau mỗi lượt tự động, hãy xem `raw/discovered/` trước khi đưa tài liệu vào wiki. Nếu không có đề xuất, hãy chạy `lumina discover run --dry-run` thủ công từ thư mục gốc rồi sửa danh sách theo dõi trong chat. Nếu lịch không tìm thấy `lumina`, dùng đường dẫn đầy đủ đến lệnh hoặc sửa thư mục làm việc, rồi chạy thử lại.
 
-```cron
-0 8 * * 1 cd /Users/you/Projects/my-wiki && lumina discover run >> .lumina-discovery.log 2>&1
-```
-
-Sau khi lưu, kiểm tra cron đã nhận lịch chưa:
-
-```bash
-crontab -l
-```
-
-Máy cần đang bật vào giờ đã đặt. Nếu laptop đang sleep, cron có thể không chạy.
-
-## 6. Chạy định kỳ trên Windows
-
-Windows có **Task Scheduler**. Dùng nó nếu project nằm trên máy Windows.
-
-Tạo một Basic Task:
-
-- Trigger: hằng tuần, vào giờ bạn chọn.
-- Action: Start a program.
-- Program: `lumina`.
-- Arguments: `discover run`.
-- Start in: thư mục project của bạn.
-
-Máy cần đang bật vào thời điểm đã đặt lịch.
-
-## 7. Theo dõi nguồn RSS / Atom (v1.4+)
-
-Ngoài chủ đề tìm kiếm, bạn có thể theo dõi cả nguồn RSS / Atom. Mỗi lần
-chạy theo lịch, runner sẽ kiểm tra mọi feed trong watchlist một lần, lọc
-trùng dựa trên state riêng của từng feed, rồi ghi các ứng viên mới vào
-`raw/discovered/` giống như khi tìm kiếm theo chủ đề.
-
-Thêm item `type: feed` qua `/lumi-research-watchlist`, hoặc chỉnh trực
-tiếp `_lumina/config/watchlist.yml`:
-
-```yaml
-items:
-  - id: arxiv-cs-lg
-    type: feed
-    enabled: true
-    url: "https://arxiv.org/rss/cs.LG"
-    name: "arXiv cs.LG"
-    schedule: daily
-    max_new: 20
-```
-
-Các item `type: topic` cũ vẫn chạy bình thường. URL của feed phải dùng
-`https://` và không được bắt đầu bằng `--`.
-
-State của từng feed nằm trong `_lumina/_state/feeds/<feed-id>.json` (etag,
-last-seen guids, đếm số lần poll). Lumina giới hạn `last_seen_guids` ở
-5000 mục và xóa các mục cũ hơn 90 ngày, nên file vẫn nhỏ ngay cả sau
-nhiều năm dùng.
-
-Nếu bạn muốn chạy một lượt duy nhất ngay trong chat (không qua lịch),
-dùng `/lumi-research-watch-run`. Đây là phiên bản trong chat của
-`lumina discover run` và sẽ báo cáo lại bằng ngôn ngữ dễ hiểu những gì mới
-tìm được.
-
-Để xem chi tiết schema feed v1.4, cơ chế etag, từ chối XXE, và wrapper
-`cron-daily.sh` (kết hợp `umask 077` với log rotation), xem
-[Research Watch deep-dive](research-watch.md) (tiếng Anh; tài liệu kỹ thuật v1.4).
+Xem quy tắc kỹ thuật cho feed và chi tiết lệnh tại [tài liệu tham khảo Research Watch](../reference/research-watch.md).

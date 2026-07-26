@@ -118,6 +118,32 @@ describe('installCommand', () => {
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'source-modes.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-discover', 'references', 'ranking-signals.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'references', 'watchlist-schema.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'references', 'scheduler-patterns.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watch-run', 'SKILL.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watch-run', 'references', 'runner-behavior.md'));
+      await access(join(workspace, '.agents', 'skills', 'lumi-research-watch-run', 'references', 'scheduler-patterns.md'));
+      const watchPackageFiles = [
+        ['lumi-research-watchlist', 'SKILL.md'],
+        ['lumi-research-watchlist', 'references', 'watchlist-schema.md'],
+        ['lumi-research-watchlist', 'references', 'scheduler-patterns.md'],
+        ['lumi-research-watch-run', 'SKILL.md'],
+        ['lumi-research-watch-run', 'references', 'runner-behavior.md'],
+        ['lumi-research-watch-run', 'references', 'scheduler-patterns.md'],
+      ];
+      for (const watchPackageFile of watchPackageFiles) {
+        const content = await readFile(join(workspace, '.agents', 'skills', ...watchPackageFile), 'utf8');
+        assert.doesNotMatch(
+          content,
+          /docs\/(?:user-guide|reference)|github\.com\/.*\/blob/,
+          `${watchPackageFile.join('/')} must not depend on repository documentation that is absent from installs`,
+        );
+      }
+      const watchlistSkill = await readFile(join(workspace, '.agents', 'skills', 'lumi-research-watchlist', 'SKILL.md'), 'utf8');
+      const watchRunSkill = await readFile(join(workspace, '.agents', 'skills', 'lumi-research-watch-run', 'SKILL.md'), 'utf8');
+      assert.match(watchlistSkill, /Do not use `--dry-run` when an enabled feed is present/);
+      assert.match(watchRunSkill, /For\nan enabled feed, manually validate.*without calling `--dry-run`/s);
+      assert.match(watchRunSkill, /Do not run it immediately before a requested\nreal pass/);
       await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'SKILL.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-research-rank', 'references', '4c-rubric.md'));
       await access(join(workspace, '.agents', 'skills', 'lumi-ingest', 'references', 'pdf-preprocessing.md'));

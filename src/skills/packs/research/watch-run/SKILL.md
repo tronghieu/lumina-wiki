@@ -5,7 +5,8 @@ description: >
   feeds). Use this whenever the user asks to "check for new papers", "run
   discovery now", "poll my feeds", "see what's new this week", or asks about
   the watchlist findings. Also fires when the user wants to wire a cron /
-  launchd / Task Scheduler job — point them at the wrapper script and docs.
+  launchd / Task Scheduler job — use the bundled platform guidance and wrapper
+  script where appropriate.
 allowed-tools:
   - Bash
   - Read
@@ -30,14 +31,9 @@ with the research pack and depends on:
 - `_lumina/tools/fetch_rss.py` — used by the runner for `type: feed` items.
 
 The runner is **manual** — Lumina does not poll feeds in the background. The
-user (or their scheduler) decides when to trigger this skill. See the online
-guide at
-https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/advanced-scheduled-discovery.en.md
-(also in Vietnamese at .../advanced-scheduled-discovery.vi.md and Simplified
-Chinese at .../advanced-scheduled-discovery.zh.md) for cron / launchd / Task
-Scheduler templates, and the online guide at
-https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/research-watch.md
-for the v1.4 feed schema, etag / XXE / per-feed-state deep-dive (English).
+user (or their scheduler) decides when to trigger this skill. Read
+`references/runner-behavior.md` before running or explaining a result. Read
+`references/scheduler-patterns.md` only when the user asks to automate a run.
 
 ## Instructions
 
@@ -46,12 +42,19 @@ for the v1.4 feed schema, etag / XXE / per-feed-state deep-dive (English).
 ```bash
 # Watchlist file exists?
 test -f _lumina/config/watchlist.yml || echo "no watchlist"
-
-# Optional: dry-run parses the YAML without writing.
-node _lumina/scripts/discover-runner.mjs --dry-run --json
 ```
 
 If the watchlist is missing, suggest `/lumi-research-watchlist` to create one.
+
+Read the watchlist and check whether it has an enabled `type: feed` item. For
+an enabled feed, manually validate its unique safe `id`, HTTPS `url`, valid
+schedule, and positive `max_new` without calling `--dry-run`; feed polling
+updates ETag and seen-item state. If the user requested a real pass, continue
+directly to the single real command in step 2.
+
+For a topic-only watchlist, use `--dry-run --json` only when the user asked for
+a preview instead of a real pass. Do not run it immediately before a requested
+real pass.
 
 ### 2. Run one discovery pass
 
@@ -67,13 +70,13 @@ Optional flags the user might ask for:
 
 ### 3. Present the result
 
-Parse the JSON summary. For each watchlist item with `new > 0` or `errors`,
-write a plain-language line:
+Parse the JSON summary. Group `candidates` by `watchlistId` for new findings
+and use `errors` and `skipped` for item-specific problems. Then write a
+plain-language summary:
 
 ```
 I checked <N> watchlist items:
 - <id>: <K> new candidates
-- <feed_id> (feed): <K> new (<spill> deferred for next run)
 - <id>: feed temporarily unreachable, will retry next time
 You can review them with /lumi-research-discover or ingest with /lumi-ingest <slug>.
 ```
@@ -82,16 +85,11 @@ Never dump raw JSON or stack traces to the user — keep it conversational.
 
 ### 4. If the user asks about scheduling
 
-Point them at the online guide (trilingual cron / launchd / Task Scheduler
-patterns) at
-https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/advanced-scheduled-discovery.en.md
-(.vi.md and .zh.md for Vietnamese and Simplified Chinese) and the included
-wrapper `_lumina/scripts/scheduler-samples/cron-daily.sh` — that file is a
-local path, shipped with the workspace. For v1.4 feed schema / etag / XXE
-specifics, the deep-dive lives at the online guide
-https://github.com/tronghieu/lumina-wiki/blob/main/docs/user-guide/research-watch.md
-(English). Do not edit their crontab or launchd files; explain the snippets
-and let them paste.
+Use `references/scheduler-patterns.md` after the user names and confirms a
+platform. The included wrapper
+`_lumina/scripts/scheduler-samples/cron-daily.sh` is a local, shipped helper
+for cron-style schedulers. Do not edit scheduler files unless the user
+explicitly asks; explain the relevant snippet and let them paste it.
 
 ## Constraints
 
