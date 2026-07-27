@@ -191,19 +191,17 @@ func registryOwnerAllowed(owner, currentUser, administrators *windows.SID, activ
 }
 
 func enabledRegistryTokenMembership(token windows.Token, sid *windows.SID) (bool, error) {
-	var impersonation windows.Token
-	if err := windows.DuplicateTokenEx(
-		token,
-		windows.TOKEN_QUERY,
-		nil,
-		windows.SecurityImpersonation,
-		windows.TokenImpersonation,
-		&impersonation,
-	); err != nil {
+	groups, err := token.GetTokenGroups()
+	if err != nil {
 		return false, err
 	}
-	defer impersonation.Close()
-	return impersonation.IsMember(sid)
+	for _, group := range groups.AllGroups() {
+		if group.Sid != nil && group.Sid.Equals(sid) {
+			return group.Attributes&windows.SE_GROUP_ENABLED != 0 &&
+				group.Attributes&windows.SE_GROUP_USE_FOR_DENY_ONLY == 0, nil
+		}
+	}
+	return false, nil
 }
 
 func reopenRegistrySecurityHandle(original *os.File, access uint32) (*os.File, error) {
