@@ -13,6 +13,8 @@ jobs:
   quality:
     name: Visual, accessibility, and Go gates
     runs-on: macos-26
+    env:
+      GOTOOLCHAIN: go1.25.12
     defaults:
       run:
         working-directory: apps/desktop
@@ -21,14 +23,24 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.25.12"
           cache-dependency-path: apps/desktop/go.sum
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/desktop/frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/frontend/package-lock.json
+
+      - name: Install contract generator dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Verify exact Go toolchain
+        working-directory: .
+        run: node scripts/check-desktop-go-version.mjs
 
       - name: Install frontend dependencies
         working-directory: apps/desktop/frontend
@@ -51,10 +63,17 @@ jobs:
           npm run test:visual
           npm run test:a11y
 
+      - name: Desktop contract tests and drift
+        working-directory: .
+        run: |
+          npm run test:desktop-contract
+          npm run test:desktop-workflow
+          npm run desktop:contract:check
+
       - name: Go tests and race gates
         run: |
           go test ./...
-          go test -race ./internal/ai ./internal/ai/settings ./internal/ai/secrets ./internal/ai/history ./internal/ai/workspaceid ./internal/ai/providers ./internal/ai/retrieval ./internal/ai/index ./internal/ai/chat
+          go test -race ./internal/workspace ./internal/appprivate ./internal/appstate ./internal/ai ./internal/ai/workspaceid
 
       - name: Retain Playwright diagnostics
         if: failure()
@@ -70,6 +89,8 @@ jobs:
   package:
     name: Package / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      GOTOOLCHAIN: go1.25.12
     strategy:
       fail-fast: false
       matrix:
@@ -82,14 +103,26 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.25.12"
           cache-dependency-path: apps/desktop/go.sum
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/desktop/frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/frontend/package-lock.json
+
+      - name: Install contract generator dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Verify exact Go toolchain and Desktop contract
+        working-directory: .
+        run: |
+          node scripts/check-desktop-go-version.mjs
+          npm run desktop:contract:check
 
       - name: Install Linux WebView prerequisites
         if: runner.os == 'Linux'
@@ -108,6 +141,15 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/desktop/frontend
         run: npm ci
+
+      - name: Initialize sanitized package diagnostics
+        shell: bash
+        run: |
+          mkdir -p package-diagnostics
+          printf 'os=%s\nphase=package-build\nresult=started\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
+
+      - name: Run native lifecycle and filesystem gates
+        run: go test ./internal/integration ./internal/workspace ./internal/appprivate ./internal/appstate ./internal/ai/workspaceid
 
       - name: Generate bindings
         run: wails3 generate bindings -clean=true -ts
@@ -158,39 +200,75 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          mkdir -p package-diagnostics
+          printf 'os=%s\nphase=package-launch\nresult=started\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
+          clean_config="$(mktemp -d)"
           if [ "$RUNNER_OS" = "macOS" ]; then
-            artifact="bin/lumina-desktop.app/Contents/MacOS/lumina-desktop"
+            test ! -e "$HOME/Library/Application Support/lumina-wiki-desktop"
+            install_root="$(mktemp -d)"
+            mkdir -p "$install_root/Applications"
+            cp -R bin/lumina-desktop.app "$install_root/Applications/Lumina Wiki.app"
+            artifact="$install_root/Applications/Lumina Wiki.app/Contents/MacOS/lumina-desktop"
           else
             artifact="/usr/local/bin/lumina-desktop"
           fi
           test -n "$artifact"
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a "$artifact" > package-smoke.log 2>&1 &
+            XDG_CONFIG_HOME="$clean_config" xvfb-run -a "$artifact" > "$RUNNER_TEMP/lumina-package-smoke.log" 2>&1 &
           else
-            "$artifact" > package-smoke.log 2>&1 &
+            "$artifact" > "$RUNNER_TEMP/lumina-package-smoke.log" 2>&1 &
           fi
           artifact_pid=$!
           sleep 5
-          kill -0 "$artifact_pid"
+          if ! kill -0 "$artifact_pid"; then
+            printf 'os=%s\nphase=package-launch\nresult=failed\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
+            exit 1
+          fi
           kill "$artifact_pid"
           wait "$artifact_pid" || true
+          rm -f "$RUNNER_TEMP/lumina-package-smoke.log"
+          printf 'os=%s\nphase=package-launch\nresult=passed\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
 
       - name: Smoke launch packaged artifact
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force package-diagnostics | Out-Null
+          @("os=Windows", "phase=package-launch", "result=started") |
+            Set-Content package-diagnostics/smoke-status.txt
           $artifact = Resolve-Path "$env:ProgramFiles\Lumina Wiki\Lumina Wiki\lumina-desktop.exe" -ErrorAction Stop
-          $process = Start-Process -FilePath $artifact.Path -PassThru
+          $cleanConfig = Join-Path $env:RUNNER_TEMP "lumina-clean-config"
+          New-Item -ItemType Directory -Force $cleanConfig | Out-Null
+          $env:APPDATA = $cleanConfig
+          $env:LOCALAPPDATA = $cleanConfig
+          $stdout = Join-Path $env:RUNNER_TEMP "lumina-package-stdout.log"
+          $stderr = Join-Path $env:RUNNER_TEMP "lumina-package-stderr.log"
+          $process = Start-Process -FilePath $artifact.Path -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           Start-Sleep -Seconds 5
-          if ($process.HasExited) { throw "Packaged executable exited during smoke launch" }
+          if ($process.HasExited) {
+            @("os=Windows", "phase=package-launch", "result=failed") |
+              Set-Content package-diagnostics/smoke-status.txt
+            throw "Packaged executable exited during smoke launch"
+          }
           Stop-Process -Id $process.Id
+          Remove-Item $stdout,$stderr -Force -ErrorAction SilentlyContinue
+          @("os=Windows", "phase=package-launch", "result=passed") |
+            Set-Content package-diagnostics/smoke-status.txt
+
+      - name: Retain sanitized package failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumina-desktop-package-diagnostics-${{ runner.os }}
+          path: apps/desktop/package-diagnostics/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Retain native package
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: lumina-desktop-${{ runner.os }}
-          path: |
-            apps/desktop/bin/
-            apps/desktop/package-smoke.log
+          path: apps/desktop/bin/
           if-no-files-found: error
           retention-days: 14
