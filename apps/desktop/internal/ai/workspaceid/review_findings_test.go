@@ -156,7 +156,7 @@ func TestStrictCanonicalPathValidation(t *testing.T) {
 			t.Fatalf("accepted canonical path %q", path)
 		}
 	}
-	m, err := NewManager(t.TempDir(), Options{Canonicalizer: func(string) (string, error) { return valid + string(filepath.Separator) + ".", nil }})
+	m, err := newTestManager(t, t.TempDir(), Options{Canonicalizer: func(string) (string, error) { return valid + string(filepath.Separator) + ".", nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,8 +172,8 @@ func TestStrictCanonicalPathValidation(t *testing.T) {
 
 func TestIndependentManagersSeeBusyLock(t *testing.T) {
 	base := t.TempDir()
-	one, _ := NewManager(base, Options{})
-	two, _ := NewManager(base, Options{})
+	one, _ := newTestManager(t, base, Options{})
+	two, _ := newTestManager(t, base, Options{})
 	release, err := one.store.acquireLock()
 	if err != nil {
 		t.Fatal(err)
@@ -255,13 +255,13 @@ func treeManifest(t *testing.T, root string) []byte {
 }
 
 func absoluteTestPath(name string) string {
-	return filepath.Join(string(filepath.Separator), "workspaceid-test", name)
+	return filepath.Join(os.TempDir(), "workspaceid-test", name)
 }
 
 func testManagerWithSeed(t *testing.T, base string, now *time.Time, signatures map[string]Signature, seed byte) *Manager {
 	t.Helper()
 	sequence := seed
-	m, err := NewManager(base, Options{Clock: func() time.Time { return *now }, Canonicalizer: func(path string) (string, error) { return filepath.Clean(path), nil }, Random: func(p []byte) error {
+	m, err := newTestManager(t, base, Options{Clock: func() time.Time { return *now }, Canonicalizer: func(path string) (string, error) { return filepath.Clean(path), nil }, Random: func(p []byte) error {
 		for i := range p {
 			p[i] = sequence
 		}

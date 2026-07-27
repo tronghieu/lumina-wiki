@@ -1,13 +1,22 @@
 package appprivate
 
 import (
+	"crypto/sha256"
 	"errors"
 	"io"
 	"io/fs"
 	"os"
 )
 
-func (store *Store) readSnapshot(lease *rootLease) (Snapshot, fs.FileInfo, error) {
+// stateVersion is a content-CAS token for cooperating app processes. The
+// private directory protection excludes other users; the persistent lock
+// serializes every supported writer.
+type stateVersion struct {
+	digest [sha256.Size]byte
+	info   fs.FileInfo
+}
+
+func (store *Store) readSnapshot(lease *rootLease) (Snapshot, *stateVersion, error) {
 	if err := lease.verify(); err != nil {
 		return Snapshot{}, nil, err
 	}
@@ -52,10 +61,13 @@ func (store *Store) readSnapshot(lease *rootLease) (Snapshot, fs.FileInfo, error
 	if err := lease.verify(); err != nil {
 		return Snapshot{}, nil, err
 	}
-	return Snapshot{Data: raw, Exists: true}, opened, nil
+	return Snapshot{Data: raw, Exists: true}, &stateVersion{
+		digest: sha256.Sum256(raw),
+		info:   opened,
+	}, nil
 }
 
-func (store *Store) verifyCurrent(lease *rootLease, expected fs.FileInfo) error {
+func (store *Store) verifyCurrent(lease *rootLease, expected *stateVersion) error {
 	current, err := lease.state.Lstat(store.stateName())
 	if expected == nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -67,13 +79,26 @@ func (store *Store) verifyCurrent(lease *rootLease, expected fs.FileInfo) error 
 		return ErrStateChanged
 	}
 	if err != nil || current.Mode()&fs.ModeSymlink != 0 || !current.Mode().IsRegular() ||
-		!os.SameFile(expected, current) {
+		!os.SameFile(expected.info, current) {
+		return ErrStateChanged
+	}
+	file, err := lease.state.Open(store.stateName())
+	if err != nil {
+		return ErrStateChanged
+	}
+	defer file.Close()
+	opened, statErr := file.Stat()
+	protectionErr := platformValidateProtectedHandle(file)
+	raw, readErr := io.ReadAll(&io.LimitedReader{R: file, N: int64(store.maxBytes + 1)})
+	if statErr != nil || readErr != nil || !os.SameFile(current, opened) ||
+		protectionErr != nil || !privateFileMode(opened) || len(raw) > store.maxBytes ||
+		sha256.Sum256(raw) != expected.digest {
 		return ErrStateChanged
 	}
 	return nil
 }
 
-func (store *Store) removeState(lease *rootLease, expected fs.FileInfo) error {
+func (store *Store) removeState(lease *rootLease, expected *stateVersion) error {
 	if expected == nil {
 		return nil
 	}

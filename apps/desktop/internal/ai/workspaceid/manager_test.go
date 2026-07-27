@@ -99,7 +99,7 @@ func TestAmbiguityAndTokenLifecycleNeverAutoAttach(t *testing.T) {
 
 func TestCanonicalizationRejectsUnsafeRootsAndResolvesSymlinkAlias(t *testing.T) {
 	base := t.TempDir()
-	m, err := NewManager(base, Options{})
+	m, err := newTestManager(t, base, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestAtomicFailurePreservesOldRegistryAndCleansTemporaryFile(t *testing.T) {
 
 func TestErrorsDoNotExposePrivatePathsOrInjectedDetails(t *testing.T) {
 	private := filepath.Join(t.TempDir(), "personal-name")
-	m, err := NewManager(t.TempDir(), Options{
+	m, err := newTestManager(t, t.TempDir(), Options{
 		Canonicalizer: func(string) (string, error) { return "", errors.New("raw " + private) },
 	})
 	if err != nil {
@@ -303,7 +303,7 @@ func TestAttachDoesNotChangeWorkspaceBytes(t *testing.T) {
 
 func TestBoundsDecisionsRecordsAndRegistryFile(t *testing.T) {
 	now := time.Now().UTC()
-	m, err := NewManager(t.TempDir(), Options{
+	m, err := newTestManager(t, t.TempDir(), Options{
 		Clock: func() time.Time { return now }, MaxDecisions: 2,
 		Canonicalizer:  func(path string) (string, error) { return path, nil },
 		SignatureProbe: func(string) (Signature, bool, error) { return "", false, nil },
@@ -343,7 +343,7 @@ func TestBoundsDecisionsRecordsAndRegistryFile(t *testing.T) {
 func testManager(t *testing.T, base string, now *time.Time, signatures map[string]Signature) *Manager {
 	t.Helper()
 	sequence := byte(1)
-	m, err := NewManager(base, Options{
+	m, err := newTestManager(t, base, Options{
 		Clock:         func() time.Time { return *now },
 		Canonicalizer: func(path string) (string, error) { return filepath.Clean(path), nil },
 		Random: func(p []byte) error {
@@ -361,9 +361,48 @@ func testManager(t *testing.T, base string, now *time.Time, signatures map[strin
 	return m
 }
 
+func newTestManager(t *testing.T, base string, options Options) (*Manager, error) {
+	t.Helper()
+	manager, err := NewManager(base, options)
+	if err == nil {
+		groupValue, _ := testManagerGroups.LoadOrStore(t, &testManagerGroup{})
+		group := groupValue.(*testManagerGroup)
+		group.mu.Lock()
+		group.managers = append(group.managers, manager)
+		group.mu.Unlock()
+		t.Cleanup(func() { closeTestManagers(t) })
+	}
+	return manager, err
+}
+
+type testManagerGroup struct {
+	mu       sync.Mutex
+	managers []*Manager
+}
+
+var testManagerGroups sync.Map
+
+func closeTestManagers(t *testing.T) {
+	groupValue, ok := testManagerGroups.LoadAndDelete(t)
+	if !ok {
+		return
+	}
+	group := groupValue.(*testManagerGroup)
+	group.mu.Lock()
+	managers := group.managers
+	group.managers = nil
+	group.mu.Unlock()
+	for _, manager := range managers {
+		_ = manager.Close()
+	}
+}
+
 func makeWorkspace(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+	// This cleanup is registered after TempDir's removal and therefore runs
+	// first even when the manager was constructed before the workspace.
+	t.Cleanup(func() { closeTestManagers(t) })
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatal(err)

@@ -92,8 +92,11 @@ func TestValidateRejectsPathReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = proof.Close() })
-	if err := os.Rename(rootPath, filepath.Join(parent, "moved")); err != nil {
-		t.Fatal(err)
+	if !renameHeldRootForTest(t, rootPath, filepath.Join(parent, "moved")) {
+		if err := proof.Validate(); err != nil {
+			t.Fatalf("proof invalid after operating system blocked replacement: %v", err)
+		}
+		return
 	}
 	if err := os.Mkdir(rootPath, 0o700); err != nil {
 		t.Fatal(err)

@@ -62,9 +62,11 @@ func TestBuildTrustedRejectsRootReplacementBeforeAndDuringScan(t *testing.T) {
 				t.Fatal(err)
 			}
 			builder := NewTreeBuilder()
+			replacementBlocked := false
 			replace := func() {
-				if err := os.Rename(root, root+"-old"); err != nil {
-					t.Fatal(err)
+				if !renameHeldWorkspaceRootForTest(t, root, root+"-old") {
+					replacementBlocked = true
+					return
 				}
 				if err := os.MkdirAll(filepath.Join(root, "wiki"), 0o700); err != nil {
 					t.Fatal(err)
@@ -75,13 +77,31 @@ func TestBuildTrustedRejectsRootReplacementBeforeAndDuringScan(t *testing.T) {
 			}
 			if timing == "before" {
 				replace()
+				if replacementBlocked {
+					return
+				}
 			} else {
 				builder.beforeOpen = func(string) { builder.beforeOpen = nil; replace() }
 			}
 			tree, err := builder.BuildTrusted(context.Background(), root, proof)
+			if replacementBlocked {
+				if err != nil || !reflect.DeepEqual(tree, normalTreeForTest(t, root)) {
+					t.Fatalf("tree=%+v err=%v after operating system blocked replacement", tree, err)
+				}
+				return
+			}
 			if !errors.Is(err, ErrTrustedTreeUnavailable) || !reflect.DeepEqual(tree, WorkspaceTree{}) {
 				t.Fatalf("tree=%+v err=%v", tree, err)
 			}
 		})
 	}
+}
+
+func normalTreeForTest(t *testing.T, root string) WorkspaceTree {
+	t.Helper()
+	tree, err := NewTreeBuilder().Build(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tree
 }

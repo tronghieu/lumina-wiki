@@ -12,7 +12,7 @@ import (
 
 func TestTrustedRootIdentityReturnsConfirmedHandleIdentity(t *testing.T) {
 	root := makeWorkspace(t)
-	manager, err := NewManager(t.TempDir(), Options{})
+	manager, err := newTestManager(t, t.TempDir(), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +33,15 @@ func TestTrustedRootIdentityReturnsConfirmedHandleIdentity(t *testing.T) {
 		t.Fatalf("identity does not match confirmed root: %v", err)
 	}
 	oldRoot := root + "-old"
-	if err := os.Rename(root, oldRoot); err != nil {
-		t.Fatal(err)
+	if !renameTrustedRootForTest(t, root, oldRoot) {
+		afterBlockedReplacement, err := manager.TrustedRootIdentity(id, decision.CanonicalPath)
+		current, statErr := os.Stat(root)
+		if err != nil || statErr != nil ||
+			!os.SameFile(expected, afterBlockedReplacement) ||
+			!os.SameFile(afterBlockedReplacement, current) {
+			t.Fatalf("blocked replacement changed trusted identity: identity=%v stat=%v", err, statErr)
+		}
+		return
 	}
 	if err := os.Mkdir(root, 0o700); err != nil {
 		t.Fatal(err)
@@ -51,7 +58,7 @@ func TestTrustedRootIdentityReturnsConfirmedHandleIdentity(t *testing.T) {
 
 func TestTrustedRootIdentityRejectsInvalidOrUnavailableEvidenceSafely(t *testing.T) {
 	root := makeWorkspace(t)
-	manager, err := NewManager(t.TempDir(), Options{})
+	manager, err := newTestManager(t, t.TempDir(), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +97,7 @@ func TestTrustedRootIdentitySerializesStatWithCloseAndAdoption(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			manager, err := NewManager(t.TempDir(), Options{})
+			manager, err := newTestManager(t, t.TempDir(), Options{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -166,7 +173,7 @@ func TestTrustedRootIdentityUsesCanonicalPathKey(t *testing.T) {
 	if err := os.Symlink(root, alias); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	manager, _ := NewManager(t.TempDir(), Options{})
+	manager, _ := newTestManager(t, t.TempDir(), Options{})
 	id := WorkspaceID("ws_11111111111111111111111111111111")
 	info, _ := os.Stat(root)
 	manager.trusted[pathKey(root)] = trustedEvidence{id: id, handle: staticDirectoryHandle{info: info}}

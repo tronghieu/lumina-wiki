@@ -79,8 +79,10 @@ func TestRegistrySaveCompactsForByteBudgetBeforeCountLimit(t *testing.T) {
 	now := time.Now().UTC()
 	registry := emptyRegistry()
 	for index := 0; index < 120; index++ {
-		path := "/" + strings.Repeat(string(rune('a'+index%26)), MaxCanonicalPathBytes-20) + strings.Repeat("x", index%17)
-		path = filepath.Clean(path)
+		suffix := strings.Repeat("x", index%17)
+		prefix := filepath.Join(os.TempDir(), "workspaceid-test")
+		name := strings.Repeat(string(rune('a'+index%26)), MaxCanonicalPathBytes-len(prefix)-len(suffix)-1) + suffix
+		path := filepath.Join(prefix, name)
 		registry.Records = append(registry.Records, Record{SchemaVersion: 1,
 			WorkspaceID:   WorkspaceID("ws_" + strings.Repeat(string("0123456789abcdef"[index%16]), 32)),
 			CanonicalPath: path, FilesystemSignature: Signature("sig-" + strings.Repeat("x", index)),
@@ -107,7 +109,7 @@ func TestRegistrySaveCompactsForByteBudgetBeforeCountLimit(t *testing.T) {
 	if len(loaded.Records) >= 120 || len(loaded.Records) > MaxRegistryRecords {
 		t.Fatalf("tombstones were not byte-compacted: %d", len(loaded.Records))
 	}
-	manager, err := NewManager(filepath.Dir(store.dir), Options{})
+	manager, err := newTestManager(t, filepath.Dir(store.dir), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

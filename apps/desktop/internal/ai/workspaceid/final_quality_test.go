@@ -54,7 +54,7 @@ func TestByteCompactionRetainsAllActiveAndOnlyFittingNewestTombstones(t *testing
 			t.Fatal("tombstones not newest-first deterministic")
 		}
 	}
-	manager, err := NewManager(filepath.Dir(store.dir), Options{})
+	manager, err := newTestManager(t, filepath.Dir(store.dir), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,9 @@ func TestKernelLockCorrectsModeAndChmodFailureIsSafe(t *testing.T) {
 
 func largeRecord(index int, active bool, seen time.Time) Record {
 	suffix := fmt.Sprintf("-%03d", index)
-	path := "/" + strings.Repeat(string(rune('a'+index%26)), MaxCanonicalPathBytes-len(suffix)-2) + suffix
+	prefix := filepath.Join(os.TempDir(), "workspaceid-test")
+	name := strings.Repeat(string(rune('a'+index%26)), MaxCanonicalPathBytes-len(prefix)-len(suffix)-1) + suffix
+	path := filepath.Join(prefix, name)
 	return Record{SchemaVersion: 1, WorkspaceID: WorkspaceID(fmt.Sprintf("ws_%032x", index+1)),
 		CanonicalPath: filepath.Clean(path), FilesystemSignature: Signature(fmt.Sprintf("sig-%03d", index)),
 		FirstSeenAt: seen, LastSeenAt: seen, Active: active}

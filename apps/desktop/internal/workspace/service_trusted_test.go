@@ -34,8 +34,11 @@ func TestValidateTrustedRejectsReplacementAndLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = proof.Close() })
-	if err := os.Rename(root, root+"-old"); err != nil {
-		t.Fatal(err)
+	if !renameHeldWorkspaceRootForTest(t, root, root+"-old") {
+		if err := proof.Validate(); err != nil {
+			t.Fatalf("proof invalid after operating system blocked replacement: %v", err)
+		}
+		return
 	}
 	if err := os.MkdirAll(filepath.Join(root, "wiki"), 0o700); err != nil {
 		t.Fatal(err)

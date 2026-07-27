@@ -2,6 +2,7 @@ package appprivate
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -206,7 +207,7 @@ func TestAtomicCommitRejectsDestinationReplacement(t *testing.T) {
 		if err := os.Remove(store.statePath); err != nil {
 			t.Fatalf("remove state in hook: %v", err)
 		}
-		if err := os.WriteFile(store.statePath, []byte("replacement"), 0o600); err != nil {
+		if err := os.WriteFile(store.statePath, []byte("change"), 0o600); err != nil {
 			t.Fatalf("replace state in hook: %v", err)
 		}
 	}
@@ -217,8 +218,28 @@ func TestAtomicCommitRejectsDestinationReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(raw) != "replacement" {
+	if string(raw) != "change" {
 		t.Fatalf("replacement was overwritten: %q", raw)
+	}
+}
+
+func TestVerifyCurrentRejectsContentMismatchWithMatchingFileIdentity(t *testing.T) {
+	store := newTestStore(t, t.TempDir())
+	if err := store.Write(context.Background(), []byte("before")); err != nil {
+		t.Fatal(err)
+	}
+	lease, release, err := store.acquireLease(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	info, err := lease.state.Lstat(store.stateName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := &stateVersion{info: info, digest: sha256.Sum256([]byte("change"))}
+	if err := store.verifyCurrent(lease, version); !errors.Is(err, ErrStateChanged) {
+		t.Fatalf("verify error = %v, want ErrStateChanged", err)
 	}
 }
 

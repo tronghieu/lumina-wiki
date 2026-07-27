@@ -5,7 +5,6 @@ package appprivate
 import (
 	"errors"
 	"os"
-	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -13,25 +12,17 @@ import (
 )
 
 const (
-	sddlRevision1           = 1
-	daclSecurityInformation = 0x00000004
 	readControl             = 0x00020000
 	writeDAC                = 0x00040000
 	fileReadAttributes      = 0x00000080
+	fileAllAccess           = 0x001F01FF
 	fileShareRead           = 0x00000001
 	fileShareWrite          = 0x00000002
 	fileShareDelete         = 0x00000004
 	fileFlagBackupSemantics = 0x02000000
-	maxSecurityDescriptor   = 64 * 1024
 )
 
-var securityAdvapi32 = syscall.NewLazyDLL("advapi32.dll")
 var securityKernel32 = syscall.NewLazyDLL("kernel32.dll")
-var convertSDDL = securityAdvapi32.NewProc("ConvertStringSecurityDescriptorToSecurityDescriptorW")
-var setKernelSecurity = securityAdvapi32.NewProc("SetKernelObjectSecurity")
-var getKernelSecurity = securityAdvapi32.NewProc("GetKernelObjectSecurity")
-var securityToSDDL = securityAdvapi32.NewProc("ConvertSecurityDescriptorToStringSecurityDescriptorW")
-var localFreeSecurity = securityKernel32.NewProc("LocalFree")
 var getFinalPath = securityKernel32.NewProc("GetFinalPathNameByHandleW")
 
 func platformProtectHandle(file *os.File, _ os.FileMode) error {
@@ -40,22 +31,51 @@ func platformProtectHandle(file *os.File, _ os.FileMode) error {
 		return err
 	}
 	defer secured.Close()
-	sddl, err := syscall.UTF16PtrFromString("D:P(A;;FA;;;OW)(A;;FA;;;SY)")
-	if err != nil {
-		return err
+	tokenUser, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil || tokenUser == nil || tokenUser.User.Sid == nil {
+		return errors.New("read private state owner failed")
 	}
-	var descriptor uintptr
-	result, _, _ := convertSDDL.Call(uintptr(unsafe.Pointer(sddl)), sddlRevision1,
-		uintptr(unsafe.Pointer(&descriptor)), 0)
-	if result == 0 || descriptor == 0 {
+	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
+	if err != nil {
 		return errors.New("create protected DACL failed")
 	}
-	defer localFreeSecurity.Call(descriptor)
-	result, _, _ = setKernelSecurity.Call(secured.Fd(), daclSecurityInformation, descriptor)
-	if result == 0 {
+	acl, err := windows.ACLFromEntries(protectedAccessEntries(tokenUser.User.Sid, system), nil)
+	if err != nil {
+		return errors.New("create protected DACL failed")
+	}
+	if err := windows.SetSecurityInfo(
+		windows.Handle(secured.Fd()),
+		windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		nil,
+		nil,
+		acl,
+		nil,
+	); err != nil {
 		return errors.New("apply protected DACL failed")
 	}
 	return platformValidateProtectedHandle(file)
+}
+
+func protectedAccessEntries(owner, system *windows.SID) []windows.EXPLICIT_ACCESS {
+	entries := []windows.EXPLICIT_ACCESS{fullAccessEntry(owner, windows.TRUSTEE_IS_USER)}
+	if !owner.Equals(system) {
+		entries = append(entries, fullAccessEntry(system, windows.TRUSTEE_IS_WELL_KNOWN_GROUP))
+	}
+	return entries
+}
+
+func fullAccessEntry(sid *windows.SID, trusteeType windows.TRUSTEE_TYPE) windows.EXPLICIT_ACCESS {
+	return windows.EXPLICIT_ACCESS{
+		AccessPermissions: fileAllAccess,
+		AccessMode:        windows.SET_ACCESS,
+		Inheritance:       windows.NO_INHERITANCE,
+		Trustee: windows.TRUSTEE{
+			TrusteeForm:  windows.TRUSTEE_IS_SID,
+			TrusteeType:  trusteeType,
+			TrusteeValue: windows.TrusteeValueFromSID(sid),
+		},
+	}
 }
 
 func platformValidateProtectedHandle(file *os.File) error {
@@ -64,44 +84,59 @@ func platformValidateProtectedHandle(file *os.File) error {
 		return err
 	}
 	defer secured.Close()
-	var needed uint32
-	getKernelSecurity.Call(secured.Fd(), daclSecurityInformation, 0, 0, uintptr(unsafe.Pointer(&needed)))
-	if needed == 0 || needed > maxSecurityDescriptor {
-		return errors.New("read protected DACL failed")
-	}
-	descriptor := make([]byte, needed)
-	result, _, _ := getKernelSecurity.Call(secured.Fd(), daclSecurityInformation,
-		uintptr(unsafe.Pointer(&descriptor[0])), uintptr(len(descriptor)), uintptr(unsafe.Pointer(&needed)))
-	if result == 0 {
-		return errors.New("read protected DACL failed")
-	}
-	var encoded *uint16
-	var length uint32
-	result, _, _ = securityToSDDL.Call(uintptr(unsafe.Pointer(&descriptor[0])), sddlRevision1,
-		daclSecurityInformation, uintptr(unsafe.Pointer(&encoded)), uintptr(unsafe.Pointer(&length)))
-	if result == 0 || encoded == nil || length == 0 {
-		return errors.New("encode protected DACL failed")
-	}
-	defer func() {
-		localFreeSecurity.Call(uintptr(unsafe.Pointer(encoded)))
-		runtime.KeepAlive(encoded)
-	}()
-	sddl := syscall.UTF16ToString(unsafe.Slice(encoded, length))
-	if sddl != "D:P(A;;FA;;;OW)(A;;FA;;;SY)" && sddl != "D:P(A;;FA;;;SY)(A;;FA;;;OW)" {
-		return errors.New("private state DACL is unsafe")
-	}
-	securityDescriptor, err := windows.GetSecurityInfo(windows.Handle(secured.Fd()), windows.SE_FILE_OBJECT,
-		windows.OWNER_SECURITY_INFORMATION)
+	descriptor, err := windows.GetSecurityInfo(
+		windows.Handle(secured.Fd()),
+		windows.SE_FILE_OBJECT,
+		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION,
+	)
 	if err != nil {
-		return errors.New("read private state owner failed")
+		return errors.New("read protected DACL failed")
 	}
-	owner, _, err := securityDescriptor.Owner()
+	owner, _, err := descriptor.Owner()
 	if err != nil || owner == nil {
 		return errors.New("read private state owner failed")
 	}
 	tokenUser, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil || tokenUser == nil || tokenUser.User.Sid == nil || !owner.Equals(tokenUser.User.Sid) {
 		return errors.New("private state owner is unsafe")
+	}
+	control, _, err := descriptor.Control()
+	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+		return errors.New("private state DACL is unsafe")
+	}
+	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
+	if err != nil {
+		return errors.New("read protected DACL failed")
+	}
+	expected := map[string]bool{
+		tokenUser.User.Sid.String(): false,
+	}
+	expected[system.String()] = false
+	dacl, _, err := descriptor.DACL()
+	if err != nil || dacl == nil || int(dacl.AceCount) != len(expected) {
+		return errors.New("private state DACL is unsafe")
+	}
+	for index := uint16(0); index < dacl.AceCount; index++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, uint32(index), &ace); err != nil ||
+			ace == nil ||
+			ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE ||
+			ace.Header.AceFlags != 0 ||
+			ace.Mask != fileAllAccess {
+			return errors.New("private state DACL is unsafe")
+		}
+		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+		key := sid.String()
+		seen, ok := expected[key]
+		if !ok || seen {
+			return errors.New("private state DACL is unsafe")
+		}
+		expected[key] = true
+	}
+	for _, seen := range expected {
+		if !seen {
+			return errors.New("private state DACL is unsafe")
+		}
 	}
 	return nil
 }

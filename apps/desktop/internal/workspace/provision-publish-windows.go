@@ -11,11 +11,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-type renameInfoExHeader struct {
-	Flags          uint32
-	RootDirectory  windows.Handle
-	FileNameLength uint32
-	FileName       [1]uint16
+type renameInfoHeader struct {
+	ReplaceIfExists byte
+	RootDirectory   windows.Handle
+	FileNameLength  uint32
+	FileName        [1]uint16
 }
 
 const (
@@ -60,18 +60,18 @@ func platformPublishNoReplace(root *os.Root, oldName, newName string) error {
 		return err
 	}
 	encoded = encoded[:len(encoded)-1]
-	var layout renameInfoExHeader
+	var layout renameInfoHeader
 	nameOffset := unsafe.Offsetof(layout.FileName)
 	buffer := make([]byte, int(nameOffset)+len(encoded)*2)
-	header := (*renameInfoExHeader)(unsafe.Pointer(&buffer[0]))
-	header.Flags = 0 // FILE_RENAME_FLAG_REPLACE_IF_EXISTS must remain unset.
+	header := (*renameInfoHeader)(unsafe.Pointer(&buffer[0]))
+	header.ReplaceIfExists = 0
 	header.RootDirectory = windows.Handle(destinationParent.Fd())
 	header.FileNameLength = uint32(len(encoded) * 2)
 	target := unsafe.Slice((*uint16)(unsafe.Pointer(&buffer[nameOffset])), len(encoded))
 	copy(target, encoded)
 	return windows.SetFileInformationByHandle(
 		windows.Handle(renameSource.Fd()),
-		windows.FileRenameInfoEx,
+		windows.FileRenameInfo,
 		&buffer[0],
 		uint32(len(buffer)),
 	)

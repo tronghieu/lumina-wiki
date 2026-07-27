@@ -68,7 +68,7 @@ func TestPendingHandleDetectsDirectoryReplacementAndCloses(t *testing.T) {
 	}
 	base := t.TempDir()
 	root := makeWorkspace(t)
-	m, err := NewManager(base, Options{})
+	m, err := newTestManager(t, base, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestSamplingReplacementFailsAndClosesHandleOnce(t *testing.T) {
 	}
 	root := makeWorkspace(t)
 	var tracked *trackedDirectoryHandle
-	m, err := NewManager(t.TempDir(), Options{
+	m, err := newTestManager(t, t.TempDir(), Options{
 		OpenDirectory: func(path string) (DirectoryHandle, error) {
 			file, err := os.Open(path)
 			tracked = &trackedDirectoryHandle{DirectoryHandle: file}
@@ -136,7 +136,7 @@ func TestSamplingReplacementFailsAndClosesHandleOnce(t *testing.T) {
 }
 
 func TestMalformedAndHugeTokensRejectedBeforeLookup(t *testing.T) {
-	m, err := NewManager(t.TempDir(), Options{})
+	m, err := newTestManager(t, t.TempDir(), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

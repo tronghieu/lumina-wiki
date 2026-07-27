@@ -18,7 +18,7 @@ const (
 
 var tempSequence atomic.Uint64
 
-func (store *Store) atomicWrite(lease *rootLease, previous fs.FileInfo, raw []byte) error {
+func (store *Store) atomicWrite(lease *rootLease, previous *stateVersion, raw []byte) error {
 	if err := lease.verify(); err != nil {
 		return err
 	}

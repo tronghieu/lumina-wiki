@@ -108,7 +108,7 @@ func TestBeginRestoreReopensSavedPathAndPreservesRestartConfirmation(t *testing.
 
 func TestBeginRestoreRejectsUnknownInactiveMissingAndReplacedLibraries(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
-		manager, err := NewManager(t.TempDir(), Options{})
+		manager, err := newTestManager(t, t.TempDir(), Options{})
 		if err != nil {
 			t.Fatal(err)
 		}

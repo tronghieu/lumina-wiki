@@ -6,9 +6,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
-	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsStoreAppliesAndVerifiesOwnerSystemDACL(t *testing.T) {
@@ -42,6 +42,21 @@ func TestWindowsStoreRejectsPermissiveFinalDACL(t *testing.T) {
 	}
 }
 
+func TestProtectedAccessEntriesDeduplicateEqualOwnerAndSystemSID(t *testing.T) {
+	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := protectedAccessEntries(system, system)
+	if len(entries) != 1 {
+		t.Fatalf("equal owner and SYSTEM produced %d entries", len(entries))
+	}
+	if entries[0].AccessPermissions != fileAllAccess ||
+		entries[0].Trustee.TrusteeValue != windows.TrusteeValueFromSID(system) {
+		t.Fatal("deduplicated owner entry lost full access")
+	}
+}
+
 func applyTestDACL(path, sddl string) error {
 	file, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
@@ -53,19 +68,21 @@ func applyTestDACL(path, sddl string) error {
 		return err
 	}
 	defer secured.Close()
-	encoded, err := syscall.UTF16PtrFromString(sddl)
+	descriptor, err := windows.SecurityDescriptorFromString(sddl)
 	if err != nil {
 		return err
 	}
-	var descriptor uintptr
-	result, _, callErr := convertSDDL.Call(uintptr(unsafe.Pointer(encoded)), sddlRevision1, uintptr(unsafe.Pointer(&descriptor)), 0)
-	if result == 0 {
-		return callErr
+	dacl, _, err := descriptor.DACL()
+	if err != nil {
+		return err
 	}
-	defer localFreeSecurity.Call(descriptor)
-	result, _, callErr = setKernelSecurity.Call(secured.Fd(), daclSecurityInformation, descriptor)
-	if result == 0 {
-		return callErr
-	}
-	return nil
+	return windows.SetSecurityInfo(
+		windows.Handle(secured.Fd()),
+		windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		nil,
+		nil,
+		dacl,
+		nil,
+	)
 }
