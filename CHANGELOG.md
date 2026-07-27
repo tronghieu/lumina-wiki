@@ -3,6 +3,109 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.11.0] - 2026-07-27
+
+### Fixed
+
+- Six page templates (source, concept, person, summary, topic, foundation)
+  had drifted out of step with the wiki's own rules: each one was missing
+  required frontmatter fields (`id`, `created`, `updated`) and instead
+  carried two fields that were never part of the rules at all (`slug`,
+  `date_added`). Every page written from these templates started life
+  incomplete, without anyone noticing until lint caught it.
+- Once a page was incomplete, `lint.mjs --fix` used to patch every kind of
+  missing field with the placeholder word `TODO` — that satisfied the
+  "something is there" check but permanently failed the "is it the right
+  kind of value" check, since `TODO` is never a valid date or number. Once a
+  page reached this state, nothing could repair it automatically, and the
+  notice shown after an upgrade recommended a command that could not help
+  either. `--fix` no longer writes `TODO` under any circumstances.
+- A page whose `id`, `type`, or `title` still carried that same `TODO`
+  placeholder from an older run of the repair above was invisible to every
+  check — a placeholder word looks exactly like ordinary text, so nothing
+  ever flagged it. Lint now treats `TODO` as never a real value, for any
+  field the wiki tracks, and reports it; `--fix` recovers the real value
+  the same way it already does for a genuinely missing field — from an
+  older field name, from the page's file path, or from its own heading —
+  wherever that recovery is possible, and, if recovering `id` this way
+  also means an old `slug` field is now a confirmed duplicate, that old
+  field is cleared out in the same pass.
+- `wiki.mjs set-meta` used to save whatever value it was given, even one
+  that plainly didn't match what the field expects (text where a date
+  belongs, for example). It now checks the value against the field's
+  expected type first and refuses to save one that doesn't fit.
+
+### Added
+
+- The six page templates above now match the wiki's frontmatter rules
+  exactly, and a new automated test compares every template against the
+  schema so they can't silently drift out of sync again.
+- `lint.mjs --fix` recovers more on its own now: an empty list for
+  list-type fields, a date recovered from an older field name or the
+  file's own save timestamp, a page's `id` recovered from an older field
+  name or its file path, its `type` from the folder it lives in, and its
+  title from the page's own heading. Where no safe value exists — a
+  publication year, an importance rating — it leaves the field reported as
+  missing instead of guessing, so a wrong value never quietly passes as
+  fixed.
+- `lint.mjs --fix` gained two further repairs: it corrects fields holding
+  the wrong kind of value (including rebuilding a page's source list and
+  related-concepts list straight from the link graph, which already held
+  the real answer), and it fixes wiki links that are missing their folder
+  name whenever exactly one page could be the intended target — never when
+  more than one page could match.
+- `lint.mjs --suggest` now actually does something. It had been accepted as
+  a flag since it shipped but silently did nothing; it now lists a concrete
+  next step for every finding the automatic repair could not resolve on its
+  own.
+- `lint.mjs --fix` now clears out an old field name once its replacement is
+  confirmed to hold the same information — for example, once a page's `id`
+  is in place, a leftover, older `slug` field carrying the identical value
+  is removed instead of being reported forever. "Matches" now also covers
+  the most common near-miss found in real wikis: an `id` that names both
+  its own folder and the old `slug` value together (for example
+  `concepts/ab-testing` next to a `slug` of `ab-testing`) counts as a
+  match, since the shorter value is fully contained inside the longer one
+  — nothing is lost by keeping the longer `id` and dropping the duplicate
+  `slug`. This only happens when the replacement field is present, holds a
+  valid value, and matches the old one this way; if the two genuinely
+  disagree, both are left in place and the warning keeps showing, because
+  that mismatch needs a person to look at it, not an automatic guess.
+- The notice shown after an upgrade now separates what will be repaired
+  automatically from what still needs a person's judgment, and only names
+  the commands that actually apply to what was found — instead of always
+  suggesting the same two commands regardless of what is wrong.
+- `/lumi-ingest` now checks its own new and updated pages before marking an
+  entry done, instead of trusting that the step succeeded.
+  `/lumi-migrate-legacy` now also picks up the specific findings the
+  automatic repair leaves standing (an ambiguous link, a rating with no
+  safe default), not only the fields a Lumina version explicitly renamed.
+
+### Migration
+
+- If your wiki was created or upgraded before this release, some pages may
+  already carry the `TODO` placeholder — in a date or number field, or in a
+  page's own `id`, `type`, or `title` — left behind by an older, less
+  careful repair. Run `node _lumina/scripts/lint.mjs --fix` (or ask your AI
+  agent to run `/lumi-check`) to clean up everything that can be recovered
+  safely — empty lists, dates, page ids, types, and titles are handled
+  automatically, and lists such as key sources or related concepts are
+  rebuilt from your wiki's existing links. A small number of fields, such
+  as a publication year or an importance rating, cannot be safely guessed
+  and will still be reported afterward — run
+  `node _lumina/scripts/lint.mjs --suggest` or `/lumi-migrate-legacy` to see
+  exactly what each one needs. Expect to make the final call yourself on
+  those; that is expected, not a sign anything went wrong.
+- The same repair also clears out older, duplicate field names left behind
+  by earlier upgrades (an old `slug` once `id` is set — including when
+  `id` also names its own folder — an old `date_added` once `created` is
+  set, and so on), so the number of warnings you see after running it
+  should drop sharply on a long-lived wiki, often to a small handful.
+  Anything still reported after that run is a genuine disagreement between
+  an old field and its replacement, not something the tool missed — it
+  needs you to decide which value is right, and that decision is the point,
+  not a sign anything went wrong.
+
 ## [1.10.1] - 2026-07-26
 
 ### Changed

@@ -1,9 +1,11 @@
 ---
 name: lumi-migrate-legacy
 description: >
-  Backfill missing schema fields (provenance, confidence) on legacy wiki entries
-  after a Lumina version upgrade. Use proactively when /lumi-check reports
-  L01/L11 findings on multiple entries, when manifest shows
+  Backfill missing schema fields (provenance, confidence) and resolve
+  judgment-only lint findings (L01/L02 fields lint.mjs --fix could not safely
+  infer, ambiguous L05 wikilinks) on legacy wiki entries after a Lumina
+  version upgrade. Use proactively when /lumi-check reports L01/L02/L05/L11
+  findings on multiple entries after a --fix pass, when manifest shows
   legacyMigrationNeeded:true, or when user mentions "lint do", "upgrade",
   "missing provenance", or "schema gap" after running install.
 allowed-tools:
@@ -22,7 +24,10 @@ introduces new required or optional frontmatter fields, existing entries may
 be missing those fields. Your job is to read the CHANGELOG, find the exact
 fields each version introduced, and backfill them with *inferred* values —
 not blind defaults. Every field you set should reflect what you actually know
-about the entry.
+about the entry. You also pick up wherever `lint.mjs --fix` had to stop:
+`number`/`enum` frontmatter fields it couldn't safely default, and ambiguous
+wikilinks it wouldn't guess at. Always let `--fix` run first — you spend your
+reasoning only on what deterministic repair genuinely could not resolve.
 
 This skill is **CHANGELOG-driven**, not hardcoded to any specific field set.
 The CHANGELOG's `### Migration` sections are the authoritative source of truth
@@ -34,8 +39,13 @@ future versions without modification, as long as the CHANGELOG is maintained.
 Key workspace paths:
 - `_lumina/manifest.json` — `packageVersion`, `legacyMigrationNeeded`
 - `_lumina/CHANGELOG.md` — `### Migration` sections per version (the spec)
-- `_lumina/scripts/lint.mjs` — runs checks; L01 = missing required field
-  (error), L11 = missing `confidence` (warning)
+- `_lumina/scripts/lint.mjs` — runs checks; `--fix` repairs L01/L02/L03/L05/
+  L06/L07/L09 wherever it safely can; L01 = missing required field (error),
+  L02 = wrong frontmatter type (error), L05 = broken wikilink (error), L11 =
+  missing `confidence` (warning) — this skill only ever sees the L01/L02/L05
+  findings that `--fix` left standing, plus every L11; `--suggest` adds a
+  `suggestion` string to each finding whose `fixable` is `false` (an L05
+  finding also carries a `candidates` array of matching pages)
 - `_lumina/scripts/wiki.mjs` — `read-meta`, `set-meta`, `list-entities`, `log`
 - `wiki/graph/edges.jsonl` — citation/edge counts for confidence inference
 - `raw/` — source snapshots for provenance inference
@@ -54,52 +64,64 @@ Note `packageVersion` and `legacyMigrationNeeded`. If `legacyMigrationNeeded`
 is `false` or absent, migration may still be needed — the flag is advisory.
 Proceed to the lint check regardless.
 
-**Step 1.2 — Run lint (read-only pass).**
+**Step 1.2 — Run the deterministic fix pass first.**
 
-First, get aggregate counts (tiny output, always safe):
+`lint.mjs --fix` now repairs L01, L02, L03, L05, L06, L07, and L09
+automatically wherever it safely can. Run it before spending any inference
+effort, so this skill only has to reason about what deterministic repair
+genuinely could not resolve. It is idempotent — safe to run even if a
+previous migration or `/lumi-check` already ran it.
 
 ```bash
-node _lumina/scripts/lint.mjs --summary
+node _lumina/scripts/lint.mjs --fix --json > /tmp/lumi-lint.json
 ```
-
-If `errors === 0` and `by_check.L11` is `0` or absent, skip to the clean-exit
-branch below. Otherwise, you need the per-entry findings.
 
 **Important — do NOT pipe `--json` straight into a heredoc.** On a large wiki
 the full findings JSON can exceed the shell tool's ~30KB stdout buffer and get
-truncated mid-string, breaking JSON.parse. Instead, write it to a temp file
-and read filtered slices:
+truncated mid-string, breaking JSON.parse. Read the temp file with a filtered
+projection instead:
 
 ```bash
-node _lumina/scripts/lint.mjs --json > /tmp/lumi-lint.json
 node -e "
 const j=JSON.parse(require('fs').readFileSync('/tmp/lumi-lint.json','utf8'));
-const want=new Set(['L01-frontmatter-required','L11-confidence-missing']);
-const hits=j.findings.filter(f=>want.has(f.id))
+const want=new Set(['L01-frontmatter-required','L02-frontmatter-types','L05-broken-wikilink','L11-confidence-missing']);
+const hits=j.findings.filter(f=>want.has(f.id) && !f.fix_applied)
   .map(f=>({id:f.id,file:f.file,message:f.message}));
 console.log(JSON.stringify(hits,null,2));
 "
 ```
 
-The projected output (id + file + message only) is bounded and parseable. If
-even that exceeds buffer (very large wikis), read `/tmp/lumi-lint.json` with
-the Read tool instead — Read paginates, Bash stdout does not.
+`!f.fix_applied` is the key filter: it drops everything the fix pass already
+resolved and keeps only the findings that survived — the ones needing
+inference or a human decision. The projected output (id + file + message
+only) is bounded and parseable. If even that exceeds buffer (very large
+wikis), read `/tmp/lumi-lint.json` with the Read tool instead — Read
+paginates, Bash stdout does not.
 
 Collect:
-- All `L01-frontmatter-required` findings (severity: error) — entries with
-  missing required fields.
+- Surviving `L01-frontmatter-required` findings (severity: error) — a
+  required field `--fix` recognized but left standing, almost always a
+  `number` or `enum` field with no safe default (e.g. a source's `year` or
+  `importance`).
+- Surviving `L02-frontmatter-types` findings (severity: error) — same shape:
+  a `number`/`enum` value that fails validation and that `--fix` cannot
+  repair on its own.
+- Surviving `L05-broken-wikilink` findings (severity: error) — a wikilink
+  whose basename matched zero or more than one page, so `--fix` would not
+  guess.
 - All `L11-confidence-missing` findings (severity: warning) — entries missing
-  the optional-but-recommended `confidence` field.
+  the optional-but-recommended `confidence` field. `--fix` never touches L11;
+  every instance survives.
 
-If `summary.errors === 0` and there are no L11 warnings relevant to migration:
+If the projected list above is empty:
 
 ```
-No migration work needed. Lint is clean.
+No migration work needed. Lint is clean (after auto-fix).
 ```
 
 Log and exit:
 ```bash
-node _lumina/scripts/wiki.mjs log migrate-legacy "No migration needed — lint clean."
+node _lumina/scripts/wiki.mjs log migrate-legacy "No migration needed — lint clean after auto-fix."
 ```
 
 **Step 1.3 — Read CHANGELOG migration notes.**
@@ -113,9 +135,11 @@ entry's install version and the current `packageVersion`**. These sections
 describe exactly which fields were added and for which entity types. Read them
 carefully — they are the specification for what you will backfill.
 
-If no `### Migration` section exists but L01/L11 findings are present, the
-fields are listed in the findings themselves (the `message` field names them).
-Use the finding messages as the migration spec.
+If no `### Migration` section exists but L01/L02/L05/L11 findings are present,
+the fields are listed in the findings themselves (the `message` field names
+them, and `node _lumina/scripts/lint.mjs --suggest --json` adds a `suggestion`
+string to each one). Use the finding messages and suggestions as the
+migration spec.
 
 **Step 1.4 — Build work list.**
 
@@ -242,6 +266,68 @@ Pick based on inbound evidence signals:
 Do not guess. If evidence is ambiguous, choose `unverified` over a higher value.
 Bumping confidence up is easier than correcting overconfident legacy data.
 
+#### `number`/`enum` required fields left absent by `--fix` (surviving L01/L02)
+
+`lint.mjs --fix` only ever writes a value it can derive safely. It never
+guesses a `number` or `enum` field with no obvious default (a source's
+`year`, `importance`), so a surviving L01/L02 finding on one of these fields
+is squarely this skill's job. Use the following inference order per field;
+stop at the first tier that yields a confident value.
+
+**Tier 1 — confirm the finding is genuinely in this bucket.** Run
+`node _lumina/scripts/lint.mjs --suggest --json` and read the matching
+finding's `suggestion` field. For an L01/L02 `number`/`enum` finding this
+string only restates the field name and expected type ("cannot be inferred —
+provide a value manually") — it is not an inferred value, and never reads
+`external_ids` or anything else on the page. Its job is to confirm you're
+looking at the right finding before you spend Tier 2's reading effort; the
+actual inference is entirely yours to do, starting at Tier 2.
+
+**Tier 2 — read the page body and the raw source.** For `year`, check the
+page body's citation or bibliography line, the `external_ids` block (a DOI or
+arXiv ID often encodes or implies a publication year), and — if `raw_paths`
+resolves to a real file — the source document itself (a PDF's title page or
+metadata). For `importance` (1–5) or any project-specific enum, read how the
+page talks about itself: how central the entry reads in its own summary, how
+many other pages cite it, whether the CHANGELOG's `### Migration` section
+gives explicit guidance for this field.
+
+**Tier 3 — ask the user instead of guessing.** If Tiers 1–2 leave real
+ambiguity (conflicting years across sources, an `importance` call that is
+genuinely a judgment about the wiki owner's priorities, or an enum whose
+options don't obviously fit the evidence), do not write a value. List the
+slug, the field, and what you found under it in the report to the user and
+ask them to pick — a `number`/`enum` field has no safe "unverified" fallback
+the way `confidence` does, and `set-meta` will reject anything that doesn't
+match the declared type anyway (exit 2, file unchanged), so a wrong guess
+can't land silently even if you tried.
+
+#### Ambiguous L05 wikilinks (ones `--fix` would not touch)
+
+`--fix` only rewrites `[[basename]]` when exactly one page's basename
+matches; every other broken wikilink is left standing on purpose. Run
+`node _lumina/scripts/lint.mjs --suggest --json` and read the `candidates`
+array attached to each surviving L05 finding (its `suggestion` field folds
+the same list into one sentence, if you'd rather read that):
+
+- **Zero candidates** — the target page genuinely doesn't exist yet. Suggest
+  `/lumi-ingest` or `/lumi-edit` to create it, or ask the user whether the
+  link should be removed instead. Do not invent a target.
+- **One candidate that `--fix` still didn't rewrite** — this should be rare
+  (it would mean `--fix` already handled it); if you see it, treat it as one
+  candidate and resolve it the same way as below.
+- **Multiple candidates** — read the linking page's surrounding paragraph and
+  each candidate page's title/summary to judge which one the sentence
+  actually means. Only pick when the context makes it unambiguous — e.g. the
+  paragraph names a specific paper and only one candidate is a page about
+  that paper. If two candidates are both plausible, do not guess: list them
+  for the user with the sentence they appear in and ask which one is meant.
+
+Resolve a wikilink by rewriting `[[old-target]]` to `[[full/slug]]` in the
+page body with the Edit tool (this is a page-body edit, not a `set-meta`
+call — wikilink targets live in prose, not frontmatter) and confirm with a
+lint re-run that the specific L05 finding is gone.
+
 **For future fields** not listed above: read the `### Migration` section in
 CHANGELOG carefully. It will specify the field, its allowed values, and how to
 infer the right value. Apply the same pattern: read available evidence, apply
@@ -259,9 +345,15 @@ sources/lora-2021:
   raw_paths: []           (Tier 3: url present, no file match)
   provenance: partial     (url present, no resolvable raw_paths)
   confidence: unverified  (0 inbound edges, no cross-checks)
+  year: 2021              (L02 survivor; Tier 2: arXiv ID 2106.09685 → 2021)
 
 concepts/softmax-temperature:
   confidence: medium      (2 inbound edges)
+
+summary/transformers-overview.md:42 — [[flash-decoding]]:
+  resolve to [[concepts/flash-decoding-v2]]  (--suggest: 1 real candidate after
+  reading context; a second candidate, concepts/flash-decoding-draft, was
+  ruled out — the paragraph names the shipped technique, not the draft note)
 ```
 
 ### Phase 3 — Backfill
@@ -372,12 +464,17 @@ exist or are under `raw/tmp/`. Treat these as follow-up action items for the
 user — the migration is not blocked, but the `raw_paths` value is inaccurate
 until the referenced file is located or the entry is corrected.
 
-If any L01 errors remain:
-- Read the finding message — it names the exact field still missing.
-- Return to Phase 2 and infer a value for that field.
-- Apply via `set-meta` and re-run lint.
+If any L01, L02, or L05 errors remain:
+- Read the finding message (and its `--suggest` suggestion, if any) — it
+  names the exact field still missing/invalid, or the wikilink still broken.
+- Return to Phase 2 and infer a value, or resolve the wikilink, for that
+  finding.
+- Apply via `set-meta` (frontmatter fields) or the Edit tool (wikilink
+  targets in the body) and re-run lint.
 - Do not loop more than 3 times — if errors persist after 3 attempts, surface
-  them to the user with the exact finding messages.
+  them to the user with the exact finding messages. A field or wikilink that
+  still can't be resolved after 3 attempts usually means Tier 3 applies:
+  stop guessing and ask the user directly.
 
 **Step 4.2 — Clear the manifest flag.**
 
@@ -423,20 +520,26 @@ User: "/lumi-migrate-legacy"
 
 Clean wiki — no migration needed:
 ```bash
-node _lumina/scripts/lint.mjs --json
-# → { "summary": { "errors": 0, "warnings": 0 } }
+node _lumina/scripts/lint.mjs --fix --json
+# → { "summary": { "errors": 0, "warnings": 0 } }, nothing to fix or infer
 ```
 Report: "No migration needed — lint is clean. Nothing changed."
 Log entry written. Done.
 </example>
 
 <example>
-User: "/lumi-migrate-legacy" (after upgrading to a version that added provenance)
+User: "/lumi-migrate-legacy" (after upgrading to a version that added provenance,
+plus a handful of legacy L02/L05 findings a previous, weaker --fix left behind)
 
 Normal migration path:
 ```bash
-node _lumina/scripts/lint.mjs --json
-# → 4 L01 errors: sources/* missing provenance
+node _lumina/scripts/lint.mjs --fix --json > /tmp/lumi-lint.json
+# → --fix resolves the mechanical stuff on its own (kebab slugs, reverse
+#   edges, most L02 array shapes, unambiguous wikilinks). What survives:
+#   4 L01 errors: sources/* missing provenance (no safe default — required
+#   on `sources`, not an array/date/id/type/title case --fix could derive)
+#   1 L02 error: sources/lora-2021 "year" must be a number, got "2021" (a
+#   quoted string in legacy frontmatter — --fix can't repair number values)
 
 # Phase 2 — for each source:
 node _lumina/scripts/wiki.mjs read-meta sources/attention-is-all-you-need
@@ -444,17 +547,19 @@ node _lumina/scripts/wiki.mjs read-meta sources/attention-is-all-you-need
 ls raw/sources/attention-is-all-you-need*
 # → raw/sources/attention-is-all-you-need.pdf (found)
 # → infer: provenance = replayable
+# sources/lora-2021 "year" — Tier 2: external_ids.arxiv is 2106.09685 → 2021
 
 # Phase 3:
 node _lumina/scripts/wiki.mjs set-meta sources/attention-is-all-you-need provenance replayable
-# ... repeat for all 4 entries ...
+node _lumina/scripts/wiki.mjs set-meta sources/lora-2021 year 2021 --json-value
+# ... repeat for all remaining entries ...
 
 # Phase 4:
 node _lumina/scripts/lint.mjs --json
 # → { "summary": { "errors": 0, "warnings": 2 } }  -- L11 warnings remain (advisory only)
 # Clear manifest flag, write log.
 ```
-Report: "4 entries backfilled (provenance). Lint: 0 errors, 2 advisory warnings."
+Report: "5 entries backfilled (provenance, year). Lint: 0 errors, 2 advisory warnings."
 </example>
 
 <example>
@@ -462,8 +567,8 @@ User: "/lumi-migrate-legacy" (re-run on already-migrated wiki)
 
 Idempotency — all fields already present:
 ```bash
-node _lumina/scripts/lint.mjs --json
-# → 0 L01 errors, 0 L11 warnings
+node _lumina/scripts/lint.mjs --fix --json
+# → 0 L01 errors, 0 L02 errors, 0 L05 errors, 0 L11 warnings
 ```
 Report: "No migration needed — lint is clean. Nothing changed."
 Re-running this skill on a clean wiki produces zero file changes.
@@ -471,19 +576,27 @@ Re-running this skill on a clean wiki produces zero file changes.
 
 ## Guardrails
 
+- Always run `lint.mjs --fix` before any inference (Step 1.2). Never spend a
+  Phase 2 reasoning pass on a finding deterministic repair could have handled.
 - Never write a value you cannot infer from available evidence. When in doubt,
-  use `unverified` (for confidence) or read the CHANGELOG rubric for the field.
+  use `unverified` (for confidence), Tier 3 (ask the user, for `number`/`enum`
+  fields), or read the CHANGELOG rubric for the field.
+- Never guess an ambiguous L05 wikilink target. Multiple plausible candidates
+  or zero candidates both mean: ask the user, don't pick.
 - Never modify files in `raw/`. Read-only.
 - Never hand-edit `wiki/graph/edges.jsonl` or `wiki/graph/citations.jsonl`.
 - `set-meta` is the only permitted write path for frontmatter changes in this
-  skill, with one sanctioned exception: deleting the obsolete `url:` key
-  during the `url` → `urls` schema-shape upgrade (Phase 3), since `set-meta`
-  has no key-removal flag. Do not use Edit or Write on wiki pages for
-  anything else.
+  skill, with two sanctioned exceptions: deleting the obsolete `url:` key
+  during the `url` → `urls` schema-shape upgrade (Phase 3), and rewriting a
+  resolved `[[wikilink]]` target in a page body once you've confidently
+  matched it to exactly one candidate — both because `set-meta` has no way to
+  make either change. Do not use Edit or Write on wiki pages for anything
+  else, and never use Edit to invent a value `set-meta` would have rejected.
 - Do not clear `legacyMigrationNeeded` until lint confirms 0 errors.
 - If the CHANGELOG has no `### Migration` section for the detected version gap,
-  rely entirely on the L01/L11 finding messages to identify which fields need
-  backfilling. Do not fabricate a migration spec.
+  rely entirely on the L01/L02/L05/L11 finding messages (and `--suggest`
+  suggestions) to identify which fields or wikilinks need backfilling. Do not
+  fabricate a migration spec.
 
 ## Definition of Done
 

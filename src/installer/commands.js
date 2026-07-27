@@ -710,8 +710,44 @@ export async function versionCommand(opts = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Run lint --summary in the project root and, if findings exist, print a
- * post-upgrade banner to stderr.
+ * Derive an {errors, warnings, fixableCount, nonFixableCount} breakdown from
+ * whatever shape `lint.mjs` produced.
+ *
+ * Preferred shape (`--json`, no `--summary`): a `findings[]` array where each
+ * finding carries its own `severity` and `fixable` — this is the authoritative
+ * per-finding truth (a check can be nominally "fixable" yet still leave a
+ * specific finding untouched, e.g. an L01 on an enum/number field with no
+ * safe default). We sum from the array directly rather than trusting a
+ * check-ID-level count.
+ *
+ * Fallback shape (`--summary`, or any stub/mock that only returns the compact
+ * top-level `{errors, warnings, fixable}` object): used when `findings` is
+ * absent. This keeps the function resilient to older/simpler lint outputs.
+ *
+ * @param {object} parsed
+ * @returns {{errors: number, warnings: number, fixableCount: number, nonFixableCount: number}}
+ */
+function summarizeLintOutput(parsed) {
+  if (parsed && Array.isArray(parsed.findings)) {
+    const findings = parsed.findings;
+    const errors = findings.filter(f => f.severity === 'error').length;
+    const warnings = findings.filter(f => f.severity === 'warning').length;
+    const fixableCount = findings.filter(f => f.severity !== 'info' && f.fixable).length;
+    const nonFixableCount = Math.max(0, errors + warnings - fixableCount);
+    return { errors, warnings, fixableCount, nonFixableCount };
+  }
+
+  const errors = Number(parsed?.errors) || 0;
+  const warnings = Number(parsed?.warnings) || 0;
+  const fixableCount = Number(parsed?.fixable) || 0;
+  const nonFixableCount = Math.max(0, errors + warnings - fixableCount);
+  return { errors, warnings, fixableCount, nonFixableCount };
+}
+
+/**
+ * Run lint in the project root and, if findings exist, print a post-upgrade
+ * banner to stderr that tells the user exactly what will and will not be
+ * fixed for them.
  *
  * @param {object} opts
  * @param {string}  opts.projectRoot
@@ -720,12 +756,12 @@ export async function versionCommand(opts = {}) {
  * @param {object}  opts.colors
  */
 export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersion, colors, t = null }) {
-  let summary;
+  let parsed;
   try {
     const lintScript = join(projectRoot, '_lumina', 'scripts', 'lint.mjs');
     const result = spawnSync(
       process.execPath,
-      [lintScript, '--summary'],
+      [lintScript, '--json'],
       { cwd: projectRoot, encoding: 'utf8', timeout: 30000 },
     );
 
@@ -735,7 +771,7 @@ export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersi
     }
 
     try {
-      summary = JSON.parse(result.stdout.trim());
+      parsed = JSON.parse(result.stdout.trim());
     } catch {
       return;
     }
@@ -743,33 +779,46 @@ export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersi
     return;
   }
 
-  const { errors = 0, warnings = 0 } = summary;
+  const { errors, warnings, fixableCount, nonFixableCount } = summarizeLintOutput(parsed);
   if (errors === 0 && warnings === 0) {
     return;
   }
 
   // Use t() if available; fall back to EN literals for callers that don't pass t.
-  const banner = [
+  const lines = [
     '',
-    colors.yellow(t ? t('warn.upgrade_header', { from: fromVersion, to: toVersion }) : `[warn] Lumina upgraded v${fromVersion} -> v${toVersion} — schema gap detected:`),
-    colors.yellow(t ? t('warn.upgrade_errors', { errors, warnings }) : `       ${errors} error(s), ${warnings} warning(s) across legacy entries.`),
+    colors.yellow(t ? t('warn.upgrade_header', { from: fromVersion, to: toVersion }) : `[warn] Lumina upgraded v${fromVersion} -> v${toVersion}. Some older wiki entries need attention:`),
+    colors.yellow(t ? t('warn.upgrade_errors', { errors, warnings }) : `       ${errors} error(s), ${warnings} warning(s).`),
     '',
-    t ? t('warn.upgrade_fix_quick') : '     Quick fix (deterministic):',
-    t ? t('warn.upgrade_fix_quick_cmd') : '       node _lumina/scripts/wiki.mjs migrate --add-defaults',
-    '',
-    t ? t('warn.upgrade_fix_smart') : '     Smart fix (LLM-driven, recommended):',
-    t ? t('warn.upgrade_fix_smart_cmd') : '       /lumi-migrate-legacy',
-    '',
-    t ? t('warn.upgrade_idempotent') : '     Both are idempotent. See _lumina/CHANGELOG.md for details.',
-    '',
-  ].join('\n');
+  ];
 
-  process.stderr.write(banner + '\n');
+  // Deterministic pass — only mention it when it actually has something to do.
+  if (fixableCount > 0) {
+    lines.push(t ? t('warn.upgrade_fix_auto') : '     Fix what can be corrected automatically:');
+    lines.push(t ? t('warn.upgrade_fix_auto_cmd') : '       node _lumina/scripts/lint.mjs --fix');
+    lines.push('');
+  }
+
+  // Judgment pass — only mention the LLM-assisted path when something actually
+  // needs a human decision. If everything was auto-fixable, say nothing here.
+  if (nonFixableCount > 0) {
+    lines.push(t ? t('warn.upgrade_fix_manual', { count: nonFixableCount }) : `     ${nonFixableCount} finding(s) still need your judgment. See exactly what to do:`);
+    lines.push(t ? t('warn.upgrade_fix_manual_suggest_cmd') : '       node _lumina/scripts/lint.mjs --suggest');
+    lines.push(t ? t('warn.upgrade_fix_manual_cmd') : '       /lumi-migrate-legacy');
+    lines.push('');
+  }
+
+  lines.push(t ? t('warn.upgrade_footer') : '     Safe to run again. See _lumina/CHANGELOG.md for details.');
+  lines.push('');
+
+  process.stderr.write(lines.join('\n') + '\n');
 
   // Spawn-and-forget: append upgrade log entry (ignore failures, e.g., wiki/ missing)
   try {
     const wikiScript = join(projectRoot, '_lumina', 'scripts', 'wiki.mjs');
-    const logMsg = `upgrade v${fromVersion}->v${toVersion}: ${errors} errors, ${warnings} warnings — run /lumi-migrate-legacy`;
+    const logMsg = nonFixableCount > 0
+      ? `upgrade v${fromVersion}->v${toVersion}: ${errors} errors, ${warnings} warnings — ${fixableCount} auto-fixable via lint --fix, ${nonFixableCount} need /lumi-migrate-legacy`
+      : `upgrade v${fromVersion}->v${toVersion}: ${errors} errors, ${warnings} warnings — all auto-fixable via lint --fix`;
     spawnSync(
       process.execPath,
       [wikiScript, 'log', 'installer', logMsg],
