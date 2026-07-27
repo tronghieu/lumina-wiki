@@ -155,8 +155,15 @@ node _lumina/scripts/wiki.mjs log research-topic "created topic <slug> covering 
 node _lumina/scripts/lint.mjs --fix --json
 ```
 
-   If `summary.errors > 0`, read the lint output, address each error, and re-run
-   before telling the user the skill is done.
+   Re-run in read mode (no `--fix`) to see the true count — the `--fix` run's
+   own `summary.errors` still counts findings it just repaired:
+
+```bash
+node _lumina/scripts/lint.mjs --json
+```
+
+   If that re-run's `summary.errors > 0`, read the lint output, address each
+   error, and re-run before telling the user the skill is done.
 
 8. Suggest `/lumi-check` in a fresh session or via a subagent after this run. A
    blank context catches bias from the reasoning chain that just built the
@@ -187,7 +194,8 @@ node _lumina/scripts/lint.mjs --fix --json
 - Bidirectional edges exist for every linked source and concept — forward from
   the topic page, written once via `add-edge`, with the reverse edge on each
   source and concept page written automatically by the engine.
-- `node _lumina/scripts/lint.mjs --fix --json` leaves `summary.errors === 0`.
+- `node _lumina/scripts/lint.mjs --fix --json` runs clean, and a read-only
+  re-run (`lint.mjs --json`, no `--fix`) leaves `summary.errors === 0`.
 - `wiki/log.md` has an append-only `research-topic` entry recording the
   slug, source count, and concept count.
 - If the page already existed, the user's choice (skip / refresh / abort) is

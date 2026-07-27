@@ -308,6 +308,108 @@ describe('installCommand', () => {
     }
   });
 
+  test('post-upgrade banner: invokes lint.mjs with --suggest so `fixable` reflects the truth pass, not the check-time prediction', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'scripts'), { recursive: true });
+      // The stub only reports a non-zero `fixable` count when it sees
+      // `--suggest` on argv — mirroring lint.mjs's real behavior where
+      // `--suggest` triggers applyFixes' dry-run truth pass and corrects
+      // any `fixable: true` predictions that don't actually resolve. If the
+      // banner regresses to plain `--json` (no `--suggest`), this stub
+      // reports `fixable: 0`, and the "Fix what can be corrected
+      // automatically" guidance would be missing even though there is
+      // fixable work — the exact bug this test guards against.
+      const lintStub = [
+        "const hasSuggest = process.argv.slice(2).includes('--suggest');",
+        "const fixable = hasSuggest ? 4 : 0;",
+        "process.stdout.write(JSON.stringify({errors:4,warnings:0,by_check:{},fixable}) + '\\n');",
+        "process.exitCode = 1;",
+        "",
+      ].join('\n');
+      await writeFile(join(tmp, '_lumina', 'scripts', 'lint.mjs'), lintStub, 'utf8');
+
+      const captured = [];
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+
+      try {
+        await printPostUpgradeBanner({
+          projectRoot: tmp,
+          fromVersion: '0.5.0',
+          toVersion: PKG.version,
+          colors: { yellow: (s) => s },
+        });
+      } finally {
+        process.stderr.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.match(output, /4 error/);
+      assert.match(output, /Fix what can be corrected automatically/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('post-upgrade banner: still renders when lint --json output exceeds the default 1 MB spawnSync buffer', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'scripts'), { recursive: true });
+      // Emit ~6000 findings with padded messages: comfortably over the
+      // default (unset) spawnSync maxBuffer of 1 MB, but well under the
+      // explicit 16 MB the banner now passes. Without an explicit
+      // maxBuffer, spawnSync would set `result.error` (ENOBUFS) and the
+      // banner's existing `if (result.error ...) return;` branch would
+      // silently drop the ENTIRE warning — the user would be told nothing.
+      //
+      // Uses `process.exitCode` rather than `process.exit()` after the
+      // large write — the same fix now applied to lint.mjs's real main() —
+      // so this stub isolates the maxBuffer behavior under test instead of
+      // also tripping the separate async-pipe-write truncation issue (see
+      // lint.mjs's exitCode comment) that a naive `process.exit()` stub
+      // would otherwise confound this test with.
+      const lintStub = [
+        "const findings = [];",
+        "for (let i = 0; i < 6000; i++) {",
+        "  findings.push({",
+        "    id: 'L01-frontmatter-required',",
+        "    file: `foundations/f${i}.md`,",
+        "    severity: i % 2 === 0 ? 'error' : 'warning',",
+        "    message: 'x'.repeat(200),",
+        "    fixable: false,",
+        "  });",
+        "}",
+        "process.stdout.write(JSON.stringify({schema_version:1,scanned_files:6000,checks_run:[],findings,summary:{}}, null, 2) + '\\n');",
+        "process.exitCode = 1;",
+        "",
+      ].join('\n');
+      await writeFile(join(tmp, '_lumina', 'scripts', 'lint.mjs'), lintStub, 'utf8');
+
+      const captured = [];
+      const origWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...args) => { captured.push(String(chunk)); return true; };
+
+      try {
+        await printPostUpgradeBanner({
+          projectRoot: tmp,
+          fromVersion: '0.5.0',
+          toVersion: PKG.version,
+          colors: { yellow: (s) => s },
+        });
+      } finally {
+        process.stderr.write = origWrite;
+      }
+
+      const output = captured.join('');
+      assert.match(output, /\[warn\]/);
+      assert.match(output, /3000 error/);
+      assert.match(output, /3000 warning/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('same-version re-install does not print banner', async () => {
     const tmp = await makeTmpDir();
     const workspace = join(tmp, 'same-ver-wiki');

@@ -12,10 +12,10 @@ Examples below use `/`. In Codex, replace the first `/` with `$`.
 | `/lumi-ingest` | add a document, a link, or a paper to your wiki | `/lumi-ingest raw/sources/article.pdf` | A source note, connected notes for important ideas, and an updated index. |
 | `/lumi-ask` | ask what your wiki says about a question | `/lumi-ask What do these sources agree on?` | An answer that points to the notes and sources it used. |
 | `/lumi-edit` | revise one existing wiki page | `/lumi-edit wiki/sources/article.md` | The requested change while keeping related notes connected. |
-| `/lumi-check` | check whether the wiki needs attention | `/lumi-check` | A clear list of issues and help with safe repairs. |
+| `/lumi-check` | check whether the wiki needs attention | `/lumi-check` | A clear list of issues, most fixed for you automatically, plus guidance for anything that still needs your judgment. |
 | `/lumi-reset` | start over with selected material | `/lumi-reset` | A proposed plan first, then changes only after you confirm. |
 | `/lumi-verify` | compare notes with the sources they name | `/lumi-verify article` | Findings you can inspect; it does not change your notes by itself. |
-| `/lumi-migrate-legacy` | update older notes after a Lumina-Wiki upgrade | `/lumi-migrate-legacy --backfill-ids` | Help filling in information needed by older pages. |
+| `/lumi-migrate-legacy` | update older notes after a Lumina-Wiki upgrade | `/lumi-migrate-legacy --backfill-ids` | Help filling in information older pages are missing, especially anything the automatic check could not safely fill in by itself. |
 | `/lumi-help` | find the next step or learn how a feature works | `/lumi-help` | One suggested next action. Use `skills` to see your installed commands or `explain <question>` for a product question. |
 
 `/lumi-ingest` also accepts a paper title, an arXiv identifier, or a web link when you do not have a local file. `/lumi-ask` may save an answer only when you explicitly ask it to do so.

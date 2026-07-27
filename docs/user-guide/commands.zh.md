@@ -12,10 +12,10 @@
 | `/lumi-ingest` | 把文档、链接或论文加入 wiki | `/lumi-ingest raw/sources/article.pdf` | 资料笔记、相互关联的重要想法笔记和更新后的目录。 |
 | `/lumi-ask` | 询问 wiki 对某个问题的看法 | `/lumi-ask 这些资料在哪些方面一致？` | 指向所用笔记和资料的回答。 |
 | `/lumi-edit` | 修改一页已有的 wiki 页面 | `/lumi-edit wiki/sources/article.md` | 你要求的修改，同时保持相关笔记的连接。 |
-| `/lumi-check` | 查看 wiki 是否有需要注意的地方 | `/lumi-check` | 清楚的问题清单，以及对安全修复的帮助。 |
+| `/lumi-check` | 查看 wiki 是否有需要注意的地方 | `/lumi-check` | 清楚的问题清单——大部分已自动修复——以及对仍需你判断的事项的建议。 |
 | `/lumi-reset` | 对你选定的内容重新开始 | `/lumi-reset` | 先给出计划；只有你确认后才会改变内容。 |
 | `/lumi-verify` | 将笔记与它们提到的资料进行核对 | `/lumi-verify article` | 需要你查看的结果；它不会自行改动笔记。 |
-| `/lumi-migrate-legacy` | 在升级 Lumina-Wiki 后更新旧笔记 | `/lumi-migrate-legacy --backfill-ids` | 帮助为旧页面补充所需信息。 |
+| `/lumi-migrate-legacy` | 在升级 Lumina-Wiki 后更新旧笔记 | `/lumi-migrate-legacy --backfill-ids` | 帮助为旧页面补充缺少的信息，尤其是自动检查无法安全自行填写的部分。 |
 | `/lumi-help` | 寻找下一步或询问功能如何使用 | `/lumi-help` | 一个建议的下一步。用 `skills` 查看已安装命令，用 `explain <问题>` 询问 Lumina-Wiki。 |
 
 当你没有本地文件时，`/lumi-ingest` 也接受论文标题、arXiv 编号或网页链接。只有你明确要求时，`/lumi-ask` 才会保存回答。

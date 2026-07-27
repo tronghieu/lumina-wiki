@@ -116,8 +116,15 @@ Run the linter with fix enabled:
 node _lumina/scripts/lint.mjs --fix --json
 ```
 
-Read the JSON output. If `summary.errors > 0` after fix, address each remaining
-error:
+Then re-run in read mode to see the true remaining count:
+
+```bash
+node _lumina/scripts/lint.mjs --json
+```
+
+The `--fix` run's own `summary.errors` still counts findings it just repaired,
+so trust the read-only re-run, not that number. If `summary.errors > 0` there,
+address each remaining error:
 - L06 (missing reverse edge): re-run the forward `add-edge`; it auto-adds reverse
 - L07 (duplicate symmetric edge): run `dedup-edges`
 - L17 (dangling edge): an edge still points at a slug that no longer resolves

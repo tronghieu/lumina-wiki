@@ -12,10 +12,10 @@ Ví dụ bên dưới dùng `/`. Trong Codex, thay dấu `/` đầu tiên bằng
 | `/lumi-ingest` | thêm tài liệu, liên kết hoặc bài báo vào wiki | `/lumi-ingest raw/sources/article.pdf` | Ghi chú nguồn, các ghi chú ý quan trọng đã nối với nhau và mục lục được cập nhật. |
 | `/lumi-ask` | hỏi wiki nói gì về một câu hỏi | `/lumi-ask Các nguồn này đồng ý ở điểm nào?` | Câu trả lời chỉ về ghi chú và nguồn đã dùng. |
 | `/lumi-edit` | sửa một trang wiki đã có | `/lumi-edit wiki/sources/article.md` | Thay đổi bạn yêu cầu, đồng thời giữ các ghi chú liên quan được kết nối. |
-| `/lumi-check` | xem wiki có điều gì cần chú ý không | `/lumi-check` | Danh sách rõ ràng các vấn đề và hỗ trợ sửa những việc an toàn. |
+| `/lumi-check` | xem wiki có điều gì cần chú ý không | `/lumi-check` | Danh sách rõ ràng các vấn đề, phần lớn được tự động sửa, cùng gợi ý cho những việc còn cần bạn tự quyết định. |
 | `/lumi-reset` | làm lại với phần nội dung bạn chọn | `/lumi-reset` | Kế hoạch được đưa ra trước; chỉ thay đổi sau khi bạn xác nhận. |
 | `/lumi-verify` | đối chiếu ghi chú với nguồn mà chúng nhắc tới | `/lumi-verify article` | Các điểm cần bạn xem lại; lệnh không tự đổi ghi chú. |
-| `/lumi-migrate-legacy` | cập nhật ghi chú cũ sau khi nâng cấp Lumina-Wiki | `/lumi-migrate-legacy --backfill-ids` | Hỗ trợ bổ sung thông tin cần có cho các trang cũ. |
+| `/lumi-migrate-legacy` | cập nhật ghi chú cũ sau khi nâng cấp Lumina-Wiki | `/lumi-migrate-legacy --backfill-ids` | Hỗ trợ bổ sung thông tin còn thiếu cho các trang cũ, nhất là những gì bước kiểm tra tự động chưa thể tự điền an toàn. |
 | `/lumi-help` | tìm bước tiếp theo hoặc hỏi cách một tính năng hoạt động | `/lumi-help` | Một bước tiếp theo được gợi ý. Dùng `skills` để xem lệnh đã cài, hoặc `explain <câu hỏi>` để hỏi về Lumina-Wiki. |
 
 `/lumi-ingest` cũng nhận tiêu đề bài báo, mã arXiv hoặc liên kết web khi bạn chưa có tệp trên máy. `/lumi-ask` chỉ lưu câu trả lời khi bạn yêu cầu rõ ràng.

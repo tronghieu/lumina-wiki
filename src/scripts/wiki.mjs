@@ -631,7 +631,34 @@ async function readMeta(projectRoot, slug) {
 }
 
 /**
+ * Determine the entity type for a file path by matching its parent
+ * directory (relative to wiki/) against ENTITY_DIRS.
+ * @param {string} projectRoot
+ * @param {string} filePath - Absolute path to a file under wiki/.
+ * @returns {string|null} Entity type key, or null if not under a known dir.
+ */
+function _entityTypeForFilePath(projectRoot, filePath) {
+  const wikiDir = join(projectRoot, 'wiki');
+  const relPath = relative(wikiDir, filePath);
+  const dirParts = relPath.split(sep);
+  const entityDirName = dirParts[0] + '/';
+  return Object.entries(ENTITY_DIRS).find(
+    ([, v]) => v.dir === entityDirName,
+  )?.[0] ?? null;
+}
+
+/**
  * Set a frontmatter key in an entity file.
+ *
+ * Schema gate: if the entity's type declares a field definition for `key`
+ * in REQUIRED_FRONTMATTER, the supplied `value` must satisfy that field's
+ * declared type or the write is rejected outright (no --force escape
+ * hatch — see _checkFieldType). Only the single key being set is checked;
+ * the rest of the document (including fields not yet present) is left
+ * alone, so mid-draft pages can still set fields one at a time. Keys with
+ * no declared type for this entity type (free-form keys like `tags`) are
+ * always writable.
+ *
  * @param {string} projectRoot
  * @param {string} slug
  * @param {string} key
@@ -647,11 +674,59 @@ async function setMeta(projectRoot, slug, key, value) {
   }
   const content = await readFile(filePath, 'utf8');
   const { frontmatter, body, hasFrontmatter } = parseFrontmatter(content);
+
+  const entityType = _entityTypeForFilePath(projectRoot, filePath);
+  if (entityType) {
+    const fields = _getRequiredFrontmatterFields(entityType);
+    const field = fields ? fields.find((f) => f.key === key) : null;
+    // Clearing an OPTIONAL declared field stays allowed. The gate exists to stop
+    // wrong-typed values, and `null` on a field the schema marks `required:
+    // false` is not a wrong value — it is the absence the schema already
+    // permits. Type-checking it would leave no way at all to undo an optional
+    // field once set. A required field still cannot be cleared: that just
+    // trades this error for an L01 one.
+    const clearingOptional = (value === null || value === undefined) && field && field.required === false;
+    if (field && !clearingOptional) {
+      const violation = _checkFieldType(field, value);
+      if (violation) {
+        // The TODO sentinel gets its own hint: --json-value re-encodes the
+        // same string ("TODO" stays "TODO" whether it arrives via parseScalar
+        // or JSON.parse), so pointing the user at --json-value here would be
+        // actively wrong — it cannot make this value acceptable. Every other
+        // violation is a real type/shape mismatch, where --json-value (or
+        // quoting the value) genuinely can fix it. Detected off the
+        // violation text itself (not the raw value) so a "TODO" rejected by
+        // a DIFFERENT branch — e.g. an iso-date field, which keeps its own
+        // "must be an ISO date" message — still gets that branch's own hint
+        // (none, today) rather than this one.
+        const isTodoPlaceholder = /is set to the placeholder "TODO"/.test(violation);
+        let hint;
+        if (isTodoPlaceholder) {
+          hint = ' — supply a real value; this is not a quoting issue, so --json-value will not help';
+        } else {
+          // Scalars arrive already coerced by parseScalar, so a value the user
+          // typed as text can reach us as a number or a bare string where the
+          // schema wants a list. That is exactly what --json-value is for, and an
+          // error that does not say so reads as "this value is forbidden" rather
+          // than "quote it".
+          const coercible = field.type === 'string' || field.type === 'array' || field.type === 'object';
+          hint = coercible
+            ? ' — if this is the value you meant, pass it with --json-value (e.g. --json-value \'"1706.03762"\' or \'["a","b"]\')'
+            : '';
+        }
+        const err = new Error(`Schema violation: ${violation}${hint}`);
+        err.code = 2;
+        throw err;
+      }
+    }
+  }
+
   // external_ids is the only object-typed frontmatter today; sanitize untrusted
   // input (CLI / JSON.parse / fetcher output) against the namespace allowlist.
   // Note: `sources` array entries are validated at write time by buildSourceEntry
   // / build_source_entry (provider slug, URL parse, length bounds), so no
-  // sanitization gate is needed here. Other typed fields are checked by lint.
+  // sanitization gate is needed here. Other typed fields are checked above and
+  // by lint.
   if (key === 'external_ids') {
     frontmatter[key] = sanitizeExternalIdsObject(value);
   } else {
@@ -1585,6 +1660,70 @@ async function readCitationsForSlug(projectRoot, slug) {
 }
 
 /**
+ * Check a single frontmatter value against its declared field type.
+ * Mirrors lint.mjs's L02 check word-for-word so the two can never diverge —
+ * this is the single source of truth for frontmatter type semantics, used
+ * both by whole-document validation (_validateFrontmatter, read-only) and
+ * by the setMeta write-path gate (single-key, hard reject, no --force). That
+ * includes L02's TODO-placeholder rule, which lives in checkL02's 'string'
+ * branch only (not a blanket pre-switch guard): the literal "TODO" (trimmed,
+ * case-sensitive) is never a real value for a declared string field, so
+ * setMeta can no longer be used to write the exact defect L02 flags on read.
+ * Other types keep their own natural mismatch message for a "TODO" value
+ * (e.g. iso-date still says "must be an ISO date... got \"TODO\""), exactly
+ * as checkL02 does — only the 'string' branch's outcome changes.
+ *
+ * @param {import('./schemas.mjs').FrontmatterField} field
+ * @param {any} val - Already-present value (never undefined/null; callers
+ *   handle missing-field logic themselves before calling this).
+ * @returns {string|null} Human-readable violation (unprefixed), or null if valid.
+ */
+function _checkFieldType(field, val) {
+  switch (field.type) {
+    case 'string':
+      if (typeof val !== 'string') {
+        return `"${field.key}" must be a string, got ${typeof val}`;
+      } else if (val.trim() === 'TODO') {
+        // Task 2 sentinel rule (mirrors checkL02 in lint.mjs word-for-word):
+        // the exact literal "TODO" (trimmed, case-sensitive) is never a real
+        // value for a DECLARED schema field — it is the placeholder a prior
+        // Lumina version could write for a missing string field. It satisfies
+        // `typeof val === 'string'` above, so without this check the write
+        // path would happily persist it — precisely the defect this gate
+        // exists to close.
+        return `"${field.key}" is set to the placeholder "TODO", which is not a real value`;
+      }
+      break;
+    case 'number':
+      if (typeof val !== 'number' || Number.isNaN(val)) {
+        return `"${field.key}" must be a number, got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'array':
+      if (!Array.isArray(val)) {
+        return `"${field.key}" must be an array, got ${typeof val}`;
+      }
+      break;
+    case 'iso-date':
+      if (typeof val !== 'string' || !DATE_RE.test(val)) {
+        return `"${field.key}" must be an ISO date (YYYY-MM-DD), got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'enum':
+      if (field.values && !field.values.includes(val)) {
+        return `"${field.key}" must be one of [${field.values.join(', ')}], got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'object':
+      if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+        return `"${field.key}" must be an object, got ${Array.isArray(val) ? 'array' : typeof val}`;
+      }
+      break;
+  }
+  return null;
+}
+
+/**
  * Validate frontmatter fields against REQUIRED_FRONTMATTER schema.
  * Returns a list of validation errors (empty if valid).
  * @param {Record<string,any>} frontmatter
@@ -1607,34 +1746,8 @@ function _validateFrontmatter(frontmatter, entityType) {
       }
       continue;
     }
-    // Type checks
-    switch (field.type) {
-      case 'string':
-        if (typeof val !== 'string') {
-          errors.push(`Field '${field.key}' must be a string, got ${typeof val}`);
-        }
-        break;
-      case 'number':
-        if (typeof val !== 'number') {
-          errors.push(`Field '${field.key}' must be a number, got ${typeof val}`);
-        }
-        break;
-      case 'array':
-        if (!Array.isArray(val)) {
-          errors.push(`Field '${field.key}' must be an array, got ${typeof val}`);
-        }
-        break;
-      case 'enum':
-        if (field.values && !field.values.includes(val)) {
-          errors.push(`Field '${field.key}' must be one of [${field.values.join(', ')}], got ${val}`);
-        }
-        break;
-      case 'iso-date':
-        if (typeof val !== 'string' || !DATE_RE.test(val)) {
-          errors.push(`Field '${field.key}' must be a YYYY-MM-DD date, got '${val}'`);
-        }
-        break;
-    }
+    const violation = _checkFieldType(field, val);
+    if (violation) errors.push(violation);
   }
   return errors;
 }
@@ -2257,15 +2370,10 @@ async function main(argv) {
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
 
         // Determine entity type from directory
-        const wikiDir = join(projectRoot, 'wiki');
-        const relPath = relative(wikiDir, filePath);
-        const dirParts = relPath.split(sep);
-        const entityDirName = dirParts[0] + '/';
-        const entityType = Object.entries(ENTITY_DIRS).find(
-          ([, v]) => v.dir === entityDirName,
-        )?.[0] ?? null;
+        const entityType = _entityTypeForFilePath(projectRoot, filePath);
 
         if (!entityType) {
+          const relPath = relative(join(projectRoot, 'wiki'), filePath);
           emitJson({ slug, valid: false, errors: [`Cannot determine entity type from path: ${relPath}`] });
           break;
         }

@@ -24,9 +24,16 @@ import {
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
   checkL13, checkL14, checkL16, checkL17,
-  fixL01, fixL06, fixL07, fixL09,
+  fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
+  reconstructArrayFromBody,
   runLint,
   reportSummary,
+  reportHuman,
+  reportJson,
+  computeSuggestion,
+  isLegacyTargetValid,
+  isLegacyValueEquivalent,
+  removeFrontmatterKeyLines,
   INDEX_MARKER_OPEN,
   INDEX_MARKER_CLOSE,
   ALL_CHECK_IDS,
@@ -189,14 +196,48 @@ describe('L01 frontmatter-required', () => {
     assert.equal(result.length, 0);
   });
 
-  test('violation: missing required key', () => {
+  test('violation: missing required key (array type — always fixable)', () => {
+    const fm = { ...validSourceFm() };
+    delete fm.authors;
+    const result = checkL01('sources/test.md', fm);
+    assert.ok(result.length > 0);
+    assert.equal(result[0].id, 'L01-frontmatter-required');
+    assert.equal(result[0].severity, 'error');
+    assert.ok(result[0].fixable);
+  });
+
+  test('violation: missing "year" (number type — never fixable)', () => {
     const fm = { ...validSourceFm() };
     delete fm.year;
     const result = checkL01('sources/test.md', fm);
     assert.ok(result.length > 0);
     assert.equal(result[0].id, 'L01-frontmatter-required');
     assert.equal(result[0].severity, 'error');
-    assert.ok(result[0].fixable);
+    assert.equal(result[0].fixable, false, 'a "number" field has no safe default and must not be marked fixable');
+  });
+
+  test('fixability by type: array/object/iso-date/id/type/title fixable; other strings, number, and no-default enum are not', () => {
+    // array
+    assert.equal(checkL01('sources/x.md', (() => { const f = validSourceFm(); delete f.authors; return f; })())[0].fixable, true);
+    // iso-date
+    assert.equal(checkL01('sources/x.md', (() => { const f = validSourceFm(); delete f.created; return f; })())[0].fixable, true);
+    // string: id/type/title
+    assert.equal(checkL01('sources/x.md', (() => { const f = validSourceFm(); delete f.id; return f; })())[0].fixable, true);
+    assert.equal(checkL01('sources/x.md', (() => { const f = validSourceFm(); delete f.type; return f; })())[0].fixable, true);
+    assert.equal(checkL01('sources/x.md', (() => { const f = validSourceFm(); delete f.title; return f; })())[0].fixable, true);
+    // string: "book" (readings/chapters/etc.) has no derivation rule.
+    const chapterFm = { id: 'chapters/b/c1', title: 'C1', type: 'chapter', created: '2026-01-01', updated: '2026-01-01', number: 1 };
+    const bookFinding = checkL01('chapters/b/c1.md', chapterFm).find(f => f.message.includes('"book"'));
+    assert.ok(bookFinding, 'expected a finding for missing "book"');
+    assert.equal(bookFinding.fixable, false, '"book" has no safe derivation and must not be marked fixable');
+    // enum with a safe default (sources.provenance)
+    const noProv = { ...validSourceFm() }; delete noProv.provenance;
+    const provFinding = checkL01('sources/x.md', noProv).find(f => f.message.includes('"provenance"'));
+    assert.equal(provFinding.fixable, true, 'provenance has a safe legacy default and must be fixable');
+    // enum with no safe default (sources.importance)
+    const noImportance = { ...validSourceFm() }; delete noImportance.importance;
+    const impFinding = checkL01('sources/x.md', noImportance).find(f => f.message.includes('"importance"'));
+    assert.equal(impFinding.fixable, false, 'importance has no safe default and must not be marked fixable');
   });
 
   test('non-entity file returns empty', () => {
@@ -297,6 +338,325 @@ describe('L02 frontmatter-types', () => {
     const result = checkL02('sources/test.md', fm);
     assert.ok(!result.some(f => f.message.includes('Legacy frontmatter field')));
   });
+
+  test('legacy renamed field: "slug" -> "id" warns across any entity type', () => {
+    const fm = { ...validSourceFm(), slug: 'legacy-name' };
+    const result = checkL02('sources/test.md', fm);
+    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    assert.ok(legacy, 'expected a legacy-field warning for slug');
+    assert.equal(legacy.severity, 'warning');
+    assert.ok(legacy.message.includes('"id"'));
+  });
+
+  test('legacy renamed field: "date_added" -> "created" warns on a concept too (not just sources)', () => {
+    const fm = {
+      id: 'my-concept', title: 'My Concept', type: 'concept',
+      created: '2026-01-01', updated: '2026-01-01',
+      key_sources: [], related_concepts: [],
+      date_added: '2020-01-01',
+    };
+    const result = checkL02('concepts/my-concept.md', fm);
+    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    assert.ok(legacy, 'expected a legacy-field warning for date_added on a non-source type');
+    assert.ok(legacy.message.includes('"created"'));
+  });
+
+  test('fixability: array type mismatch is always fixable', () => {
+    const fm = { ...validSourceFm(), authors: 'Alice' };
+    const result = checkL02('sources/test.md', fm);
+    const f = result.find(f => f.message.includes('"authors"'));
+    assert.equal(f.fixable, true);
+  });
+
+  test('fixability: iso-date "TODO" sentinel is fixable, other malformed dates are not', () => {
+    const todoFm = { ...validSourceFm(), created: 'TODO' };
+    const todoFinding = checkL02('sources/test.md', todoFm).find(f => f.message.includes('"created"'));
+    assert.equal(todoFinding.fixable, true);
+
+    const badDateFm = { ...validSourceFm(), created: '01-01-2026' };
+    const badDateFinding = checkL02('sources/test.md', badDateFm).find(f => f.message.includes('"created"'));
+    assert.equal(badDateFinding.fixable, false);
+  });
+
+  test('fixability: number/enum/object type mismatches are never fixable', () => {
+    const yearFm = { ...validSourceFm(), year: 'twenty-twenty-six' };
+    assert.equal(checkL02('sources/test.md', yearFm).find(f => f.message.includes('"year"')).fixable, false);
+
+    const importanceFm = { ...validSourceFm(), importance: 99 };
+    assert.equal(checkL02('sources/test.md', importanceFm).find(f => f.message.includes('"importance"')).fixable, false);
+
+    const extFm = { ...validSourceFm(), external_ids: 'not-an-object' };
+    assert.equal(checkL02('sources/test.md', extFm).find(f => f.message.includes('"external_ids"')).fixable, false);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Legacy-field removal fixability (Task 1) — the finding's `fixable` flag
+  // must reflect the three-part safety rule: target present, target valid,
+  // values equivalent. Actual removal is exercised in the `fixL02` describe
+  // block below; this section only covers the check-time decision.
+  // ───────────────────────────────────────────────────────────────────────
+
+  test('legacy "slug" -> "id": equivalent values -> fixable (removable)', () => {
+    const fm = { ...validSourceFm(), slug: 'test-source' }; // id already "test-source"
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, true, 'slug equals id verbatim — safe to remove');
+  });
+
+  test('legacy "slug" -> "id": disagreeing values -> not fixable (real conflict)', () => {
+    const fm = { ...validSourceFm(), slug: 'totally-different-slug' };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, false, 'slug disagrees with id — must not be marked removable');
+  });
+
+  test('legacy "date_added" -> "created": target absent -> not fixable', () => {
+    const fm = { ...validSourceFm(), date_added: '2020-01-01' };
+    delete fm.created;
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, false, 'created is absent — date_added is the only copy, must not be removed');
+  });
+
+  test('legacy "date_added" -> "created": target present but invalid -> not fixable', () => {
+    const fm = { ...validSourceFm(), created: 'not-a-date', date_added: '2020-01-01' };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, false, 'created fails ISO-date validity — must not be removed');
+  });
+
+  test('legacy "date_added" -> "created": equal valid dates -> fixable', () => {
+    const fm = { ...validSourceFm(), created: '2020-01-01', date_added: '2020-01-01' };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, true);
+  });
+
+  test('legacy "url" -> "urls": urls array already contains the url string -> fixable', () => {
+    const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234', urls: ['https://arxiv.org/abs/1234'] };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, true, 'urls[] already contains the legacy url verbatim');
+  });
+
+  test('legacy "url" -> "urls": urls array present but missing the url string -> not fixable (disagree)', () => {
+    const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234', urls: ['https://example.com/other'] };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, false, 'urls[] does not carry the legacy value — real conflict');
+  });
+
+  test('legacy "url" -> "urls": urls absent -> not fixable', () => {
+    const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234' };
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    assert.ok(legacy);
+    assert.equal(legacy.fixable, false, 'urls is absent — url is the only copy');
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Task 2 — "TODO" sentinel rule: the exact literal "TODO" is invalid for
+  // ANY declared schema field, of any type. Only the STRING branch needed a
+  // code change (a "TODO" string previously passed `typeof val === 'string'`
+  // silently) — number/array/enum/iso-date/object already fail their own
+  // type check when handed the string "TODO", so those are covered by the
+  // pre-existing tests above/below; this block covers what's new.
+  // ───────────────────────────────────────────────────────────────────────
+
+  test('TODO on a declared string field: "id" is detected and fixable (derivable)', () => {
+    const fm = { ...validSourceFm(), id: 'TODO' };
+    const f = checkL02('sources/test.md', fm).find(x => x.message.includes('"id"'));
+    assert.ok(f, 'expected a finding for id: TODO');
+    assert.equal(f.severity, 'error');
+    assert.equal(f.fixable, true);
+    assert.match(f.message, /placeholder "TODO"/);
+  });
+
+  test('TODO on a declared string field: "type" and "title" are detected and fixable (derivable)', () => {
+    const fmType = { ...validSourceFm(), type: 'TODO' };
+    assert.equal(checkL02('sources/test.md', fmType).find(x => x.message.includes('"type"')).fixable, true);
+    const fmTitle = { ...validSourceFm(), title: 'TODO' };
+    assert.equal(checkL02('sources/test.md', fmTitle).find(x => x.message.includes('"title"')).fixable, true);
+  });
+
+  test('TODO case-sensitivity: only the exact literal "TODO" (trimmed) counts, not "todo" or "ToDo"', () => {
+    const fmLower = { ...validSourceFm(), id: 'todo' };
+    assert.ok(!checkL02('sources/test.md', fmLower).some(x => x.message.includes('placeholder')));
+    const fmMixed = { ...validSourceFm(), id: 'ToDo' };
+    assert.ok(!checkL02('sources/test.md', fmMixed).some(x => x.message.includes('placeholder')));
+    const fmPadded = { ...validSourceFm(), id: '  TODO  ' };
+    assert.ok(checkL02('sources/test.md', fmPadded).some(x => x.message.includes('placeholder')), 'trimmed literal must still match');
+  });
+
+  test('TODO on a declared string field with NO derivation ("source" on readings): detected but left unfixable', () => {
+    const fm = {
+      id: 'readings/deep-work/01-focus', title: 'Part 1', type: 'reading',
+      created: '2026-01-01', updated: '2026-01-01',
+      source: 'TODO', part: 1,
+    };
+    const f = checkL02('readings/deep-work/01-focus.md', fm).find(x => x.message.includes('"source"'));
+    assert.ok(f, 'expected a finding for source: TODO');
+    assert.equal(f.fixable, false, '"source" has no derivation rule and must not be marked fixable');
+  });
+
+  test('TODO on a declared string field with NO derivation ("book" on chapters): detected but left unfixable', () => {
+    const fm = {
+      id: 'chapters/mybook/c1', title: 'C1', type: 'chapter',
+      created: '2026-01-01', updated: '2026-01-01',
+      book: 'TODO', number: 1,
+    };
+    const f = checkL02('chapters/mybook/c1.md', fm).find(x => x.message.includes('"book"'));
+    assert.ok(f, 'expected a finding for book: TODO');
+    assert.equal(f.fixable, false, '"book" has no derivation rule and must not be marked fixable');
+  });
+
+  test('TODO on a free-form (undeclared) key is NOT touched', () => {
+    // A user's own note field, coincidentally named like a schema key but
+    // not declared for this entity type, or any key outside REQUIRED_FRONTMATTER.
+    const fm = { ...validSourceFm(), my_custom_note: 'TODO', reviewer: 'TODO' };
+    const result = checkL02('sources/test.md', fm);
+    assert.ok(!result.some(f => f.message.includes('my_custom_note')));
+    assert.ok(!result.some(f => f.message.includes('reviewer')));
+    // And the rest of the page is still clean — no findings leak in from
+    // keys checkL02 was never asked to look at.
+    assert.equal(result.length, 0);
+  });
+
+  test('clean: string fields holding a real, non-"TODO" value produce no finding', () => {
+    const result = checkL02('sources/test.md', validSourceFm());
+    assert.equal(result.length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIT: isLegacyTargetValid / isLegacyValueEquivalent (Task 1 helpers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('isLegacyTargetValid', () => {
+  test('string: any string is valid', () => {
+    assert.equal(isLegacyTargetValid('string', 'anything'), true);
+    assert.equal(isLegacyTargetValid('string', ''), true);
+  });
+  test('string: non-string is invalid', () => {
+    assert.equal(isLegacyTargetValid('string', 42), false);
+  });
+  test('string: the "TODO" sentinel is invalid — never a valid target (Task 2)', () => {
+    assert.equal(isLegacyTargetValid('string', 'TODO'), false);
+    assert.equal(isLegacyTargetValid('string', '  TODO  '), false, 'trimmed before comparing');
+  });
+  test('iso-date: well-formed date is valid', () => {
+    assert.equal(isLegacyTargetValid('iso-date', '2026-01-01'), true);
+  });
+  test('iso-date: malformed date is invalid', () => {
+    assert.equal(isLegacyTargetValid('iso-date', '01-01-2026'), false);
+    assert.equal(isLegacyTargetValid('iso-date', 'TODO'), false);
+  });
+  test('array: array is valid regardless of contents', () => {
+    assert.equal(isLegacyTargetValid('array', []), true);
+    assert.equal(isLegacyTargetValid('array', ['a']), true);
+  });
+  test('array: non-array is invalid', () => {
+    assert.equal(isLegacyTargetValid('array', 'not-an-array'), false);
+  });
+  test('unrecognized type defaults to invalid (fail closed)', () => {
+    assert.equal(isLegacyTargetValid('number', 42), false);
+    assert.equal(isLegacyTargetValid('enum', 'high'), false);
+    assert.equal(isLegacyTargetValid('object', {}), false);
+  });
+});
+
+describe('isLegacyValueEquivalent', () => {
+  test('string: trimmed equality', () => {
+    assert.equal(isLegacyValueEquivalent('string', 'foo', 'foo'), true);
+    assert.equal(isLegacyValueEquivalent('string', '  foo  ', 'foo'), true);
+    assert.equal(isLegacyValueEquivalent('string', 'foo', 'bar'), false);
+  });
+  test('string: non-string legacy or target is never equivalent', () => {
+    assert.equal(isLegacyValueEquivalent('string', 42, '42'), false);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Task 1 — prefix-aware equivalence for slug -> id (the 179 legacy-rename
+  // warnings shaped like `id: concepts/ab-testing` / `slug: ab-testing`).
+  // ─────────────────────────────────────────────────────────────────────
+
+  test('string: prefix-aware equivalence accepted for a REAL entity dir', () => {
+    assert.equal(isLegacyValueEquivalent('string', 'ab-testing', 'concepts/ab-testing'), true);
+    assert.equal(isLegacyValueEquivalent('string', 'ab-testing', 'sources/ab-testing'), true);
+    assert.equal(isLegacyValueEquivalent('string', '  ab-testing  ', 'concepts/ab-testing'), true, 'both sides trimmed');
+  });
+
+  test('string: prefix REJECTED when the prefix is not a real entity directory', () => {
+    // "note" is not a key in ENTITY_DIRS — must not be silently equated,
+    // even though "ab-testing" is still, textually, a trailing substring.
+    assert.equal(isLegacyValueEquivalent('string', 'ab-testing', 'note/ab-testing'), false);
+    assert.equal(isLegacyValueEquivalent('string', 'ab-testing', 'foo/ab-testing'), false);
+  });
+
+  test('string: the arXiv-id genuine-mismatch case still survives untouched', () => {
+    // slug: attention-is-all-you-need vs id: "1706.03762" — no slash at all
+    // in the target, so the prefix branch never even engages.
+    assert.equal(isLegacyValueEquivalent('string', 'attention-is-all-you-need', '1706.03762'), false);
+  });
+
+  test('string: prefix match requires the REMAINDER to equal the legacy value exactly', () => {
+    // Same entity dir, but the remainder after the slash differs from slug —
+    // a real conflict, not a dir-qualified copy.
+    assert.equal(isLegacyValueEquivalent('string', 'ab-testing', 'concepts/different-slug'), false);
+  });
+  test('iso-date: trimmed equality', () => {
+    assert.equal(isLegacyValueEquivalent('iso-date', '2020-01-01', '2020-01-01'), true);
+    assert.equal(isLegacyValueEquivalent('iso-date', '2020-01-01', '2021-01-01'), false);
+  });
+
+  test('iso-date: a genuine one-calendar-day disagreement still survives untouched', () => {
+    assert.equal(isLegacyValueEquivalent('iso-date', '2020-01-01', '2020-01-02'), false);
+  });
+  test('array: legacy string must appear verbatim (trimmed) in the target array', () => {
+    assert.equal(isLegacyValueEquivalent('array', 'https://x.com', ['https://x.com']), true);
+    assert.equal(isLegacyValueEquivalent('array', '  https://x.com  ', ['https://x.com']), true);
+    assert.equal(isLegacyValueEquivalent('array', 'https://x.com', ['https://other.com']), false);
+    assert.equal(isLegacyValueEquivalent('array', 'https://x.com', []), false);
+  });
+  test('array: legacy value may be a subset — extra entries in target do not break equivalence', () => {
+    assert.equal(isLegacyValueEquivalent('array', 'https://x.com', ['https://other.com', 'https://x.com']), true);
+  });
+  test('array: non-string legacy value is never equivalent', () => {
+    assert.equal(isLegacyValueEquivalent('array', 42, ['42']), false);
+  });
+  test('unrecognized type defaults to false (fail closed)', () => {
+    assert.equal(isLegacyValueEquivalent('number', 3, 3), false);
+    assert.equal(isLegacyValueEquivalent('object', {}, {}), false);
+  });
+});
+
+describe('removeFrontmatterKeyLines', () => {
+  test('removes a simple scalar key line', () => {
+    const fmText = '\nid: x\nslug: legacy-name\ntitle: X\n';
+    const result = removeFrontmatterKeyLines(fmText, 'slug');
+    assert.ok(!result.includes('slug:'));
+    assert.ok(result.includes('id: x'));
+    assert.ok(result.includes('title: X'));
+  });
+
+  test('removes a block-list key and its continuation lines', () => {
+    const fmText = '\nid: x\nurl: https://example.com\nurls:\n  - https://example.com\ntitle: X\n';
+    const result = removeFrontmatterKeyLines(fmText, 'urls');
+    assert.ok(!result.includes('urls:'));
+    assert.ok(!result.includes('  - https://example.com'));
+    assert.ok(result.includes('url: https://example.com'), 'must not remove the similarly-prefixed "url" key');
+    assert.ok(result.includes('title: X'));
+  });
+
+  test('leaves no blank line where the key used to be', () => {
+    const fmText = 'id: x\nslug: legacy-name\ntitle: X';
+    const result = removeFrontmatterKeyLines(fmText, 'slug');
+    assert.equal(result, 'id: x\ntitle: X');
+  });
+
+  test('no-op when key not present', () => {
+    const fmText = 'id: x\ntitle: X';
+    assert.equal(removeFrontmatterKeyLines(fmText, 'slug'), fmText);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,6 +734,31 @@ describe('L05 broken-wikilink', () => {
     const content = 'line one\nline two [[missing-slug]]\nline three';
     const result = checkL05('sources/test.md', content, new Set());
     assert.equal(result[0].line, 2);
+  });
+
+  test('unique basename match: fixable=true, candidates has exactly one entry', () => {
+    const content = 'See [[agent-taxonomy]] for details.';
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'sources/other']);
+    const result = checkL05('sources/test.md', content, knownSlugs);
+    assert.equal(result[0].fixable, true);
+    assert.deepEqual(result[0].candidates, ['concepts/agent-taxonomy']);
+    assert.equal(result[0].brokenSlug, 'agent-taxonomy');
+  });
+
+  test('ambiguous basename match (2+ pages share a basename): fixable=false, candidates recorded', () => {
+    const content = 'See [[agent-taxonomy]] for details.';
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'foundations/agent-taxonomy']);
+    const result = checkL05('sources/test.md', content, knownSlugs);
+    assert.equal(result[0].fixable, false);
+    assert.equal(result[0].candidates.length, 2);
+  });
+
+  test('zero basename match: fixable=false, empty candidates', () => {
+    const content = 'See [[totally-unknown]] for details.';
+    const knownSlugs = new Set(['concepts/agent-taxonomy']);
+    const result = checkL05('sources/test.md', content, knownSlugs);
+    assert.equal(result[0].fixable, false);
+    assert.deepEqual(result[0].candidates, []);
   });
 });
 
@@ -487,17 +872,572 @@ describe('L09 index-stale', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('fixL01', () => {
-  test('inserts missing keys with TODO sentinel', () => {
+  function fakeL01(key, type) {
+    return [{ id: 'L01-frontmatter-required', message: `Missing required frontmatter key: "${key}" (type: ${type})` }];
+  }
+
+  function todayYmd() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  test('leaves "year" (number) absent — no TODO sentinel, no write at all', async () => {
     const content = `---\ntitle: Test\n---\nbody`;
-    const fakeFindings = [{ id: 'L01-frontmatter-required', message: 'Missing required frontmatter key: "year" (type: number)' }];
-    const { newContent } = fixL01('test.md', content, fakeFindings);
-    assert.ok(newContent.includes('year: TODO'));
+    const { newContent } = await fixL01('/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('year', 'number'));
+    assert.equal(newContent, content, 'number field must not be written at all');
+    assert.ok(!newContent.includes('year'));
   });
 
-  test('returns unchanged content when no frontmatter', () => {
+  test('returns unchanged content when no frontmatter', async () => {
     const content = 'no frontmatter here';
-    const { newContent } = fixL01('test.md', content, []);
+    const { newContent } = await fixL01('/tmp/fake/test.md', 'sources/test.md', content, []);
     assert.equal(newContent, content);
+  });
+
+  test('array field missing -> []', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('authors', 'array'));
+    assert.ok(newContent.includes('authors: []'));
+  });
+
+  test('object field missing -> {}', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('meta', 'object'));
+    assert.ok(newContent.includes('meta: {}'));
+  });
+
+  test('iso-date missing "created": uses legacy date_added when valid', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ndate_added: 2020-05-05\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('created', 'iso-date'));
+    assert.ok(newContent.includes('created: 2020-05-05'));
+  });
+
+  test('iso-date missing "created": falls back to file mtime when no legacy date_added', async () => {
+    const tmp = await makeTmp();
+    try {
+      const filePath = join(tmp, 'test.md');
+      const content = `---\nid: x\ntitle: X\ntype: source\nupdated: 2026-01-01\n---\nbody`;
+      await writeFile(filePath, content);
+      const { newContent } = await fixL01(filePath, 'sources/test.md', content, fakeL01('created', 'iso-date'));
+      assert.ok(newContent.includes(`created: ${todayYmd()}`));
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('id missing: uses legacy "slug" when present', async () => {
+    const content = `---\ntitle: X\ntype: source\nslug: legacy-slug-name\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/weird-name.md', 'sources/weird-name.md', content, fakeL01('id', 'string'));
+    assert.ok(newContent.includes('id: legacy-slug-name'));
+  });
+
+  test('id missing, top-level type, no legacy slug: bare basename', async () => {
+    const content = `---\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/my-paper.md', 'sources/my-paper.md', content, fakeL01('id', 'string'));
+    assert.ok(newContent.includes('id: my-paper'));
+  });
+
+  test('id missing, nested type (readings): full wiki-relative path', async () => {
+    const content = `---\ntitle: X\ntype: reading\ncreated: 2026-01-01\nupdated: 2026-01-01\nsource: deep-work\npart: 1\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/readings/deep-work/01-focus.md', 'readings/deep-work/01-focus.md', content, fakeL01('id', 'string'));
+    assert.ok(newContent.includes('id: readings/deep-work/01-focus'));
+  });
+
+  test('id missing, reflections type: "reflection-<basename>"', async () => {
+    const content = `---\ntitle: X\ntype: reflection\ncreated: 2026-01-01\nupdated: 2026-01-01\nrelated_concepts: []\nrelated_sources: []\nevolution_count: 0\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/reflections/my-note.md', 'reflections/my-note.md', content, fakeL01('id', 'string'));
+    assert.ok(newContent.includes('id: reflection-my-note'));
+  });
+
+  test('type missing: derived from entity directory', async () => {
+    const content = `---\nid: x\ntitle: X\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/concepts/x.md', 'concepts/x.md', content, fakeL01('type', 'string'));
+    assert.ok(newContent.includes('type: concept'));
+  });
+
+  test('title missing: uses first H1 heading in body', async () => {
+    const content = `---\nid: x\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n\n# My Great Title\n\nBody text.`;
+    const { newContent } = await fixL01('/tmp/fake/sources/x.md', 'sources/x.md', content, fakeL01('title', 'string'));
+    assert.ok(newContent.includes('title: My Great Title'));
+  });
+
+  test('title missing, no H1: Title-Cased basename', async () => {
+    const content = `---\nid: x\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nBody with no heading.`;
+    const { newContent } = await fixL01('/tmp/fake/sources/my-cool-paper.md', 'sources/my-cool-paper.md', content, fakeL01('title', 'string'));
+    assert.ok(newContent.includes('title: My Cool Paper'));
+  });
+
+  test('enum missing with safe default: sources.provenance -> "missing"', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/x.md', 'sources/x.md', content, fakeL01('provenance', 'enum'));
+    assert.ok(newContent.includes('provenance: missing'));
+  });
+
+  test('enum missing with safe default: concepts.confidence -> "unverified"', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/concepts/x.md', 'concepts/x.md', content, fakeL01('confidence', 'enum'));
+    assert.ok(newContent.includes('confidence: unverified'));
+  });
+
+  test('enum missing with no safe default (importance): left absent', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
+    const { newContent } = await fixL01('/tmp/fake/sources/x.md', 'sources/x.md', content, fakeL01('importance', 'enum'));
+    assert.equal(newContent, content);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIXER L02
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('fixL02', () => {
+  test('string where array expected: wraps losslessly', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: "[[sources/foo]]"\nrelated_concepts: []\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
+    assert.ok(newContent.includes('key_sources:\n  - [[sources/foo]]'), newContent);
+  });
+
+  test('TODO in concepts.key_sources: reconstructs from graph (outbound + inbound union)', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\nrelated_concepts: []\n---\nbody`;
+    const edges = [
+      { from: 'concepts/my-concept', to: 'sources/paper-a', type: 'introduced_in' },
+      { from: 'sources/paper-b', to: 'concepts/my-concept', type: 'uses_concept' },
+    ];
+    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, edges);
+    assert.ok(newContent.includes('[[sources/paper-a]]'));
+    assert.ok(newContent.includes('[[sources/paper-b]]'));
+  });
+
+  test('concepts.related_concepts: reconstructs symmetric related_to edges seen from both directions', async () => {
+    const content = `---\nid: concept-a\ntitle: Concept A\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nbody`;
+    const edges = [
+      { from: 'concepts/concept-a', to: 'concepts/concept-b', type: 'related_to' }, // self is "from"
+      { from: 'concepts/concept-c', to: 'concepts/concept-a', type: 'related_to' }, // self is "to" (alpha-sorted)
+    ];
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/concept-a.md', 'concepts/concept-a.md', content, findings, edges);
+    assert.ok(newContent.includes('[[concepts/concept-b]]'));
+    assert.ok(newContent.includes('[[concepts/concept-c]]'));
+  });
+
+  test('people.key_sources: reconstructs from authored/authored_by, both directions', async () => {
+    const content = `---\nid: alice\ntitle: Alice\ntype: person\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\n---\nbody`;
+    const edges = [
+      { from: 'people/alice', to: 'sources/paper-a', type: 'authored' },
+      { from: 'sources/paper-b', to: 'people/alice', type: 'authored_by' },
+    ];
+    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/people/alice.md', 'people/alice.md', content, findings, edges);
+    assert.ok(newContent.includes('[[sources/paper-a]]'));
+    assert.ok(newContent.includes('[[sources/paper-b]]'));
+  });
+
+  test('topics.key_sources: reconstructs from includes_source/included_in_topic, both directions', async () => {
+    const content = `---\nid: my-topic\ntitle: My Topic\ntype: topic\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\n---\nbody`;
+    const edges = [
+      { from: 'topics/my-topic', to: 'sources/paper-a', type: 'includes_source' },
+      { from: 'sources/paper-b', to: 'topics/my-topic', type: 'included_in_topic' },
+    ];
+    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/topics/my-topic.md', 'topics/my-topic.md', content, findings, edges);
+    assert.ok(newContent.includes('[[sources/paper-a]]'));
+    assert.ok(newContent.includes('[[sources/paper-b]]'));
+  });
+
+  test('reflections.related_concepts / related_sources: not graph-backed by design, always []', async () => {
+    const content = `---\nid: reflection-x\ntitle: X\ntype: reflection\ncreated: 2026-01-01\nupdated: 2026-01-01\nrelated_concepts: TODO\nrelated_sources: TODO\nevolution_count: 0\n---\nbody`;
+    // Even with a matching-looking edge present, reflections must stay [].
+    const edges = [{ from: 'reflections/reflection-x', to: 'concepts/some-concept', type: 'related_to' }];
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' },
+      { id: 'L02-frontmatter-types', message: '"related_sources" must be an array, got string' },
+    ];
+    const { newContent } = await fixL02('/tmp/fake/reflections/reflection-x.md', 'reflections/reflection-x.md', content, findings, edges);
+    assert.ok(newContent.includes('related_concepts: []'));
+    assert.ok(newContent.includes('related_sources: []'));
+  });
+
+  test('no matching edges: falls back to []', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\nrelated_concepts: []\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
+    assert.ok(newContent.includes('key_sources: []'));
+  });
+
+  test('TODO in iso-date: same derivation as fixL01 (legacy date_added)', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: TODO\nupdated: 2026-01-01\ndate_added: 2019-09-09\nauthors: []\nyear: 2024\nimportance: 3\nprovenance: replayable\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' }];
+    const { newContent } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(newContent.includes('created: 2019-09-09'));
+  });
+
+  test('TODO in number/enum: left unchanged, not repairable', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: TODO\nimportance: TODO\nprovenance: replayable\n---\nbody`;
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"year" must be a number, got "TODO"' },
+      { id: 'L02-frontmatter-types', message: '"importance" must be one of [1, 2, 3, 4, 5], got "TODO"' },
+    ];
+    const { newContent } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.equal(newContent, content);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Task 2 — repairing the "TODO" sentinel on a declared STRING field.
+  // ───────────────────────────────────────────────────────────────────────
+
+  test('TODO in "id" with no legacy "slug": derives from the file path', async () => {
+    const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/my-paper.md', 'sources/my-paper.md', content, findings, []);
+    assert.ok(newContent.includes('id: my-paper'), `expected id derived from path, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys, ['id']);
+  });
+
+  test('TODO in "id" WITH legacy "slug" present: derives "id" from "slug" (lossless recovery)', async () => {
+    const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: real-value\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/my-paper.md', 'sources/my-paper.md', content, findings, []);
+    assert.ok(newContent.includes('id: real-value'), `expected id derived from slug, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys, ['id']);
+  });
+
+  test('TODO in "type": derives from the entity directory', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: TODO\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"type" is set to the placeholder "TODO", which is not a real value' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(newContent.includes('type: source'), `expected type derived from directory, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys, ['type']);
+  });
+
+  test('TODO in "title": derives from the body H1', async () => {
+    const content = `---\nid: x\ntitle: TODO\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n# Real Title Here\n\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"title" is set to the placeholder "TODO", which is not a real value' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(newContent.includes('title: Real Title Here'), `expected title derived from H1, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys, ['title']);
+  });
+
+  test('TODO in a non-derivable string field ("source" on readings): left unchanged', async () => {
+    const content = `---\nid: readings/deep-work/01-focus\ntitle: Part 1\ntype: reading\ncreated: 2026-01-01\nupdated: 2026-01-01\nsource: TODO\npart: 1\n---\nbody`;
+    const findings = [{ id: 'L02-frontmatter-types', message: '"source" is set to the placeholder "TODO", which is not a real value' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/readings/deep-work/01-focus.md', 'readings/deep-work/01-focus.md', content, findings, []);
+    assert.equal(newContent, content, '"source" has no derivation rule — must be left untouched');
+    assert.deepEqual(fixedKeys, []);
+  });
+
+  test('full chain in ONE fixL02 call: "id: TODO" + "slug: real-value" -> "id" derived AND "slug" removed, real value preserved', async () => {
+    // Mirrors the pre-existing "date_added"/"created" same-pass test above:
+    // fixL02 must resolve "id" from "slug" FIRST, then see that freshly
+    // derived value (not the stale "TODO") when deciding whether "slug" is
+    // now redundant (Task 1's prefix-aware equivalence, since here the
+    // derived id is the bare slug value with no dir prefix — trimmed
+    // equality already covers it).
+    const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: real-value\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' },
+      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+    ];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(newContent.includes('id: real-value'), `expected id recovered from slug, got:\n${newContent}`);
+    assert.ok(!newContent.includes('slug:'), `expected slug removed in the same pass, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys.sort(), ['id', 'slug']);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Tier 2: body-wikilink fallback (see reconstructArrayFromBody below for
+  // unit-level coverage of the resolution rules themselves).
+  // ───────────────────────────────────────────────────────────────────────
+
+  test('tier 1 (graph) wins over tier 2 (body) when both are present and DIFFER', async () => {
+    const content = `---\nid: concept-a\ntitle: Concept A\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[concept-z]] in the body.`;
+    // Graph says concept-a relates to concept-b; body links to a DIFFERENT
+    // concept (concept-z). Graph must win outright — body must not even be
+    // merged in.
+    const edges = [{ from: 'concepts/concept-a', to: 'concepts/concept-b', type: 'related_to' }];
+    const knownSlugs = new Set(['concepts/concept-a', 'concepts/concept-b', 'concepts/concept-z']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/concept-a.md', 'concepts/concept-a.md', content, findings, edges, knownSlugs);
+    assert.ok(newContent.includes('[[concepts/concept-b]]'), 'graph-derived value must be used');
+    assert.ok(!newContent.includes('[[concepts/concept-z]]'), 'body value must NOT be used when graph tier is non-empty');
+  });
+
+  test('tier 2 (body) recovers related_concepts when graph has no related_to edges', async () => {
+    const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[concepts/tool-using-agents]] and [[concepts/planning-agents]].`;
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents', 'concepts/planning-agents']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
+    assert.ok(newContent.includes('[[concepts/tool-using-agents]]'));
+    assert.ok(newContent.includes('[[concepts/planning-agents]]'));
+    assert.ok(!newContent.includes('related_concepts: []'), 'must not have fallen through to []');
+  });
+
+  test('tier 2 resolves a bare basename to the full slug (order-independent of L05)', async () => {
+    // The body link is still BROKEN (missing the concepts/ prefix) — as it
+    // would be before L05 has run. Tier 2 must resolve it anyway via the
+    // unique-basename heuristic, without requiring L05 to run first.
+    const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[tool-using-agents]] for details.`;
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
+    assert.ok(newContent.includes('[[concepts/tool-using-agents]]'));
+  });
+
+  test('tier 2 filters by entity type: a [[sources/x]] link must not land in related_concepts', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[sources/some-paper]] for background.`;
+    const knownSlugs = new Set(['concepts/my-concept', 'sources/some-paper']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, [], knownSlugs);
+    assert.ok(newContent.includes('related_concepts: []'), 'a sources/* link must not satisfy related_concepts');
+  });
+
+  test('tier 2 excludes a self-link, dedupes repeats, and strips |alias', async () => {
+    const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\n` +
+      `See [[concepts/agent-taxonomy]] (self), [[concepts/planning-agents|Planning Agents]], and again [[concepts/planning-agents]].`;
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/planning-agents']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
+    assert.ok(!newContent.includes('[[concepts/agent-taxonomy]]\n  - [[concepts/agent-taxonomy]]'), 'sanity: not double-inserted');
+    // Self-link excluded entirely.
+    const relBlockMatch = newContent.match(/related_concepts:\n((?:  - .*\n?)*)/);
+    assert.ok(relBlockMatch, 'expected a related_concepts block list');
+    const items = relBlockMatch[1].trim().split('\n');
+    assert.deepEqual(items, ['- [[concepts/planning-agents]]'], 'expected exactly one deduped, alias-stripped entry, no self-link');
+  });
+
+  test('both tiers empty: falls back to [] (no graph edges, no resolvable body links)', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nNo links here at all.`;
+    const knownSlugs = new Set(['concepts/my-concept']);
+    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, [], knownSlugs);
+    assert.ok(newContent.includes('related_concepts: []'));
+  });
+
+  test('reflections stay excluded from tier 2 even with matching body wikilinks and knownSlugs supplied', async () => {
+    const content = `---\nid: reflection-x\ntitle: X\ntype: reflection\ncreated: 2026-01-01\nupdated: 2026-01-01\nrelated_concepts: TODO\nrelated_sources: TODO\nevolution_count: 0\n---\nSee [[concepts/some-concept]] and [[sources/some-source]].`;
+    const knownSlugs = new Set(['reflections/reflection-x', 'concepts/some-concept', 'sources/some-source']);
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' },
+      { id: 'L02-frontmatter-types', message: '"related_sources" must be an array, got string' },
+    ];
+    const { newContent } = await fixL02('/tmp/fake/reflections/reflection-x.md', 'reflections/reflection-x.md', content, findings, [], knownSlugs);
+    assert.ok(newContent.includes('related_concepts: []'));
+    assert.ok(newContent.includes('related_sources: []'));
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Legacy-field removal (Task 1) — the first thing `--fix` in lint.mjs
+  // ever deletes from a page. Covers the positive (removable) case for all
+  // three LEGACY_RENAMED_FIELDS entries, and the three negative cases the
+  // task calls out explicitly: target absent, target invalid, values
+  // disagree.
+  // ───────────────────────────────────────────────────────────────────────
+
+  test('legacy "slug" -> "id": removes "slug" when it equals "id" verbatim', async () => {
+    const content = `---\nid: test-source\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/test-source.md', 'sources/test-source.md', content, findings, []);
+    assert.ok(!newContent.includes('slug:'), `expected "slug" removed, got:\n${newContent}`);
+    assert.ok(newContent.includes('id: test-source'), 'id must be untouched');
+    assert.deepEqual(fixedKeys, ['slug']);
+  });
+
+  test('legacy "slug" -> "id": target ("id") ABSENT — never removes "slug"', async () => {
+    // id is present here only because L01 always inserts SOME value before L02
+    // runs in the real pipeline; simulate the case where, for whatever reason,
+    // id is still missing at fixL02 time by omitting it entirely.
+    const content = `---\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/test-source.md', 'sources/test-source.md', content, findings, []);
+    assert.equal(newContent, content, 'id absent — slug is the only copy, must not be touched');
+    assert.deepEqual(fixedKeys, []);
+  });
+
+  test('legacy "date_added" -> "created": target ("created") INVALID — never removes "date_added"', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: not-a-date\nupdated: 2026-01-01\ndate_added: 2020-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.equal(newContent, content, 'created is invalid — date_added must survive for a human to look at');
+    assert.deepEqual(fixedKeys, []);
+  });
+
+  test('legacy "date_added" -> "created": values DISAGREE — never removes "date_added" (real conflict)', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\ndate_added: 2020-05-05\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.equal(newContent, content, 'created and date_added disagree — kept for manual resolution, not silently resolved either way');
+    assert.deepEqual(fixedKeys, []);
+  });
+
+  test('legacy "date_added" -> "created": equal valid dates — removes "date_added"', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2020-05-05\nupdated: 2026-01-01\ndate_added: 2020-05-05\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(!newContent.includes('date_added:'));
+    assert.ok(newContent.includes('created: 2020-05-05'));
+    assert.deepEqual(fixedKeys, ['date_added']);
+  });
+
+  test('legacy "date_added" -> "created": a TODO "created" repaired earlier in the SAME fixL02 call is seen as the live target — removes "date_added" in one pass', async () => {
+    // "created" starts as the TODO sentinel; fixL02 must resolve it from
+    // date_added FIRST, then see that freshly-derived value (not the stale
+    // "TODO") when deciding whether date_added is now redundant.
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: TODO\nupdated: 2026-01-01\ndate_added: 2019-09-09\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' },
+      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+    ];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(newContent.includes('created: 2019-09-09'), `expected created repaired, got:\n${newContent}`);
+    assert.ok(!newContent.includes('date_added:'), `expected date_added removed in the same pass, got:\n${newContent}`);
+    assert.deepEqual(fixedKeys.sort(), ['created', 'date_added']);
+  });
+
+  test('legacy "url" -> "urls": urls[] already contains the url string — removes "url"', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nurl: https://arxiv.org/abs/1234\nurls:\n  - https://arxiv.org/abs/1234\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.ok(!newContent.includes('url:'), `expected "url" removed, got:\n${newContent}`);
+    assert.ok(newContent.includes('urls:\n  - https://arxiv.org/abs/1234'), 'urls[] must be untouched');
+    assert.deepEqual(fixedKeys, ['url']);
+  });
+
+  test('legacy "url" -> "urls": urls[] present but does NOT contain the url string — never removes "url" (real conflict)', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nurl: https://arxiv.org/abs/1234\nurls:\n  - https://example.com/other\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
+    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
+    assert.equal(newContent, content, 'urls[] does not carry the legacy value — must not be silently dropped');
+    assert.deepEqual(fixedKeys, []);
+  });
+
+  test('legacy removal appears alongside an unrelated type-mismatch fix in the same preview/fixedKeys', async () => {
+    const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\nslug: my-concept\n---\nBody.`;
+    const findings = [
+      { id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }, // won't actually apply (already array) — sanity no-op guard
+      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+    ];
+    const { newContent, fixedKeys } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
+    assert.ok(!newContent.includes('slug:'));
+    assert.deepEqual(fixedKeys, ['slug']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIT: reconstructArrayFromBody (tier-2 resolution rules in isolation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('reconstructArrayFromBody', () => {
+  test('resolves a full-path link directly', () => {
+    const body = 'See [[concepts/tool-using-agents]].';
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/agent-taxonomy', body, knownSlugs);
+    assert.deepEqual(result, ['[[concepts/tool-using-agents]]']);
+  });
+
+  test('resolves a bare basename via unique-basename match', () => {
+    const body = 'See [[tool-using-agents]].';
+    const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/agent-taxonomy', body, knownSlugs);
+    assert.deepEqual(result, ['[[concepts/tool-using-agents]]']);
+  });
+
+  test('ambiguous basename (2+ candidates): not resolved', () => {
+    const body = 'See [[dup-name]].';
+    const knownSlugs = new Set(['concepts/self', 'concepts/dup-name', 'foundations/dup-name']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/self', body, knownSlugs);
+    assert.deepEqual(result, []);
+  });
+
+  test('filters by target entity dir: sources/* excluded from related_concepts', () => {
+    const body = 'See [[sources/some-paper]] and [[concepts/real-concept]].';
+    const knownSlugs = new Set(['concepts/self', 'sources/some-paper', 'concepts/real-concept']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/self', body, knownSlugs);
+    assert.deepEqual(result, ['[[concepts/real-concept]]']);
+  });
+
+  test('key_sources / related_sources target sources/*', () => {
+    const body = 'See [[sources/paper-a]] and [[concepts/unrelated]].';
+    const knownSlugs = new Set(['concepts/self', 'sources/paper-a', 'concepts/unrelated']);
+    assert.deepEqual(reconstructArrayFromBody('key_sources', 'concepts/self', body, knownSlugs), ['[[sources/paper-a]]']);
+    assert.deepEqual(reconstructArrayFromBody('related_sources', 'reflections/self', body, knownSlugs), ['[[sources/paper-a]]']);
+  });
+
+  test('excludes a self-link', () => {
+    const body = 'See [[concepts/self]] and [[concepts/other]].';
+    const knownSlugs = new Set(['concepts/self', 'concepts/other']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/self', body, knownSlugs);
+    assert.deepEqual(result, ['[[concepts/other]]']);
+  });
+
+  test('dedupes repeated links and strips |alias', () => {
+    const body = 'First [[concepts/other|Other]], then again [[concepts/other]].';
+    const knownSlugs = new Set(['concepts/self', 'concepts/other']);
+    const result = reconstructArrayFromBody('related_concepts', 'concepts/self', body, knownSlugs);
+    assert.deepEqual(result, ['[[concepts/other]]']);
+  });
+
+  test('field with no target-dir mapping returns []', () => {
+    const body = 'See [[concepts/other]].';
+    const knownSlugs = new Set(['concepts/self', 'concepts/other']);
+    assert.deepEqual(reconstructArrayFromBody('authors', 'concepts/self', body, knownSlugs), []);
+  });
+
+  test('empty/absent body returns []', () => {
+    const knownSlugs = new Set(['concepts/self']);
+    assert.deepEqual(reconstructArrayFromBody('related_concepts', 'concepts/self', '', knownSlugs), []);
+    assert.deepEqual(reconstructArrayFromBody('related_concepts', 'concepts/self', undefined, knownSlugs), []);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIXER L05
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('fixL05', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('unique match: rewrites [[slug]] to the full resolved path, preserving alias', async () => {
+    await mkdir(join(tmpDir, 'sources'), { recursive: true });
+    const filePath = join(tmpDir, 'sources', 'test.md');
+    await writeFile(filePath, 'See [[agent-taxonomy|the taxonomy]] for details.');
+    const findingObj = {
+      id: 'L05-broken-wikilink', file: 'sources/test.md',
+      brokenSlug: 'agent-taxonomy', candidates: ['concepts/agent-taxonomy'],
+    };
+    const { newContent, fixedFindings } = await fixL05('sources/test.md', tmpDir, [findingObj]);
+    assert.ok(newContent.includes('[[concepts/agent-taxonomy|the taxonomy]]'));
+    assert.equal(fixedFindings.length, 1);
+  });
+
+  test('ambiguous (2+ candidates): left untouched, not marked fixed', async () => {
+    await mkdir(join(tmpDir, 'sources'), { recursive: true });
+    const filePath = join(tmpDir, 'sources', 'ambiguous.md');
+    const original = 'See [[agent-taxonomy]] for details.';
+    await writeFile(filePath, original);
+    const findingObj = {
+      id: 'L05-broken-wikilink', file: 'sources/ambiguous.md',
+      brokenSlug: 'agent-taxonomy', candidates: ['concepts/agent-taxonomy', 'foundations/agent-taxonomy'],
+    };
+    const { newContent, fixedFindings } = await fixL05('sources/ambiguous.md', tmpDir, [findingObj]);
+    assert.equal(newContent, original);
+    assert.equal(fixedFindings.length, 0);
+  });
+
+  test('zero candidates: left untouched', async () => {
+    await mkdir(join(tmpDir, 'sources'), { recursive: true });
+    const filePath = join(tmpDir, 'sources', 'zero.md');
+    const original = 'See [[totally-unknown]] for details.';
+    await writeFile(filePath, original);
+    const findingObj = {
+      id: 'L05-broken-wikilink', file: 'sources/zero.md',
+      brokenSlug: 'totally-unknown', candidates: [],
+    };
+    const { newContent, fixedFindings } = await fixL05('sources/zero.md', tmpDir, [findingObj]);
+    assert.equal(newContent, original);
+    assert.equal(fixedFindings.length, 0);
   });
 });
 
@@ -699,10 +1639,10 @@ describe('runLint L01 fix idempotency', () => {
   before(async () => { tmpDir = await makeTmp(); });
   after(async () => { await removeTmp(tmpDir); });
 
-  test('fix inserts missing keys, second run is clean', async () => {
+  test('fix inserts derivable keys; unfixable keys stay flagged; fixer never introduces an L02 violation', async () => {
     await makeWiki(tmpDir);
-    // Source missing "year" and "authors".
-    const fm = `---\nid: test\ntitle: Test\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nimportance: 3\n---\n`;
+    // Missing "authors" (array — derivable as []) and "year" (number — no safe default).
+    const fm = `---\nid: test\ntitle: Test\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nimportance: 3\nprovenance: replayable\n---\n`;
     const sourcePath = join(tmpDir, 'wiki', 'sources', 'test-source.md');
     await writeFile(sourcePath, fm + 'Body.');
     await writeFile(join(tmpDir, 'wiki', 'index.md'),
@@ -710,14 +1650,27 @@ describe('runLint L01 fix idempotency', () => {
 
     // First run with fix.
     const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
-    const fixedL01 = r1.findings.filter(f => f.id === 'L01-frontmatter-required' && f.fix_applied);
-    assert.ok(fixedL01.length > 0, 'Expected L01 fixes to be applied');
+    const fileFindings1 = r1.findings.filter(f => f.file === 'sources/test-source.md');
 
-    // Second run should have no new L01 violations on that file.
+    const authorsFinding = fileFindings1.find(f => f.id === 'L01-frontmatter-required' && f.message.includes('"authors"'));
+    assert.ok(authorsFinding, 'expected an "authors" L01 finding');
+    assert.ok(authorsFinding.fix_applied, 'expected "authors" (array) to be auto-fixed');
+
+    const yearFinding = fileFindings1.find(f => f.id === 'L01-frontmatter-required' && f.message.includes('"year"'));
+    assert.ok(yearFinding, 'expected a "year" L01 finding to still be reported');
+    assert.equal(yearFinding.fixable, false, '"year" (number) must not be marked fixable');
+    assert.equal(yearFinding.fix_applied, false, '"year" must not be auto-fixed');
+
+    // Second run: "authors" no longer flagged; "year" still flagged (correctly
+    // unfixed); and critically, the fixer introduced zero L02 findings.
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
-    // The TODO values will fail L02 type check but L01 should be gone for previously-fixed file.
-    const l01Again = r2.findings.filter(f => f.id === 'L01-frontmatter-required' && f.file === 'sources/test-source.md');
-    assert.equal(l01Again.length, 0, 'L01 violations should be gone after fix');
+    const fileFindings2 = r2.findings.filter(f => f.file === 'sources/test-source.md');
+    assert.ok(!fileFindings2.some(f => f.id === 'L01-frontmatter-required' && f.message.includes('"authors"')),
+      '"authors" should no longer be missing');
+    assert.ok(fileFindings2.some(f => f.id === 'L01-frontmatter-required' && f.message.includes('"year"')),
+      '"year" should still be flagged as missing (never auto-fixed)');
+    assert.equal(fileFindings2.filter(f => f.id === 'L02-frontmatter-types').length, 0,
+      'the L01 fixer must never introduce an L02 violation');
   });
 });
 
@@ -770,6 +1723,302 @@ describe('runLint L07 fix idempotency', () => {
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
     const l07Again = r2.findings.filter(f => f.id === 'L07-symmetric-edge-duplicate');
     assert.equal(l07Again.length, 0, 'L07 violations should be gone after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint L02 fix idempotency
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L02 fix idempotency', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('fix reconstructs a TODO array field from the graph; second run is clean', async () => {
+    await makeWiki(tmpDir, {
+      edgesContent: JSON.stringify({ from: 'concepts/my-concept', to: 'sources/paper-a', type: 'introduced_in' }) + '\n',
+    });
+    const conceptFm = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\nrelated_concepts: []\n---\n`;
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'my-concept.md'), conceptFm + 'Body.');
+    const sourceFm = renderFm(validSourceFm({ id: 'paper-a', title: 'Paper A' }));
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'paper-a.md'), sourceFm + 'Body.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `${INDEX_MARKER_OPEN}\n- [[concepts/my-concept]]\n- [[sources/paper-a]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
+    const fixedL02 = r1.findings.filter(f => f.id === 'L02-frontmatter-types' && f.fix_applied);
+    assert.ok(fixedL02.length > 0, 'Expected L02 fix to be applied');
+
+    const content = await readFile(join(tmpDir, 'wiki', 'concepts', 'my-concept.md'), 'utf8');
+    assert.ok(content.includes('[[sources/paper-a]]'));
+
+    const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l02Again = r2.findings.filter(f => f.id === 'L02-frontmatter-types' && f.file === 'concepts/my-concept.md');
+    assert.equal(l02Again.length, 0, 'L02 violation should be gone after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint L02 body-wikilink tier (real-world "agent-taxonomy"
+// scenario) — no related_to edges in the graph, but the body has broken
+// (missing directory prefix) wikilinks to sibling concept pages. This is
+// the exact case that motivated the tier-2 fallback: L02's body tier must
+// recover the relationships WITHOUT depending on L05 having already
+// rewritten the links (fixer order is unchanged: L01+L02 still runs before
+// L05 in applyFixes).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L02 body-wikilink tier (order-independent of L05)', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('single --fix run recovers related_concepts from body AND repairs the broken links (L05); second run is clean for both', async () => {
+    await makeWiki(tmpDir); // no edges.jsonl content — empty graph.
+    const conceptFm = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\n`;
+    // Broken wikilinks: missing the "concepts/" directory prefix, exactly
+    // like the real damaged wiki.
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'agent-taxonomy.md'),
+      conceptFm + 'See [[tool-using-agents]] and [[planning-agents]] for related ideas.');
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'tool-using-agents.md'),
+      '---\nid: tool-using-agents\ntitle: Tool-Using Agents\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'planning-agents.md'),
+      '---\nid: planning-agents\ntitle: Planning Agents\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\nBody.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `${INDEX_MARKER_OPEN}\n- [[concepts/agent-taxonomy]]\n- [[concepts/tool-using-agents]]\n- [[concepts/planning-agents]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
+    const fixedL02 = r1.findings.filter(f => f.id === 'L02-frontmatter-types' && f.fix_applied && f.file === 'concepts/agent-taxonomy.md');
+    assert.ok(fixedL02.length > 0, 'Expected the related_concepts L02 finding to be fixed via the body tier');
+    const fixedL05 = r1.findings.filter(f => f.id === 'L05-broken-wikilink' && f.fix_applied && f.file === 'concepts/agent-taxonomy.md');
+    assert.ok(fixedL05.length > 0, 'Expected the broken body wikilinks to also be repaired by L05 in the same run');
+
+    const content = await readFile(join(tmpDir, 'wiki', 'concepts', 'agent-taxonomy.md'), 'utf8');
+    assert.ok(content.includes('[[concepts/tool-using-agents]]'), `expected related_concepts to recover concepts/tool-using-agents, got:\n${content}`);
+    assert.ok(content.includes('[[concepts/planning-agents]]'), `expected related_concepts to recover concepts/planning-agents, got:\n${content}`);
+    assert.ok(!content.includes('related_concepts: []'), 'must not have fallen through to []');
+    // Body links should also now carry the full prefix (L05's own fix).
+    assert.ok(content.includes('See [[concepts/tool-using-agents]] and [[concepts/planning-agents]]'));
+
+    const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
+    const remaining = r2.findings.filter(f => f.file === 'concepts/agent-taxonomy.md' && (f.id === 'L02-frontmatter-types' || f.id === 'L05-broken-wikilink'));
+    assert.equal(remaining.length, 0, `expected no remaining L02/L05 findings after fix, got: ${JSON.stringify(remaining)}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint legacy-field removal (Task 1) — end-to-end through
+// runLint + applyFixes, not just the fixL02 unit. Covers --dry-run preview,
+// a real disk write, and second-run idempotency (zero further changes).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint legacy-field removal fix idempotency', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('--dry-run: reports proposed_fix for the removable legacy field, writes nothing', async () => {
+    await makeWiki(tmpDir);
+    const fm = `---\nid: test-source\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n`;
+    const sourcePath = join(tmpDir, 'wiki', 'sources', 'test-source.md');
+    await writeFile(sourcePath, fm + 'Body.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `${INDEX_MARKER_OPEN}\n- [[sources/test-source]]\n${INDEX_MARKER_CLOSE}\n`);
+    const before = await readFile(sourcePath, 'utf8');
+
+    const result = await runLint(tmpDir, { fix: true, dryRun: true });
+    const after = await readFile(sourcePath, 'utf8');
+    assert.equal(before, after, 'dry-run must not write to disk');
+
+    const legacy = result.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+    assert.ok(legacy, 'expected the legacy slug finding');
+    assert.equal(legacy.fixable, true);
+    assert.equal(legacy.fix_applied, false, 'dry-run must never set fix_applied');
+    assert.ok(legacy.proposed_fix && legacy.proposed_fix.includes('slug'), 'proposed_fix must mention the field being removed');
+  });
+
+  test('--fix: removes the redundant legacy field; second run is clean and makes zero further changes', async () => {
+    const tmp2 = await makeTmp();
+    try {
+      await makeWiki(tmp2);
+      const fm = `---\nid: test-source\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\ndate_added: 2020-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n`;
+      const sourcePath = join(tmp2, 'wiki', 'sources', 'test-source.md');
+      await writeFile(sourcePath, fm + 'Body.');
+      await writeFile(join(tmp2, 'wiki', 'index.md'),
+        `${INDEX_MARKER_OPEN}\n- [[sources/test-source]]\n${INDEX_MARKER_CLOSE}\n`);
+
+      // "created" (2026-01-01) and "date_added" (2020-01-01) intentionally
+      // DISAGREE here — only "slug"/"id" are equivalent — so this run also
+      // exercises "one field removed, one conflict correctly survives".
+      const r1 = await runLint(tmp2, { fix: true, dryRun: false });
+      const fileFindings1 = r1.findings.filter(f => f.file === 'sources/test-source.md');
+
+      const slugFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+      assert.ok(slugFinding.fix_applied, 'expected "slug" to be removed (equivalent to id)');
+
+      const dateFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+      assert.ok(dateFinding, 'expected the date_added finding to still be reported');
+      assert.equal(dateFinding.fixable, false, 'created and date_added disagree — must not be marked fixable');
+      assert.equal(dateFinding.fix_applied, false, 'a real conflict must never be auto-resolved');
+
+      const content = await readFile(sourcePath, 'utf8');
+      assert.ok(!content.includes('slug:'), `expected slug removed from disk, got:\n${content}`);
+      assert.ok(content.includes('date_added: 2020-01-01'), 'date_added must survive — it is a real conflict');
+      assert.ok(content.includes('id: test-source'));
+      assert.ok(content.includes('created: 2026-01-01'));
+
+      // Second run: no further changes at all (full idempotency, not just
+      // for the removed field) — the surviving date_added conflict is
+      // reported again, identically, but nothing is rewritten.
+      const before2 = await readFile(sourcePath, 'utf8');
+      const r2 = await runLint(tmp2, { fix: true, dryRun: false });
+      const after2 = await readFile(sourcePath, 'utf8');
+      assert.equal(before2, after2, 'second --fix run must write nothing');
+      const fixedOnSecondRun = r2.findings.filter(f => f.file === 'sources/test-source.md' && f.fix_applied);
+      assert.equal(fixedOnSecondRun.length, 0, 'second run must apply zero fixes');
+      const slugAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+      assert.ok(!slugAgain, 'slug warning must be fully gone after removal');
+      const dateAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "date_added"'));
+      assert.ok(dateAgain, 'date_added conflict must still be reported (correctly unresolved)');
+    } finally {
+      await removeTmp(tmp2);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint TODO sentinel fix idempotency (Task 2 + Task 1 chain)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint TODO sentinel fix idempotency', () => {
+  test('--dry-run: previews id derivation AND slug removal, writes nothing', async () => {
+    const tmpDir = await makeTmp();
+    try {
+      await makeWiki(tmpDir);
+      const fm = `---\nid: TODO\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: my-real-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n`;
+      const sourcePath = join(tmpDir, 'wiki', 'sources', 'my-real-source.md');
+      await writeFile(sourcePath, fm + 'Body.');
+      await writeFile(join(tmpDir, 'wiki', 'index.md'),
+        `${INDEX_MARKER_OPEN}\n- [[sources/my-real-source]]\n${INDEX_MARKER_CLOSE}\n`);
+      const before = await readFile(sourcePath, 'utf8');
+
+      const result = await runLint(tmpDir, { fix: true, dryRun: true });
+      const after = await readFile(sourcePath, 'utf8');
+      assert.equal(before, after, 'dry-run must not write to disk');
+
+      const idFinding = result.findings.find(f => f.file === 'sources/my-real-source.md' && f.message.includes('placeholder "TODO"'));
+      assert.ok(idFinding, 'expected the id:TODO finding');
+      assert.equal(idFinding.fixable, true);
+      assert.equal(idFinding.fix_applied, false, 'dry-run must never set fix_applied');
+      assert.ok(idFinding.proposed_fix && idFinding.proposed_fix.includes('my-real-source'), 'proposed_fix must show the derived id');
+
+      const slugFinding = result.findings.find(f => f.file === 'sources/my-real-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+      assert.ok(slugFinding, 'expected the legacy slug finding');
+      assert.ok(slugFinding.proposed_fix, 'dry-run must also preview the slug removal, since effectiveValue sees the derived id');
+    } finally {
+      await removeTmp(tmpDir);
+    }
+  });
+
+  test('--fix: recovers "id" from "slug" and removes "slug" in the SAME pass; real value survives; second run is clean (idempotent)', async () => {
+    const tmpDir = await makeTmp();
+    try {
+      await makeWiki(tmpDir);
+      const fm = `---\nid: TODO\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: my-real-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n`;
+      const sourcePath = join(tmpDir, 'wiki', 'sources', 'my-real-source.md');
+      await writeFile(sourcePath, fm + 'Body.');
+      await writeFile(join(tmpDir, 'wiki', 'index.md'),
+        `${INDEX_MARKER_OPEN}\n- [[sources/my-real-source]]\n${INDEX_MARKER_CLOSE}\n`);
+
+      const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
+      const content = await readFile(sourcePath, 'utf8');
+      assert.ok(content.includes('id: my-real-source'), `expected id recovered from slug, got:\n${content}`);
+      assert.ok(!content.includes('slug:'), `expected slug removed, got:\n${content}`);
+      // The real value is still present on the page — just under "id" now
+      // instead of "slug". Nothing was lost, only moved.
+      assert.ok(content.includes('my-real-source'), 'the real value must survive somewhere on the page');
+
+      const fileFindings1 = r1.findings.filter(f => f.file === 'sources/my-real-source.md');
+      const idFinding = fileFindings1.find(f => f.message.includes('placeholder "TODO"'));
+      assert.ok(idFinding.fix_applied);
+      const slugFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+      assert.ok(slugFinding.fix_applied, 'slug removal must be recorded as applied in the same pass');
+
+      // Second run: fully idempotent — zero further changes, and the
+      // id/slug chain specifically leaves nothing behind (an unrelated
+      // pre-existing advisory — L11 "confidence" missing — is expected to
+      // still fire, since this fixture never set one; that's out of scope
+      // for this test).
+      const before2 = await readFile(sourcePath, 'utf8');
+      const r2 = await runLint(tmpDir, { fix: true, dryRun: false });
+      const after2 = await readFile(sourcePath, 'utf8');
+      assert.equal(before2, after2, 'second --fix run must write nothing');
+      const remaining = r2.findings.filter(f => f.file === 'sources/my-real-source.md'
+        && (f.message.includes('placeholder "TODO"') || f.message.includes('Legacy frontmatter field')));
+      assert.equal(remaining.length, 0, 'no id/slug findings should remain for this file after the chain resolves');
+    } finally {
+      await removeTmp(tmpDir);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint L05 fix idempotency
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L05 fix idempotency', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('fix rewrites a unique-match broken wikilink; second run is clean', async () => {
+    await makeWiki(tmpDir);
+    const conceptFm = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\n`;
+    await writeFile(join(tmpDir, 'wiki', 'concepts', 'agent-taxonomy.md'), conceptFm + 'Body.');
+    const sourceFm = renderFm(validSourceFm({ id: 'my-source', title: 'My Source' }));
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'my-source.md'), sourceFm + 'See [[agent-taxonomy]] for details.');
+    await writeFile(join(tmpDir, 'wiki', 'index.md'),
+      `${INDEX_MARKER_OPEN}\n- [[sources/my-source]]\n- [[concepts/agent-taxonomy]]\n${INDEX_MARKER_CLOSE}\n`);
+
+    const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
+    const fixedL05 = r1.findings.filter(f => f.id === 'L05-broken-wikilink' && f.fix_applied);
+    assert.ok(fixedL05.length > 0, 'Expected L05 fix to be applied');
+
+    const content = await readFile(join(tmpDir, 'wiki', 'sources', 'my-source.md'), 'utf8');
+    assert.ok(content.includes('[[concepts/agent-taxonomy]]'));
+
+    const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l05Again = r2.findings.filter(f => f.id === 'L05-broken-wikilink' && f.file === 'sources/my-source.md');
+    assert.equal(l05Again.length, 0, 'L05 violation should be gone after fix');
+  });
+
+  test('ambiguous case: left untouched by --fix, candidates recorded on the finding', async () => {
+    const tmp2 = await makeTmp();
+    try {
+      await makeWiki(tmp2);
+      await mkdir(join(tmp2, 'wiki', 'foundations'), { recursive: true });
+      const conceptFm = `---\nid: dup-name\ntitle: Dup\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\n`;
+      await writeFile(join(tmp2, 'wiki', 'concepts', 'dup-name.md'), conceptFm + 'Body.');
+      const foundationFm = `---\nid: dup-name\ntitle: Dup\ntype: foundation\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n`;
+      await writeFile(join(tmp2, 'wiki', 'foundations', 'dup-name.md'), foundationFm + 'Body.');
+      const sourceFm = renderFm(validSourceFm({ id: 'amb-source', title: 'Amb Source' }));
+      await writeFile(join(tmp2, 'wiki', 'sources', 'amb-source.md'), sourceFm + 'See [[dup-name]] for details.');
+      await writeFile(join(tmp2, 'wiki', 'index.md'),
+        `${INDEX_MARKER_OPEN}\n- [[sources/amb-source]]\n- [[concepts/dup-name]]\n- [[foundations/dup-name]]\n${INDEX_MARKER_CLOSE}\n`);
+
+      const r1 = await runLint(tmp2, { fix: true, dryRun: false });
+      const l05 = r1.findings.find(f => f.id === 'L05-broken-wikilink' && f.file === 'sources/amb-source.md');
+      assert.ok(l05, 'expected an L05 finding');
+      assert.equal(l05.fixable, false);
+      assert.equal(l05.fix_applied, false);
+      assert.equal(l05.candidates.length, 2);
+
+      const content = await readFile(join(tmp2, 'wiki', 'sources', 'amb-source.md'), 'utf8');
+      assert.ok(content.includes('[[dup-name]]'), 'ambiguous link must be left untouched');
+    } finally {
+      await removeTmp(tmp2);
+    }
   });
 });
 
@@ -1753,5 +3002,188 @@ describe('L17 dangling-edge', () => {
     const result = checkL17(edges, knownSlugs);
     assert.equal(result.length, 1);
     assert.equal(result[0].id, 'L17-dangling-edge');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// --suggest: computeSuggestion unit tests + reportJson/reportHuman shape
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('--suggest output', () => {
+  function captureConsoleLog(fn) {
+    const lines = [];
+    const orig = console.log;
+    console.log = (...args) => { lines.push(args.join(' ')); };
+    try { fn(); } finally { console.log = orig; }
+    return lines.join('\n');
+  }
+
+  test('computeSuggestion: L01 unfixable field names the type and says it cannot be inferred', () => {
+    const f = {
+      id: 'L01-frontmatter-required', fixable: false, fix_applied: false,
+      message: 'Missing required frontmatter key: "year" (type: number)',
+    };
+    const s = computeSuggestion(f);
+    assert.ok(s.includes('year'));
+    assert.ok(s.includes('number'));
+  });
+
+  test('computeSuggestion: L02 unfixable field names the expected type', () => {
+    const f = {
+      id: 'L02-frontmatter-types', fixable: false, fix_applied: false,
+      message: '"importance" must be one of [1, 2, 3, 4, 5], got 99',
+    };
+    const s = computeSuggestion(f);
+    assert.ok(s.includes('importance'));
+  });
+
+  test('computeSuggestion: unresolved legacy-field conflict names both keys', () => {
+    const f = {
+      id: 'L02-frontmatter-types', fixable: false, fix_applied: false,
+      message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.',
+    };
+    const s = computeSuggestion(f);
+    assert.ok(s.includes('slug'));
+    assert.ok(s.includes('id'));
+  });
+
+  test('computeSuggestion: a REMOVED legacy field (fixable: true) returns null — --fix already handled it', () => {
+    const f = {
+      id: 'L02-frontmatter-types', fixable: true, fix_applied: true,
+      message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.',
+    };
+    assert.equal(computeSuggestion(f), null);
+  });
+
+  test('computeSuggestion: returns null for a fixable or already-fixed finding', () => {
+    const fixableF = {
+      id: 'L01-frontmatter-required', fixable: true, fix_applied: false,
+      message: 'Missing required frontmatter key: "authors" (type: array)',
+    };
+    assert.equal(computeSuggestion(fixableF), null);
+
+    const fixedF = {
+      id: 'L02-frontmatter-types', fixable: true, fix_applied: true,
+      message: '"key_sources" must be an array, got string',
+    };
+    assert.equal(computeSuggestion(fixedF), null);
+  });
+
+  test('computeSuggestion: L05 ambiguous lists every candidate', () => {
+    const f = {
+      id: 'L05-broken-wikilink', fixable: false, fix_applied: false,
+      brokenSlug: 'dup-name', candidates: ['concepts/dup-name', 'foundations/dup-name'],
+    };
+    const s = computeSuggestion(f);
+    assert.ok(s.includes('concepts/dup-name'));
+    assert.ok(s.includes('foundations/dup-name'));
+  });
+
+  test('computeSuggestion: L05 zero-match names the missing basename', () => {
+    const f = {
+      id: 'L05-broken-wikilink', fixable: false, fix_applied: false,
+      brokenSlug: 'totally-unknown', candidates: [],
+    };
+    const s = computeSuggestion(f);
+    assert.ok(s.includes('totally-unknown'));
+  });
+
+  test('reportJson: --suggest adds a "suggestion" key only for unfixable findings; omitted without the flag', () => {
+    const findings = [{
+      id: 'L01-frontmatter-required', severity: 'error', fixable: false,
+      file: 'sources/a.md', line: null,
+      message: 'Missing required frontmatter key: "year" (type: number)',
+      fix_applied: false,
+    }];
+    const withSuggest = JSON.parse(captureConsoleLog(() => reportJson(findings, 1, { suggest: true })));
+    assert.ok(withSuggest.findings[0].suggestion, 'expected a suggestion field when --suggest is set');
+
+    const withoutSuggest = JSON.parse(captureConsoleLog(() => reportJson(findings, 1, { suggest: false })));
+    assert.equal(withoutSuggest.findings[0].suggestion, undefined, 'suggestion must be absent without --suggest');
+  });
+
+  test('reportJson: L05 candidates surfaced under --suggest, internal fields stripped otherwise', () => {
+    const findings = [{
+      id: 'L05-broken-wikilink', severity: 'error', fixable: false,
+      file: 'sources/a.md', line: 3,
+      message: 'Broken wikilink: [[dup-name]] does not resolve to any wiki file',
+      fix_applied: false, brokenSlug: 'dup-name',
+      candidates: ['concepts/dup-name', 'foundations/dup-name'],
+    }];
+    const withSuggest = JSON.parse(captureConsoleLog(() => reportJson(findings, 1, { suggest: true })));
+    assert.deepEqual(withSuggest.findings[0].candidates, ['concepts/dup-name', 'foundations/dup-name']);
+
+    const withoutSuggest = JSON.parse(captureConsoleLog(() => reportJson(findings, 1, { suggest: false })));
+    assert.equal(withoutSuggest.findings[0].candidates, undefined, 'internal candidates field must not leak without --suggest');
+    assert.equal(withoutSuggest.findings[0].brokenSlug, undefined, 'internal brokenSlug field must not leak');
+  });
+
+  test('reportHuman: --suggest prints a "suggestion:" line for unfixable findings, omitted without the flag', () => {
+    const findings = [{
+      id: 'L01-frontmatter-required', severity: 'error', fixable: false,
+      file: 'sources/a.md', line: null,
+      message: 'Missing required frontmatter key: "year" (type: number)',
+      fix_applied: false,
+    }];
+    const out = captureConsoleLog(() => reportHuman(findings, 1, { suggest: true }));
+    assert.ok(out.includes('suggestion:'));
+
+    const outNoSuggest = captureConsoleLog(() => reportHuman(findings, 1, { suggest: false }));
+    assert.ok(!outNoSuggest.includes('suggestion:'));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRESSION: CLI stdout integrity on large --json output (async pipe write vs
+// process.exit race)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CLI: stdout is not truncated on a large --json payload', () => {
+  // On POSIX, process.stdout writes to a pipe (not a TTY or a file) are
+  // asynchronous. main() used to call `process.exit(...)` immediately after
+  // printing the --json/--summary body; when a parent captured stdout via a
+  // pipe (e.g. spawnSync, exactly how the installer's post-upgrade banner
+  // invokes this script), a large enough payload could still be queued when
+  // the process tore down, silently truncating stdout to a fixed ~8 KB with
+  // no error surfaced at all — `result.error` stayed undefined and the exit
+  // code looked normal, but stdout was invalid JSON. main() now sets
+  // `process.exitCode` and lets the event loop drain instead, which lets the
+  // queued write flush before Node exits. This test drives the real CLI
+  // entry point (not the `runLint` library function) via spawnSync, because
+  // the bug lived entirely in how main() exits, not in what it computes.
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('spawnSync of the real CLI on a wiki with enough findings to exceed 8KB of pretty-printed JSON returns fully parsable stdout', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const lintScript = fileURLToPath(new URL('./lint.mjs', import.meta.url));
+
+    const wikiDir = await makeWiki(tmpDir);
+    // Each page links to a nonexistent slug — a cheap, reliable way to
+    // generate one L05 finding per file. 150 files comfortably clears the
+    // ~8KB truncation threshold observed pre-fix (that threshold was hit
+    // well under 50 files) while staying fast to write and lint.
+    for (let i = 0; i < 150; i++) {
+      await writeFile(
+        join(wikiDir, 'concepts', `concept-${i}.md`),
+        `---\nid: concept-${i}\ntitle: Concept ${i}\ntype: concept\ncreated: '2026-01-01'\nupdated: '2026-01-01'\n---\n\nSee [[nonexistent-target-${i}]] for details.\n`,
+      );
+    }
+
+    const result = spawnSync(process.execPath, [lintScript, tmpDir, '--suggest', '--json'], {
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.equal(result.error, undefined, 'spawnSync should not report a spawn error');
+    assert.equal(result.status, 1, 'expected findings, so exit code 1');
+    assert.ok(result.stdout.length > 8192, 'test payload should exceed the previously-observed truncation point');
+
+    let parsed;
+    assert.doesNotThrow(() => { parsed = JSON.parse(result.stdout); }, 'stdout must be complete, parsable JSON, not truncated');
+    assert.ok(Array.isArray(parsed.findings));
+    assert.ok(parsed.findings.some(f => f.id === 'L05-broken-wikilink'));
   });
 });

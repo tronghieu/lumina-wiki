@@ -1,6 +1,7 @@
 // English (en) locale strings — full installer copy.
 // Keys are dot-notation; values may contain {varName} placeholders.
-// Banner strings are intentionally absent: banner.js is hardcoded EN by design.
+// `warn.upgrade_*` below is read by printPostUpgradeBanner() in commands.js.
+// The unrelated ASCII install banner (installer/banner.js) stays hardcoded EN.
 
 export default {
   // ── Intro / cancellation ───────────────────────────────────────────────────
@@ -92,13 +93,14 @@ export default {
   'warn.copied_skills':                        '  [warn] Some skills were copied instead of symlinked. Run "lumina install --re-link" after enabling Windows Developer Mode.',
   'warn.relocated':                            '  [warn] Workspace moved from {from} to {to}; managed links will be refreshed.',
   'warn.preserved_modified_file':               '  [warn] Kept modified file that is no longer selected: {path}',
-  'warn.upgrade_header':                       '[warn] Lumina upgraded v{from} -> v{to} — schema gap detected:',
-  'warn.upgrade_errors':                       '       {errors} error(s), {warnings} warning(s) across legacy entries.',
-  'warn.upgrade_fix_quick':                    '     Quick fix (deterministic):',
-  'warn.upgrade_fix_quick_cmd':                '       node _lumina/scripts/wiki.mjs migrate --add-defaults',
-  'warn.upgrade_fix_smart':                    '     Smart fix (LLM-driven, recommended):',
-  'warn.upgrade_fix_smart_cmd':                '       /lumi-migrate-legacy',
-  'warn.upgrade_idempotent':                   '     Both are idempotent. See _lumina/CHANGELOG.md for details.',
+  'warn.upgrade_header':                       '[warn] Lumina upgraded v{from} -> v{to}. Some older wiki entries need attention:',
+  'warn.upgrade_errors':                       '       {errors} error(s), {warnings} warning(s).',
+  'warn.upgrade_fix_auto':                     '     Fix what can be corrected automatically:',
+  'warn.upgrade_fix_auto_cmd':                 '       node _lumina/scripts/lint.mjs --fix',
+  'warn.upgrade_fix_manual':                   '     {count} finding(s) still need your judgment. See exactly what to do:',
+  'warn.upgrade_fix_manual_suggest_cmd':       '       node _lumina/scripts/lint.mjs --suggest',
+  'warn.upgrade_fix_manual_cmd':               '       /lumi-migrate-legacy',
+  'warn.upgrade_footer':                       '     Safe to run again. See _lumina/CHANGELOG.md for details.',
 
   // ── Uninstall output ───────────────────────────────────────────────────────
   'uninstall.cancelled':                       'Uninstall cancelled.',
