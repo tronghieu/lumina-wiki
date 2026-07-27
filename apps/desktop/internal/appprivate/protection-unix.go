@@ -11,6 +11,8 @@ func platformProtectHandle(file *os.File, mode os.FileMode) error {
 	return file.Chmod(mode)
 }
 
+func platformRepairsExistingLockProtection() bool { return false }
+
 func platformValidateProtectedHandle(file *os.File) error {
 	info, err := file.Stat()
 	if err != nil {

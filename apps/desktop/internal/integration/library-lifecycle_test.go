@@ -28,6 +28,13 @@ import (
 
 const lifecycleWindow session.WindowID = 41
 
+const (
+	lifecycleOpenProcessEnv = "LUMINA_TEST_OPEN_PROCESS"
+	lifecycleConfigBaseEnv  = "LUMINA_TEST_CONFIG_BASE"
+	lifecycleParentEnv      = "LUMINA_TEST_LIBRARY_PARENT"
+	lifecycleRootEnv        = "LUMINA_TEST_LIBRARY_ROOT"
+)
+
 type lifecycleWindowResolver struct{}
 
 func (lifecycleWindowResolver) ResolveWindow(context.Context) (session.WindowID, error) {
@@ -230,6 +237,10 @@ func TestComposedLibraryLifecycleWithoutExternalRuntimes(t *testing.T) {
 			t.Fatalf("external runtime unexpectedly resolved: %s", filepath.Base(resolved))
 		}
 	}
+	if os.Getenv(lifecycleOpenProcessEnv) == "1" {
+		runOpenLifecycleProcess(t)
+		return
+	}
 
 	configBase := t.TempDir()
 	libraryParent := t.TempDir()
@@ -331,20 +342,24 @@ func TestComposedLibraryLifecycleWithoutExternalRuntimes(t *testing.T) {
 	second.close(t)
 
 	before := snapshotWorkspace(t, root)
-	opener := newLifecycleHarness(t, configBase, libraryParent)
-	opener.authority.selectDirectory(root)
-	openPrepared, err := opener.service.PrepareChooseWorkspace(ctx)
-	if err != nil || openPrepared.Status != ai.PreparationReady {
-		t.Fatalf("open prepare status=%q err=%v", openPrepared.Status, err)
-	}
-	if _, err := opener.service.CommitPreparedLibrary(ctx, openPrepared.PreparationToken); err != nil {
+	executable, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
+	}
+	openProcess := exec.Command(executable, "-test.run", "^TestComposedLibraryLifecycleWithoutExternalRuntimes$")
+	openProcess.Env = append(os.Environ(),
+		lifecycleOpenProcessEnv+"=1",
+		lifecycleConfigBaseEnv+"="+configBase,
+		lifecycleParentEnv+"="+libraryParent,
+		lifecycleRootEnv+"="+root,
+	)
+	if output, err := openProcess.CombinedOutput(); err != nil {
+		t.Fatalf("clean-process Open failed: %v\n%s", err, output)
 	}
 	after := snapshotWorkspace(t, root)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("opening an existing library changed its names, types, modes, or bytes")
 	}
-	opener.close(t)
 
 	third := newLifecycleHarness(t, configBase, libraryParent)
 	movedAside := filepath.Join(libraryParent, "preserved-library")
@@ -366,6 +381,28 @@ func TestComposedLibraryLifecycleWithoutExternalRuntimes(t *testing.T) {
 	}
 	assertNoRawRendererSurface(t)
 	third.close(t)
+}
+
+func runOpenLifecycleProcess(t *testing.T) {
+	t.Helper()
+	configBase := os.Getenv(lifecycleConfigBaseEnv)
+	libraryParent := os.Getenv(lifecycleParentEnv)
+	root := os.Getenv(lifecycleRootEnv)
+	if !filepath.IsAbs(configBase) || !filepath.IsAbs(libraryParent) || !filepath.IsAbs(root) {
+		t.Fatal("clean-process Open requires absolute test paths")
+	}
+	ctx := context.Background()
+	opener := newLifecycleHarness(t, configBase, libraryParent)
+	opener.authority.selectDirectory(root)
+	prepared, err := opener.service.PrepareChooseWorkspace(ctx)
+	if err != nil || prepared.Status != ai.PreparationReady {
+		t.Fatalf("open prepare status=%q err=%v", prepared.Status, err)
+	}
+	committed, err := opener.service.CommitPreparedLibrary(ctx, prepared.PreparationToken)
+	if err != nil || committed.Status != ai.CommitOpenedAndActive || committed.Capability == nil {
+		t.Fatalf("open commit status=%q err=%v", committed.Status, err)
+	}
+	opener.close(t)
 }
 
 type workspaceEntry struct {

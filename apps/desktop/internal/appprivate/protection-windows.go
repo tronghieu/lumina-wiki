@@ -26,6 +26,8 @@ const (
 var securityKernel32 = syscall.NewLazyDLL("kernel32.dll")
 var getFinalPath = securityKernel32.NewProc("GetFinalPathNameByHandleW")
 
+func platformRepairsExistingLockProtection() bool { return true }
+
 func platformProtectHandle(file *os.File, _ os.FileMode) error {
 	secured, err := reopenSecurityHandle(file, readControl|writeDAC|fileReadAttributes)
 	if err != nil {

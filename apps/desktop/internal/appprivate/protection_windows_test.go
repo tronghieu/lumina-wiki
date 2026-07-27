@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -26,6 +27,57 @@ func TestWindowsStoreAppliesAndVerifiesOwnerSystemDACL(t *testing.T) {
 			t.Fatalf("%s: %v", filepath.Base(path), err)
 		}
 		file.Close()
+	}
+}
+
+func TestWindowsLockWinnerHardensFileCreatedByPausedContender(t *testing.T) {
+	base := t.TempDir()
+	creator := newTestStore(t, base)
+	winner := newTestStore(t, base)
+	created := make(chan struct{})
+	resumeCreator := make(chan struct{})
+	creator.lockCreatedHook = func() {
+		close(created)
+		<-resumeCreator
+	}
+
+	creatorResult := make(chan error, 1)
+	go func() {
+		release, err := creator.acquire(context.Background())
+		if err == nil {
+			release()
+		}
+		creatorResult <- err
+	}()
+	select {
+	case <-created:
+	case <-time.After(5 * time.Second):
+		t.Fatal("creator did not expose the lock file")
+	}
+
+	winnerRelease, err := winner.acquire(context.Background())
+	if err != nil {
+		close(resumeCreator)
+		t.Fatalf("winner failed to harden the visible lock: %v", err)
+	}
+	winnerRelease()
+	close(resumeCreator)
+	select {
+	case err := <-creatorResult:
+		if err != nil {
+			t.Fatalf("creator failed after winner released the lock: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("creator did not resume")
+	}
+
+	lock, err := os.Open(creator.lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	if err := platformValidateProtectedHandle(lock); err != nil {
+		t.Fatalf("lock DACL was not protected: %v", err)
 	}
 }
 

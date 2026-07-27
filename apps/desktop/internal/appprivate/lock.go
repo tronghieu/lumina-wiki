@@ -75,22 +75,7 @@ func (store *Store) acquireLock(ctx context.Context, lease *rootLease) (func(), 
 		return nil, ErrStateChanged
 	}
 	if created {
-		if err := platformProtectHandle(file, 0o600); err != nil {
-			file.Close()
-			return nil, errors.New("protect private state lock failed")
-		}
-	}
-	if err := platformValidateProtectedHandle(file); err != nil {
-		file.Close()
-		return nil, ErrUnsafeState
-	}
-	protected, err := file.Stat()
-	if err != nil || !privateFileMode(protected) {
-		file.Close()
-		return nil, ErrUnsafeState
-	}
-	if created {
-		_ = syncRootDirectory(lease.state)
+		store.lockCreatedHook()
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -114,6 +99,27 @@ func (store *Store) acquireLock(ctx context.Context, lease *rootLease) (func(), 
 			return nil, ctx.Err()
 		case <-time.After(5 * time.Millisecond):
 		}
+	}
+	if created || platformRepairsExistingLockProtection() {
+		if err := platformProtectHandle(file, 0o600); err != nil {
+			_ = platformUnlock(file)
+			file.Close()
+			return nil, errors.New("protect private state lock failed")
+		}
+	}
+	if err := platformValidateProtectedHandle(file); err != nil {
+		_ = platformUnlock(file)
+		file.Close()
+		return nil, ErrUnsafeState
+	}
+	protected, err := file.Stat()
+	if err != nil || !privateFileMode(protected) {
+		_ = platformUnlock(file)
+		file.Close()
+		return nil, ErrUnsafeState
+	}
+	if created {
+		_ = syncRootDirectory(lease.state)
 	}
 	current, lstatErr = lease.state.Lstat(store.lockName())
 	if lstatErr != nil || current.Mode()&fs.ModeSymlink != 0 || !os.SameFile(protected, current) {

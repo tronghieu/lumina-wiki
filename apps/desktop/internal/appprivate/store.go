@@ -57,6 +57,7 @@ type Store struct {
 	stateOpenHook    func()
 	appDirOpenHook   func()
 	stateDirOpenHook func()
+	lockCreatedHook  func()
 	beforeCommitHook func()
 }
 
@@ -82,6 +83,7 @@ func NewStore(configBase, name string, maxBytes int) (*Store, error) {
 		stateOpenHook:    func() {},
 		appDirOpenHook:   func() {},
 		stateDirOpenHook: func() {},
+		lockCreatedHook:  func() {},
 		beforeCommitHook: func() {},
 	}, nil
 }
