@@ -200,9 +200,6 @@ const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
  * @returns {string}
  */
 function deriveIdFromPath(wikiRelPath, fm) {
-  if (fm && typeof fm.slug === 'string' && fm.slug.trim() !== '') {
-    return fm.slug.trim();
-  }
   const noExt = wikiRelPath.replace(/\.md$/, '');
   const dir = noExt.split('/')[0];
   if (dir === 'reflections') {
@@ -210,6 +207,16 @@ function deriveIdFromPath(wikiRelPath, fm) {
   }
   if (NESTED_ID_ENTITY_DIRS.has(dir)) {
     return noExt; // full wiki-relative path, e.g. readings/deep-work/01-focus
+  }
+  // Legacy `slug` is consulted only for FLAT entity dirs, where the id is the
+  // bare basename and `slug` can express it exactly. In a nested dir the id
+  // carries a parent qualifier a bare `slug` cannot represent, so trusting it
+  // there would write an ambiguous id (`01-focus` instead of
+  // `readings/deep-work/01-focus`) — and the legacy-removal pass would then see
+  // the two as equal and delete `slug`, losing the parent for good. The path is
+  // always authoritative and always available, so it wins in those dirs.
+  if (fm && typeof fm.slug === 'string' && fm.slug.trim() !== '') {
+    return fm.slug.trim();
   }
   return basename(noExt);
 }
@@ -232,8 +239,17 @@ function deriveTypeFromPath(wikiRelPath) {
  * @returns {string}
  */
 function deriveTitleFromContent(wikiRelPath, body) {
-  const m = (body || '').match(/^#\s+(.+)$/m);
-  if (m) return m[1].trim();
+  // Scan line by line rather than with a multiline regex: `\s` matches a
+  // newline, so `/^#\s+(.+)$/m` treats a bare `#` as a heading whose text is
+  // the next paragraph. Fenced blocks are skipped because a shell comment
+  // (`# install deps`) is not this page's title.
+  const lines = (body || '').split('\n');
+  const inFence = fencedCodeLines(lines);
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) continue;
+    const m = lines[i].match(/^#[^\S\n]+(\S.*)$/);
+    if (m) return m[1].trim();
+  }
   const base = basename(wikiRelPath.replace(/\.md$/, ''));
   return base
     .split('-')
@@ -323,6 +339,38 @@ function renderYamlLine(key, value) {
 }
 
 /**
+ * Whether a derived value survives being written and read back unchanged.
+ *
+ * lint.mjs's own frontmatter parser is deliberately minimal: it reads
+ * `[a, b]` as a list, `{}` as a mapping, coerces bare numerics, and strips one
+ * leading and one trailing quote character. Several perfectly ordinary strings
+ * therefore have no representation it reads back intact — a title beginning
+ * with `[`, or one containing a double quote. Writing such a value anyway
+ * either corrupts it silently (`"Attention" Revisited` comes back as
+ * `Attention" Revisited`, passing every check) or manufactures a type error no
+ * fixer can ever clear (`title: [Draft]` re-reads as a list, so L02 reports a
+ * permanent "must be a string"). Both outcomes are worse than leaving the field
+ * alone, so every derived value is checked here before it is written.
+ * @param {string} key
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function roundTripsAsFrontmatter(key, value) {
+  const parsed = parseFrontmatter(`---\n${renderYamlLine(key, value)}\n---\n`);
+  if (!parsed) return false;
+  const got = parsed.data[key];
+  if (Array.isArray(value)) {
+    return Array.isArray(got)
+      && got.length === value.length
+      && got.every((v, i) => String(v) === String(value[i]));
+  }
+  if (value !== null && typeof value === 'object') {
+    return got !== null && typeof got === 'object' && !Array.isArray(got);
+  }
+  return got === value;
+}
+
+/**
  * Split raw file content into the frontmatter text (no `---` delimiters)
  * and the tail (starting with the newline before the closing `---`,
  * through end of file). Returns null when there is no parseable
@@ -334,9 +382,22 @@ function renderYamlLine(key, value) {
 function splitRawFrontmatter(content) {
   if (!content.startsWith('---')) return null;
   const rest = content.slice(3);
+  const nlIdx = rest.indexOf('\n');
+  if (nlIdx === -1) return null;
+  // Mirror parseFrontmatter's rule for where the block starts, exactly. It
+  // treats a non-empty first line as part of the frontmatter when it is a YAML
+  // key line, and rejects the block outright otherwise. Diverging here makes
+  // the two disagree about which keys exist: unconditionally skipping the first
+  // line drops `---id: x` on rewrite, and accepting a block parseFrontmatter
+  // rejects leaves fixL01 with an empty view of the frontmatter, so it appends
+  // a second copy of every key that was already there.
+  const afterDash = rest.slice(0, nlIdx).trim();
+  if (afterDash !== '' && !/^[a-zA-Z_][a-zA-Z0-9_]*\s*:/.test(afterDash)) return null;
   const bodyStart = rest.indexOf('\n---');
   if (bodyStart === -1) return null;
-  const fmText = rest.slice(rest.indexOf('\n') + 1, bodyStart);
+  const fmText = afterDash !== ''
+    ? rest.slice(0, bodyStart)
+    : rest.slice(nlIdx + 1, bodyStart);
   const tail = rest.slice(bodyStart); // "\n---\n<body>"
   return { fmText, tail };
 }
@@ -468,6 +529,15 @@ function isLegacyTargetValid(fieldType, val) {
  * @returns {boolean}
  */
 function isLegacyValueEquivalent(targetFieldType, legacyVal, targetVal) {
+  // An empty legacy value (`slug:` with nothing after it) holds no information
+  // at all, so once the replacement is present and valid — the caller has
+  // already checked both — there is nothing that removing it could lose. This
+  // case has to be handled explicitly because every branch below demands a
+  // string on both sides and would otherwise report a permanent conflict,
+  // pinning the exit code at 1 with no action available to the user beyond
+  // deleting the line by hand.
+  if (legacyVal === null || legacyVal === undefined
+    || (typeof legacyVal === 'string' && legacyVal.trim() === '')) return true;
   if (targetFieldType === 'array') {
     if (typeof legacyVal !== 'string') return false;
     const legacyTrimmed = legacyVal.trim();
@@ -534,9 +604,23 @@ function isLegacyValueEquivalent(targetFieldType, legacyVal, targetVal) {
  * @param {Array<{from:string,to:string,type:string}>} edges
  * @returns {string[]}
  */
-function reconstructArrayFromGraph(entityType, field, selfSlug, edges) {
+function reconstructArrayFromGraph(entityType, field, selfSlug, edges, knownSlugs) {
   const results = new Set();
-  const add = (slug) => results.add(`[[${slug}]]`);
+  const add = (slug) => {
+    // The graph can outlive the pages it describes: an edge whose target was
+    // deleted, or a self-referential edge, is still sitting in edges.jsonl.
+    // Writing either into frontmatter turns stale graph state into a fresh
+    // page-level defect — a self-link, or a broken wikilink that only shows up
+    // as an L05 error on the NEXT run, after this one reported success.
+    if (slug === selfSlug) return;
+    // An absent OR empty set carries no membership information, so it disables
+    // the existence filter rather than rejecting everything — the same
+    // convention fixL02 already documents for its tier-2 knownSlugs argument.
+    // A real run always passes the full set, so the filter is live where it
+    // matters and inert only where the caller supplied nothing to check against.
+    if (knownSlugs && knownSlugs.size > 0 && !knownSlugs.has(slug)) return;
+    results.add(`[[${slug}]]`);
+  };
 
   if (entityType === 'concepts' && field === 'key_sources') {
     const outboundTypes = ['introduced_in', 'used_in', 'extended_in', 'critiqued_in'];
@@ -624,6 +708,33 @@ function resolveWikilinkTarget(raw, knownSlugs, basenameIndex) {
 }
 
 /**
+ * Mark which lines fall inside a fenced code block (``` or ~~~), fence lines
+ * themselves included. A `[[...]]` inside a fence is sample text — Lumina's
+ * own page templates and user-written docs show wikilink syntax that way — so
+ * it is neither a real link (checkL05 must not report it broken) nor a real
+ * relationship (reconstructArrayFromBody must not harvest it into frontmatter).
+ * A closing fence must use the same character as the opener and be at least as
+ * long, per CommonMark; an unterminated fence swallows the rest of the file,
+ * which is also what a Markdown renderer does.
+ * @param {string[]} lines
+ * @returns {boolean[]}
+ */
+function fencedCodeLines(lines) {
+  const inFence = new Array(lines.length).fill(false);
+  let open = null;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^\s*(`{3,}|~{3,})/);
+    if (open === null) {
+      if (m) { open = m[1]; inFence[i] = true; }
+    } else {
+      inFence[i] = true;
+      if (m && m[1][0] === open[0] && m[1].length >= open.length) open = null;
+    }
+  }
+  return inFence;
+}
+
+/**
  * Tier-2 fallback for reconstructing an array-typed field: scan the page
  * BODY for `[[wikilinks]]` and keep only the ones that resolve — via exact
  * match or unique-basename match, see `resolveWikilinkTarget` — to a page
@@ -649,13 +760,18 @@ function reconstructArrayFromBody(field, selfSlug, body, knownSlugs) {
 
   const basenameIndex = buildBasenameIndex(knownSlugs);
   const results = new Set();
-  const re = new RegExp(WIKILINK_RE.source, 'g');
-  let m;
-  while ((m = re.exec(body)) !== null) {
-    const resolved = resolveWikilinkTarget(m[1], knownSlugs, basenameIndex);
-    if (!resolved || resolved === selfSlug) continue;
-    if (!resolved.startsWith(`${targetDir}/`)) continue;
-    results.add(`[[${resolved}]]`);
+  const lines = body.split('\n');
+  const inFence = fencedCodeLines(lines);
+  for (let li = 0; li < lines.length; li++) {
+    if (inFence[li]) continue; // sample syntax in a code block is not a relationship.
+    const re = new RegExp(WIKILINK_RE.source, 'g');
+    let m;
+    while ((m = re.exec(lines[li])) !== null) {
+      const resolved = resolveWikilinkTarget(m[1], knownSlugs, basenameIndex);
+      if (!resolved || resolved === selfSlug) continue;
+      if (!resolved.startsWith(`${targetDir}/`)) continue;
+      results.add(`[[${resolved}]]`);
+    }
   }
   return Array.from(results);
 }
@@ -682,14 +798,23 @@ function reconstructArrayFromBody(field, selfSlug, body, knownSlugs) {
  * @returns {string[]}
  */
 function repairArrayValue(entityType, key, wikiRelPath, val, edges, body, knownSlugs) {
-  if (typeof val === 'string') {
-    const trimmed = val.trim();
-    if (trimmed !== '' && trimmed !== 'TODO') {
-      return [val];
-    }
+  if (val !== null && val !== undefined && typeof val === 'object' && !Array.isArray(val)) {
+    // A mapping sitting in an array-typed field holds structured data this
+    // fixer cannot express as list items — renderYamlLine would flatten it to
+    // "[object Object]" and the original would be gone. An EMPTY mapping holds
+    // nothing, so reconstruction may proceed over it; anything else is left
+    // exactly as written and reported unfixable for a human to resolve.
+    if (Object.keys(val).length > 0) return null;
+  } else if (val !== null && val !== undefined) {
+    const isSentinel = typeof val === 'string' && (val.trim() === '' || val.trim() === 'TODO');
+    // Any other non-empty scalar is real content and is wrapped losslessly.
+    // This covers numbers and booleans, not just strings: `authors: 2024` is a
+    // mistyped value, and --fix replacing it with [] would destroy the only
+    // copy of it — reconstruction has no mapping for `authors` to recover from.
+    if (!isSentinel) return [val];
   }
   const selfSlug = wikiRelPath.replace(/\.md$/, '');
-  const fromGraph = reconstructArrayFromGraph(entityType, key, selfSlug, edges);
+  const fromGraph = reconstructArrayFromGraph(entityType, key, selfSlug, edges, knownSlugs);
   if (fromGraph.length > 0) return fromGraph;
   if (entityType === 'reflections') return []; // frontmatter-only; never graph- or body-backed.
   return reconstructArrayFromBody(key, selfSlug, body || '', knownSlugs || new Set());
@@ -1074,9 +1199,14 @@ function checkL02(wikiRelPath, fm) {
         break;
       case 'array':
         if (!Array.isArray(val)) {
-          // Always fixable: fixL02 wraps a real string value, or reconstructs
-          // from the graph / falls back to [] for a TODO sentinel or stray scalar.
-          findings.push(finding('L02-frontmatter-types', 'error', true, wikiRelPath, null,
+          // Fixable in every shape fixL02 can represent: a scalar is wrapped
+          // losslessly, and a TODO sentinel / empty string / empty mapping is
+          // reconstructed from the graph or body, else []. A NON-EMPTY mapping
+          // is the one exception — it holds structured data that cannot be
+          // rendered as list items, so it is reported for a human instead.
+          const isNonEmptyMapping = val !== null && typeof val === 'object'
+            && !Array.isArray(val) && Object.keys(val).length > 0;
+          findings.push(finding('L02-frontmatter-types', 'error', !isNonEmptyMapping, wikiRelPath, null,
             `"${field.key}" must be an array, got ${typeof val}`));
         }
         break;
@@ -1185,12 +1315,53 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
   const basenameIndex = buildBasenameIndex(knownSlugs);
 
   const lines = rawContent.split('\n');
+  const inFence = fencedCodeLines(lines);
   for (let li = 0; li < lines.length; li++) {
+    // A `[[...]]` inside a fenced code block is sample syntax, not a link.
+    // Reporting it would also be unfixable-by-design: rewriting it corrupts
+    // the very example the author wrote, so the finding could never clear.
+    if (inFence[li]) continue;
     const lineRe = new RegExp(WIKILINK_RE.source, 'g');
     while ((match = lineRe.exec(lines[li])) !== null) {
       const slug = match[1].trim();
       if (!knownSlugs.has(slug)) {
-        const candidates = basenameIndex.get(basename(slug)) || [];
+        // The basename heuristic exists for ONE mistake: a bare slug missing
+        // its directory prefix. Two shapes must never be "repaired" by it.
+        //   - A target that already names a real entity dir (`[[sources/lora]]`)
+        //     is an explicit claim about WHICH page is meant; resolving it to
+        //     `concepts/lora` by basename would silently change the entity type
+        //     the link asserts, and edge types such as `annotates` are only
+        //     valid against a sources target.
+        //   - A URL-shaped target (`[[https://x.dev/lora]]`) is not an internal
+        //     page reference at all, and its last path segment matching some
+        //     page's basename is a coincidence, not an intent.
+        // Both are still reported broken — just never auto-rewritten.
+        const firstSeg = slug.split('/')[0];
+        const explicitEntityDir = slug.includes('/')
+          && Object.prototype.hasOwnProperty.call(ENTITY_DIRS, firstSeg);
+        const looksLikeUrl = slug.includes('://');
+        // A trailing `.md` is a spelling of the same target, not a different
+        // one: resolveWikilinkTarget already strips it, so without stripping it
+        // here too the link is reported broken and never offered a repair.
+        const lookupSlug = slug.endsWith('.md') ? slug.slice(0, -3) : slug;
+        const byBasename = basenameIndex.get(basename(lookupSlug)) || [];
+        let candidates;
+        let suppressed = null;
+        if (lookupSlug !== slug && knownSlugs.has(lookupSlug)) {
+          // Only the suffix was wrong — an exact resolution, not a basename guess,
+          // so it is safe even for an explicitly-qualified target.
+          candidates = [lookupSlug];
+        } else if (explicitEntityDir || looksLikeUrl) {
+          candidates = [];
+          // Remember what the basename WOULD have matched. Not a repair
+          // candidate — deliberately withheld — but the suggestion must name it
+          // rather than claim no such page exists, which is both false and
+          // unactionable when `[[sources/lora]]` fails only because the page
+          // lives at `concepts/lora`.
+          suppressed = { reason: looksLikeUrl ? 'url' : 'explicit-dir', nearMatches: byBasename };
+        } else {
+          candidates = byBasename;
+        }
         const f = finding(
           'L05-broken-wikilink', 'error', candidates.length === 1,
           wikiRelPath, li + 1,
@@ -1201,6 +1372,7 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
         // output when not requested (see reportJson).
         f.brokenSlug = slug;
         f.candidates = candidates;
+        if (suppressed) f.suppressedRepair = suppressed;
         findings.push(f);
       }
     }
@@ -1641,11 +1813,14 @@ function checkL17(edges, knownSlugs) {
  */
 async function fixL01(absPath, wikiRelPath, content, l01findings) {
   const split = splitRawFrontmatter(content);
-  if (!split) return { newContent: content, preview: '' };
+  const parsed = parseFrontmatter(content);
+  // Both parsers must agree the block is readable. If parseFrontmatter cannot
+  // read it, we have no reliable view of which keys already exist, and
+  // appending would duplicate them.
+  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
   const { fmText, tail } = split;
 
-  const parsed = parseFrontmatter(content);
-  const fm = parsed ? parsed.data : {};
+  const fm = parsed.data;
   const body = parsed ? parsed.body : '';
   const entityType = entityTypeForPath(wikiRelPath);
   const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
@@ -1676,6 +1851,7 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
       }
     }
     if (value === undefined) continue;
+    if (!roundTripsAsFrontmatter(key, value)) continue; // unrepresentable — leave the field missing.
     additions.push({ key, value });
   }
 
@@ -1716,10 +1892,11 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
  */
 async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSlugs) {
   const split = splitRawFrontmatter(content);
-  if (!split) return { newContent: content, preview: '', fixedKeys: [] };
-
   const parsed = parseFrontmatter(content);
-  const fm = parsed ? parsed.data : {};
+  // Same agreement requirement as fixL01 — see the comment there.
+  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
+
+  const fm = parsed.data;
   const body = parsed ? parsed.body : '';
   const entityType = entityTypeForPath(wikiRelPath);
   const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
@@ -1743,9 +1920,12 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
 
     if (fieldDef.type === 'array' && !Array.isArray(val)) {
       const newVal = repairArrayValue(entityType, key, wikiRelPath, val, edges, body, slugs);
+      if (newVal === null) continue; // no representable repair — leave the value untouched.
+      if (!roundTripsAsFrontmatter(key, newVal)) continue;
       changes.push({ key, value: newVal });
     } else if (fieldDef.type === 'iso-date' && typeof val === 'string' && val.trim() === 'TODO') {
       const newVal = await deriveIsoDateValue(fm, absPath);
+      if (!roundTripsAsFrontmatter(key, newVal)) continue;
       changes.push({ key, value: newVal });
     } else if (fieldDef.type === 'string' && typeof val === 'string' && val.trim() === 'TODO' && DERIVABLE_STRING_KEYS.has(key)) {
       // Task 2 repair: same derivation `fixL01` uses for a MISSING id/type/
@@ -1758,6 +1938,7 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
       if (key === 'id') newVal = deriveIdFromPath(wikiRelPath, fm);
       else if (key === 'type') newVal = deriveTypeFromPath(wikiRelPath);
       else if (key === 'title') newVal = deriveTitleFromContent(wikiRelPath, body);
+      if (newVal === undefined || !roundTripsAsFrontmatter(key, newVal)) continue;
       changes.push({ key, value: newVal });
     }
     // number/enum/object mismatches, and non-derivable string keys
@@ -1861,25 +2042,56 @@ function escapeRegex(s) {
  * @param {Finding[]} l05findings  L05 findings for this one file.
  * @returns {Promise<{ newContent: string, preview: string, fixedFindings: Finding[] }>}
  */
-async function fixL05(wikiRelPath, wikiRoot, l05findings) {
+async function fixL05(wikiRelPath, wikiRoot, l05findings, pendingRenames = new Set()) {
   const abs = safejoin(wikiRoot, wikiRelPath);
   const original = await readFile(abs, 'utf8');
-  let content = original;
+  const lines = original.split('\n');
+  const inFence = fencedCodeLines(lines);
   const fixedFindings = [];
+  const previewLines = [];
 
+  // Group by broken slug, NOT by line number. checkL05 emits one finding per
+  // OCCURRENCE, so a slug repeated in a page yields several findings that a
+  // single rewrite resolves together, and marking only whichever finding
+  // happened to trigger the write leaves the rest looking unresolved, which
+  // `/lumi-migrate-legacy` (it filters on `!fix_applied`), the ingest gate, and
+  // the process exit code all read as outstanding work on an already-clean page.
+  //
+  // Line numbers cannot be used for that grouping: fixL01/fixL02 rewrite this
+  // same file's frontmatter block earlier in applyFixes, so by the time we run,
+  // `f.line` may be off by however many lines that rewrite added or removed.
+  // Slug-keyed repair over the current lines is immune to the shift.
+  const groups = new Map();
   for (const f of l05findings) {
     if (!f.candidates || f.candidates.length !== 1) continue;
-    const brokenSlug = f.brokenSlug;
-    const candidate = f.candidates[0];
-    const re = new RegExp(`\\[\\[${escapeRegex(brokenSlug)}(\\|[^\\]]*)?\\]\\]`, 'g');
-    const before = content;
-    content = content.replace(re, (_, alias) => `[[${candidate}${alias || ''}]]`);
-    if (content !== before) fixedFindings.push(f);
+    if (!f.brokenSlug) continue;
+    // Leave links to a file fixL03 is about to rename for fixL03 itself.
+    if (pendingRenames.has(f.candidates[0])) continue;
+    if (!groups.has(f.brokenSlug)) groups.set(f.brokenSlug, []);
+    groups.get(f.brokenSlug).push(f);
   }
 
-  if (content === original) return { newContent: content, preview: '', fixedFindings: [] };
-  const preview = fixedFindings.map(f => `~ [[${f.brokenSlug}]] -> [[${f.candidates[0]}]]`).join('\n');
-  return { newContent: content, preview, fixedFindings };
+  for (const [brokenSlug, members] of groups) {
+    const candidate = members[0].candidates[0];
+    // checkL05 records the TRIMMED target, so the pattern must tolerate the
+    // padding the page actually contains (`[[ alpha | A ]]`). Without `\s*`
+    // the finding is reported fixable and then silently never rewritten, on
+    // every run forever.
+    const re = new RegExp(`\\[\\[\\s*${escapeRegex(brokenSlug)}\\s*(\\|[^\\]]*)?\\]\\]`, 'g');
+    let changed = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (inFence[i]) continue; // sample syntax stays exactly as the author wrote it.
+      const before = lines[i];
+      lines[i] = before.replace(re, (_, alias) => `[[${candidate}${alias || ''}]]`);
+      if (lines[i] !== before) changed = true;
+    }
+    if (!changed) continue;
+    fixedFindings.push(...members);
+    previewLines.push(`~ [[${brokenSlug}]] -> [[${candidate}]]`);
+  }
+
+  if (fixedFindings.length === 0) return { newContent: original, preview: '', fixedFindings: [] };
+  return { newContent: lines.join('\n'), preview: previewLines.join('\n'), fixedFindings };
 }
 
 /**
@@ -2086,9 +2298,14 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL10(foundationEntries));
   }
 
-  // Apply fixes if requested.
-  if (opts.fix || opts.dryRun) {
-    await applyFixes(allFindings, wikiRoot, edgesPath, indexPath, indexContent, entityFiles, allAbsMd, edges, edgeSet, knownSlugs, opts);
+  // Apply fixes if requested. `--suggest` on its own runs them in dry-run mode
+  // (no writes) purely to learn which findings a fixer would actually resolve:
+  // `fixable` is only a check-time prediction, and without exercising the
+  // fixers, --suggest defers to --fix for every finding still flagged fixable
+  // and so says nothing about the ones --fix would silently fail to repair.
+  if (opts.fix || opts.dryRun || opts.suggest) {
+    const fixOpts = (opts.fix || opts.dryRun) ? opts : { ...opts, dryRun: true };
+    await applyFixes(allFindings, wikiRoot, edgesPath, indexPath, indexContent, entityFiles, allAbsMd, edges, edgeSet, knownSlugs, fixOpts);
   }
 
   return { findings: allFindings, scannedFiles: allWikiRel.length };
@@ -2160,6 +2377,20 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
 
   // Fix L05 — rewrite [[slug]] wikilinks that broke only because of a
   // missing/wrong directory prefix, when the basename resolves uniquely.
+  //
+  // L05 runs BEFORE L03 (which renames non-kebab files) so that fixL05 never
+  // reads a path L03 has already renamed out from under it. The cost is that a
+  // link pointing at a file L03 is about to rename must be left alone here:
+  // qualifying `[[Foo_Bar]]` to `[[concepts/Foo_Bar]]` would hide it from
+  // fixL03's own rewrite, which only matches the bare form — and once the file
+  // becomes `foo-bar.md`, the qualified link is dead with no basename left to
+  // resolve it, so a later run cannot repair what this run broke. Skipping lets
+  // fixL03 rewrite the bare link correctly in this same run; whatever prefix is
+  // still missing afterwards is picked up by the next run, with no page left
+  // pointing at a file that never existed.
+  const pendingRenames = new Set(
+    findings.filter(f => f.id === 'L03-slug-style').map(f => f.file.replace(/\.md$/, ''))
+  );
   const l05ByFile = new Map();
   for (const f of findings.filter(f => f.id === 'L05-broken-wikilink')) {
     if (!l05ByFile.has(f.file)) l05ByFile.set(f.file, []);
@@ -2168,7 +2399,7 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
   for (const [wikiRelPath, filefindings] of l05ByFile) {
     let result;
     try {
-      result = await fixL05(wikiRelPath, wikiRoot, filefindings);
+      result = await fixL05(wikiRelPath, wikiRoot, filefindings, pendingRenames);
     } catch {
       continue; // file unreadable (e.g. renamed by another fixer) — skip gracefully.
     }
@@ -2249,6 +2480,23 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
       }
     }
   }
+
+  // Truth pass. `fixable` is decided at check time from the finding's shape
+  // alone, before any fixer has looked at the file, so it is a prediction. Some
+  // predictions do not survive contact: a page with no readable frontmatter
+  // block has nothing to append to, a derived value may be unrepresentable in
+  // this parser's dialect, a legacy key may carry no value to compare, and a
+  // wikilink may not match the text on the page. Leaving `fixable: true` on a
+  // finding this run did not fix makes every downstream consumer wrong in the
+  // same direction: `/lumi-migrate-legacy` skips it as already handled, the
+  // upgrade banner reports work that will never happen, and `--suggest` stays
+  // silent (it defers to --fix for anything flagged fixable), so the user is
+  // told a problem is solved while it quietly persists. Correcting the flag
+  // here is what makes the run self-consistent and lets --suggest speak.
+  for (const f of findings) {
+    const resolved = opts.dryRun ? Boolean(f.proposed_fix) : Boolean(f.fix_applied);
+    if (f.fixable && !resolved) f.fixable = false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2291,6 +2539,16 @@ function computeSuggestion(f) {
     const candidates = f.candidates || [];
     if (candidates.length > 1) {
       return `Ambiguous target for [[${f.brokenSlug}]] — candidates: ${candidates.join(', ')}. Pick one and update the link manually.`;
+    }
+    // A repair withheld on purpose is a different situation from "nothing
+    // matches", and saying the latter would be plainly false when the near
+    // match is what the author almost certainly meant.
+    const sup = f.suppressedRepair;
+    if (sup && sup.nearMatches && sup.nearMatches.length > 0) {
+      const near = sup.nearMatches.join(', ');
+      return sup.reason === 'url'
+        ? `[[${f.brokenSlug}]] looks like a URL, so it is never rewritten to an internal page. Did you mean ${near}, or should this be a plain Markdown link?`
+        : `[[${f.brokenSlug}]] names an entity directory that has no such page; ${near} exists but points at a different kind of page, so this is not rewritten automatically. Confirm which one you mean and update the link.`;
     }
     return `No page found with basename "${basename(f.brokenSlug || '')}" for [[${f.brokenSlug}]] — create the page or fix the link manually.`;
   }
@@ -2376,11 +2634,12 @@ function reportJson(findings, scannedFiles, opts = {}) {
   const infos = findings.filter(f => f.severity === 'info').length;
   const fixes = findings.filter(f => f.fix_applied).length;
 
-  // Strip internal-only fields (candidates/brokenSlug — set by checkL05 for
-  // fixL05's own use) from the public shape; re-add `candidates` and the new
-  // `suggestion` key only when --suggest was requested.
+  // Strip internal-only fields (candidates/brokenSlug/suppressedRepair — set by
+  // checkL05 for fixL05's and computeSuggestion's own use) from the public
+  // shape; re-add `candidates` and the new `suggestion` key only when
+  // --suggest was requested.
   const outputFindings = findings.map(f => {
-    const { candidates, brokenSlug, ...rest } = f;
+    const { candidates, brokenSlug, suppressedRepair, ...rest } = f;
     if (opts.suggest) {
       const suggestion = computeSuggestion(f);
       if (suggestion) rest.suggestion = suggestion;

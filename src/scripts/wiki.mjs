@@ -679,10 +679,26 @@ async function setMeta(projectRoot, slug, key, value) {
   if (entityType) {
     const fields = _getRequiredFrontmatterFields(entityType);
     const field = fields ? fields.find((f) => f.key === key) : null;
-    if (field) {
+    // Clearing an OPTIONAL declared field stays allowed. The gate exists to stop
+    // wrong-typed values, and `null` on a field the schema marks `required:
+    // false` is not a wrong value — it is the absence the schema already
+    // permits. Type-checking it would leave no way at all to undo an optional
+    // field once set. A required field still cannot be cleared: that just
+    // trades this error for an L01 one.
+    const clearingOptional = (value === null || value === undefined) && field && field.required === false;
+    if (field && !clearingOptional) {
       const violation = _checkFieldType(field, value);
       if (violation) {
-        const err = new Error(`Schema violation: ${violation}`);
+        // Scalars arrive already coerced by parseScalar, so a value the user
+        // typed as text can reach us as a number or a bare string where the
+        // schema wants a list. That is exactly what --json-value is for, and an
+        // error that does not say so reads as "this value is forbidden" rather
+        // than "quote it".
+        const coercible = field.type === 'string' || field.type === 'array' || field.type === 'object';
+        const hint = coercible
+          ? ' — if this is the value you meant, pass it with --json-value (e.g. --json-value \'"1706.03762"\' or \'["a","b"]\')'
+          : '';
+        const err = new Error(`Schema violation: ${violation}${hint}`);
         err.code = 2;
         throw err;
       }

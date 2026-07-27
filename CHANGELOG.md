@@ -34,6 +34,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   that plainly didn't match what the field expects (text where a date
   belongs, for example). It now checks the value against the field's
   expected type first and refuses to save one that doesn't fit.
+- The page check also stopped skipping one kind of field, so a page that
+  was reported as fine before may now be reported as needing attention.
+  Nothing on the page changed — the problem was always there and simply
+  wasn't being looked at.
+- A repaired link is now reported as repaired even when the same link
+  appears more than once on a page. Before, only the first one counted,
+  so a page that had been fully fixed could still be listed as needing
+  work, and the check could end with a failure notice after a successful
+  repair.
+- Example links written inside a code block are now left alone. They are
+  illustrations of how to write a link, not links, so they are no longer
+  reported as broken and no longer rewritten.
+- A link pointing at a page whose file name was about to be tidied up is no
+  longer touched twice in the same pass. Previously the two repairs worked
+  against each other and could leave the link pointing at a page that no
+  longer existed, with no way to recover it afterwards.
+- A value that is clearly wrong for its field, such as a year typed where a
+  list of authors belongs, is now kept and reported instead of being
+  replaced with an empty list. Nothing you wrote is thrown away just
+  because the repair could not interpret it.
+- Repairs are now checked before they are saved: if the repaired value would
+  not read back exactly as intended, it is not written at all and is
+  reported for you to decide instead. This stops a repair from quietly
+  changing a title that contains quotation marks, or from writing one that
+  the next check would reject forever.
+- Notes filed under a parent, such as reading notes belonging to a book, keep
+  the parent in their identifier. An older field naming only the short form
+  is no longer trusted over the file's own location, and is no longer
+  removed when the two disagree.
+- Links that already name a section of the wiki, and links that are actually
+  web addresses, are no longer redirected to a similarly named page in a
+  different section. They are reported with a note naming the near match so
+  you can decide.
+- Links relating to pages recorded in the connection map are only filled in
+  when the page still exists, and a page is never linked to itself.
+- A page's title is no longer taken from a comment inside a code block, or
+  from the paragraph after an empty heading.
+- Padded links and links written with a `.md` ending are now repaired rather
+  than reported as repairable and then skipped on every run.
+- A problem the repair could not actually resolve is no longer still labelled
+  repairable afterwards. This is what previously caused the follow-up steps
+  to skip real work, and left the advice option silent about it.
+- Asking for advice alone now reports advice for everything the repair could
+  not handle, without changing any file.
+- An optional field can be cleared again, and a rejected value now says how
+  to supply it as written text.
 
 ### Added
 
