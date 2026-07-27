@@ -4,10 +4,55 @@ package workspaceid
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 
 	"golang.org/x/sys/windows"
 )
+
+const registryDirectoryChildEnv = "LUMINA_TEST_REGISTRY_DIRECTORY_CHILD"
+const registryDirectoryBaseEnv = "LUMINA_TEST_REGISTRY_DIRECTORY_BASE"
+
+func TestWindowsRegistryDirectoryValidationAcrossProcess(t *testing.T) {
+	if os.Getenv(registryDirectoryChildEnv) == "1" {
+		store, err := newRegistryStore(os.Getenv(registryDirectoryBaseEnv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		exists, err := store.ensureDir(false)
+		if err != nil || !exists {
+			t.Fatalf("child registry directory validation: exists=%t err=%v", exists, err)
+		}
+		return
+	}
+
+	base := t.TempDir()
+	store, err := newRegistryStore(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exists, err := store.ensureDir(true)
+	if err != nil || !exists {
+		t.Fatalf("parent registry directory setup: exists=%t err=%v", exists, err)
+	}
+	exists, err = store.ensureDir(false)
+	if err != nil || !exists {
+		t.Fatalf("parent registry directory validation: exists=%t err=%v", exists, err)
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := exec.Command(executable, "-test.run", "^TestWindowsRegistryDirectoryValidationAcrossProcess$")
+	child.Env = append(os.Environ(),
+		registryDirectoryChildEnv+"=1",
+		registryDirectoryBaseEnv+"="+base,
+	)
+	if output, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("child registry validation failed: %v\n%s", err, output)
+	}
+}
 
 func TestRegistryStoreAppliesExactOwnerSystemDACLs(t *testing.T) {
 	store, err := newRegistryStore(t.TempDir())

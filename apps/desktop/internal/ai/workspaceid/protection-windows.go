@@ -184,7 +184,12 @@ func validateRegistryHandle(file *os.File) error {
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		seen, ok := expected[sid.String()]
 		if !ok {
-			return fmt.Errorf("registry DACL ACE %d principal is unexpected", index)
+			return fmt.Errorf(
+				"registry DACL ACE %d principal is unexpected (%s; owner=%s)",
+				index,
+				classifyRegistryPrincipal(sid, owner),
+				classifyRegistryOwner(owner, tokenUser.User.Sid),
+			)
 		}
 		if seen {
 			return fmt.Errorf("registry DACL ACE %d principal is duplicated", index)
@@ -201,6 +206,40 @@ func validateRegistryHandle(file *os.File) error {
 		}
 	}
 	return nil
+}
+
+func classifyRegistryPrincipal(sid, owner *windows.SID) string {
+	if sid != nil && owner != nil && sid.Equals(owner) {
+		return "owner"
+	}
+	known := []struct {
+		kind  windows.WELL_KNOWN_SID_TYPE
+		label string
+	}{
+		{windows.WinBuiltinAdministratorsSid, "Administrators"},
+		{windows.WinWorldSid, "Everyone"},
+		{windows.WinAuthenticatedUserSid, "Authenticated Users"},
+		{windows.WinBuiltinUsersSid, "Users"},
+		{windows.WinCreatorOwnerSid, "Creator Owner"},
+	}
+	for _, candidate := range known {
+		knownSID, err := windows.CreateWellKnownSid(candidate.kind)
+		if err == nil && sid != nil && sid.Equals(knownSID) {
+			return candidate.label
+		}
+	}
+	return "other"
+}
+
+func classifyRegistryOwner(owner, currentUser *windows.SID) string {
+	if owner != nil && currentUser != nil && owner.Equals(currentUser) {
+		return "current user"
+	}
+	administrators, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err == nil && owner != nil && owner.Equals(administrators) {
+		return "Administrators"
+	}
+	return "other"
 }
 
 func isSafeRegistryOwner(owner, currentUser *windows.SID, token windows.Token) bool {
