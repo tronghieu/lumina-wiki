@@ -23,6 +23,7 @@ import (
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/appstate"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/contract"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/rootproof"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
@@ -151,7 +152,31 @@ func (discardSinkFactory) NewChatSink(
 type lifecycleHarness struct {
 	service   *ai.Service
 	manager   *workspaceid.Manager
+	attacher  *lifecycleAttacher
 	authority *lifecycleNativeAuthority
+}
+
+type lifecycleAttacher struct {
+	*workspaceid.Manager
+	mu      sync.Mutex
+	lastErr error
+}
+
+func (attacher *lifecycleAttacher) BeginAttachTrusted(
+	root string,
+	proof rootproof.RootProof,
+) (*workspaceid.PreparedAttach, workspaceid.AttachDecision, error) {
+	prepared, decision, err := attacher.Manager.BeginAttachTrusted(root, proof)
+	attacher.mu.Lock()
+	attacher.lastErr = err
+	attacher.mu.Unlock()
+	return prepared, decision, err
+}
+
+func (attacher *lifecycleAttacher) failure() error {
+	attacher.mu.Lock()
+	defer attacher.mu.Unlock()
+	return attacher.lastErr
 }
 
 func newLifecycleHarness(t *testing.T, configBase, libraryParent string) *lifecycleHarness {
@@ -168,6 +193,7 @@ func newLifecycleHarness(t *testing.T, configBase, libraryParent string) *lifecy
 	if err != nil {
 		t.Fatal(err)
 	}
+	attacher := &lifecycleAttacher{Manager: manager}
 	configStore, err := settings.NewConfigStore(configBase)
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +224,7 @@ func newLifecycleHarness(t *testing.T, configBase, libraryParent string) *lifecy
 		Windows:       lifecycleWindowResolver{},
 		Native:        authority,
 		Validator:     validator,
-		Attacher:      manager,
+		Attacher:      attacher,
 		Runtimes:      runtimes,
 		Sessions:      session.NewRegistry(session.Options{}),
 		Streams:       discardSinkFactory{},
@@ -216,7 +242,9 @@ func newLifecycleHarness(t *testing.T, configBase, libraryParent string) *lifecy
 		_ = manager.Close()
 		t.Fatal(err)
 	}
-	return &lifecycleHarness{service: service, manager: manager, authority: authority}
+	return &lifecycleHarness{
+		service: service, manager: manager, attacher: attacher, authority: authority,
+	}
 }
 
 func (harness *lifecycleHarness) close(t *testing.T) {
@@ -396,7 +424,7 @@ func runOpenLifecycleProcess(t *testing.T) {
 	opener.authority.selectDirectory(root)
 	prepared, err := opener.service.PrepareChooseWorkspace(ctx)
 	if err != nil || prepared.Status != ai.PreparationReady {
-		t.Fatalf("open prepare status=%q err=%v", prepared.Status, err)
+		t.Fatalf("open prepare status=%q err=%v attach=%v", prepared.Status, err, opener.attacher.failure())
 	}
 	committed, err := opener.service.CommitPreparedLibrary(ctx, prepared.PreparationToken)
 	if err != nil || committed.Status != ai.CommitOpenedAndActive || committed.Capability == nil {
