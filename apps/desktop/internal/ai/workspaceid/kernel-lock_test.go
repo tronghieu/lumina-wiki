@@ -41,6 +41,38 @@ func TestKernelLockPersistsAndSerializesIndependentStores(t *testing.T) {
 	}
 }
 
+func TestKernelLockRejectsPathReplacementAfterAcquisition(t *testing.T) {
+	store, err := newRegistryStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.afterLock = func() {
+		store.afterLock = func() {}
+		if err := os.Remove(store.lockPath); err != nil {
+			t.Fatal(err)
+		}
+		replacement, err := os.OpenFile(store.lockPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := platformSecureLockMode(replacement); err != nil {
+			replacement.Close()
+			t.Fatal(err)
+		}
+		if err := replacement.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := store.acquireLock(); !errors.Is(err, ErrRegistryConflict) {
+		t.Fatalf("replacement error = %v, want ErrRegistryConflict", err)
+	}
+	release, err := store.acquireLock()
+	if err != nil {
+		t.Fatalf("replacement lock remained unavailable: %v", err)
+	}
+	release()
+}
+
 func TestKernelLockRejectsSymlinkAndNonRegularPath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation may require privileges")

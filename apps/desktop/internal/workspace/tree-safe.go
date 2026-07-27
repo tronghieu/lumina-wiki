@@ -110,7 +110,7 @@ func treeRootCurrent(root *os.Root) bool {
 		return false
 	}
 	current, err := os.Stat(root.Name())
-	return err == nil && current.IsDir() && os.SameFile(opened, current)
+	return err == nil && current.IsDir() && sameTreeRoot(opened, current)
 }
 
 func treeLstat(root *os.Root, path string) (os.FileInfo, error) {

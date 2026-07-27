@@ -61,6 +61,7 @@ func TestBuildTrustedRejectsRootReplacementBeforeAndDuringScan(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			normal := normalTreeForTest(t, root)
 			builder := NewTreeBuilder()
 			replacementBlocked := false
 			replace := func() {
@@ -77,15 +78,12 @@ func TestBuildTrustedRejectsRootReplacementBeforeAndDuringScan(t *testing.T) {
 			}
 			if timing == "before" {
 				replace()
-				if replacementBlocked {
-					return
-				}
 			} else {
 				builder.beforeOpen = func(string) { builder.beforeOpen = nil; replace() }
 			}
 			tree, err := builder.BuildTrusted(context.Background(), root, proof)
 			if replacementBlocked {
-				if err != nil || !reflect.DeepEqual(tree, normalTreeForTest(t, root)) {
+				if err != nil || !reflect.DeepEqual(tree, normal) {
 					t.Fatalf("tree=%+v err=%v after operating system blocked replacement", tree, err)
 				}
 				return

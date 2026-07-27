@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -21,6 +22,7 @@ type registryStore struct {
 	tryLock             func(*os.File) error
 	unlock              func(*os.File) error
 	secureLockMode      func(*os.File) error
+	afterLock           func()
 }
 
 func newRegistryStore(base string) (*registryStore, error) {
@@ -31,7 +33,7 @@ func newRegistryStore(base string) (*registryStore, error) {
 	return &registryStore{dir: dir, path: filepath.Join(dir, registryFileName),
 		lockPath: filepath.Join(dir, registryLockName), rename: os.Rename,
 		syncDir: syncDirectory, mkdir: os.Mkdir, tryLock: platformTryLock, unlock: platformUnlock,
-		secureLockMode: platformSecureLockMode}, nil
+		secureLockMode: platformSecureLockMode, afterLock: func() {}}, nil
 }
 
 func (store *registryStore) ensureDir(create bool) (bool, error) {
@@ -54,15 +56,33 @@ func (store *registryStore) ensureDir(create bool) (bool, error) {
 	if info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() {
 		return false, errors.New("registry directory must be a real directory")
 	}
-	if lostCreationRace && !privateDirectoryMode(info) {
-		return false, errors.New("registry directory permissions must be private")
+	if lostCreationRace && !platformValidatePrivateDirectory(store.dir, info) {
+		for range 20 {
+			time.Sleep(time.Millisecond)
+			current, currentErr := os.Lstat(store.dir)
+			if currentErr != nil || !os.SameFile(info, current) {
+				return false, errors.New("registry directory changed during creation")
+			}
+			info = current
+			if platformValidatePrivateDirectory(store.dir, info) {
+				break
+			}
+		}
+		if !platformValidatePrivateDirectory(store.dir, info) {
+			return false, errors.New("registry directory permissions must be private")
+		}
 	}
-	if !create && !privateDirectoryMode(info) {
+	if !create && !platformValidatePrivateDirectory(store.dir, info) {
 		return false, errors.New("registry directory permissions must be private")
 	}
 	if create {
-		if err := os.Chmod(store.dir, 0o700); err != nil {
+		if err := platformSecurePrivateDirectory(store.dir, info); err != nil {
 			return false, errors.New("secure registry directory failed")
+		}
+		protected, err := os.Lstat(store.dir)
+		if err != nil || !os.SameFile(info, protected) ||
+			!platformValidatePrivateDirectory(store.dir, protected) {
+			return false, errors.New("registry directory permissions must be private")
 		}
 	}
 	return true, nil

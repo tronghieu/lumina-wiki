@@ -4,6 +4,7 @@ package appprivate
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
@@ -41,7 +42,7 @@ func platformProtectHandle(file *os.File, _ os.FileMode) error {
 	}
 	acl, err := windows.ACLFromEntries(protectedAccessEntries(tokenUser.User.Sid, system), nil)
 	if err != nil {
-		return errors.New("create protected DACL failed")
+		return fmt.Errorf("create protected DACL failed: %w", err)
 	}
 	if err := windows.SetSecurityInfo(
 		windows.Handle(secured.Fd()),
@@ -52,7 +53,7 @@ func platformProtectHandle(file *os.File, _ os.FileMode) error {
 		acl,
 		nil,
 	); err != nil {
-		return errors.New("apply protected DACL failed")
+		return fmt.Errorf("apply protected DACL failed: %w", err)
 	}
 	return platformValidateProtectedHandle(file)
 }
@@ -68,7 +69,7 @@ func protectedAccessEntries(owner, system *windows.SID) []windows.EXPLICIT_ACCES
 func fullAccessEntry(sid *windows.SID, trusteeType windows.TRUSTEE_TYPE) windows.EXPLICIT_ACCESS {
 	return windows.EXPLICIT_ACCESS{
 		AccessPermissions: fileAllAccess,
-		AccessMode:        windows.SET_ACCESS,
+		AccessMode:        windows.GRANT_ACCESS,
 		Inheritance:       windows.NO_INHERITANCE,
 		Trustee: windows.TRUSTEE{
 			TrusteeForm:  windows.TRUSTEE_IS_SID,
@@ -154,7 +155,7 @@ func reopenSecurityHandle(original *os.File, access uint32) (*os.File, error) {
 	handle, err := syscall.CreateFile(&buffer[0], access, fileShareRead|fileShareWrite|fileShareDelete,
 		nil, syscall.OPEN_EXISTING, fileFlagBackupSemantics, 0)
 	if err != nil {
-		return nil, errors.New("reopen private security handle failed")
+		return nil, fmt.Errorf("reopen private security handle failed: %w", err)
 	}
 	reopened := os.NewFile(uintptr(handle), "app-private-security")
 	reopenedInfo, statErr := reopened.Stat()

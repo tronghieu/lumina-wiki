@@ -146,11 +146,18 @@ func TestRegistryStrictPersistenceAndSafety(t *testing.T) {
 	if strings.Contains(string(raw), `"schemaVersion": 0`) {
 		t.Fatal("registry schema was not versioned")
 	}
-	if info, _ := os.Stat(m.store.path); info.Mode().Perm() != 0o600 {
-		t.Fatalf("registry mode = %o", info.Mode().Perm())
+	registryFile, err := os.Open(m.store.path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if info, _ := os.Stat(m.store.dir); info.Mode().Perm() != 0o700 {
-		t.Fatalf("registry dir mode = %o", info.Mode().Perm())
+	if !platformValidatePrivateFile(registryFile) {
+		registryFile.Close()
+		t.Fatal("registry file permissions are not private")
+	}
+	registryFile.Close()
+	if info, err := os.Stat(m.store.dir); err != nil ||
+		!platformValidatePrivateDirectory(m.store.dir, info) {
+		t.Fatal("registry directory permissions are not private")
 	}
 
 	badCases := []string{

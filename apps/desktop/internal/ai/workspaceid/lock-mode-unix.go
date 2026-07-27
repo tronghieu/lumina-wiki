@@ -4,4 +4,4 @@ package workspaceid
 
 import "os"
 
-func platformSecureLockMode(file *os.File) error { return file.Chmod(0o600) }
+func platformSecureLockMode(file *os.File) error { return platformSecurePrivateFile(file) }

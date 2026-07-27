@@ -29,6 +29,17 @@ func TestWindowsStoreAppliesAndVerifiesOwnerSystemDACL(t *testing.T) {
 	}
 }
 
+func TestPlatformProtectHandleAppliesDirectoryDACL(t *testing.T) {
+	directory, err := os.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer directory.Close()
+	if err := platformProtectHandle(directory, 0o700); err != nil {
+		t.Fatalf("platformProtectHandle: %v", err)
+	}
+}
+
 func TestWindowsStoreRejectsPermissiveFinalDACL(t *testing.T) {
 	store := newTestStore(t, t.TempDir())
 	if err := store.Write(context.Background(), []byte("private")); err != nil {

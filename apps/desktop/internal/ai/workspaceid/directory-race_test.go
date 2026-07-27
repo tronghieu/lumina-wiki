@@ -96,3 +96,34 @@ func TestEnsureDirRevalidatesMaliciousEEXISTReplacement(t *testing.T) {
 		t.Fatal("malicious target was followed")
 	}
 }
+
+func TestEnsureDirWaitsForWinningCreatorToHardenDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("native Windows race is covered by the repeated manager test")
+	}
+	store, err := newRegistryStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hardened := make(chan error, 1)
+	store.mkdir = func(path string, _ fs.FileMode) error {
+		if err := os.Mkdir(path, 0o755); err != nil {
+			return err
+		}
+		go func() {
+			time.Sleep(5 * time.Millisecond)
+			hardened <- os.Chmod(path, 0o700)
+		}()
+		return fs.ErrExist
+	}
+	if exists, err := store.ensureDir(true); err != nil || !exists {
+		t.Fatalf("creator hardening race = %v, exists=%v", err, exists)
+	}
+	if err := <-hardened; err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(store.dir)
+	if err != nil || !platformValidatePrivateDirectory(store.dir, info) {
+		t.Fatalf("hardened directory was not accepted: %v", err)
+	}
+}

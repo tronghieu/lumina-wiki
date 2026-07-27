@@ -5,6 +5,7 @@ package workspace
 import (
 	"os"
 	"path"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -18,6 +19,11 @@ type renameInfoHeader struct {
 	FileName        [1]uint16
 }
 
+type ioStatusBlock struct {
+	Status      uintptr
+	Information uintptr
+}
+
 const (
 	deleteAccess       = 0x00010000
 	synchronizeAccess  = 0x00100000
@@ -25,9 +31,13 @@ const (
 	fileShareWrite     = 0x00000002
 	fileShareDelete    = 0x00000004
 	invalidHandleValue = ^uintptr(0)
+	fileRenameInfo     = 10
 )
 
 var reOpenFile = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReOpenFile")
+var nativeWindows = windows.NewLazySystemDLL("ntdll.dll")
+var ntSetInformationFile = nativeWindows.NewProc("NtSetInformationFile")
+var rtlNtStatusToDosError = nativeWindows.NewProc("RtlNtStatusToDosError")
 
 func platformPublishNoReplace(root *os.Root, oldName, newName string) error {
 	source, err := root.OpenFile(oldName, os.O_RDWR, 0)
@@ -69,10 +79,23 @@ func platformPublishNoReplace(root *os.Root, oldName, newName string) error {
 	header.FileNameLength = uint32(len(encoded) * 2)
 	target := unsafe.Slice((*uint16)(unsafe.Pointer(&buffer[nameOffset])), len(encoded))
 	copy(target, encoded)
-	return windows.SetFileInformationByHandle(
-		windows.Handle(renameSource.Fd()),
-		windows.FileRenameInfo,
-		&buffer[0],
-		uint32(len(buffer)),
+	var statusBlock ioStatusBlock
+	status, _, _ := ntSetInformationFile.Call(
+		renameSource.Fd(),
+		uintptr(unsafe.Pointer(&statusBlock)),
+		uintptr(unsafe.Pointer(&buffer[0])),
+		uintptr(len(buffer)),
+		fileRenameInfo,
 	)
+	runtime.KeepAlive(renameSource)
+	runtime.KeepAlive(destinationParent)
+	runtime.KeepAlive(buffer)
+	if int32(status) >= 0 {
+		return nil
+	}
+	code, _, _ := rtlNtStatusToDosError.Call(status)
+	if code == 0 {
+		return syscall.EINVAL
+	}
+	return syscall.Errno(code)
 }

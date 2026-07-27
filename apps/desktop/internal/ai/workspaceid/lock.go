@@ -34,8 +34,7 @@ func (store *registryStore) acquireLock() (func(), error) {
 		_ = file.Close()
 		return nil, errors.New("secure registry lock permissions failed")
 	}
-	secured, err := file.Stat()
-	if err != nil || !privateFileMode(secured) {
+	if !platformValidatePrivateFile(file) {
 		_ = file.Close()
 		return nil, errors.New("registry lock permissions are not private")
 	}
@@ -45,6 +44,16 @@ func (store *registryStore) acquireLock() (func(), error) {
 			return nil, ErrRegistryBusy
 		}
 		return nil, errors.New("kernel registry lock failed")
+	}
+	store.afterLock()
+	locked, statErr := file.Stat()
+	current, lstatErr = os.Lstat(store.lockPath)
+	if statErr != nil || lstatErr != nil || current.Mode()&fs.ModeSymlink != 0 ||
+		!locked.Mode().IsRegular() || !current.Mode().IsRegular() ||
+		!os.SameFile(locked, current) || !platformValidatePrivateFile(file) {
+		_ = store.unlock(file)
+		_ = file.Close()
+		return nil, ErrRegistryConflict
 	}
 	var once sync.Once
 	return func() { once.Do(func() { _ = store.unlock(file); _ = file.Close() }) }, nil

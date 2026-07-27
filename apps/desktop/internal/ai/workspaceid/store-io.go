@@ -18,9 +18,6 @@ func (store *registryStore) readBounded() ([]byte, bool, error) {
 	if before.Mode()&fs.ModeSymlink != 0 || !before.Mode().IsRegular() {
 		return nil, false, errors.New("registry file must be a regular file")
 	}
-	if !privateFileMode(before) {
-		return nil, false, errors.New("registry file permissions must be private")
-	}
 	if before.Size() > MaxRegistryBytes {
 		return nil, false, errors.New("workspace registry exceeds size limit")
 	}
@@ -32,6 +29,9 @@ func (store *registryStore) readBounded() ([]byte, bool, error) {
 	opened, err := file.Stat()
 	if err != nil || !os.SameFile(before, opened) {
 		return nil, false, ErrRegistryConflict
+	}
+	if !platformValidatePrivateFile(file) {
+		return nil, false, errors.New("registry file permissions must be private")
 	}
 	limited := &io.LimitedReader{R: file, N: MaxRegistryBytes + 1}
 	raw, err := io.ReadAll(limited)
@@ -57,8 +57,11 @@ func (store *registryStore) atomicWrite(raw []byte) error {
 			_ = os.Remove(tempPath)
 		}
 	}()
-	if err := temp.Chmod(0o600); err != nil {
+	if err := platformSecurePrivateFile(temp); err != nil {
 		return errors.New("secure registry temporary file failed")
+	}
+	if !platformValidatePrivateFile(temp) {
+		return errors.New("registry temporary file permissions are not private")
 	}
 	if _, err := temp.Write(raw); err != nil {
 		return errors.New("write registry temporary file failed")

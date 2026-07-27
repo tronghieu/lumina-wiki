@@ -149,6 +149,9 @@ func TestBeginRestoreRejectsUnknownInactiveMissingAndReplacedLibraries(t *testin
 		root := makeWorkspace(t)
 		signatures[root] = "stable"
 		id := attachWorkspace(t, manager, root)
+		if err := manager.Close(); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.RemoveAll(root); err != nil {
 			t.Fatal(err)
 		}
@@ -182,11 +185,15 @@ func TestBeginFindPreservesOnlyTheUniquelyMatchedRecentIdentity(t *testing.T) {
 	original := makeWorkspace(t)
 	signatures[original] = "stable"
 	id := attachWorkspace(t, manager, original)
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
 	moved := original + "-moved"
 	if err := os.Rename(original, moved); err != nil {
 		t.Fatal(err)
 	}
 	signatures[moved] = "stable"
+	manager = testManager(t, base, &now, signatures)
 
 	decision, err := manager.BeginFind(id, moved)
 	if err != nil || decision.Kind != AttachRenameConfirmationRequired {

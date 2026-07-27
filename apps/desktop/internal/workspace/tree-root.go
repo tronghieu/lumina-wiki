@@ -26,7 +26,7 @@ func openTrustedTreeWorkspace(path string, expected os.FileInfo) (*os.Root, erro
 		return nil, err
 	}
 	opened, err := root.Stat(".")
-	if err != nil || !os.SameFile(opened, expected) {
+	if err != nil || !sameTreeRoot(opened, expected) {
 		_ = root.Close()
 		return nil, errors.New("workspace root proof changed")
 	}
@@ -50,7 +50,7 @@ func openTreeRoot(path string) (*os.Root, error) {
 		return nil, errors.New("workspace root cannot be opened")
 	}
 	opened, err := root.Stat(".")
-	if err != nil || !os.SameFile(before, opened) {
+	if err != nil || !sameTreeRoot(before, opened) {
 		_ = root.Close()
 		return nil, errors.New("workspace root changed")
 	}
