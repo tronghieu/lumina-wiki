@@ -55,6 +55,12 @@ import {
 } from './prompts.js';
 import { VALID_LOCALES, loadLocale } from './locales.js';
 import { checkForUpdate } from './update-check.js';
+import {
+  RESEARCH_TOOL_FILES,
+  projectWorkspace,
+  workspacePayloadSources,
+  workspaceSkillDefinitions,
+} from './workspace-definition.js';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -64,9 +70,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PACKAGE_ROOT = resolve(__dirname, '..', '..');
 const TEMPLATES_DIR = join(PACKAGE_ROOT, 'src', 'templates');
-const SCRIPTS_DIR = join(PACKAGE_ROOT, 'src', 'scripts');
 const SKILLS_DIR = join(PACKAGE_ROOT, 'src', 'skills');
-const TOOLS_DIR = join(PACKAGE_ROOT, 'src', 'tools');
 
 // Load package.json for version info
 const require = createRequire(import.meta.url);
@@ -105,35 +109,8 @@ async function getColorFns() {
 // Directory scaffold spec
 // ---------------------------------------------------------------------------
 
-/** Directories always created (core pack) */
-const CORE_WIKI_DIRS = [
-  'wiki/sources', 'wiki/concepts', 'wiki/people', 'wiki/summary',
-  'wiki/outputs', 'wiki/graph', 'wiki/readings',
-];
-
-const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
-const READING_WIKI_DIRS  = ['wiki/chapters', 'wiki/characters', 'wiki/themes', 'wiki/plot'];
-const LEARNING_WIKI_DIRS = ['wiki/reflections'];
-
-const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download'];
-const RESEARCH_RAW_DIRS = ['raw/discovered'];
-
-const LUMINA_DIRS = [
-  '_lumina/config',
-  '_lumina/schema',
-  '_lumina/scripts',
-  '_lumina/tools',
-  '_lumina/_state',
-];
-
 const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
-const RESEARCH_TOOL_FILES = [
-  '_env.py', '_cache.py', 'discover.py', 'init_discovery.py', 'prepare_source.py',
-  'fetch_arxiv.py', 'fetch_wikipedia.py', 'fetch_s2.py', 'fetch_deepxiv.py',
-  'fetch_openalex.py', 'fetch_unpaywall.py', 'fetch_core.py', 'resolve_pdf.py',
-  'fetch_rss.py', 'fetch_scite.py', 'fetch_altmetric.py',
-];
 
 async function findEnclosingWorkspace(startDir) {
   let current = resolve(startDir);
@@ -177,8 +154,9 @@ async function readManifestForInstall(projectRoot) {
  * @param {string} [opts.communicationLang]
  * @param {string} [opts.documentOutputLang]
  * @param {boolean} [opts.searchParents] - Find an enclosing Lumina workspace when no directory flag was used
+ * @param {{now?: Date|string}} [installContext] - Internal deterministic clock seam for tests
  */
-export async function installCommand(opts = {}) {
+export async function installCommand(opts = {}, installContext = {}) {
   const { yes = false, reLink = false } = opts;
   const initialDir = opts.directory ?? opts.cwd ?? process.cwd();
   const requestedRoot = resolve(initialDir);
@@ -289,11 +267,21 @@ export async function installCommand(opts = {}) {
 
   const { projectName, researchPurpose, ideTargets, packs, communicationLang, documentOutputLang, locale } = answers;
   const hasResearch = packs.includes('research');
-  const hasReading  = packs.includes('reading');
-  const hasLearning = packs.includes('learning');
   const previousProjectRoot = existingManifest?.resolvedPaths?.projectRoot;
   const relocated = Boolean(previousProjectRoot && resolve(previousProjectRoot) !== projectRoot);
   const effectiveReLink = reLink || relocated;
+  const installInstant = installContext.now === undefined
+    ? new Date()
+    : new Date(installContext.now);
+  if (Number.isNaN(installInstant.valueOf())) {
+    throw new TypeError('installContext.now must be a valid instant');
+  }
+  const workspace = projectWorkspace({
+    ...answers,
+    packageVersion: PKG.version,
+    projectRoot,
+    symlinkStrategies: {},
+  }, { now: installInstant });
 
   console.log('');
   if (isUpgrade) {
@@ -306,23 +294,7 @@ export async function installCommand(opts = {}) {
   }
 
   // 3. Scaffold directories
-  const dirsToCreate = [
-    ...CORE_WIKI_DIRS,
-    ...CORE_RAW_DIRS,
-    ...LUMINA_DIRS,
-    '.agents/skills',
-  ];
-  if (hasResearch) {
-    dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS);
-  }
-  if (hasReading) {
-    dirsToCreate.push(...READING_WIKI_DIRS);
-  }
-  if (hasLearning) {
-    dirsToCreate.push(...LEARNING_WIKI_DIRS);
-  }
-
-  for (const dir of dirsToCreate) {
+  for (const dir of workspace.directories) {
     await ensureDir(join(projectRoot, dir));
   }
 
@@ -341,21 +313,10 @@ export async function installCommand(opts = {}) {
   }
 
   // 4. Template variables
-  const templateVars = {
-    project_name:             projectName,
-    locale:                   locale,
-    communication_language:   communicationLang,
-    document_output_language: documentOutputLang,
-    pack_core:     true,
-    pack_research: hasResearch,
-    pack_reading:  hasReading,
-    pack_learning: hasLearning,
-    created_at:    new Date().toISOString().slice(0, 10),
-    schema_version: String(MANIFEST_SCHEMA_VERSION),
-  };
+  const templateVars = workspace.templateVariables;
 
   // 5. Render + write config
-  await renderAndWriteConfig(projectRoot, templateVars, answers);
+  await renderAndWriteConfig(projectRoot, workspace.config);
 
   // 6. Render + write README (with region awareness)
   await renderAndWriteReadme(projectRoot, templateVars, researchPurpose, isUpgrade, yes, t);
@@ -370,7 +331,7 @@ export async function installCommand(opts = {}) {
   await copyChangelog(projectRoot);
 
   // 9. Copy skills
-  const skillRows = await copySkills(projectRoot, packs, {
+  const skillRows = await copySkills(projectRoot, workspace.skills, {
     claudeCode: ideTargets.includes('claude_code'),
   });
   await reconcileRemovedSkills(projectRoot, previousSkillRows, skillRows);
@@ -413,33 +374,27 @@ export async function installCommand(opts = {}) {
   }
 
   // 16. Build files-manifest rows
-  const fileRows = await buildFilesManifest(projectRoot, packs, PKG.version);
+  const fileRows = await buildFilesManifest(
+    projectRoot,
+    workspace.state.managedFilePaths,
+    PKG.version,
+  );
 
   // 17. Write three state files atomically
-  const now = new Date().toISOString();
   // Run schema migrations on the existing manifest first so flags like
   // legacyMigrationNeeded are preserved into the final write.
   const migrated = existingManifest
     ? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION)
     : {};
-  const manifest = {
-    ...migrated,
-    schemaVersion:    MANIFEST_SCHEMA_VERSION,
-    packageVersion:   PKG.version,
-    locale:           locale,
-    installedAt:      existingManifest?.installedAt ?? now,
-    updatedAt:        now,
-    packs:            Object.fromEntries(packs.map(p => [p, { version: PKG.version, source: 'built-in' }])),
-    ideTargets,
+  const finalWorkspace = projectWorkspace({
+    ...answers,
+    baseManifest: migrated,
+    packageVersion: PKG.version,
+    installedAt: existingManifest?.installedAt,
     symlinkStrategies,
-    resolvedPaths: {
-      projectRoot,
-      wiki:    join(projectRoot, 'wiki'),
-      raw:     join(projectRoot, 'raw'),
-      agents:  join(projectRoot, '.agents'),
-      lumina:  join(projectRoot, '_lumina'),
-    },
-  };
+    projectRoot,
+  }, { now: installInstant });
+  const manifest = finalWorkspace.state.manifest;
 
   await writeManifest(projectRoot, manifest);
   await writeSkillsManifest(projectRoot, skillRows);
@@ -857,70 +812,8 @@ function maybeWarnAiDraft(localeMod) {
   }
 }
 
-async function renderAndWriteConfig(projectRoot, templateVars, answers) {
+async function renderAndWriteConfig(projectRoot, config) {
   const yaml = await import('js-yaml');
-
-  // Build config object
-  const config = {
-    project_name: templateVars.project_name,
-    locale: templateVars.locale,
-    communication_language: templateVars.communication_language,
-    document_output_language: templateVars.document_output_language,
-    created_at: templateVars.created_at,
-    ide_targets: {
-      claude_code: answers.ideTargets.includes('claude_code'),
-      codex:       answers.ideTargets.includes('codex'),
-      cursor:      answers.ideTargets.includes('cursor'),
-      gemini_cli:  answers.ideTargets.includes('gemini_cli'),
-      qwen:        answers.ideTargets.includes('qwen'),
-      iflow:       answers.ideTargets.includes('iflow'),
-      generic:     answers.ideTargets.includes('generic'),
-    },
-    packs: {
-      core:     true,
-      research: answers.packs.includes('research'),
-      reading:  answers.packs.includes('reading'),
-      learning: answers.packs.includes('learning'),
-    },
-    paths: {
-      raw:     'raw',
-      wiki:    'wiki',
-      agents:  '.agents',
-      _lumina: '_lumina',
-      index:   'wiki/index.md',
-      log:     'wiki/log.md',
-    },
-    wiki: {
-      link_syntax:  'obsidian',
-      slug_style:   'kebab-case',
-      log_prefix:   '## [{{date}}] {{skill}} | {{details}}',
-      bidirectional_links: {
-        mode: 'exempt-only',
-        exemptions: ['foundations/**', 'outputs/**', '*://*', ...(answers.packs.includes('learning') ? ['reflections/**'] : [])],
-      },
-      graph: {
-        enabled: true,
-        edge_types_core: ['related_to', 'builds_on', 'contradicts', 'cites', 'mentions', 'part_of'],
-      },
-    },
-    lint: {
-      default_mode: 'report',
-      checks: {
-        broken_links: true,
-        orphan_pages: true,
-        missing_reverse_links: true,
-        log_format: true,
-        index_freshness: true,
-        stale_claims: false,
-      },
-    },
-    integrations: {
-      qmd_search: false,
-      obsidian_vault: false,
-      marp_slides: false,
-    },
-    telemetry: false,
-  };
 
   const configPath = join(projectRoot, '_lumina', 'config', 'lumina.config.yaml');
   const configContent = `# lumina.config.yaml — workspace config managed by lumina-wiki installer.\n` +
@@ -1066,7 +959,7 @@ function previousManagedSkillRows(previousSkillRows, existingManifest) {
   const previousStrategies = existingManifest?.symlinkStrategies ?? {};
   const claudeWasSelected = existingManifest?.ideTargets?.includes('claude_code') ?? false;
   const previousPacks = Object.keys(existingManifest?.packs ?? {});
-  for (const skill of getSkillDefs(previousPacks)) {
+  for (const skill of workspaceSkillDefinitions(previousPacks)) {
     if (!rowsById.has(skill.canonicalId)) {
       rowsById.set(skill.canonicalId, {
         canonical_id: skill.canonicalId,
@@ -1167,42 +1060,32 @@ function buildIdeStub(target, vars) {
 }
 
 async function copyScripts(projectRoot) {
-  const destDir = join(projectRoot, '_lumina', 'scripts');
-  const scriptFiles = ['wiki.mjs', 'lint.mjs', 'reset.mjs', 'schemas.mjs', 'discover-runner.mjs', 'external-ids.mjs', 'parse-ids.mjs', 'merge-ids.mjs', 'build-source.mjs'];
-  // Parallel: each copy is independent; destDir is created earlier.
-  await Promise.all(scriptFiles.map(async file => {
+  const sources = workspacePayloadSources(['core']).filter(source => source.group === 'script');
+  await Promise.all(sources.map(async source => {
     try {
-      await copyFile(join(SCRIPTS_DIR, file), join(destDir, file));
+      const destination = join(projectRoot, source.targetPath);
+      await ensureDir(dirname(destination));
+      await copyFile(join(PACKAGE_ROOT, source.sourcePath), destination);
     } catch (_) {
       // Scripts may not exist yet (P4+ work); skip gracefully
-    }
-  }));
-  // Ensure the lib subdir once, then parallelize the file copies.
-  const libDir = join(destDir, 'lib');
-  await ensureDir(libDir);
-  const libFiles = ['watchlist-config.mjs', 'discovery-state.mjs'];
-  await Promise.all(libFiles.map(async file => {
-    try {
-      await copyFile(join(SCRIPTS_DIR, 'lib', file), join(libDir, file));
-    } catch (_) {
-      // Script libs may not exist yet; skip gracefully
     }
   }));
 }
 
 async function copyChangelog(projectRoot) {
-  const src = join(PACKAGE_ROOT, 'CHANGELOG.md');
-  const dest = join(projectRoot, '_lumina', 'CHANGELOG.md');
+  const source = workspacePayloadSources(['core']).find(item => item.group === 'changelog');
   try {
-    await copyFile(src, dest);
+    await copyFile(
+      join(PACKAGE_ROOT, source.sourcePath),
+      join(projectRoot, source.targetPath),
+    );
   } catch (_) {
     // CHANGELOG may not exist in older snapshots; skip gracefully
   }
 }
 
-async function copySkills(projectRoot, packs, { claudeCode = false } = {}) {
+async function copySkills(projectRoot, skillDefs, { claudeCode = false } = {}) {
   const skillRows = [];
-  const skillDefs = getSkillDefs(packs);
 
   for (const skill of skillDefs) {
     // srcPackPath uses forward slashes — join handles OS differences
@@ -1240,102 +1123,38 @@ function replaceOrAppendSchemaRegion(existingContent, newSchemaContent) {
   return `${existingContent}${separator}${openMarker}${schemaBody}${closeMarker}\n`;
 }
 
-function getSkillDefs(packs) {
-  const defs = [];
-
-  if (packs.includes('core')) {
-    const coreSkills = [
-      { name: 'init',            canonicalId: 'lumi-init',            displayName: '/lumi-init' },
-      { name: 'ingest',          canonicalId: 'lumi-ingest',          displayName: '/lumi-ingest' },
-      { name: 'ask',             canonicalId: 'lumi-ask',             displayName: '/lumi-ask' },
-      { name: 'edit',            canonicalId: 'lumi-edit',            displayName: '/lumi-edit' },
-      { name: 'check',           canonicalId: 'lumi-check',           displayName: '/lumi-check' },
-      { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
-      { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
-      { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
-      { name: 'help',            canonicalId: 'lumi-help',            displayName: '/lumi-help' },
-    ];
-    for (const s of coreSkills) {
-      defs.push({ ...s, pack: 'core', srcPackPath: 'core' });
-    }
-  }
-
-  if (packs.includes('research')) {
-    const researchSkills = [
-      { name: 'discover', canonicalId: 'lumi-research-discover', displayName: '/lumi-research-discover' },
-      { name: 'survey',   canonicalId: 'lumi-research-survey',   displayName: '/lumi-research-survey' },
-      { name: 'prefill',  canonicalId: 'lumi-research-prefill',  displayName: '/lumi-research-prefill' },
-      { name: 'setup',    canonicalId: 'lumi-research-setup',    displayName: '/lumi-research-setup' },
-      { name: 'topic',     canonicalId: 'lumi-research-topic',     displayName: '/lumi-research-topic' },
-      { name: 'rank',      canonicalId: 'lumi-research-rank',      displayName: '/lumi-research-rank' },
-      { name: 'watchlist', canonicalId: 'lumi-research-watchlist', displayName: '/lumi-research-watchlist' },
-      { name: 'watch-run', canonicalId: 'lumi-research-watch-run', displayName: '/lumi-research-watch-run' },
-    ];
-    for (const s of researchSkills) {
-      defs.push({ ...s, pack: 'research', srcPackPath: 'packs/research' });
-    }
-  }
-
-  if (packs.includes('reading')) {
-    const readingSkills = [
-      { name: 'chapter-ingest',   canonicalId: 'lumi-reading-chapter-ingest',   displayName: '/lumi-reading-chapter-ingest' },
-      { name: 'character-track',  canonicalId: 'lumi-reading-character-track',  displayName: '/lumi-reading-character-track' },
-      { name: 'theme-map',        canonicalId: 'lumi-reading-theme-map',        displayName: '/lumi-reading-theme-map' },
-      { name: 'plot-recap',       canonicalId: 'lumi-reading-plot-recap',       displayName: '/lumi-reading-plot-recap' },
-    ];
-    for (const s of readingSkills) {
-      defs.push({ ...s, pack: 'reading', srcPackPath: 'packs/reading' });
-    }
-  }
-
-  if (packs.includes('learning')) {
-    const learningSkills = [
-      { name: 'reflect', canonicalId: 'lumi-learning-reflect', displayName: '/lumi-learning-reflect' },
-    ];
-    for (const s of learningSkills) {
-      defs.push({ ...s, pack: 'learning', srcPackPath: 'packs/learning' });
-    }
-  }
-
-  return defs;
-}
-
 async function copyTools(projectRoot, { research }) {
-  const destDir = join(projectRoot, '_lumina', 'tools');
-  const coreTools = ['extract_pdf.py', 'fetch_pdf.py', 'id_utils.py', 'verify_quotes.py'];
-  const toolFiles = research ? [...coreTools, ...RESEARCH_TOOL_FILES] : coreTools;
+  const packs = research ? ['core', 'research'] : ['core'];
+  const sources = workspacePayloadSources(packs).filter(source => source.group === 'tool');
   // Parallelize: each copy is independent and destDir already exists.
   // Sequential awaits were the main Windows cold-start regression in v1.4
   // (~30 ms per file × 14 files dominates on NTFS + Defender).
-  await Promise.all(toolFiles.map(async file => {
+  await Promise.all(sources.map(async source => {
     try {
-      await copyFile(join(TOOLS_DIR, file), join(destDir, file));
+      await copyFile(
+        join(PACKAGE_ROOT, source.sourcePath),
+        join(projectRoot, source.targetPath),
+      );
     } catch (_) {
       // Tool not yet authored; skip
     }
   }));
-  try {
-    await copyFile(join(TOOLS_DIR, 'requirements.txt'), join(destDir, 'requirements.txt'));
-  } catch (_) {
-    // requirements.txt missing in dev; skip
-  }
 }
 
 async function renderSchemaDocs(projectRoot, templateVars) {
-  const schemaDir = join(projectRoot, '_lumina', 'schema');
-  const schemaDocs = ['page-templates.md', 'cross-reference-packs.md', 'graph-packs.md', 'lumi-help.csv', 'lumi-help-runbook.md'];
+  const schemaSources = workspacePayloadSources(['core']).filter(source => source.group === 'schema');
 
   // Parallel render + atomicWrite. Each doc is independent; schemaDir is
   // already created by the dirsToCreate loop in installCommand.
-  await Promise.all(schemaDocs.map(async doc => {
-    const templatePath = join(TEMPLATES_DIR, '_lumina', 'schema', doc);
-    const destPath = join(schemaDir, doc);
+  await Promise.all(schemaSources.map(async source => {
+    const templatePath = join(PACKAGE_ROOT, source.sourcePath);
+    const destPath = join(projectRoot, source.targetPath);
     let content;
     try {
       const raw = await readFile(templatePath, 'utf8');
       content = render(raw, templateVars);
     } catch (_) {
-      content = `# ${doc}\n\n_This file is managed by the Lumina installer._\n`;
+      content = `# ${basename(source.targetPath)}\n\n_This file is managed by the Lumina installer._\n`;
     }
     await atomicWrite(destPath, content);
   }));
@@ -1402,7 +1221,8 @@ async function writeGitignore(projectRoot) {
   } catch (_) {}
 
   if (!exists) {
-    const templatePath = join(TEMPLATES_DIR, '.gitignore');
+    const source = workspacePayloadSources(['core']).find(item => item.group === 'gitignore');
+    const templatePath = join(PACKAGE_ROOT, source.sourcePath);
     let content;
     try {
       content = await readFile(templatePath, 'utf8');
@@ -1415,15 +1235,14 @@ async function writeGitignore(projectRoot) {
 }
 
 async function seedWikiFiles(projectRoot) {
-  const indexPath = join(projectRoot, 'wiki', 'index.md');
-  const logPath   = join(projectRoot, 'wiki', 'log.md');
-
-  // Only seed if files don't exist
-  try { await access(indexPath, fsConstants.F_OK); } catch (_) {
-    await atomicWrite(indexPath, '# Wiki Index\n\n_This catalog is updated by /lumi-ingest and /lumi-init._\n');
-  }
-  try { await access(logPath, fsConstants.F_OK); } catch (_) {
-    await atomicWrite(logPath, '# Wiki Log\n\n_Append-only activity log. Updated by each skill invocation._\n');
+  const seeds = workspacePayloadSources(['core']).filter(source => source.group === 'seed');
+  for (const seed of seeds) {
+    const destination = join(projectRoot, seed.targetPath);
+    try {
+      await access(destination, fsConstants.F_OK);
+    } catch (_) {
+      await atomicWrite(destination, seed.content);
+    }
   }
 }
 
@@ -1455,24 +1274,13 @@ async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reL
   return { strategies, errors };
 }
 
-async function buildFilesManifest(projectRoot, packs, pkgVersion) {
-  const managedFiles = [
-    'README.md',
-    '_lumina/config/lumina.config.yaml',
-    '_lumina/schema/page-templates.md',
-    '_lumina/schema/cross-reference-packs.md',
-    '_lumina/schema/graph-packs.md',
-    '_lumina/schema/lumi-help.csv',
-    '_lumina/schema/lumi-help-runbook.md',
-    'CLAUDE.md',
-    'AGENTS.md',
-    'GEMINI.md',
-    'QWEN.md',
-    'IFLOW.md',
-    '.cursor/rules/lumina.mdc',
-  ];
+async function buildFilesManifest(projectRoot, managedFilePathsInput, pkgVersion) {
+  const managedFiles = [...managedFilePathsInput];
+  const packs = managedFilePathsInput.some(path => path.startsWith('.env'))
+    ? ['research']
+    : [];
 
-  if (packs.includes('research')) {
+  if (packs.includes('research') && !managedFiles.some(path => path.startsWith('.env'))) {
     managedFiles.push('.env.example');
   }
 

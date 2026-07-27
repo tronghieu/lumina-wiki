@@ -71,6 +71,7 @@ const prohibitedPatterns = [
 const requiredFiles = [
   'bin/lumina.js',
   'src/installer/commands.js',
+  'src/installer/workspace-definition.js',
   'src/scripts/wiki.mjs',
   'src/scripts/lint.mjs',
   'src/scripts/reset.mjs',

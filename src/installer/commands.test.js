@@ -160,6 +160,41 @@ describe('installCommand', () => {
     }
   });
 
+  test('core generic install preserves the canonical no-stub output contract', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({
+        cwd: tmp,
+        yes: true,
+        noUpdate: true,
+        packs: ['core'],
+        ideTargets: ['generic'],
+        projectName: 'Lumina Library',
+        communicationLang: 'English',
+        documentOutputLang: 'English',
+      });
+
+      const config = await readFile(join(tmp, '_lumina', 'config', 'lumina.config.yaml'), 'utf8');
+      assert.match(config, /project_name: Lumina Library/);
+      assert.match(config, /generic: true/);
+      assert.match(config, /research: false/);
+      assert.match(config, /reading: false/);
+      assert.match(config, /learning: false/);
+      const configDate = config.match(/^created_at: '?(\d{4}-\d{2}-\d{2})'?$/m)?.[1];
+      const manifest = await readManifest(tmp);
+      assert.equal(manifest.installedAt.slice(0, 10), configDate);
+      assert.equal(manifest.updatedAt, manifest.installedAt);
+      const skills = await readSkillsManifest(tmp);
+      assert.equal(skills.length, 9);
+      assert.ok(skills.every(row => row.target_link_path === ''));
+      await assert.rejects(() => access(join(tmp, 'CLAUDE.md')));
+      await assert.rejects(() => access(join(tmp, 'AGENTS.md')));
+      await assert.rejects(() => access(join(tmp, '.claude')));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('first install merges schema into an existing README without markers', async () => {
     const tmp = await makeTmpDir();
     try {

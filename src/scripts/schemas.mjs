@@ -27,6 +27,26 @@ export const EXTERNAL_ID_NAMESPACES = Object.freeze(['doi', 'arxiv', 's2', 'url'
 /** @type {string} */
 export const SCHEMA_VERSION = '0.1.0';
 
+/** Ordered lint check IDs in execution and reporting order. */
+export const LINT_CHECK_IDS = Object.freeze([
+  'L01',
+  'L02',
+  'L03',
+  'L04',
+  'L05',
+  'L06',
+  'L07',
+  'L08',
+  'L09',
+  'L10',
+  'L11',
+  'L12',
+  'L13',
+  'L14',
+  'L16',
+  'L17',
+]);
+
 // ---------------------------------------------------------------------------
 // EXEMPTION_GLOBS
 // Default globs for `exempt-only` bidirectional-link mode.

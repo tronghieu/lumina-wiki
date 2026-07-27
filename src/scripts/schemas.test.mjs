@@ -5,7 +5,21 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ENTITY_DIRS, EDGE_TYPES, EXEMPTION_GLOBS, REQUIRED_FRONTMATTER } from './schemas.mjs';
+import {
+  ENTITY_DIRS,
+  EDGE_TYPES,
+  EXEMPTION_GLOBS,
+  LINT_CHECK_IDS,
+  REQUIRED_FRONTMATTER,
+} from './schemas.mjs';
+
+test('LINT_CHECK_IDS owns the complete ordered lint contract', () => {
+  assert.deepEqual(LINT_CHECK_IDS, [
+    'L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08',
+    'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17',
+  ]);
+  assert.ok(Object.isFrozen(LINT_CHECK_IDS));
+});
 
 test('ENTITY_DIRS contains reflections entry with pack learning', () => {
   assert.ok('reflections' in ENTITY_DIRS, 'reflections key missing from ENTITY_DIRS');

@@ -98,6 +98,9 @@ function substituteVariables(text, vars) {
 // renderReadme — three-region structure
 // ---------------------------------------------------------------------------
 
+export const DEFAULT_README_PURPOSE =
+  '_(Describe what this wiki is for. Edit freely — Lumina will not touch this section on upgrade.)_';
+
 /**
  * Render README.md from template with three distinct regions:
  *   1. Title: "# {{project_name}}" (top)
@@ -114,7 +117,7 @@ export function renderReadme(template, variables, purpose = '') {
   // Insert purpose section after the first H1 line
   const purposeText = purpose && purpose.trim()
     ? purpose.trim()
-    : '_(Describe what this wiki is for. Edit freely — Lumina will not touch this section on upgrade.)_';
+    : DEFAULT_README_PURPOSE;
 
   // Wrap the rendered content in schema markers if they're not already there
   // The template itself may already include the markers
