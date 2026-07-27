@@ -9,11 +9,12 @@ import (
 )
 
 type Store struct {
-	raw               *appprivate.Store
-	quarantine        *appprivate.Store
-	configBase        string
-	reset             *resetCoordinator
-	resetBeforeDelete func() error
+	raw                *appprivate.Store
+	quarantine         *appprivate.Store
+	configBase         string
+	reset              *resetCoordinator
+	resetBeforeDelete  func() error
+	rawUpdateErrorHook func(error)
 }
 
 func NewStore(configBase string) (*Store, error) {
@@ -30,8 +31,9 @@ func NewStore(configBase string) (*Store, error) {
 	}
 	return &Store{
 		raw: raw, quarantine: quarantine, configBase: configBase,
-		reset:             newResetCoordinator(),
-		resetBeforeDelete: func() error { return nil },
+		reset:              newResetCoordinator(),
+		resetBeforeDelete:  func() error { return nil },
+		rawUpdateErrorHook: func(error) {},
 	}, nil
 }
 

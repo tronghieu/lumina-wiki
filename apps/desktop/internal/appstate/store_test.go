@@ -152,6 +152,15 @@ func TestConcurrentActivationsAreAtomicAndBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var errorMu sync.Mutex
+	var rawErrors []error
+	recordRawError := func(err error) {
+		errorMu.Lock()
+		defer errorMu.Unlock()
+		rawErrors = append(rawErrors, err)
+	}
+	store.rawUpdateErrorHook = recordRawError
+	second.rawUpdateErrorHook = recordRawError
 	var wait sync.WaitGroup
 	for index := byte(0); index < 16; index++ {
 		wait.Add(1)
@@ -168,12 +177,15 @@ func TestConcurrentActivationsAreAtomicAndBounded(t *testing.T) {
 		}(index)
 	}
 	wait.Wait()
+	errorMu.Lock()
+	capturedErrors := append([]error(nil), rawErrors...)
+	errorMu.Unlock()
 	snapshot, err := store.Snapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(snapshot.Recent) != MaxRecentWorkspaces || snapshot.Revision != 16 {
-		t.Fatalf("snapshot=%#v", snapshot)
+		t.Fatalf("snapshot=%#v rawErrors=%v", snapshot, capturedErrors)
 	}
 }
 

@@ -121,6 +121,7 @@ func (store *Store) update(ctx context.Context, mutate func(*Snapshot) error) er
 		return err
 	}
 	if err != nil {
+		store.rawUpdateErrorHook(err)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

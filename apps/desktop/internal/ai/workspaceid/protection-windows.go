@@ -4,6 +4,7 @@ package workspaceid
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
@@ -144,7 +145,10 @@ func validateRegistryHandle(file *os.File) error {
 		return errors.New("registry owner is unsafe")
 	}
 	control, _, err := descriptor.Control()
-	if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+	if err != nil {
+		return errors.New("read registry DACL control failed")
+	}
+	if control&windows.SE_DACL_PROTECTED == 0 {
 		return errors.New("registry DACL is not protected")
 	}
 	system, err := windows.CreateWellKnownSid(windows.WinLocalSystemSid)
@@ -154,28 +158,46 @@ func validateRegistryHandle(file *os.File) error {
 	expected := map[string]bool{tokenUser.User.Sid.String(): false}
 	expected[system.String()] = false
 	dacl, _, err := descriptor.DACL()
-	if err != nil || dacl == nil || int(dacl.AceCount) != len(expected) {
-		return errors.New("registry DACL is unsafe")
+	if err != nil {
+		return errors.New("read registry DACL failed")
+	}
+	if dacl == nil {
+		return errors.New("registry DACL is absent")
+	}
+	if int(dacl.AceCount) != len(expected) {
+		return fmt.Errorf("registry DACL ACE count is unsafe: got %d want %d", dacl.AceCount, len(expected))
 	}
 	for index := uint16(0); index < dacl.AceCount; index++ {
 		var ace *windows.ACCESS_ALLOWED_ACE
-		if err := windows.GetAce(dacl, uint32(index), &ace); err != nil ||
-			ace == nil ||
-			ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE ||
-			ace.Header.AceFlags != 0 ||
-			ace.Mask != registryFileAllAccess {
-			return errors.New("registry DACL is unsafe")
+		if err := windows.GetAce(dacl, uint32(index), &ace); err != nil || ace == nil {
+			return fmt.Errorf("read registry DACL ACE %d failed", index)
+		}
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE {
+			return fmt.Errorf("registry DACL ACE %d type is unsafe", index)
+		}
+		if ace.Header.AceFlags != 0 {
+			return fmt.Errorf("registry DACL ACE %d flags are unsafe: %#x", index, ace.Header.AceFlags)
+		}
+		if ace.Mask != registryFileAllAccess {
+			return fmt.Errorf("registry DACL ACE %d mask is unsafe: %#x", index, ace.Mask)
 		}
 		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
 		seen, ok := expected[sid.String()]
-		if !ok || seen {
-			return errors.New("registry DACL is unsafe")
+		if !ok {
+			return fmt.Errorf("registry DACL ACE %d principal is unexpected", index)
+		}
+		if seen {
+			return fmt.Errorf("registry DACL ACE %d principal is duplicated", index)
 		}
 		expected[sid.String()] = true
 	}
-	for _, seen := range expected {
+	for principal, seen := range expected {
 		if !seen {
-			return errors.New("registry DACL is unsafe")
+			category := "current user"
+			if principal == system.String() {
+				category = "SYSTEM"
+			}
+			return fmt.Errorf("registry DACL is missing %s", category)
 		}
 	}
 	return nil
