@@ -227,8 +227,8 @@ Lumina-Wiki is evolving rapidly. Here is our user-facing roadmap:
 - [ ] **Multimedia Support:** Process YouTube videos and Audio recordings via transcripts.
 - [ ] **Knowledge Graph Auditing:** Automated checks for contradictions and structural drift.
 
-**Proposed**
-- [ ] **Desktop Application:** A dedicated visual environment for easier wiki management.
+**Desktop preview**
+- [ ] **Desktop Application:** An unreleased app-only preview can create or safely open a local library, remember recent libraries, and restore your latest conversation and reading view. Native installed-app acceptance and signed distribution are still pending; see the [Desktop user guide](docs/user-guide/en.md#lumina-desktop-preview).
 - [ ] **Specialized Science Packs:** Deep integration for bio-medical and physics researchers.
 
 ---

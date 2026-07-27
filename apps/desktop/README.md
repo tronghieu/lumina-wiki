@@ -1,8 +1,8 @@
 # Lumina Desktop
 
-Lumina Desktop is a Wails 3 companion app for existing Lumina-Wiki workspaces.
-Its reference-faithful workspace shell combines the real workspace tree, graph,
-Markdown notes, checks, source import, and an optional AI agent without changing
+Lumina Desktop is an unreleased Wails 3 app-only preview for local Lumina-Wiki
+libraries. It can create a first library, safely open an existing one, browse
+notes and relationships, and continue workspace-scoped chat without changing
 the root npm CLI package.
 
 ## Stack
@@ -65,27 +65,28 @@ npm run test:a11y
 ## Scope
 
 This app is intentionally isolated from the root npm package. Do not add
-desktop dependencies to the root `package.json`. AI, retrieval, and navigation
-keep the active workspace immutable. The existing check and non-overwriting
-source-import flows remain the only operational surfaces; graph and wiki
-mutations still belong to existing Lumina tools, not direct app edits.
+desktop dependencies to the root `package.json`.
 
-Workspace surface:
+Current app-only preview:
 
-- `Run Check` executes the installed workspace script at
-  `_lumina/scripts/lint.mjs --summary` through Go `exec.CommandContext`.
-- `Import` copies one selected file into `raw/sources/`; it refuses overwrites
-  and rejects symlink sources.
-- `Open Workspace` starts with the native folder picker, then requires backend
-  confirmation before activating a session capability for AI, tree, and history
-  reads.
+- A first launch with no valid recent library shows Welcome with Create library
+  and Open existing library paths.
+- Create provisions and activates a standard library from embedded, generated
+  assets. The running app does not discover or invoke Node.js, npm, Python, the
+  Lumina CLI, or workspace executables.
+- Open starts with the native folder picker, validates the selected library,
+  confirms its identity, and does not change its names, types, modes, or bytes.
+- Recent libraries live in private local application data. A later process can
+  restore the latest saved conversation, open note, and Chat, Note, or Graph
+  focus independently for each library.
+- A moved, missing, or replaced recent library fails closed and returns to
+  recovery instead of silently attaching to a different directory.
 - The responsive shell renders the real bounded workspace tree and `wiki/`
   graph, with no sample workspace content.
 - Selecting a graph node shows the full Markdown note content in the inspector.
-- `Run Check` shows both the summary and detailed stdout/stderr output in the
-  inspector.
-- `Choose Source` uses the native file picker; the importer service still
-  performs all filesystem validation before copying.
+- Check, Import, update, repair, reset, and other maintenance actions are
+  temporarily unavailable from the current renderer surface. Graph and wiki
+  mutations remain outside this preview.
 
 AI surface:
 
@@ -113,15 +114,18 @@ AI surface:
 - If semantic search is unavailable, chat continues with workspace text search
   and shows that fallback in the Agent panel.
 - Chat, search, profiles, history, citations, and semantic indexes do not write
-  into the active workspace. Import remains the sole exception and adds exactly
-  one new, non-overwriting file under `raw/sources/`.
+  into the active workspace.
 
-The desktop app is not released yet. Visual, accessibility, workspace
-immutability, secret-boundary, native-package, and packaged-GUI gates have
-passed. The desktop workflow packages and launch-smokes the app on macOS,
-Windows, and Linux. Full execution evidence is recorded in the
-[completed redesign plan](../../plans/260711-1407-lumina-desktop-ai-redesign/plan.md).
-Signed distribution remains a release prerequisite.
+The desktop app is not released yet. Local automated tests cover the app-only
+library lifecycle, workspace immutability, continuity, privacy boundaries,
+visual behavior, and accessibility. The
+[Desktop workflow](../../.github/workflows/desktop.yml) defines native package,
+install, and launch jobs for macOS, Windows, and Linux; fresh workflow results
+and digest-bound manual installed-GUI acceptance reports are still required.
+Signing, macOS notarization, and trusted distribution also remain release
+prerequisites.
+Track the remaining product work in the
+[Desktop build-to-complete roadmap](../../docs/desktop-app-roadmap.md).
 
 Generated Wails packaging assets under `build/` are committed because native
 desktop builds use them directly. Recreate them with:

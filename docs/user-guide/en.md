@@ -24,6 +24,7 @@ Your role is to choose sources, ask questions, check the direction of the analys
 - [What Can You Use Lumina-Wiki For?](#what-can-you-use-lumina-wiki-for)
 - [How Does Lumina-Wiki Work?](#how-does-lumina-wiki-work)
 - [Installation](#installation)
+- [Lumina Desktop Preview](#lumina-desktop-preview)
 - [Getting Started with /lumi-help](#getting-started-with-lumi-help)
 - [How to Call Commands in an AI Agent](#how-to-call-commands-in-an-ai-agent)
 - [Quick Start](#quick-start)
@@ -175,6 +176,16 @@ When you see the **[done]** message in green, congratulations! Your "office" is 
 
 *   **To change settings or upgrade**: Just run the `npx lumina-wiki install` command again. Your existing data **will not be lost**.
 *   **To uninstall**: Run the command `npx lumina-wiki uninstall`. This only removes system files; **your documents and notes will always stay safe**.
+
+## Lumina Desktop Preview
+
+Lumina Desktop is an unreleased app-only preview for people participating in Desktop testing. It is not yet a public download. If you are developing or evaluating it from this repository, use the setup in the [Desktop README](../../apps/desktop/README.md).
+
+On first launch, the Welcome screen lets you create your first local library or open an existing Lumina library. Create prepares and opens a standard library without needing Node.js, npm, Python, the Lumina CLI, or a terminal while the app is running. Open checks the selected library before use and does not rewrite its files.
+
+The app remembers recent libraries in its own private local data. When you return, it can restore the latest saved conversation, the note you were reading, and your Chat, Note, or Graph view for that library. If a recent library was moved, deleted, or replaced, the app stops and returns you to a safe recovery path instead of opening a different folder as the old library. Conversation history is optional and can be disabled or cleared in the app.
+
+This preview is mainly for creating or opening a library, reading notes and relationships, and continuing workspace-scoped chat. Check, Import, update, repair, reset, and other maintenance flows are not yet available through the current app-only surface. Use the CLI workflow for those tasks for now. Native installed-app acceptance on macOS, Windows, and Linux, plus signing and trusted distribution, are also still pending.
 
 ## Getting Started with /lumi-help
 

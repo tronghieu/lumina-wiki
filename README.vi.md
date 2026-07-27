@@ -227,8 +227,8 @@ Lumina-Wiki đang phát triển nhanh chóng. Dưới đây là lộ trình hư�
 - [ ] **Hỗ trợ đa phương tiện:** Xử lý video YouTube và ghi âm Audio thông qua transcript.
 - [ ] **Kiểm định đồ thị tri thức:** Tự động phát hiện mâu thuẫn và sai lệch cấu trúc.
 
-**Dự kiến**
-- [ ] **Ứng dụng Desktop:** Môi trường giao diện chuyên dụng để quản lý wiki dễ dàng hơn.
+**Bản xem trước Desktop**
+- [ ] **Ứng dụng Desktop:** Bản xem trước app-only chưa phát hành có thể tạo hoặc mở an toàn một thư viện cục bộ, ghi nhớ các thư viện gần đây và khôi phục cuộc trò chuyện cùng màn hình đọc gần nhất. Việc nghiệm thu ứng dụng đã cài đặt trên từng hệ điều hành và phát hành có chữ ký vẫn đang chờ hoàn tất; xem [hướng dẫn Desktop](docs/user-guide/vi.md#bản-xem-trước-lumina-desktop).
 - [ ] **Gói Khoa học Chuyên dụng:** Tích hợp sâu cho các nhà nghiên cứu sinh học, y tế và vật lý.
 
 ---

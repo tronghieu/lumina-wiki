@@ -32,6 +32,7 @@ Vai trò của bạn là chọn nguồn, đặt câu hỏi, kiểm tra hướng 
 - [Bạn Có Thể Dùng Lumina-Wiki Để Làm Gì?](#bạn-có-thể-dùng-lumina-wiki-để-làm-gì)
 - [Lumina-Wiki Hoạt Động Như Thế Nào?](#lumina-wiki-hoạt-động-như-thế-nào)
 - [Cài Đặt](#cài-đặt)
+- [Bản Xem Trước Lumina Desktop](#bản-xem-trước-lumina-desktop)
 - [Làm Quen Với /lumi-help](#làm-quen-với-lumi-help)
 - [Cách Gọi Lệnh Trong AI Agent](#cách-gọi-lệnh-trong-ai-agent)
 - [Bắt Đầu Nhanh](#bắt-đầu-nhanh)
@@ -195,6 +196,16 @@ Nếu bạn không muốn sử dụng Lumina-Wiki nữa, hãy chạy lệnh sau 
 npx lumina-wiki uninstall
 ```
 Lệnh này sẽ dọn dẹp các tệp hệ thống do Lumina-Wiki tạo ra. Nó sẽ **không bao giờ xóa** các tài liệu gốc của bạn trong `raw/` hoặc kho tri thức trong `wiki/` mà bạn đã dày công xây dựng.
+
+## Bản Xem Trước Lumina Desktop
+
+Lumina Desktop là bản xem trước app-only chưa phát hành dành cho người tham gia thử nghiệm Desktop. Đây chưa phải bản tải xuống công khai. Nếu bạn đang phát triển hoặc đánh giá ứng dụng từ kho mã này, hãy làm theo phần thiết lập trong [README của Desktop](../../apps/desktop/README.md).
+
+Ở lần mở đầu tiên, màn hình Chào mừng cho phép bạn tạo thư viện cục bộ đầu tiên hoặc mở một thư viện Lumina đã có. Tạo thư viện sẽ chuẩn bị và mở một thư viện tiêu chuẩn mà không cần Node.js, npm, Python, Lumina CLI hay terminal khi ứng dụng chạy. Mở thư viện sẽ kiểm tra thư mục đã chọn trước khi dùng và không ghi lại các tệp trong đó.
+
+Ứng dụng ghi nhớ các thư viện gần đây trong dữ liệu cục bộ riêng của ứng dụng. Khi quay lại, ứng dụng có thể khôi phục cuộc trò chuyện gần nhất đã lưu, ghi chú bạn đang đọc và màn hình Chat, Ghi chú hoặc Đồ thị của riêng thư viện đó. Nếu thư viện gần đây đã bị di chuyển, xóa hoặc thay thế, ứng dụng sẽ dừng và đưa bạn về hướng khôi phục an toàn thay vì xem một thư mục khác là thư viện cũ. Lịch sử trò chuyện là tùy chọn; bạn có thể tắt hoặc xóa trong ứng dụng.
+
+Bản xem trước này chủ yếu dùng để tạo hoặc mở thư viện, đọc ghi chú và mối liên hệ, rồi tiếp tục trò chuyện trong thư viện đang mở. Kiểm tra, Nhập tài liệu, cập nhật, sửa chữa, đặt lại và các luồng bảo trì khác chưa có trong giao diện app-only hiện tại. Tạm thời hãy dùng luồng CLI cho các việc đó. Việc nghiệm thu ứng dụng đã cài đặt trên macOS, Windows và Linux, cùng với ký ứng dụng và phân phối tin cậy, vẫn đang chờ hoàn tất.
 
 ## Làm Quen Với /lumi-help
 
