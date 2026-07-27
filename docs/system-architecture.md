@@ -1,7 +1,7 @@
 # Lumina-Wiki — System Architecture
 
 **Document Type:** Locked v0.1 Architecture  
-**Last Updated:** 2026-05-06  
+**Last Updated:** 2026-07-24
 **Status:** Stable; breaking changes require SemVer major bump
 
 ---
@@ -51,6 +51,50 @@
 │     exemption globs; consumed by wiki.mjs + lint.mjs)    │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Optional Desktop Companion Boundary
+
+The Wails desktop app under [`apps/desktop/`](../apps/desktop/) is an optional
+client of a Lumina workspace, not a third installation layer. It does not alter
+the npm installer or the projected workspace payload. The Go backend owns
+native and AI authority; React consumes generated Wails bindings and remains a
+presentation client.
+
+- [`apps/desktop/main.go`](../apps/desktop/main.go) and
+  [`apps/desktop/ai-composition.go`](../apps/desktop/ai-composition.go) own
+  production composition and service registration.
+- Native workspace choice or confirmation produces a backend-issued,
+  window-bound session capability. Workspace reads resolve that capability
+  rather than trusting a frontend path, and AI operations treat the workspace
+  as immutable.
+- Settings, history, and derived indexes stay in desktop-owned local storage.
+  Provider secrets stay behind backend credential services: the operating-system
+  keyring when persisted, or confirmed backend memory for session-only use.
+- Lexical retrieval remains local. Embedding use is opt-in and guarded by
+  explicit consent before workspace text may be sent to the configured
+  embedding provider.
+- Chat and index work is cancellable. Session deactivation, window close, and
+  application shutdown retire capabilities and clean up active work.
+- React subscribes before starting chat, filters events by active workspace
+  session, request, and sequence, and treats the matching terminal stream event
+  as authoritative. Cancellation keeps that listener through the terminal
+  handshake; retries are linked attempts rather than duplicate user turns.
+- Release verification combines source contracts with a pinned Chromium
+  fixture. Dark/light snapshots, rendered responsive geometry, axe checks,
+  keyboard/focus behavior, local fonts, workspace byte manifests, generated
+  binding scans, race tests, and native Wails builds are defined by
+  [`desktop.yml`](../.github/workflows/desktop.yml). Deterministic fixture data
+  lives only in the browser test harness. The workflow's packaged smoke checks
+  prove process launch, not full GUI interactions; execution evidence is
+  recorded separately in the
+  [completed desktop plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md).
+
+The backend contracts live in
+[`apps/desktop/internal/ai/`](../apps/desktop/internal/ai/); generated React
+bindings live under
+[`apps/desktop/frontend/bindings/`](../apps/desktop/frontend/bindings/).
 
 ---
 

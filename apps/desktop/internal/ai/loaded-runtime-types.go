@@ -1,0 +1,74 @@
+package ai
+
+import (
+	"context"
+	"os"
+	"time"
+
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/chat"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/providers"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/retrieval"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/settings"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/workspaceid"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
+)
+
+type RootTrustProvider interface {
+	TrustedRootIdentity(workspaceid.WorkspaceID, string) (os.FileInfo, error)
+}
+
+type ConfigReader interface {
+	Load() (settings.Config, error)
+}
+
+type CredentialResolver interface {
+	Get(context.Context, string) ([]byte, error)
+}
+
+type RuntimeHistoryStore interface {
+	Enabled(context.Context) (bool, error)
+	SetEnabled(context.Context, bool) error
+	List(context.Context) ([]history.ConversationMetadata, error)
+	Load(context.Context, string) ([]history.ConversationRecord, error)
+	Append(context.Context, history.ConversationRecord) (history.AppendOutcome, error)
+	Delete(context.Context, string) (history.DeleteResult, error)
+	DeleteAll(context.Context) (history.DeleteAllResult, error)
+}
+
+type TrustedTreeBuilder interface {
+	BuildTrusted(context.Context, string, os.FileInfo) (workspace.WorkspaceTree, error)
+}
+
+type LexicalFactory func(context.Context, string, os.FileInfo) (*retrieval.Lexical, error)
+type HistoryFactory func(string, workspaceid.WorkspaceID) (RuntimeHistoryStore, error)
+type ProviderFactory func(settings.Profile, providers.SafeClient, CredentialResolver) (providers.ChatProvider, error)
+type RetrieverFactory func(chat.HybridConfig) chat.RetrievalRunner
+
+type RuntimeSemanticStore interface {
+	chat.SemanticSearcher
+	Status(context.Context, index.StatusRequest) (index.IndexStatus, error)
+	Build(context.Context, index.BuildRequest, index.ProgressSink) (index.IndexStatus, error)
+	Clear(context.Context) (index.IndexStatus, error)
+}
+
+type SemanticStoreFactory func(workspaceid.WorkspaceID) (RuntimeSemanticStore, error)
+type EmbeddingProviderFactory func(settings.Profile, index.FactoryOptions) (index.EmbeddingProvider, error)
+
+type LoadedRuntimeDependencies struct {
+	ConsentAccess            *ConsentAccessGate
+	Trust                    RootTrustProvider
+	Config                   ConfigReader
+	Credentials              CredentialResolver
+	Client                   providers.SafeClient
+	HistoryBase              string
+	LexicalFactory           LexicalFactory
+	HistoryFactory           HistoryFactory
+	ProviderFactory          ProviderFactory
+	RetrieverFactory         RetrieverFactory
+	SemanticStoreFactory     SemanticStoreFactory
+	EmbeddingProviderFactory EmbeddingProviderFactory
+	Tree                     TrustedTreeBuilder
+	Now                      func() time.Time
+}

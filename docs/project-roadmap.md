@@ -2,7 +2,7 @@
 
 **Current Version:** 1.1.0 (2026-05-06)  
 **Canonical source:** [ROADMAP.md](../ROADMAP.md) at project root  
-**Updated:** 2026-05-06
+**Updated:** 2026-07-24
 
 ---
 
@@ -30,6 +30,7 @@ Focus: Stability, local capabilities, and v1.x feature expansion.
 | **CI/CD hardening** (Bun, Node 22 LTS) | Planned | — |
 | **Stability lock** (CLI contract published; --cwd deprecation; exit-4 cancellation) | Shipped v1.x | — |
 | **Schema parity** (cross-source ID handling) | In progress | — |
+| **Desktop companion app** (Wails workspace UI + optional local AI services) | Implementation plan completed; unreleased. Cross-platform package/install/launch and packaged macOS GUI gates passed | [plan](../plans/260711-1407-lumina-desktop-ai-redesign/plan.md) |
 
 ---
 
@@ -53,7 +54,7 @@ Lower priority; research, community feedback, or alignment with external needs m
 - **Domain packs** — Specialized biomedical / physics / ML-specific templates and skills
 - **Local cache layer** — Session-level caching for fetcher responses to optimize rate limits
 - **Intelligence layer** — Graph-walking algorithms for "missing link" or "relevant paper" recommendations
-- **Desktop app** — Electron/Tauri standalone UI for richer GUI and native OS integration
+- **Desktop app expansion** — Richer desktop workflows after the redesigned shell, integration, and release gates
 
 ---
 

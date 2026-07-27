@@ -1,0 +1,279 @@
+.graph-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.react-flow {
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.react-flow__node.flow-node {
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.graph-node-content {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.graph-node-dot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--node);
+  transition:
+    background-color var(--duration-state) var(--ease-out-quart),
+    box-shadow var(--duration-state) var(--ease-out-quart),
+    transform var(--duration-state) var(--ease-out-quart);
+}
+
+.node-type-person .graph-node-dot {
+  background: var(--node-person);
+}
+
+.node-type-source .graph-node-dot,
+.node-type-summary .graph-node-dot {
+  width: 16px;
+  height: 16px;
+  background: var(--node-hub);
+}
+
+.graph-node-label {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: max-content;
+  max-width: 148px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.react-flow__node.flow-node.selected .graph-node-dot {
+  background: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--ink);
+  transform: scale(1.08);
+}
+
+.react-flow__node.flow-node.selected .graph-node-label,
+.react-flow__node.flow-node.match .graph-node-label {
+  color: var(--accent);
+}
+
+.react-flow__node.flow-node.neighbor .graph-node-dot,
+.react-flow__node.flow-node.match .graph-node-dot {
+  background: var(--node-hub);
+}
+
+.react-flow__node.flow-node.dim .graph-node-dot {
+  background: var(--node-dim);
+}
+
+.react-flow__node.flow-node.dim .graph-node-label {
+  color: var(--muted);
+}
+
+.graph-node-content .react-flow__handle {
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
+  border: 0;
+  opacity: 0;
+}
+
+.react-flow__edge.flow-edge path {
+  stroke: var(--edge);
+  stroke-width: 1;
+}
+
+.react-flow__edge.flow-edge.focused path {
+  stroke: var(--edge-focus);
+  stroke-width: 1.5;
+}
+
+.react-flow__edge-text {
+  display: none;
+}
+
+.graph-controls {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.graph-controls button {
+  width: 32px;
+  height: 32px;
+  border-bottom-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.graph-controls button:hover {
+  background: var(--rail);
+}
+
+.graph-controls button svg {
+  fill: currentColor;
+}
+
+.graph-node-fallback {
+  position: absolute;
+  z-index: 4;
+  top: var(--space-5);
+  left: var(--space-5);
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.graph-node-fallback:focus-within {
+  display: grid;
+  gap: var(--space-1);
+  width: min(280px, calc(100% - 24px));
+  height: auto;
+  max-height: calc(100% - 24px);
+  padding: var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.graph-node-fallback button {
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.graph-node-fallback button:hover {
+  color: var(--accent);
+  background: var(--rail);
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  color: var(--muted);
+  background: var(--bg);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.empty-state span {
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.note-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.note-view > header,
+.note-view > pre {
+  width: min(680px, calc(100% - 64px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.note-view > header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding-top: var(--space-9);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.note-view > header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-view > pre {
+  margin-top: var(--space-8);
+  margin-bottom: 80px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 1.72;
+  white-space: pre-wrap;
+}
+
+.note-view.idle > pre,
+.note-view.loading > pre {
+  color: var(--muted);
+}
+
+.note-view.error > pre,
+.note-view.error > header strong {
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .empty-state {
+    width: 100%;
+    padding: var(--space-6);
+  }
+
+  .empty-state span {
+    max-width: 100%;
+  }
+
+  .note-view > header,
+  .note-view > pre {
+    width: calc(100% - 28px);
+  }
+
+  .note-view > pre {
+    font-size: 16px;
+  }
+}

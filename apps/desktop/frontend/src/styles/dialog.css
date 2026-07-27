@@ -1,0 +1,140 @@
+.settings-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-8);
+  background: var(--overlay);
+}
+
+.settings-panel {
+  display: grid;
+  gap: var(--space-6);
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.settings-panel header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.settings-panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-panel header span {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.settings-panel header button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  background: transparent;
+}
+
+.settings-panel header button:hover {
+  color: var(--ink);
+  background: var(--rail);
+}
+
+.settings-panel label,
+.credential-settings,
+.index-settings {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-panel input,
+.settings-panel select {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4);
+  color: var(--ink);
+  background: var(--bg);
+  font-size: 16px;
+}
+
+.settings-tabs,
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.settings-tabs button,
+.settings-actions button {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4);
+  color: var(--muted);
+  background: var(--rail);
+}
+
+.settings-tabs button[aria-pressed='true'],
+.settings-actions button:first-child {
+  color: var(--on-accent);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.settings-form,
+.credential-settings,
+.index-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.settings-form .settings-actions,
+.credential-settings .settings-actions,
+.index-settings .settings-actions,
+.index-settings > p,
+.settings-message {
+  grid-column: 1 / -1;
+}
+
+.settings-toggle {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.settings-toggle input {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-message,
+.index-settings p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .settings-form,
+  .credential-settings,
+  .index-settings {
+    grid-template-columns: 1fr;
+  }
+}

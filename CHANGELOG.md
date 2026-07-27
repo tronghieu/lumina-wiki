@@ -290,6 +290,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   never been wired into either, so a catalog problem like the one above
   could ship without any automated test catching it.
 
+### Added — Desktop companion MVP
+
+- Added an isolated Wails 3 desktop companion app under `apps/desktop/`.
+  It is local-first and does not add dependencies to the root npm CLI package.
+- Added Go services for Lumina workspace validation, read-only graph loading,
+  safe check execution through `_lumina/scripts/lint.mjs --summary`, and
+  one-file import into `raw/sources/` with overwrite refusal.
+- Added a React + TypeScript graph interface using React Flow, search/filter
+  logic, node inspector, and a small workspace action panel.
+- Redesigned the desktop shell around the real workspace tree, graph, Markdown
+  notes, checks, and source import, with responsive and keyboard-accessible
+  navigation.
+- Added optional provider-backed chat with cited streaming answers,
+  cancellation, retry, workspace-scoped local history, local text search, and
+  opt-in semantic search with automatic text-search fallback.
+- Kept provider credentials behind the Go backend, using operating-system
+  secure storage when available and backend memory for session-only use. Chat,
+  retrieval, history, and indexes leave the active workspace unchanged; source
+  import remains the sole non-overwriting write path.
+- Added visual, accessibility, secret-boundary, workspace-immutability, and Go
+  race gates, plus native package checks for macOS, Windows, and Linux,
+  installer validation on Windows and Linux, and launch checks on all three.
+
 ## [1.9.2] - 2026-07-18
 
 ### Added

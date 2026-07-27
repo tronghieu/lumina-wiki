@@ -28,6 +28,38 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - ~~**Schema Parity:** Standardize cross-source ID handling across all core and research skills.~~ **Shipped in v1.2** (`external_ids` namespace, `sources[]` provenance, lint L13/L14/L16).
 - ~~**Research & Discovery Expansion:** Broaden coverage to OpenAlex, CORE, Unpaywall, and RSS feeds.~~ **Shipped in v1.6 (pending release).** Multi-provider PDF resolution ladder (OpenAlex → Unpaywall → CORE → arXiv) with always-on OpenAlex metadata anchor; RSS / Atom feed monitoring as first-class watchlist items; `/lumi-research-watch-run` skill for on-demand polling; `cron-daily.sh` wrapper for scheduled invocation.
   - *Spec:* [Research Source & Discovery Expansion](./docs/planning-artifacts/specs/spec-research-expansion.md)
+- **Lumina Desktop app-only (unreleased):** Evolve the implemented Wails
+  workspace interface and optional AI assistant into a self-contained product.
+  Users install only Lumina Desktop; normal use must not require Node.js, npm,
+  the Lumina CLI, or a terminal.
+  - *Current implementation:* The workspace shell, graph, source import,
+    checks, AI services, and cross-platform packaging gates are complete.
+  - *Next milestone — standalone onboarding:* Create a standard workspace from
+    a native folder picker, validate it, connect it automatically, and reopen
+    the most recent valid workspace on the next launch.
+  - *Workspace lifecycle:* Add native upgrade, repair, reset, and pack
+    management without invoking an externally installed CLI.
+  - *Knowledge workflows:* Bring accepted source-processing, note, graph,
+    research, reading, and learning workflows into the app with the same user
+    approval and data-safety boundaries as their canonical workspace
+    contracts.
+  - *Release:* Complete signing, notarization, distribution, update, and
+    recovery validation for supported desktop platforms.
+  - *Development guide:* [Lumina Desktop](./apps/desktop/README.md)
+
+### Desktop synchronization policy
+
+- The CLI and installed workspace contracts remain the capability reference and
+  schema authority. Desktop creates and maintains compatible workspaces but
+  implements user-facing behavior inside the packaged app.
+- Do not add speculative Desktop parity work. When an accepted user-facing CLI
+  or installed-workspace capability changes, assess its Desktop impact and add
+  the corresponding native app work to this roadmap.
+- CLI changes do not silently expand a Desktop release. Each native equivalent
+  still requires its own safety, interaction, compatibility, and packaged-app
+  validation.
+- Sharing generated templates, schemas, and conformance fixtures is encouraged;
+  requiring users to install or execute the CLI is not.
 - ~~**Advanced Ranking:** Integrate influential citation counts and altmetrics into the core discovery flow.~~ **Shipped in v1.7 (2026-06-16).** `/lumi-research-rank` records a Semantic Scholar influential-citation signal, optional key-gated Scite/Altmetric signals, an LLM-estimated (flagged) venue tier, and a 4C qualitative scorecard onto each source page.
   - *Outcome:* Surface quality and influence signals to prioritize research reading.
   - *Spec:* [Paper Ranking & Quality](./docs/planning-artifacts/specs/spec-paper-ranking.md)
@@ -53,7 +85,6 @@ This roadmap tracks intentions and planned upgrades, categorized by timeframe an
 - **Domain Packs:** Create specialized "Science Packs" for bio-medical or physics domains.
 - ~~**Local Cache Layer:** Implement session-level caching for fetcher responses to optimize rate limits.~~ **Shipped in v1.2** (persistent HTTP GET cache via `_lumina/tools/http_cache.py`).
 - **Intelligence Layer:** Graph-walking algorithms for proactive "missing link" or "relevant paper" recommendations.
-- **Desktop Application:** Explore a standalone desktop environment (Electron/Tauri) for a richer GUI-driven experience and native OS integration.
 
 ---
 *Note: This roadmap is non-binding and evolved based on research needs and technical feasibility.*
