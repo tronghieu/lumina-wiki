@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/appprivate"
 )
 
 const (
@@ -111,8 +113,26 @@ func (s *ConfigStore) ensureOwnedDir(create bool) (bool, error) {
 		return false, errors.New("owned config path must be a real directory")
 	}
 	if create {
-		if err := os.Chmod(s.dir, 0o700); err != nil {
+		directory, err := os.Open(s.dir)
+		if err != nil {
 			return false, err
+		}
+		opened, statErr := directory.Stat()
+		if statErr != nil || !os.SameFile(info, opened) {
+			directory.Close()
+			return false, errors.New("owned config directory changed")
+		}
+		protectErr := appprivate.ProtectPrivateHandle(directory, 0o700)
+		closeErr := directory.Close()
+		if protectErr != nil {
+			return false, errors.New("secure owned config directory failed")
+		}
+		if closeErr != nil {
+			return false, closeErr
+		}
+		protected, err := os.Lstat(s.dir)
+		if err != nil || !os.SameFile(opened, protected) {
+			return false, errors.New("owned config directory changed after protection")
 		}
 	}
 	return true, nil
@@ -131,8 +151,8 @@ func (s *ConfigStore) atomicWrite(raw []byte) error {
 			_ = os.Remove(tempPath)
 		}
 	}()
-	if err := temp.Chmod(0o600); err != nil {
-		return err
+	if err := appprivate.ProtectPrivateHandle(temp, 0o600); err != nil {
+		return errors.New("secure config temporary file failed")
 	}
 	if _, err := temp.Write(raw); err != nil {
 		return err
