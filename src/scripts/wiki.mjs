@@ -631,7 +631,34 @@ async function readMeta(projectRoot, slug) {
 }
 
 /**
+ * Determine the entity type for a file path by matching its parent
+ * directory (relative to wiki/) against ENTITY_DIRS.
+ * @param {string} projectRoot
+ * @param {string} filePath - Absolute path to a file under wiki/.
+ * @returns {string|null} Entity type key, or null if not under a known dir.
+ */
+function _entityTypeForFilePath(projectRoot, filePath) {
+  const wikiDir = join(projectRoot, 'wiki');
+  const relPath = relative(wikiDir, filePath);
+  const dirParts = relPath.split(sep);
+  const entityDirName = dirParts[0] + '/';
+  return Object.entries(ENTITY_DIRS).find(
+    ([, v]) => v.dir === entityDirName,
+  )?.[0] ?? null;
+}
+
+/**
  * Set a frontmatter key in an entity file.
+ *
+ * Schema gate: if the entity's type declares a field definition for `key`
+ * in REQUIRED_FRONTMATTER, the supplied `value` must satisfy that field's
+ * declared type or the write is rejected outright (no --force escape
+ * hatch — see _checkFieldType). Only the single key being set is checked;
+ * the rest of the document (including fields not yet present) is left
+ * alone, so mid-draft pages can still set fields one at a time. Keys with
+ * no declared type for this entity type (free-form keys like `tags`) are
+ * always writable.
+ *
  * @param {string} projectRoot
  * @param {string} slug
  * @param {string} key
@@ -647,11 +674,27 @@ async function setMeta(projectRoot, slug, key, value) {
   }
   const content = await readFile(filePath, 'utf8');
   const { frontmatter, body, hasFrontmatter } = parseFrontmatter(content);
+
+  const entityType = _entityTypeForFilePath(projectRoot, filePath);
+  if (entityType) {
+    const fields = _getRequiredFrontmatterFields(entityType);
+    const field = fields ? fields.find((f) => f.key === key) : null;
+    if (field) {
+      const violation = _checkFieldType(field, value);
+      if (violation) {
+        const err = new Error(`Schema violation: ${violation}`);
+        err.code = 2;
+        throw err;
+      }
+    }
+  }
+
   // external_ids is the only object-typed frontmatter today; sanitize untrusted
   // input (CLI / JSON.parse / fetcher output) against the namespace allowlist.
   // Note: `sources` array entries are validated at write time by buildSourceEntry
   // / build_source_entry (provider slug, URL parse, length bounds), so no
-  // sanitization gate is needed here. Other typed fields are checked by lint.
+  // sanitization gate is needed here. Other typed fields are checked above and
+  // by lint.
   if (key === 'external_ids') {
     frontmatter[key] = sanitizeExternalIdsObject(value);
   } else {
@@ -1585,6 +1628,54 @@ async function readCitationsForSlug(projectRoot, slug) {
 }
 
 /**
+ * Check a single frontmatter value against its declared field type.
+ * Mirrors lint.mjs's L02 check word-for-word so the two can never diverge —
+ * this is the single source of truth for frontmatter type semantics, used
+ * both by whole-document validation (_validateFrontmatter, read-only) and
+ * by the setMeta write-path gate (single-key, hard reject, no --force).
+ *
+ * @param {import('./schemas.mjs').FrontmatterField} field
+ * @param {any} val - Already-present value (never undefined/null; callers
+ *   handle missing-field logic themselves before calling this).
+ * @returns {string|null} Human-readable violation (unprefixed), or null if valid.
+ */
+function _checkFieldType(field, val) {
+  switch (field.type) {
+    case 'string':
+      if (typeof val !== 'string') {
+        return `"${field.key}" must be a string, got ${typeof val}`;
+      }
+      break;
+    case 'number':
+      if (typeof val !== 'number' || Number.isNaN(val)) {
+        return `"${field.key}" must be a number, got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'array':
+      if (!Array.isArray(val)) {
+        return `"${field.key}" must be an array, got ${typeof val}`;
+      }
+      break;
+    case 'iso-date':
+      if (typeof val !== 'string' || !DATE_RE.test(val)) {
+        return `"${field.key}" must be an ISO date (YYYY-MM-DD), got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'enum':
+      if (field.values && !field.values.includes(val)) {
+        return `"${field.key}" must be one of [${field.values.join(', ')}], got ${JSON.stringify(val)}`;
+      }
+      break;
+    case 'object':
+      if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+        return `"${field.key}" must be an object, got ${Array.isArray(val) ? 'array' : typeof val}`;
+      }
+      break;
+  }
+  return null;
+}
+
+/**
  * Validate frontmatter fields against REQUIRED_FRONTMATTER schema.
  * Returns a list of validation errors (empty if valid).
  * @param {Record<string,any>} frontmatter
@@ -1607,34 +1698,8 @@ function _validateFrontmatter(frontmatter, entityType) {
       }
       continue;
     }
-    // Type checks
-    switch (field.type) {
-      case 'string':
-        if (typeof val !== 'string') {
-          errors.push(`Field '${field.key}' must be a string, got ${typeof val}`);
-        }
-        break;
-      case 'number':
-        if (typeof val !== 'number') {
-          errors.push(`Field '${field.key}' must be a number, got ${typeof val}`);
-        }
-        break;
-      case 'array':
-        if (!Array.isArray(val)) {
-          errors.push(`Field '${field.key}' must be an array, got ${typeof val}`);
-        }
-        break;
-      case 'enum':
-        if (field.values && !field.values.includes(val)) {
-          errors.push(`Field '${field.key}' must be one of [${field.values.join(', ')}], got ${val}`);
-        }
-        break;
-      case 'iso-date':
-        if (typeof val !== 'string' || !DATE_RE.test(val)) {
-          errors.push(`Field '${field.key}' must be a YYYY-MM-DD date, got '${val}'`);
-        }
-        break;
-    }
+    const violation = _checkFieldType(field, val);
+    if (violation) errors.push(violation);
   }
   return errors;
 }
@@ -2257,15 +2322,10 @@ async function main(argv) {
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
 
         // Determine entity type from directory
-        const wikiDir = join(projectRoot, 'wiki');
-        const relPath = relative(wikiDir, filePath);
-        const dirParts = relPath.split(sep);
-        const entityDirName = dirParts[0] + '/';
-        const entityType = Object.entries(ENTITY_DIRS).find(
-          ([, v]) => v.dir === entityDirName,
-        )?.[0] ?? null;
+        const entityType = _entityTypeForFilePath(projectRoot, filePath);
 
         if (!entityType) {
+          const relPath = relative(join(projectRoot, 'wiki'), filePath);
           emitJson({ slug, valid: false, errors: [`Cannot determine entity type from path: ${relPath}`] });
           break;
         }

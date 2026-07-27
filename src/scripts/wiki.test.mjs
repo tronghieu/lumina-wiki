@@ -586,6 +586,185 @@ related_concepts: []
 });
 
 // ---------------------------------------------------------------------------
+// Tests: set-meta schema validation (write-path gate)
+//
+// setMeta rejects a value that violates the declared REQUIRED_FRONTMATTER
+// type for the key being set — hard reject, no --force escape hatch. Only
+// the single key is checked; declared-but-absent fields elsewhere in the
+// document are not this call's problem, and undeclared (free-form) keys
+// are always writable.
+// ---------------------------------------------------------------------------
+
+describe('set-meta schema validation', () => {
+  test('rejects TODO for an iso-date field: exit 2, structured stderr, file unchanged', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-iso-date');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-iso-date.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(['set-meta', 'sources/sv-iso-date', 'created', 'TODO'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"created" must be an ISO date \(YYYY-MM-DD\), got "TODO"/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects a non-number for a number field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-number');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-number.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(['set-meta', 'sources/sv-number', 'year', 'not-a-year'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"year" must be a number, got/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects a non-member for an enum field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-enum');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-enum.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(['set-meta', 'sources/sv-enum', 'importance', '99'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"importance" must be one of \[1, 2, 3, 4, 5\], got 99/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects a scalar for an array field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-array');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-array.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(['set-meta', 'sources/sv-array', 'authors', 'Not An Array'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"authors" must be an array, got string/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('accepts a valid value for each declared type, including [] for an array field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-valid');
+
+      const created = runWiki(['set-meta', 'sources/sv-valid', 'created', '2024-03-15'], { cwd: tmp });
+      assert.equal(created.status, 0, `iso-date accept failed: ${created.stderr}`);
+
+      const year = runWiki(['set-meta', 'sources/sv-valid', 'year', '2020'], { cwd: tmp });
+      assert.equal(year.status, 0, `number accept failed: ${year.stderr}`);
+
+      const importance = runWiki(['set-meta', 'sources/sv-valid', 'importance', '1'], { cwd: tmp });
+      assert.equal(importance.status, 0, `enum accept failed: ${importance.stderr}`);
+
+      const authors = runWiki(
+        ['set-meta', 'sources/sv-valid', 'authors', '[]', '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(authors.status, 0, `empty-array accept failed: ${authors.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/sv-valid'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.created, '2024-03-15');
+      assert.equal(json.frontmatter.year, 2020);
+      assert.equal(json.frontmatter.importance, 1);
+      assert.deepEqual(json.frontmatter.authors, []);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('accepts a free-form key not declared in the schema', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-freeform');
+
+      const r = runWiki(['set-meta', 'sources/sv-freeform', 'tags', 'llm-inference'], { cwd: tmp });
+      assert.equal(r.status, 0, `free-form key set-meta failed: ${r.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/sv-freeform'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.tags, 'llm-inference');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('external_ids sanitization still runs after the schema gate', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-external-ids');
+
+      const r = runWiki(
+        [
+          'set-meta', 'sources/sv-external-ids', 'external_ids',
+          '{"doi":"10.1/abc","isbn":"9780000000000","__proto__":{"x":1}}',
+          '--json-value',
+        ],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `external_ids set-meta failed: ${r.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/sv-external-ids'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      // 'isbn' is a reserved-but-inactive namespace and must be dropped;
+      // '__proto__' must never survive sanitization.
+      assert.deepEqual(Object.keys(json.frontmatter.external_ids).sort(), ['doi']);
+      assert.equal(({}).x, undefined, 'prototype must not be polluted');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: add-edge
 // ---------------------------------------------------------------------------
 
