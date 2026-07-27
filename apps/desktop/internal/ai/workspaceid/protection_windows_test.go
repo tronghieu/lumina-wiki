@@ -84,3 +84,40 @@ func TestRegistryLoadRejectsPermissiveDACL(t *testing.T) {
 		t.Fatal("registry with permissive DACL was accepted")
 	}
 }
+
+func TestRegistryOwnerPolicyAcceptsOnlyCurrentUserOrActiveAdministrators(t *testing.T) {
+	token := windows.GetCurrentProcessToken()
+	tokenUser, err := token.GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isSafeRegistryOwner(tokenUser.User.Sid, tokenUser.User.Sid, token) {
+		t.Fatal("current user SID was rejected")
+	}
+
+	administrators, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isAdministrator, err := enabledRegistryTokenMembership(token, administrators)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := isSafeRegistryOwner(administrators, tokenUser.User.Sid, token); got != isAdministrator {
+		t.Fatalf("Administrators owner policy = %t, token membership = %t", got, isAdministrator)
+	}
+	if !registryOwnerAllowed(administrators, tokenUser.User.Sid, administrators, true) {
+		t.Fatal("active Administrators owner was rejected")
+	}
+	if registryOwnerAllowed(administrators, tokenUser.User.Sid, administrators, false) {
+		t.Fatal("disabled Administrators owner was accepted")
+	}
+
+	everyone, err := windows.CreateWellKnownSid(windows.WinWorldSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isSafeRegistryOwner(everyone, tokenUser.User.Sid, token) {
+		t.Fatal("Everyone owner was accepted")
+	}
+}

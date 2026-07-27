@@ -122,8 +122,12 @@ func validateRegistryHandle(file *os.File) error {
 	if err != nil || owner == nil {
 		return errors.New("registry owner is unavailable")
 	}
-	tokenUser, err := windows.GetCurrentProcessToken().GetTokenUser()
-	if err != nil || tokenUser == nil || tokenUser.User.Sid == nil || !owner.Equals(tokenUser.User.Sid) {
+	token := windows.GetCurrentProcessToken()
+	tokenUser, err := token.GetTokenUser()
+	if err != nil || tokenUser == nil || tokenUser.User.Sid == nil {
+		return errors.New("registry owner is unsafe")
+	}
+	if !isSafeRegistryOwner(owner, tokenUser.User.Sid, token) {
 		return errors.New("registry owner is unsafe")
 	}
 	control, _, err := descriptor.Control()
@@ -162,6 +166,44 @@ func validateRegistryHandle(file *os.File) error {
 		}
 	}
 	return nil
+}
+
+func isSafeRegistryOwner(owner, currentUser *windows.SID, token windows.Token) bool {
+	if owner == nil || currentUser == nil {
+		return false
+	}
+	if owner.Equals(currentUser) {
+		return true
+	}
+	administrators, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil || !owner.Equals(administrators) {
+		return false
+	}
+	member, err := enabledRegistryTokenMembership(token, administrators)
+	return err == nil && registryOwnerAllowed(owner, currentUser, administrators, member)
+}
+
+func registryOwnerAllowed(owner, currentUser, administrators *windows.SID, activeAdministrator bool) bool {
+	return owner != nil &&
+		currentUser != nil &&
+		administrators != nil &&
+		(owner.Equals(currentUser) || activeAdministrator && owner.Equals(administrators))
+}
+
+func enabledRegistryTokenMembership(token windows.Token, sid *windows.SID) (bool, error) {
+	var impersonation windows.Token
+	if err := windows.DuplicateTokenEx(
+		token,
+		windows.TOKEN_QUERY,
+		nil,
+		windows.SecurityImpersonation,
+		windows.TokenImpersonation,
+		&impersonation,
+	); err != nil {
+		return false, err
+	}
+	defer impersonation.Close()
+	return impersonation.IsMember(sid)
 }
 
 func reopenRegistrySecurityHandle(original *os.File, access uint32) (*os.File, error) {

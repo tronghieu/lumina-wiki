@@ -68,6 +68,43 @@ func TestProtectedAccessEntriesDeduplicateEqualOwnerAndSystemSID(t *testing.T) {
 	}
 }
 
+func TestPrivateOwnerPolicyAcceptsOnlyCurrentUserOrActiveAdministrators(t *testing.T) {
+	token := windows.GetCurrentProcessToken()
+	tokenUser, err := token.GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isSafePrivateOwner(tokenUser.User.Sid, tokenUser.User.Sid, token) {
+		t.Fatal("current user SID was rejected")
+	}
+
+	administrators, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isAdministrator, err := enabledPrivateTokenMembership(token, administrators)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := isSafePrivateOwner(administrators, tokenUser.User.Sid, token); got != isAdministrator {
+		t.Fatalf("Administrators owner policy = %t, token membership = %t", got, isAdministrator)
+	}
+	if !privateOwnerAllowed(administrators, tokenUser.User.Sid, administrators, true) {
+		t.Fatal("active Administrators owner was rejected")
+	}
+	if privateOwnerAllowed(administrators, tokenUser.User.Sid, administrators, false) {
+		t.Fatal("disabled Administrators owner was accepted")
+	}
+
+	everyone, err := windows.CreateWellKnownSid(windows.WinWorldSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isSafePrivateOwner(everyone, tokenUser.User.Sid, token) {
+		t.Fatal("Everyone owner was accepted")
+	}
+}
+
 func applyTestDACL(path, sddl string) error {
 	file, err := os.OpenFile(path, os.O_RDWR, 0)
 	if err != nil {
