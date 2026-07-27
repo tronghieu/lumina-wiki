@@ -24,32 +24,44 @@ type platformProof struct {
 	fileID [16]byte
 }
 
-func openPlatformRoot(path string) (*os.Root, os.FileInfo, platformProof, error) {
+func openPlatformRoot(path string) (*os.Root, platformProof, error) {
 	before, err := os.Lstat(path)
 	if err != nil || !before.IsDir() || before.Mode()&fs.ModeSymlink != 0 {
-		return nil, nil, platformProof{}, errors.New("root is not a physical directory")
+		return nil, platformProof{}, errors.New("root is not a physical directory")
 	}
 	root, err := os.OpenRoot(path)
 	if err != nil {
-		return nil, nil, platformProof{}, errors.New("root cannot be held")
+		return nil, platformProof{}, errors.New("root cannot be held")
 	}
-	opened, err := root.Stat(".")
-	if err != nil || !os.SameFile(before, opened) {
+	rootHandle, err := root.Open(".")
+	if err != nil {
 		_ = root.Close()
-		return nil, nil, platformProof{}, errors.New("root changed while opening")
+		return nil, platformProof{}, errors.New("root identity handle cannot be held")
+	}
+	rootIdentity, err := queryFileID(rootHandle)
+	_ = rootHandle.Close()
+	if err != nil {
+		_ = root.Close()
+		return nil, platformProof{}, errors.New("root platform identity is unavailable")
 	}
 	handle, err := os.Open(path)
 	if err != nil {
 		_ = root.Close()
-		return nil, nil, platformProof{}, errors.New("root identity handle cannot be held")
+		return nil, platformProof{}, errors.New("root identity handle cannot be held")
 	}
 	identity, err := queryFileID(handle)
-	if err != nil {
+	if err != nil || identity != rootIdentity {
 		_ = handle.Close()
 		_ = root.Close()
-		return nil, nil, platformProof{}, errors.New("root platform identity is unavailable")
+		return nil, platformProof{}, errors.New("root changed while opening")
 	}
-	return root, before, platformProof{
+	current, err := os.Lstat(path)
+	if err != nil || !current.IsDir() || current.Mode()&fs.ModeSymlink != 0 {
+		_ = handle.Close()
+		_ = root.Close()
+		return nil, platformProof{}, errors.New("root changed while opening")
+	}
+	return root, platformProof{
 		handle: handle,
 		volume: identity.VolumeSerialNumber,
 		fileID: identity.FileID,
@@ -83,6 +95,19 @@ func (p platformProof) validate(path string) error {
 		return errors.New("held root platform identity changed")
 	}
 	current, err := os.Open(path)
+	if err != nil {
+		return errors.New("root platform identity changed")
+	}
+	defer current.Close()
+	identity, err := queryFileID(current)
+	if err != nil || identity.VolumeSerialNumber != p.volume || identity.FileID != p.fileID {
+		return errors.New("root platform identity changed")
+	}
+	return nil
+}
+
+func (p platformProof) validateRoot(root *os.Root) error {
+	current, err := root.Open(".")
 	if err != nil {
 		return errors.New("root platform identity changed")
 	}

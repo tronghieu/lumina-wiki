@@ -18,7 +18,7 @@ func (store *registryStore) acquireLock() (func(), error) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, errors.New("inspect registry lock failed")
 	}
-	file, err := os.OpenFile(store.lockPath, os.O_RDWR|os.O_CREATE, 0o600)
+	file, err := openRegistryLock(store.lockPath)
 	if err != nil {
 		return nil, errors.New("open registry lock failed")
 	}

@@ -324,15 +324,6 @@ func publishFile(root *os.Root, staged string, expected contract.File, allowExis
 	return verifyRootFile(root, expected.Path, expected)
 }
 
-func syncDirectory(root *os.Root, name string) error {
-	directory, err := root.Open(name)
-	if err != nil {
-		return err
-	}
-	defer directory.Close()
-	return directory.Sync()
-}
-
 func validateOwnedTree(root *os.Root, journal provisionJournal, stage string) error {
 	allowed := map[string]bool{
 		journalNameFor(journal): false,

@@ -22,7 +22,6 @@ const CurrentVersion Version = 1
 type proofState struct {
 	mu       sync.RWMutex
 	root     *os.Root
-	expected os.FileInfo
 	platform platformProof
 	path     string
 	closed   bool
@@ -44,13 +43,12 @@ func Open(path string) (RootProof, error) {
 		filepath.Clean(path) != path {
 		return RootProof{}, errors.New("canonical absolute root is required")
 	}
-	root, expected, platform, err := openPlatformRoot(path)
+	root, platform, err := openPlatformRoot(path)
 	if err != nil {
 		return RootProof{}, err
 	}
 	return RootProof{state: &proofState{
 		root:     root,
-		expected: expected,
 		platform: platform,
 		path:     path,
 	}}, nil
@@ -123,8 +121,7 @@ func (p RootProof) OpenRoot() (*os.Root, error) {
 	if err != nil {
 		return nil, errors.New("proven root cannot be opened")
 	}
-	opened, err := root.Stat(".")
-	if err != nil || !os.SameFile(opened, p.state.expected) {
+	if err := p.state.platform.validateRoot(root); err != nil {
 		_ = root.Close()
 		return nil, errors.New("root changed while opening")
 	}
@@ -137,16 +134,17 @@ func (p RootProof) OpenRoot() (*os.Root, error) {
 
 func (state *proofState) validateLocked() error {
 	current, err := os.Lstat(state.path)
-	if err != nil || !current.IsDir() || current.Mode()&fs.ModeSymlink != 0 ||
-		!os.SameFile(current, state.expected) {
+	if err != nil || !current.IsDir() || current.Mode()&fs.ModeSymlink != 0 {
 		return errors.New("root path changed")
 	}
 	opened, err := state.root.Stat(".")
-	if err != nil || !opened.IsDir() || opened.Mode()&fs.ModeSymlink != 0 ||
-		!os.SameFile(opened, state.expected) {
+	if err != nil || !opened.IsDir() || opened.Mode()&fs.ModeSymlink != 0 {
 		return errors.New("root proof changed")
 	}
 	if err := state.platform.validate(state.path); err != nil {
+		return err
+	}
+	if err := state.platform.validateRoot(state.root); err != nil {
 		return err
 	}
 	return nil
