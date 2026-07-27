@@ -86,4 +86,9 @@ and [current validation](./reports/validation-260727-1205-cook-readiness.md).
 The full implementation sync-back records 4/5 completed phases and preserves
 the external Phase 5 gates. [Sync-back report](./reports/project-manager-260727-1821-sync-back.md).
 
+Automated Phase 5 engineering and native-package gates passed for candidate
+`83d7e076156e40ff197867081ed744635bea53e6`; only digest-bound human
+installed-GUI acceptance remains external.
+[Automated evidence](./reports/automated-native-package-gates-260728-0105.md).
+
 <!-- slug: lumina-desktop-welcome-and-app-only-library-provisioning -->

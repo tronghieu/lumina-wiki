@@ -10,14 +10,15 @@ scope: "Full five-phase reconciliation"
 | Metric | Result |
 |---|---:|
 | Completed phases | 4 / 5 |
-| Phase checklist | 85 / 90 (94%) |
+| Phase checklist | 88 / 90 (98%) |
 | Plan status | in-progress |
 | Unresolved phase mappings | 0 |
-| External evidence gaps | 5 Phase 5 items |
+| External evidence gaps | 2 Phase 5 items |
 
-Phases 1-4 are implementation- and local-gate-complete. Phase 5 remains
-in-progress; workflow implementation is not counted as native job execution or
-release acceptance.
+Phases 1-4 are complete. Phase 5 automated engineering and native package
+execution are complete for candidate
+`83d7e076156e40ff197867081ed744635bea53e6`; human installed-GUI release
+acceptance remains external.
 
 ## Evidence
 
@@ -29,6 +30,7 @@ release acceptance.
 | Review | backend debugger/reviewer findings resolved; final UI review findings resolved through TDD |
 | Source | generated contract, rooted provisioner, staged activation, Welcome/Create/Open, private recents/view store, continuity restore, composed lifecycle test, and package workflow are present |
 | Documentation | three root READMEs, three maintained-language user guides, Desktop README, Desktop roadmap, and umbrella dependency text synchronized and validated |
+| Native candidate | [Run `30291654296`](https://github.com/nguyennguyenit/lumina-wiki/actions/runs/30291654296): Quality, Ubuntu, macOS, and Windows all successful; artifact API and inner hashes recorded in the [automated native package report](./automated-native-package-gates-260728-0105.md) |
 
 Local linker warnings about macOS deployment versions did not fail Go or race
 tests.
@@ -38,14 +40,11 @@ tests.
 | Open checklist item | Required evidence |
 |---|---|
 | Release-owner reports | Fresh `package-acceptance-<os>-<commit>-<artifact-digest>.md` for macOS, Windows, and Linux |
-| Windows-native behavior | Native job evidence for installer launch plus junction/reparse, 128-bit identity, DACL, and lock behavior |
-| Quality plus three package jobs | Successful native macOS, Windows, and Linux job results under patched Go |
-| Composed versus package evidence | Native results recording composed lifecycle separately from copied/installed clean-location launch on all three platforms |
 | Release acceptance | All three digest-bound human GUI reports for Create/Open/relaunch |
 
-No digest-bound package-acceptance reports exist in this plan. No native
-Windows/Linux/macOS package-job result was inferred from workflow YAML or local
-macOS unit/integration tests.
+No digest-bound human package-acceptance reports exist in this plan. Automated
+native evidence is bound to the candidate source and retained artifact digests;
+it is not substituted for human GUI acceptance.
 
 Signing/notarization remains a separate unclaimed distribution boundary.
 

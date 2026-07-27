@@ -161,3 +161,33 @@ current source state.
 
 None. The remaining work is evidence and release execution, not an unresolved
 product decision.
+
+## 2026-07-28 Native Candidate Addendum
+
+Candidate `83d7e076156e40ff197867081ed744635bea53e6` passed Desktop run
+[`30291654296`](https://github.com/nguyennguyenit/lumina-wiki/actions/runs/30291654296):
+Quality plus Ubuntu, macOS, and Windows package jobs all succeeded.
+
+Windows-native TDD exposed and fixed three concrete issues without weakening
+the gates:
+
+- active Administrators ownership is accepted only when the process token has
+  the enabled, non-deny-only Administrators group, while exact DACL entries
+  remain current-user+SYSTEM;
+- app-private lock files are hardened and validated while holding the exact
+  kernel lock, including the paused-creator/winning-contender schedule;
+- settings and history no longer rewrite the shared app directory with
+  incompatible Windows ACLs; both delegate to the same handle-based
+  protect-and-final-validate policy.
+
+The composed lifecycle now proves immutable Open in a child test process while
+the parent remains alive after service shutdown, so leaked parent handles still
+fail the gate. The package jobs separately prove package/install or
+clean-location copy and bounded launch. Artifact API digests and inner package
+hashes are recorded in the
+[automated native package report](../260725-0135-lumina-desktop-welcome-and-app-only-library-provisioning/reports/automated-native-package-gates-260728-0105.md).
+
+Automated cook work is complete. Phase 5 and this journal remain in progress
+because the release owner has not yet supplied the three candidate- and
+artifact-digest-bound installed-GUI Create/Open/relaunch reports. Signing and
+notarization remain separate.

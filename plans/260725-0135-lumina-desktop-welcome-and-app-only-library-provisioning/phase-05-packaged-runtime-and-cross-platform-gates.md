@@ -34,7 +34,7 @@ Context: [focused scout](./reports/phase-05-focused-scout.md).
 - [ ] The project release owner records one
       `reports/package-acceptance-<os>-<commit>-<artifact-digest>.md` per OS.
       Any source or artifact-digest change invalidates that OS result.
-- [ ] Windows runner covers junction/reparse behavior, 128-bit identity and
+- [x] Windows runner covers junction/reparse behavior, 128-bit identity and
       lock contention; Linux/macOS cover native symlink/permissions/durability
       semantics available to their filesystems.
 - [x] Feature gates distinguish package/install/runtime correctness from the
@@ -158,6 +158,11 @@ This is not clean-first-launch or release-owner evidence because the machine
 already had app configuration and the worktree was uncommitted. See
 [automated macOS package smoke](./reports/automated-macos-package-smoke-260727-1837.md).
 
+The release-candidate matrix passed on 2026-07-28 for source
+`83d7e076156e40ff197867081ed744635bea53e6`: Quality and all three native
+package jobs were successful, with retained artifact and inner-file digests.
+See [automated native package gates](./reports/automated-native-package-gates-260728-0105.md).
+
 ### Regression Gate
 
 - Root npm package contents remain unchanged except the intentional shared
@@ -170,9 +175,9 @@ already had app configuration and the worktree was uncommitted. See
 
 ## Success Criteria
 
-- [ ] Quality and three native package jobs pass under a non-vulnerable Go
+- [x] Quality and three native package jobs pass under a non-vulnerable Go
       toolchain.
-- [ ] Automated cook completion records composed lifecycle and clean-location
+- [x] Automated cook completion records composed lifecycle and clean-location
       package launch separately on all three platforms.
 - [ ] Release acceptance remains pending until fresh digest-bound human GUI
       evidence covers Create/Open/relaunch on all three platforms.
