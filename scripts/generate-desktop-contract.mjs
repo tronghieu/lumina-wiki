@@ -659,6 +659,10 @@ async function compareGeneratedTrees(expectedDir, actualDir) {
     const right = actual.get(path);
     if (!left) {
       differences.push(`extra ${path}`);
+    } else if (!right && left.kind === 'directory') {
+      // Git cannot represent empty directories. Their required paths remain
+      // authenticated by contract.json and are created by the materializer.
+      continue;
     } else if (!right) {
       differences.push(`missing ${path}`);
     } else if (left.kind !== right.kind) {

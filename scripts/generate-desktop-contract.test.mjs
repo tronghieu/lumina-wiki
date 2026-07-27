@@ -58,6 +58,19 @@ async function snapshot(root) {
   return result;
 }
 
+async function pruneEmptyDirectories(root) {
+  async function walk(current) {
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) await walk(join(current, entry.name));
+    }
+    if (current !== root && (await readdir(current)).length === 0) {
+      await rm(current, { recursive: true });
+    }
+  }
+  await walk(root);
+}
+
 function serializeCsv(rows, columns) {
   const escape = value => {
     const string = String(value ?? '');
@@ -465,6 +478,19 @@ test('--check detects modified, missing, and extra generated files without rewri
       () => checkDesktopContract({ repoRoot: REPO_ROOT, assetsDir: assets, fixturePath: FIXTURE }),
       /generated desktop contract differs/i,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('--check accepts empty payload directories omitted by a clean Git checkout', async () => {
+  const root = await tempDir();
+  try {
+    const assets = join(root, 'assets');
+    await generateDesktopContract({ repoRoot: REPO_ROOT, outputDir: assets, fixturePath: FIXTURE });
+    await pruneEmptyDirectories(assets);
+
+    await checkDesktopContract({ repoRoot: REPO_ROOT, assetsDir: assets, fixturePath: FIXTURE });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

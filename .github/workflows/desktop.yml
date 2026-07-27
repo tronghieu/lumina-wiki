@@ -118,6 +118,12 @@ jobs:
         working-directory: .
         run: npm ci
 
+      - name: Initialize sanitized package diagnostics
+        shell: bash
+        run: |
+          mkdir -p package-diagnostics
+          printf 'os=%s\nphase=package-build\nresult=started\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
+
       - name: Verify exact Go toolchain and Desktop contract
         working-directory: .
         run: |
@@ -141,12 +147,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/desktop/frontend
         run: npm ci
-
-      - name: Initialize sanitized package diagnostics
-        shell: bash
-        run: |
-          mkdir -p package-diagnostics
-          printf 'os=%s\nphase=package-build\nresult=started\n' "$RUNNER_OS" > package-diagnostics/smoke-status.txt
 
       - name: Run native lifecycle and filesystem gates
         run: go test ./internal/integration ./internal/workspace ./internal/appprivate ./internal/appstate ./internal/ai/workspaceid

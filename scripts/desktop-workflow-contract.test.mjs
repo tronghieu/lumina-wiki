@@ -51,6 +51,11 @@ test('native package jobs install or copy then launch that clean artifact for fi
 
 test('package failure diagnostics are bounded and never upload raw runtime or private state', async () => {
   const source = await workflow();
+  assert.ok(
+    source.indexOf('Initialize sanitized package diagnostics')
+      < source.indexOf('Verify exact Go toolchain and Desktop contract'),
+    'diagnostics must exist before the first package preflight can fail',
+  );
   assert.match(source, /package-diagnostics/);
   assert.match(source, /phase=package-build\\nresult=started/);
   assert.doesNotMatch(source, /apps\/desktop\/package-smoke\.log/);
