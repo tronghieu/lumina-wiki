@@ -328,21 +328,23 @@ func TestComposedLibraryLifecycleWithoutExternalRuntimes(t *testing.T) {
 		t.Fatalf("latest history status=%q conversation=%q records=%d err=%v",
 			latest.Status, latest.ConversationID, len(latest.Records), err)
 	}
+	second.close(t)
 
 	before := snapshotWorkspace(t, root)
-	second.authority.selectDirectory(root)
-	openPrepared, err := second.service.PrepareChooseWorkspace(ctx)
+	opener := newLifecycleHarness(t, configBase, libraryParent)
+	opener.authority.selectDirectory(root)
+	openPrepared, err := opener.service.PrepareChooseWorkspace(ctx)
 	if err != nil || openPrepared.Status != ai.PreparationReady {
 		t.Fatalf("open prepare status=%q err=%v", openPrepared.Status, err)
 	}
-	if _, err := second.service.CommitPreparedLibrary(ctx, openPrepared.PreparationToken); err != nil {
+	if _, err := opener.service.CommitPreparedLibrary(ctx, openPrepared.PreparationToken); err != nil {
 		t.Fatal(err)
 	}
 	after := snapshotWorkspace(t, root)
 	if !reflect.DeepEqual(before, after) {
 		t.Fatal("opening an existing library changed its names, types, modes, or bytes")
 	}
-	second.close(t)
+	opener.close(t)
 
 	third := newLifecycleHarness(t, configBase, libraryParent)
 	movedAside := filepath.Join(libraryParent, "preserved-library")
