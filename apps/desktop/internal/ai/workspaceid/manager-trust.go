@@ -9,13 +9,8 @@ func (m *Manager) isTrusted(id WorkspaceID, candidate ownedCandidate) bool {
 		m.mu.Unlock()
 		return false
 	}
-	trustedInfo, err := trusted.handle.Stat()
 	m.mu.Unlock()
-	if err != nil {
-		return false
-	}
-	candidateInfo, err := candidate.handle.Stat()
-	return err == nil && os.SameFile(trustedInfo, candidateInfo)
+	return sameDirectoryHandles(trusted.handle, candidate.handle)
 }
 
 func (m *Manager) adoptTrusted(id WorkspaceID, candidate ownedCandidate) {

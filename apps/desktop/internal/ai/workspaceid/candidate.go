@@ -98,8 +98,13 @@ func revalidateHandle(candidate ownedCandidate) error {
 	if err != nil || !handleInfo.IsDir() {
 		return ErrCandidateChanged
 	}
-	pathInfo, err := os.Stat(candidate.CanonicalPath)
-	if err != nil || !pathInfo.IsDir() || !os.SameFile(handleInfo, pathInfo) {
+	current, err := os.Open(candidate.CanonicalPath)
+	if err != nil {
+		return ErrCandidateChanged
+	}
+	defer current.Close()
+	pathInfo, err := current.Stat()
+	if err != nil || !pathInfo.IsDir() || !sameDirectoryHandles(candidate.handle, current) {
 		return ErrCandidateChanged
 	}
 	return nil

@@ -30,20 +30,22 @@ func (store *registryStore) acquireLock() (func(), error) {
 		_ = file.Close()
 		return nil, errors.New("registry lock changed while opening")
 	}
-	if err := store.secureLockMode(file); err != nil {
-		_ = file.Close()
-		return nil, errors.New("secure registry lock permissions failed")
-	}
-	if !platformValidatePrivateFile(file) {
-		_ = file.Close()
-		return nil, errors.New("registry lock permissions are not private")
-	}
 	if err := store.tryLock(file); err != nil {
 		_ = file.Close()
 		if errors.Is(err, ErrRegistryBusy) {
 			return nil, ErrRegistryBusy
 		}
 		return nil, errors.New("kernel registry lock failed")
+	}
+	if err := store.secureLockMode(file); err != nil {
+		_ = store.unlock(file)
+		_ = file.Close()
+		return nil, errors.New("secure registry lock permissions failed")
+	}
+	if !platformValidatePrivateFile(file) {
+		_ = store.unlock(file)
+		_ = file.Close()
+		return nil, errors.New("registry lock permissions are not private")
 	}
 	store.afterLock()
 	locked, statErr := file.Stat()

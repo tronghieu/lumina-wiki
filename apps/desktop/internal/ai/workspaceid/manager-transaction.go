@@ -147,8 +147,14 @@ func sameCandidateAndRoot(candidate ownedCandidate, root *os.Root) error {
 	if err != nil || candidateInfo == nil || !candidateInfo.IsDir() {
 		return ErrCandidateChanged
 	}
-	rootInfo, err := root.Stat(".")
-	if err != nil || rootInfo == nil || !rootInfo.IsDir() || !os.SameFile(candidateInfo, rootInfo) {
+	rootHandle, err := root.Open(".")
+	if err != nil {
+		return ErrCandidateChanged
+	}
+	defer rootHandle.Close()
+	rootInfo, err := rootHandle.Stat()
+	if err != nil || rootInfo == nil || !rootInfo.IsDir() ||
+		!sameDirectoryHandles(candidate.handle, rootHandle) {
 		return ErrCandidateChanged
 	}
 	return revalidateHandle(candidate)

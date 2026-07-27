@@ -57,7 +57,7 @@ func TestProvisionAbsentTargetAndManifestLast(t *testing.T) {
 			return nil
 		},
 	})
-	target := filepath.Join(t.TempDir(), `Lumina "Đọc"`)
+	target := filepath.Join(t.TempDir(), "Lumina Đọc 资料")
 	classification, err := provisioner.Classify(context.Background(), target)
 	if err != nil || classification.State != TargetAbsent {
 		t.Fatalf("classification=%+v err=%v", classification, err)
