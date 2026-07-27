@@ -72,12 +72,12 @@ export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }:
       >
         <header>
           <div>
-            <h2 ref={titleRef} id="settings-title" tabIndex={-1}>AI Settings</h2>
-            <span>Backend-owned profiles and credentials</span>
+            <h2 ref={titleRef} id="settings-title" tabIndex={-1}>Advanced settings</h2>
+            <span>Models, providers, search, and credentials</span>
           </div>
           <button type="button" aria-label="Close settings" onClick={close}>×</button>
         </header>
-        <nav className="settings-tabs" aria-label="AI settings sections">
+        <nav className="settings-tabs" aria-label="Advanced settings sections">
           <button type="button" aria-pressed={controller.section === 'chat'} onClick={() => controller.setSection('chat')}>Chat</button>
           <button type="button" aria-pressed={controller.section === 'embedding'} onClick={() => controller.setSection('embedding')}>Search</button>
         </nav>
@@ -95,11 +95,11 @@ export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }:
 
         {profile && (controller.section === 'chat' || controller.settings.semanticEnabled) && (
           <form className="settings-form" onSubmit={saveProfile}>
-            <label><span>Provider kind</span><input value={profile.kind} onChange={(event) => controller.updateProfile('kind', event.target.value)} /></label>
+            <label><span>Provider</span><input value={profile.kind} onChange={(event) => controller.updateProfile('kind', event.target.value)} /></label>
             <label><span>Profile label</span><input value={profile.label} onChange={(event) => controller.updateProfile('label', event.target.value)} /></label>
             <label><span>Model</span><input value={profile.model} onChange={(event) => controller.updateProfile('model', event.target.value)} /></label>
-            <label><span>Base URL</span><input value={profile.baseUrl} onChange={(event) => controller.updateProfile('baseUrl', event.target.value)} /></label>
-            <label><span>Credential reference</span><input value={profile.credentialRef || ''} onChange={(event) => controller.updateProfile('credentialRef', event.target.value)} /></label>
+            <label><span>Provider address</span><input value={profile.baseUrl} onChange={(event) => controller.updateProfile('baseUrl', event.target.value)} /></label>
+            <label><span>Credential name</span><input value={profile.credentialRef || ''} onChange={(event) => controller.updateProfile('credentialRef', event.target.value)} /></label>
             {controller.section === 'embedding' && (
               <label><span>Dimensions</span><input type="number" min="1" value={profile.dimensions || ''} onChange={(event) => controller.updateProfile('dimensions', Number(event.target.value))} /></label>
             )}
@@ -135,7 +135,7 @@ export function AiSettingsPanel({ session, gateway, onClose, onProfilesChange }:
               <button type="button" disabled={!session || Boolean(controller.busy)} onClick={() => void controller.changeIndex('cancel')}>Cancel build</button>
               <button type="button" disabled={!session || Boolean(controller.busy)} onClick={() => void controller.changeIndex('clear')}>Clear index</button>
             </div>
-            <p>When semantic search is unavailable, Lumina uses workspace text search.</p>
+            <p>When semantic search is unavailable, Lumina uses library text search.</p>
           </section>
         )}
         {controller.message && <p className="settings-message" role="status">{controller.message}</p>}

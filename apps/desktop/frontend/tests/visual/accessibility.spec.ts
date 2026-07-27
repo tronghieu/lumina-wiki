@@ -15,8 +15,27 @@ test('loaded desktop shell has no WCAG A or AA axe violations', async ({ page })
   expect(results.violations).toEqual([]);
 });
 
+for (const view of ['welcome', 'recovery', 'current-recovery', 'empty']) {
+  test(`${view} state has no WCAG A or AA axe violations`, async ({ page }) => {
+    await page.goto(`${fixturePath}?view=${view}`);
+    const darkResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(darkResults.violations).toEqual([]);
+
+    await page.locator('html').evaluate((element) => {
+      element.dataset.theme = 'light';
+    });
+    await page.waitForTimeout(250);
+    const lightResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+    expect(lightResults.violations).toEqual([]);
+  });
+}
+
 test('dimmed graph labels retain AA contrast', async ({ page }) => {
-  await page.getByRole('textbox', { name: 'Search graph nodes' }).fill('research');
+  await page.getByRole('textbox', { name: 'Search notes and topics' }).fill('research');
   await expect(page.locator('.flow-node.dim .graph-node-label')).toHaveCount(1);
   const results = await new AxeBuilder({ page })
     .include('.graph-canvas')
@@ -44,9 +63,9 @@ test('artifact tabs support arrow keys and expose the active panel', async ({ pa
 test('settings traps focus, closes with Escape, and restores its trigger', async ({ page }) => {
   const trigger = page.getByRole('button', { name: 'Settings' });
   await trigger.click();
-  const dialog = page.getByRole('dialog', { name: 'AI Settings' });
+  const dialog = page.getByRole('dialog', { name: 'Advanced settings' });
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'AI Settings' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Advanced settings' })).toBeFocused();
 
   await page.getByRole('button', { name: 'Close settings' }).focus();
   await page.keyboard.press('Shift+Tab');

@@ -7,21 +7,26 @@ import (
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
 var (
 	ErrWorkspaceTreeUnavailable = errors.New("workspace tree is unavailable")
+	ErrWorkspaceNoteUnavailable = errors.New("workspace note is unavailable")
 	ErrHistoryUnavailable       = errors.New("history is unavailable")
 )
 
 type managementCapableRuntime interface {
 	session.Runtime
 	WorkspaceTree(context.Context) (workspace.WorkspaceTree, error)
+	ValidateTrustedRoot(context.Context) error
+	ReadWorkspaceNote(context.Context, string) (graph.NoteContent, error)
 	HistoryEnabled(context.Context) (bool, error)
 	SetHistoryEnabled(context.Context, bool) error
 	ListHistory(context.Context) ([]history.ConversationMetadata, error)
 	LoadHistory(context.Context, string) ([]history.ConversationRecord, error)
+	LoadLatestHistory(context.Context) (history.LatestResult, error)
 	DeleteHistory(context.Context, string) (history.DeleteResult, error)
 	DeleteAllHistory(context.Context) (history.DeleteAllResult, error)
 	IndexStatus(context.Context, string) (index.IndexStatus, error)

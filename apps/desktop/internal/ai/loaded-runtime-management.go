@@ -2,8 +2,11 @@ package ai
 
 import (
 	"context"
+	"errors"
+	"os"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
@@ -14,6 +17,32 @@ func (runtime *loadedRuntime) WorkspaceTree(parent context.Context) (workspace.W
 	}
 	defer finish()
 	return runtime.deps.Tree.BuildTrusted(ctx, root, proof)
+}
+
+func (runtime *loadedRuntime) ValidateTrustedRoot(parent context.Context) error {
+	ctx, root, proof, finish, err := runtime.begin(parent)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	current, err := os.Lstat(root)
+	if err != nil || current == nil || !current.IsDir() || !os.SameFile(current, proof) ||
+		ctx.Err() != nil {
+		return errors.New("trusted workspace is unavailable")
+	}
+	return nil
+}
+
+func (runtime *loadedRuntime) ReadWorkspaceNote(
+	parent context.Context,
+	locator string,
+) (graph.NoteContent, error) {
+	ctx, root, proof, finish, err := runtime.begin(parent)
+	if err != nil {
+		return graph.NoteContent{}, err
+	}
+	defer finish()
+	return graph.NewService().ReadNoteTrusted(ctx, root, proof, locator)
 }
 
 func (runtime *loadedRuntime) HistoryEnabled(parent context.Context) (bool, error) {
@@ -66,6 +95,19 @@ func (runtime *loadedRuntime) LoadHistory(parent context.Context, conversationID
 		return nil, err
 	}
 	return store.Load(ctx, conversationID)
+}
+
+func (runtime *loadedRuntime) LoadLatestHistory(parent context.Context) (history.LatestResult, error) {
+	ctx, _, _, finish, err := runtime.begin(parent)
+	if err != nil {
+		return history.LatestResult{Status: history.LatestUnavailable}, err
+	}
+	defer finish()
+	store, err := runtime.newHistoryStore()
+	if err != nil {
+		return history.LatestResult{Status: history.LatestUnavailable}, err
+	}
+	return store.LoadLatest(ctx)
 }
 
 func (runtime *loadedRuntime) DeleteHistory(parent context.Context, conversationID string) (history.DeleteResult, error) {

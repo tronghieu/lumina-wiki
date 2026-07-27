@@ -59,6 +59,7 @@
   --on-accent: #1b1505;
   --success: #28c840;
   --danger: #ff5f57;
+  --warning: #d8a13a;
   --overlay: rgb(4 4 5 / 64%);
   --selection: rgb(229 179 65 / 12%);
   --focus-ring: rgb(229 179 65 / 44%);
@@ -86,6 +87,7 @@
   --space-7: 18px;
   --space-8: 20px;
   --space-9: 32px;
+  --space-10: 48px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -107,11 +109,12 @@
   --border: #e5e5e3;
   --line-2: #e2e1da;
   --ink: #111111;
-  --muted: #6b6b70;
+  --muted: #5f5f64;
   --accent: #8a5e0a;
   --on-accent: #ffffff;
   --success: #147a2a;
   --danger: #b42318;
+  --warning: #8a5a00;
   --overlay: rgb(17 17 17 / 42%);
   --selection: rgb(138 94 10 / 12%);
   --focus-ring: rgb(138 94 10 / 38%);

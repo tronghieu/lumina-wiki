@@ -52,6 +52,7 @@ type Manager struct {
 	maxDecisions    int
 	sequence        uint64
 	pending         map[string]pendingDecision
+	prepared        map[*preparedAttachState]struct{}
 	trusted         map[string]trustedEvidence
 }
 
@@ -88,7 +89,8 @@ func NewManager(configBase string, options Options) (*Manager, error) {
 	m := &Manager{store: store, clock: options.Clock, random: options.Random,
 		canonicalize: options.Canonicalizer, probe: options.SignatureProbe,
 		openDirectory: options.OpenDirectory, handleSignature: options.HandleSignature,
-		ttl: options.DecisionTTL, maxDecisions: options.MaxDecisions, pending: map[string]pendingDecision{}}
+		ttl: options.DecisionTTL, maxDecisions: options.MaxDecisions, pending: map[string]pendingDecision{},
+		prepared: map[*preparedAttachState]struct{}{}}
 	m.trusted = map[string]trustedEvidence{}
 	if options.IDSource != nil {
 		m.idSource = options.IDSource

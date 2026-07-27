@@ -11,14 +11,16 @@ func registryRevision(raw []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func matchedWorkspaceIDs(registry Registry, candidate Candidate) []WorkspaceID {
+func matchedWorkspaceIDs(registry Registry, candidate Candidate, legacySignature ...Signature) []WorkspaceID {
 	matched := map[WorkspaceID]struct{}{}
 	for _, record := range registry.Records {
 		if !record.Active {
 			continue
 		}
 		if pathKey(record.CanonicalPath) == pathKey(candidate.CanonicalPath) ||
-			(candidate.HasSignature && record.FilesystemSignature == candidate.Signature) {
+			(candidate.HasSignature && record.FilesystemSignature == candidate.Signature) ||
+			(len(legacySignature) == 1 && legacySignature[0] != "" &&
+				record.FilesystemSignature == legacySignature[0]) {
 			matched[record.WorkspaceID] = struct{}{}
 		}
 	}

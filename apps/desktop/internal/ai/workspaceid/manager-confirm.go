@@ -31,10 +31,11 @@ func (m *Manager) ConfirmAttach(token string) (WorkspaceID, error) {
 	if err != nil {
 		return "", err
 	}
-	if revision != pending.revision || !sameWorkspaceIDs(matchedWorkspaceIDs(registry, current), pending.targetIDs) {
+	if revision != pending.revision ||
+		!sameWorkspaceIDs(matchedWorkspaceIDs(registry, current, candidateLegacy(pending.candidate)...), pending.targetIDs) {
 		return "", ErrRegistryConflict
 	}
-	kind, index := classifyCandidate(registry, current)
+	kind, index := classifyCandidate(registry, current, candidateLegacy(pending.candidate)...)
 	if kind != pending.kind && !(pending.kind == AttachKnown && kind == AttachIdentityConfirmationRequired) {
 		return "", ErrRegistryConflict
 	}
@@ -46,6 +47,7 @@ func (m *Manager) ConfirmAttach(token string) (WorkspaceID, error) {
 			return "", ErrRegistryConflict
 		}
 		registry.Records[index].LastSeenAt = now
+		updateRecordSignature(&registry.Records[index], current)
 		id = registry.Records[index].WorkspaceID
 	case AttachRenameConfirmationRequired:
 		if index < 0 {
@@ -53,6 +55,7 @@ func (m *Manager) ConfirmAttach(token string) (WorkspaceID, error) {
 		}
 		registry.Records[index].CanonicalPath = current.CanonicalPath
 		registry.Records[index].LastSeenAt = now
+		updateRecordSignature(&registry.Records[index], current)
 		id = registry.Records[index].WorkspaceID
 	case AttachNew, AttachPathReuseConfirmationRequired, AttachAmbiguousConfirmationRequired:
 		registry, err = makeRoomForRecord(registry)
@@ -85,6 +88,20 @@ func (m *Manager) ConfirmAttach(token string) (WorkspaceID, error) {
 	m.adoptTrusted(id, pending.candidate)
 	adopted = true
 	return id, nil
+}
+
+func candidateLegacy(candidate ownedCandidate) []Signature {
+	if !candidate.hasLegacySignature {
+		return nil
+	}
+	return []Signature{candidate.legacySignature}
+}
+
+func updateRecordSignature(record *Record, candidate Candidate) {
+	if record == nil || !candidate.HasSignature {
+		return
+	}
+	record.FilesystemSignature = candidate.Signature
 }
 
 func (m *Manager) newUniqueID(registry Registry) (WorkspaceID, error) {

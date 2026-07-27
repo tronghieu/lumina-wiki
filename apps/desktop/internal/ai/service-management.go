@@ -3,7 +3,31 @@ package ai
 import (
 	"context"
 	"errors"
+
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
 )
+
+func (service *Service) ReadWorkspaceNote(
+	ctx context.Context,
+	request WorkspaceNoteRequestDTO,
+) (NoteContentDTO, error) {
+	if !validArtifactLocator(request.Artifact) {
+		return NoteContentDTO{}, ErrInvalidInput
+	}
+	runtime, lease, err := service.resolveManagement(ctx, request.Session)
+	if err != nil {
+		return NoteContentDTO{}, managementResolveError(err, ErrWorkspaceNoteUnavailable)
+	}
+	defer lease.Finish()
+	note, err := runtime.ReadWorkspaceNote(ctx, request.Artifact.RelativePath)
+	if err != nil {
+		return NoteContentDTO{}, managementCallError(ctx, ErrWorkspaceNoteUnavailable, err)
+	}
+	if note.Path != request.Artifact.RelativePath || len(note.Content) > MaxWorkspaceNoteBytes {
+		return NoteContentDTO{}, ErrWorkspaceNoteUnavailable
+	}
+	return NoteContentDTO{Artifact: request.Artifact, Content: note.Content}, nil
+}
 
 func (service *Service) WorkspaceTree(ctx context.Context, reference SessionReferenceDTO) (WorkspaceTreeDTO, error) {
 	runtime, lease, err := service.resolveManagement(ctx, reference)
@@ -82,6 +106,42 @@ func (service *Service) LoadHistory(ctx context.Context, request HistoryConversa
 		return HistoryRecordsDTO{}, ErrHistoryUnavailable
 	}
 	return dto, nil
+}
+
+func (service *Service) LoadLatestHistory(
+	ctx context.Context,
+	reference SessionReferenceDTO,
+) (LatestHistoryDTO, error) {
+	runtime, lease, err := service.resolveManagement(ctx, reference)
+	if err != nil {
+		return LatestHistoryDTO{}, managementResolveError(err, ErrHistoryUnavailable)
+	}
+	defer lease.Finish()
+	latest, err := runtime.LoadLatestHistory(ctx)
+	if err != nil {
+		return LatestHistoryDTO{}, managementCallError(ctx, ErrHistoryUnavailable, err)
+	}
+	result := LatestHistoryDTO{Status: latest.Status}
+	switch latest.Status {
+	case history.LatestLoaded:
+		if !validFacadeID(latest.ConversationID) {
+			return LatestHistoryDTO{}, ErrHistoryUnavailable
+		}
+		records, conversionErr := historyRecordsDTO(latest.Records, latest.ConversationID)
+		if conversionErr != nil || len(records.Records) == 0 {
+			return LatestHistoryDTO{}, ErrHistoryUnavailable
+		}
+		result.ConversationID = latest.ConversationID
+		result.Records = records.Records
+	case history.LatestOff, history.LatestEmpty, history.LatestDeletedRetryExhausted,
+		history.LatestUnavailable, history.LatestCorrupt:
+		if latest.ConversationID != "" || len(latest.Records) != 0 {
+			return LatestHistoryDTO{}, ErrHistoryUnavailable
+		}
+	default:
+		return LatestHistoryDTO{}, ErrHistoryUnavailable
+	}
+	return result, nil
 }
 
 func (service *Service) DeleteHistory(ctx context.Context, request HistoryConversationRequestDTO) (HistoryDeleteResultDTO, error) {

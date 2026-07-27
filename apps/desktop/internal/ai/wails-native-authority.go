@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -87,6 +88,50 @@ func (authority *WailsNativeAuthority) ConfirmDirectory(ctx context.Context, win
 	})
 }
 
+func (authority *WailsNativeAuthority) ConfirmCreateDestination(
+	ctx context.Context,
+	windowID session.WindowID,
+	destination string,
+) (bool, error) {
+	if !validNativeDestination(destination) {
+		return false, ErrNativeAuthority
+	}
+	return authority.ask(ctx, windowID, NativeQuestionSpec{
+		Title:        "Create this library?",
+		Message:      "Lumina will create the library at this exact destination:\n\n" + destination,
+		ApproveLabel: "Create Library",
+		CancelLabel:  "Change Location",
+	})
+}
+
+func (authority *WailsNativeAuthority) ConfirmUseEmptyDirectory(
+	ctx context.Context,
+	windowID session.WindowID,
+	destination string,
+) (bool, error) {
+	if !validNativeDestination(destination) {
+		return false, ErrNativeAuthority
+	}
+	return authority.ask(ctx, windowID, NativeQuestionSpec{
+		Title:        "Use this empty folder?",
+		Message:      "The exact destination already exists and is empty:\n\n" + destination,
+		ApproveLabel: "Use This Empty Folder",
+		CancelLabel:  "Cancel",
+	})
+}
+
+func (authority *WailsNativeAuthority) ConfirmResetRecentActivity(
+	ctx context.Context,
+	windowID session.WindowID,
+) (bool, error) {
+	return authority.ask(ctx, windowID, NativeQuestionSpec{
+		Title:        "Reset recent activity?",
+		Message:      "Remove recent libraries and saved views from this device? Library content and workspace identities will not be deleted.",
+		ApproveLabel: "Reset Recent Activity",
+		CancelLabel:  "Cancel",
+	})
+}
+
 func (authority *WailsNativeAuthority) ConfirmAttachDecision(ctx context.Context, windowID session.WindowID, kind workspaceid.AttachKind) (bool, error) {
 	title, message, ok := attachDecisionPrompt(kind)
 	if !ok {
@@ -129,6 +174,10 @@ func validEmbeddingDisclosure(value EmbeddingDisclosure) bool {
 
 func safeDisclosureText(value string) bool {
 	return value != "" && strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || !unicode.IsPrint(r) || unicode.Is(unicode.Cf, r) }) < 0
+}
+
+func validNativeDestination(value string) bool {
+	return validTypedRoot(value) && filepath.IsAbs(value) && filepath.Clean(value) == value
 }
 
 func (authority *WailsNativeAuthority) ask(ctx context.Context, windowID session.WindowID, question NativeQuestionSpec) (bool, error) {

@@ -1,4 +1,4 @@
-import type { NoteContent } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph/models';
+import type { GraphNode } from './graph-types';
 
 export type NoteContentState = {
   kind: 'idle' | 'loading' | 'loaded' | 'error';
@@ -9,10 +9,10 @@ export type NoteContentState = {
 export const noteUnavailableState: NoteContentState = {
   kind: 'idle',
   path: '',
-  content: 'Open a workspace to read full note content.',
+  content: 'Select a note to read it here.',
 };
 
-export function toNoteLoadedState(note: NoteContent): NoteContentState {
+export function toNoteLoadedState(note: { path: string; content: string }): NoteContentState {
   return {
     kind: 'loaded',
     path: note.path,
@@ -20,10 +20,18 @@ export function toNoteLoadedState(note: NoteContent): NoteContentState {
   };
 }
 
-export function toNoteErrorState(path: string, error: unknown): NoteContentState {
+export function toSnapshotNoteState(node: GraphNode): NoteContentState {
+  return {
+    kind: 'loaded',
+    path: node.path,
+    content: node.preview || 'This note has no preview yet.',
+  };
+}
+
+export function toNoteErrorState(path: string): NoteContentState {
   return {
     kind: 'error',
     path,
-    content: error instanceof Error ? error.message : String(error),
+    content: 'This note could not be opened. Your library is unchanged.',
   };
 }

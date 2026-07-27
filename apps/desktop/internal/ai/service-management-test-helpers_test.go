@@ -6,6 +6,7 @@ import (
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/index"
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
@@ -13,9 +14,11 @@ type managementRuntimeStub struct {
 	mu                 sync.Mutex
 	calls              int
 	tree               workspace.WorkspaceTree
+	note               graph.NoteContent
 	enabled            bool
 	metadata           []history.ConversationMetadata
 	records            []history.ConversationRecord
+	latest             history.LatestResult
 	deleteResult       history.DeleteResult
 	deleteAllResult    history.DeleteAllResult
 	err                error
@@ -38,6 +41,14 @@ func (stub *managementRuntimeStub) WorkspaceTree(context.Context) (workspace.Wor
 	stub.called()
 	return stub.tree, stub.err
 }
+func (stub *managementRuntimeStub) ValidateTrustedRoot(context.Context) error {
+	stub.called()
+	return stub.err
+}
+func (stub *managementRuntimeStub) ReadWorkspaceNote(context.Context, string) (graph.NoteContent, error) {
+	stub.called()
+	return stub.note, stub.err
+}
 func (stub *managementRuntimeStub) HistoryEnabled(context.Context) (bool, error) {
 	stub.called()
 	return stub.enabled, stub.err
@@ -56,6 +67,10 @@ func (stub *managementRuntimeStub) ListHistory(context.Context) ([]history.Conve
 func (stub *managementRuntimeStub) LoadHistory(context.Context, string) ([]history.ConversationRecord, error) {
 	stub.called()
 	return append([]history.ConversationRecord(nil), stub.records...), stub.err
+}
+func (stub *managementRuntimeStub) LoadLatestHistory(context.Context) (history.LatestResult, error) {
+	stub.called()
+	return stub.latest, stub.err
 }
 func (stub *managementRuntimeStub) DeleteHistory(context.Context, string) (history.DeleteResult, error) {
 	stub.called()

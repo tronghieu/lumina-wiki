@@ -98,9 +98,27 @@ func (factory *LoadedRuntimeFactory) Load(ctx context.Context, id workspaceid.Wo
 	if err != nil || nilLike(proof) || !proof.IsDir() {
 		return nil, ErrRuntimeLoad
 	}
+	return factory.loadWithProof(id, root, proof), nil
+}
+
+func (factory *LoadedRuntimeFactory) LoadTrusted(ctx context.Context, id workspaceid.WorkspaceID,
+	root string, proof os.FileInfo) (session.Runtime, error) {
+	if factory == nil || ctx == nil || ctx.Err() != nil || !id.Valid() || !validRuntimeRoot(root) ||
+		nilLike(proof) || !proof.IsDir() {
+		return nil, ErrRuntimeLoad
+	}
+	current, err := os.Lstat(root)
+	if err != nil || current == nil || !current.IsDir() || !os.SameFile(current, proof) {
+		return nil, ErrRuntimeLoad
+	}
+	return factory.loadWithProof(id, root, proof), nil
+}
+
+func (factory *LoadedRuntimeFactory) loadWithProof(id workspaceid.WorkspaceID, root string,
+	proof os.FileInfo) session.Runtime {
 	runtimeCtx, cancel := context.WithCancel(context.Background())
 	return &loadedRuntime{ctx: runtimeCtx, cancel: cancel, id: id, root: root, proof: proof,
-		deps: factory.deps, citations: chat.NewCitationLeaseRegistry()}, nil
+		deps: factory.deps, citations: chat.NewCitationLeaseRegistry()}
 }
 
 func (runtime *loadedRuntime) Close() error {
@@ -137,4 +155,5 @@ func nilLike(value any) bool {
 }
 
 var _ RuntimeFactory = (*LoadedRuntimeFactory)(nil)
+var _ TrustedRuntimeFactory = (*LoadedRuntimeFactory)(nil)
 var _ session.Runtime = (*loadedRuntime)(nil)

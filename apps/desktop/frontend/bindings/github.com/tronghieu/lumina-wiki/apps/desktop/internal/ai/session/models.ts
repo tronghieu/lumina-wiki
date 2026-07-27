@@ -5,6 +5,16 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+export enum AccessMode {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    AccessReadOnly = "read-only",
+    AccessWritable = "writable",
+};
+
 export type Generation = number;
 
 export type SessionID = string;

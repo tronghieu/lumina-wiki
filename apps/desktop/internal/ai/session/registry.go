@@ -15,19 +15,23 @@ type Options struct {
 }
 
 type Registry struct {
-	mu           sync.Mutex
-	randomMu     sync.Mutex
-	random       io.Reader
-	onCloseError func(error)
-	current      map[WindowID]*sessionState
-	issued       map[SessionID]struct{}
-	generation   Generation
-	closed       bool
+	mu            sync.Mutex
+	randomMu      sync.Mutex
+	random        io.Reader
+	onCloseError  func(error)
+	current       map[WindowID]*sessionState
+	windowVersion map[WindowID]uint64
+	issued        map[SessionID]struct{}
+	reserved      map[SessionID]struct{}
+	prepared      map[*stagedActivationState]struct{}
+	generation    Generation
+	closed        bool
 }
 
 type sessionState struct {
 	capability  Capability
 	runtime     Runtime
+	rootLease   TrustedRootLease
 	requests    map[string]*requestState
 	refs        uint64
 	retired     bool
@@ -46,50 +50,82 @@ func NewRegistry(options Options) *Registry {
 		random = rand.Reader
 	}
 	return &Registry{
-		random:       random,
-		onCloseError: options.OnCloseError,
-		current:      make(map[WindowID]*sessionState),
-		issued:       make(map[SessionID]struct{}),
+		random:        random,
+		onCloseError:  options.OnCloseError,
+		current:       make(map[WindowID]*sessionState),
+		windowVersion: make(map[WindowID]uint64),
+		issued:        make(map[SessionID]struct{}),
+		reserved:      make(map[SessionID]struct{}),
+		prepared:      make(map[*stagedActivationState]struct{}),
 	}
 }
 
 func (registry *Registry) Activate(window WindowID, workspace workspaceid.WorkspaceID, display DisplayMetadata, runtime Runtime) (Capability, error) {
+	return registry.ActivateDescriptor(SessionDescriptor{
+		WindowID:    window,
+		WorkspaceID: workspace,
+		Display:     display,
+		AccessMode:  AccessReadOnly,
+		Runtime:     runtime,
+	})
+}
+
+func (registry *Registry) ActivateDescriptor(descriptor SessionDescriptor) (Capability, error) {
+	runtime := descriptor.Runtime
 	if !validRuntime(runtime) {
 		return Capability{}, ErrInvalidInput
 	}
-	if window == 0 || !workspace.Valid() || !validDisplay(display) {
-		registry.rollbackRuntime(runtime)
+	if descriptor.WindowID == 0 || !descriptor.WorkspaceID.Valid() || !validDisplay(descriptor.Display) ||
+		!descriptor.AccessMode.Valid() || (descriptor.RootLease != nil && !validRootLease(descriptor.RootLease)) ||
+		(descriptor.AccessMode == AccessWritable && !validRootLease(descriptor.RootLease)) {
+		registry.rollbackResources(runtime, descriptor.RootLease)
 		return Capability{}, ErrInvalidInput
 	}
 
 	for attempt := 0; attempt < maxIDAttempts; attempt++ {
 		id, err := registry.newSessionID()
 		if err != nil {
-			registry.rollbackRuntime(runtime)
+			registry.rollbackResources(runtime, descriptor.RootLease)
 			return Capability{}, ErrSessionEntropy
 		}
 
 		registry.mu.Lock()
 		if registry.closed {
 			registry.mu.Unlock()
-			registry.rollbackRuntime(runtime)
+			registry.rollbackResources(runtime, descriptor.RootLease)
 			return Capability{}, ErrRegistryClosed
 		}
 		if _, exists := registry.issued[id]; exists {
 			registry.mu.Unlock()
 			continue
 		}
-		if registry.generation == ^Generation(0) {
+		if _, exists := registry.reserved[id]; exists {
 			registry.mu.Unlock()
-			registry.rollbackRuntime(runtime)
+			continue
+		}
+		if registry.generation == ^Generation(0) || registry.windowVersion[descriptor.WindowID] == ^uint64(0) {
+			registry.mu.Unlock()
+			registry.rollbackResources(runtime, descriptor.RootLease)
 			return Capability{}, ErrInvalidInput
 		}
 
 		registry.generation++
-		capability := Capability{id, workspace, registry.generation, display}
-		next := &sessionState{capability: capability, runtime: runtime, requests: make(map[string]*requestState)}
-		old := registry.current[window]
-		registry.current[window] = next
+		capability := Capability{
+			SessionID:   id,
+			WorkspaceID: descriptor.WorkspaceID,
+			Generation:  registry.generation,
+			Display:     descriptor.Display,
+			AccessMode:  descriptor.AccessMode,
+		}
+		next := &sessionState{
+			capability: capability,
+			runtime:    runtime,
+			rootLease:  descriptor.RootLease,
+			requests:   make(map[string]*requestState),
+		}
+		old := registry.current[descriptor.WindowID]
+		registry.current[descriptor.WindowID] = next
+		registry.advanceWindowLocked(descriptor.WindowID)
 		registry.issued[id] = struct{}{}
 		action := registry.retireLocked(old)
 		registry.mu.Unlock()
@@ -98,7 +134,7 @@ func (registry *Registry) Activate(window WindowID, workspace workspaceid.Worksp
 		return capability, nil
 	}
 
-	registry.rollbackRuntime(runtime)
+	registry.rollbackResources(runtime, descriptor.RootLease)
 	return Capability{}, ErrSessionEntropy
 }
 
@@ -124,6 +160,20 @@ func (lease *RuntimeLease) Runtime() Runtime {
 	return lease.session.runtime
 }
 
+func (lease *RuntimeLease) AccessMode() AccessMode {
+	if lease == nil || lease.session == nil {
+		return ""
+	}
+	return lease.session.capability.AccessMode
+}
+
+func (lease *RuntimeLease) WorkspaceID() workspaceid.WorkspaceID {
+	if lease == nil || lease.session == nil {
+		return ""
+	}
+	return lease.session.capability.WorkspaceID
+}
+
 func (lease *RuntimeLease) Finish() {
 	if lease == nil {
 		return
@@ -145,4 +195,22 @@ func (registry *Registry) newSessionID() (SessionID, error) {
 func (registry *Registry) resolveLocked(window WindowID, reference Reference) (*sessionState, bool) {
 	session := registry.current[window]
 	return session, session != nil && !session.retired && session.capability.Reference() == reference
+}
+
+func (registry *Registry) advanceWindowLocked(window WindowID) {
+	if registry.windowVersion[window] != ^uint64(0) {
+		registry.windowVersion[window]++
+	}
+}
+
+func (registry *Registry) cleanupWindowVersionLocked(window WindowID) {
+	if registry.current[window] != nil {
+		return
+	}
+	for prepared := range registry.prepared {
+		if prepared.window == window {
+			return
+		}
+	}
+	delete(registry.windowVersion, window)
 }

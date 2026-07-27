@@ -23,14 +23,15 @@ describe('workspace-tree-data', () => {
     assert.deepEqual(normalizeWorkspaceTree([]), []);
   });
 
-  it('keeps only real bounded workspace roots in reference order', () => {
+  it('keeps only user-facing bounded library groups', () => {
     const groups = normalizeWorkspaceTree([
       directory('wiki', 'wiki'),
       directory('other', 'other'),
       directory('raw', 'raw'),
     ]);
 
-    assert.deepEqual(groups.map((group) => group.path), ['raw', 'wiki']);
+    assert.deepEqual(groups.map((group) => group.path), ['wiki', 'other']);
+    assert.deepEqual(groups.map((group) => group.name), ['Notes', 'other']);
   });
 
   it('sorts directories before files without mutating the backend DTO', () => {
@@ -46,8 +47,8 @@ describe('workspace-tree-data', () => {
 
     const groups = normalizeWorkspaceTree(nodes);
 
-    assert.deepEqual(groups.map((group) => group.path), ['_lumina', 'wiki']);
-    assert.deepEqual(groups[1].children.map((node) => node.name), ['concepts', 'index.md', 'zeta.md']);
+    assert.deepEqual(groups.map((group) => group.path), ['wiki']);
+    assert.deepEqual(groups[0].children.map((node) => node.name), ['Topics', 'index.md', 'zeta.md']);
     assert.deepEqual(nodes, original);
   });
 

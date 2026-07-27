@@ -3,23 +3,33 @@ import type {
   HistoryMetadataDTO,
   SessionReferenceDTO,
 } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/models';
-import type { WorkspaceSummary } from '../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
 import { AgentPanel } from '../features/chat/agent-panel';
 import type { ChatCitation, ChatState } from '../features/chat/chat-types';
-import type { SettingsViewModel } from '../features/settings/ai-settings';
-import { ArtifactPane } from '../features/graph/artifact-pane';
 import type { KnowledgeGraph } from '../features/graph/graph-types';
 import type { NoteContentState } from '../features/graph/note-content';
+import { ArtifactPane } from '../features/graph/artifact-pane';
+import type { SettingsViewModel } from '../features/settings/ai-settings';
+import type {
+  LibraryAccessMode,
+  LibrarySummary,
+} from '../features/workspace/ready-library-state';
 import type { WorkspaceActionState } from '../features/workspace/workspace-actions';
-import type { WorkspaceTreeNode } from '../features/workspace/workspace-tree-data';
 import { WorkspaceRail } from '../features/workspace/workspace-rail';
+import type { WorkspaceTreeNode } from '../features/workspace/workspace-tree-data';
 import { AiSettingsPanel } from './ai-settings-panel';
-import { resolveArtifactView, resolveResponsivePanels, type ArtifactView } from './app-shell-state';
+import {
+  resolveArtifactView,
+  resolveResponsivePanels,
+  type ArtifactView,
+  type SemanticFocus,
+} from './app-shell-state';
 import { DesktopTitleBar } from './desktop-title-bar';
 import { resolveThemePreference, toggleTheme } from './theme-preference';
 
-type AppShellProps = {
+interface AppShellProps {
+  accessMode: LibraryAccessMode;
   actionState: WorkspaceActionState;
+  activationLabel: string | null;
   aiSession: SessionReferenceDTO | null;
   canChat: boolean;
   cancellingChat: boolean;
@@ -28,39 +38,35 @@ type AppShellProps = {
   history: HistoryMetadataDTO[];
   historyBusy: boolean;
   historyEnabled: boolean;
+  libraryLabel: string;
+  librarySummary: LibrarySummary;
   noteState: NoteContentState;
   query: string;
   selectedNodeId: string;
-  sourcePath: string;
-  workspaceSummary: WorkspaceSummary | null;
-  workspaceDraftRoot: string;
-  workspaceRoot: string;
+  restoredFocus: SemanticFocus;
   workspaceTree: WorkspaceTreeNode[];
-  onImportSource: () => void;
-  onActivateWorkspace: () => void;
   onCancelChat: () => void;
   onCitation: (citation: ChatCitation) => Promise<boolean>;
-  onChooseSourcePath: () => void;
-  onChooseWorkspace: () => void;
-  onQueryChange: (query: string) => void;
   onDeleteHistory: (conversationId: string) => void;
   onDeleteAllHistory: () => void;
   onLoadHistory: (conversationId: string) => void;
   onNewChat: () => void;
+  onOpenLibrary: () => void;
   onProfilesChange: (settings: SettingsViewModel) => void;
+  onQueryChange: (query: string) => void;
   onRefreshGraph: () => void;
   onRefreshHistory: () => void;
   onRetryChat: () => void;
-  onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
-  onSourcePathChange: (path: string) => void;
   onSubmitChat: (text: string) => boolean;
   onToggleHistory: () => void;
-  onWorkspaceRootChange: (path: string) => void;
-};
+  onWorkspaceFocusChange: (focus: SemanticFocus, relativePath?: string) => void;
+}
 
-export function AppShell({
+export const AppShell: React.FC<AppShellProps> = ({
+  accessMode,
   actionState,
+  activationLabel,
   aiSession,
   canChat,
   cancellingChat,
@@ -69,34 +75,30 @@ export function AppShell({
   history,
   historyBusy,
   historyEnabled,
+  libraryLabel,
+  librarySummary,
   noteState,
   query,
   selectedNodeId,
-  workspaceSummary,
-  workspaceDraftRoot,
-  workspaceRoot,
+  restoredFocus,
   workspaceTree,
-  onImportSource,
-  onActivateWorkspace,
   onCancelChat,
   onCitation,
-  onChooseSourcePath,
-  onChooseWorkspace,
-  onQueryChange,
   onDeleteHistory,
   onDeleteAllHistory,
   onLoadHistory,
   onNewChat,
+  onOpenLibrary,
   onProfilesChange,
+  onQueryChange,
   onRefreshGraph,
   onRefreshHistory,
   onRetryChat,
-  onRunCheck,
   onSelectNode,
   onSubmitChat,
   onToggleHistory,
-  onWorkspaceRootChange,
-}: AppShellProps) {
+  onWorkspaceFocusChange,
+}) => {
   const initialPanels = resolveResponsivePanels(typeof window === 'undefined' ? 1480 : window.innerWidth);
   const [activeView, setActiveView] = useState<ArtifactView>('graph');
   const [treeOpen, setTreeOpen] = useState(initialPanels.treeInitiallyOpen);
@@ -104,57 +106,58 @@ export function AppShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const responsivePanels = useRef(initialPanels);
   const settingsTrigger = useRef<HTMLButtonElement | null>(null);
+  const workspaceContent = useRef<HTMLDivElement | null>(null);
   const [theme, setTheme] = useState(() => resolveThemePreference(
     typeof window === 'undefined' ? null : window.localStorage.getItem('lumina.desktop.theme'),
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
   ));
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
   const resolvedView = resolveArtifactView(activeView, selectedNodeId);
-  const workspaceLabel = workspaceName(workspaceRoot);
 
-  function closeAgentPanel() {
+  function closeAgentPanel(): void {
     setAgentOpen(false);
     window.setTimeout(() => {
       document.querySelector<HTMLButtonElement>('[aria-label="Open Agent panel"]')?.focus();
     });
   }
 
-  function openAgentPanel() {
+  function openAgentPanel(): void {
     if (window.innerWidth <= 1180) setTreeOpen(false);
     setAgentOpen(true);
+    onWorkspaceFocusChange('chat', selectedNode?.path);
     window.setTimeout(() => {
       document.querySelector<HTMLButtonElement>('[aria-label="Close Agent panel"]')?.focus();
     });
   }
 
-  function closeWorkspaceTree() {
+  function closeWorkspaceTree(): void {
     setTreeOpen(false);
     window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>('[aria-label="Open workspace tree"]')?.focus();
+      document.querySelector<HTMLButtonElement>('[aria-label="Open library notes"]')?.focus();
     });
   }
 
-  function openWorkspaceTree() {
+  function openWorkspaceTree(): void {
     if (window.innerWidth <= 1180) setAgentOpen(false);
     setTreeOpen(true);
     window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>('.workspace-tree-panel [aria-label="Close workspace tree"]')?.focus();
+      document.querySelector<HTMLButtonElement>('.workspace-tree-panel [aria-label="Close library notes"]')?.focus();
     });
   }
 
-  function openSettings() {
+  function openSettings(): void {
     settingsTrigger.current = document.activeElement instanceof HTMLButtonElement
       ? document.activeElement
       : null;
     setSettingsOpen(true);
   }
 
-  function closeSettings() {
+  function closeSettings(): void {
     setSettingsOpen(false);
   }
 
   useEffect(() => {
-    function closeOverlay(event: KeyboardEvent) {
+    function closeOverlay(event: KeyboardEvent): void {
       if (event.key !== 'Escape') return;
       if (settingsOpen) closeSettings();
       else if (agentOpen) closeAgentPanel();
@@ -171,7 +174,7 @@ export function AppShell({
   }, [settingsOpen]);
 
   useEffect(() => {
-    function syncResponsivePanels() {
+    function syncResponsivePanels(): void {
       const next = resolveResponsivePanels(window.innerWidth);
       const previous = responsivePanels.current;
       if (
@@ -193,119 +196,151 @@ export function AppShell({
     window.localStorage.setItem('lumina.desktop.theme', theme);
   }, [theme]);
 
-  function selectTreePath(path: string) {
+  useEffect(() => {
+    if (activationLabel) workspaceContent.current?.setAttribute('inert', '');
+    else workspaceContent.current?.removeAttribute('inert');
+  }, [activationLabel]);
+
+  useEffect(() => {
+    if (restoredFocus === 'chat') {
+      setAgentOpen(true);
+      window.setTimeout(() => {
+        document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus();
+      });
+      return undefined;
+    }
+    const view = restoredFocus === 'note' && selectedNodeId ? 'note' : 'graph';
+    setActiveView(view);
+    window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>(`#artifact-tab-${view}`)?.focus();
+    });
+    return undefined;
+  }, [aiSession?.generation, aiSession?.sessionId, restoredFocus, selectedNodeId]);
+
+  function selectTreePath(path: string): void {
     const graphPath = path.startsWith('wiki/') ? path.slice('wiki/'.length) : path;
     const node = graph.nodes.find((candidate) => candidate.path === graphPath);
     if (node) {
       onSelectNode(node.id);
       setActiveView('note');
+      onWorkspaceFocusChange('note', node.path);
     }
   }
 
-  async function openCitation(citation: ChatCitation) {
+  async function openCitation(citation: ChatCitation): Promise<void> {
     const graphPath = citation.path.startsWith('wiki/')
       ? citation.path.slice('wiki/'.length)
       : citation.path;
     const node = graph.nodes.find((candidate) => candidate.path === graphPath);
     if (node) {
-      await onSelectNode(node.id);
+      onSelectNode(node.id);
       setActiveView('note');
+      onWorkspaceFocusChange('note', node.path);
       return;
     }
     if (await onCitation(citation)) {
       setActiveView('note');
+      onWorkspaceFocusChange('note', citation.path.replace(/^wiki\//, ''));
     }
   }
 
   return (
     <main className="app-shell" lang="en">
-      <DesktopTitleBar workspaceLabel={workspaceLabel} connected={Boolean(workspaceRoot)} />
-      <div className="desktop-workspace">
-        <WorkspaceRail
-          open={treeOpen}
-          selectedPath={selectedNode ? `wiki/${selectedNode.path}` : ''}
-          workspaceLabel={workspaceLabel}
-          workspaceTree={workspaceTree}
-          theme={theme}
-          onClose={closeWorkspaceTree}
-          onOpen={openWorkspaceTree}
-          onOpenSettings={openSettings}
-          onSelectGraph={() => {
-            setActiveView('graph');
-            onQueryChange('');
-          }}
-          onSelectPath={selectTreePath}
-          onToggleTheme={() => setTheme((current) => toggleTheme(current))}
-        />
-        <ArtifactPane
-          activeView={resolvedView}
-          graph={graph}
-          noteState={noteState}
-          query={query}
-          selectedNodeId={selectedNodeId}
-          workspaceSummary={workspaceSummary}
-          workspaceDraftRoot={workspaceDraftRoot}
-          workspaceRoot={workspaceRoot}
-          onActivateWorkspace={onActivateWorkspace}
-          onActiveViewChange={setActiveView}
-          onChooseSourcePath={onChooseSourcePath}
-          onChooseWorkspace={onChooseWorkspace}
-          onImportSource={onImportSource}
-          onQueryChange={onQueryChange}
-          onRefreshGraph={onRefreshGraph}
-          onRunCheck={onRunCheck}
-          onSelectNode={onSelectNode}
-          onWorkspaceDraftChange={onWorkspaceRootChange}
-        />
-        {agentOpen ? (
-          <AgentPanel
-            chat={chat}
-            canChat={canChat}
-            cancelling={cancellingChat}
-            contextLabel={(selectedNode?.path ?? workspaceLabel) || 'No workspace'}
-            workspaceStatus={actionState}
-            history={history}
-            historyBusy={historyBusy}
-            historyEnabled={historyEnabled}
-            onCancel={onCancelChat}
-            onCitation={(citation) => void openCitation(citation)}
-            onClose={closeAgentPanel}
-            onDeleteHistory={onDeleteHistory}
-            onDeleteAllHistory={onDeleteAllHistory}
-            onLoadHistory={onLoadHistory}
-            onNewChat={onNewChat}
-            onRefreshHistory={onRefreshHistory}
-            onRetry={onRetryChat}
-            onSubmit={onSubmitChat}
-            onToggleHistory={onToggleHistory}
+      <DesktopTitleBar libraryLabel={libraryLabel} readOnly={accessMode === 'read-only'} />
+      <section className="desktop-workspace-host" aria-busy={Boolean(activationLabel)}>
+        <div
+          ref={workspaceContent}
+          className="desktop-workspace"
+          aria-hidden={activationLabel ? true : undefined}
+        >
+          <WorkspaceRail
+            open={treeOpen}
+            selectedPath={selectedNode ? `wiki/${selectedNode.path}` : ''}
+            workspaceLabel={libraryLabel}
+            workspaceTree={workspaceTree}
+            theme={theme}
+            onClose={closeWorkspaceTree}
+            onOpen={openWorkspaceTree}
+            onOpenLibrary={onOpenLibrary}
+            onOpenSettings={openSettings}
+            onSelectGraph={() => {
+              setActiveView('graph');
+              onQueryChange('');
+              onWorkspaceFocusChange('graph');
+            }}
+            onSelectPath={selectTreePath}
+            onToggleTheme={() => setTheme((current) => toggleTheme(current))}
           />
-        ) : (
-          <aside className="agent-panel-collapsed" aria-label="Agent panel collapsed">
-            <button
-              type="button"
-              aria-controls="agent-panel"
-              aria-expanded={agentOpen}
-              aria-label="Open Agent panel"
-              onClick={openAgentPanel}
-            >
-              ‹
-            </button>
-            <span>Agent</span>
-          </aside>
-        )}
-        {settingsOpen && (
-          <AiSettingsPanel
-            session={aiSession}
-            onClose={closeSettings}
-            onProfilesChange={onProfilesChange}
+          <ArtifactPane
+            activeView={resolvedView}
+            graph={graph}
+            libraryLabel={libraryLabel}
+            librarySummary={librarySummary}
+            noteState={noteState}
+            query={query}
+            selectedNodeId={selectedNodeId}
+            onActiveViewChange={(view) => {
+              setActiveView(view);
+              onWorkspaceFocusChange(view, view === 'note' ? selectedNode?.path : undefined);
+            }}
+            onOpenLibrary={onOpenLibrary}
+            onQueryChange={onQueryChange}
+            onRefreshGraph={onRefreshGraph}
+            onSelectNode={onSelectNode}
           />
+          {agentOpen ? (
+            <AgentPanel
+              chat={chat}
+              canChat={canChat}
+              cancelling={cancellingChat}
+              contextLabel={selectedNode?.title ?? libraryLabel}
+              workspaceStatus={actionState}
+              history={history}
+              historyBusy={historyBusy}
+              historyEnabled={historyEnabled}
+              onCancel={onCancelChat}
+              onCitation={(citation) => void openCitation(citation)}
+              onClose={closeAgentPanel}
+              onDeleteHistory={onDeleteHistory}
+              onDeleteAllHistory={onDeleteAllHistory}
+              onLoadHistory={onLoadHistory}
+              onNewChat={onNewChat}
+              onRefreshHistory={onRefreshHistory}
+              onRetry={onRetryChat}
+              onSubmit={onSubmitChat}
+              onToggleHistory={onToggleHistory}
+            />
+          ) : (
+            <aside className="agent-panel-collapsed" aria-label="Agent panel collapsed">
+              <button
+                type="button"
+                aria-controls="agent-panel"
+                aria-expanded={agentOpen}
+                aria-label="Open Agent panel"
+                onClick={openAgentPanel}
+              >
+                ‹
+              </button>
+              <span>Agent</span>
+            </aside>
+          )}
+          {settingsOpen && (
+            <AiSettingsPanel
+              session={aiSession}
+              onClose={closeSettings}
+              onProfilesChange={onProfilesChange}
+            />
+          )}
+        </div>
+        {activationLabel && (
+          <div className="activation-veil" role="status" aria-live="polite">
+            <strong>{activationLabel}</strong>
+            <span>Your current library will stay open unless the new one is ready.</span>
+          </div>
         )}
-      </div>
+      </section>
     </main>
   );
-}
+};
 
-function workspaceName(root: string): string {
-  const normalized = root.replace(/\\/g, '/').replace(/\/+$/, '');
-  return normalized.slice(normalized.lastIndexOf('/') + 1);
-}
+export default AppShell;

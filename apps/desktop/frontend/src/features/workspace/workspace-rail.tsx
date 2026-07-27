@@ -11,6 +11,7 @@ type WorkspaceRailProps = {
   onClose: () => void;
   onOpen: () => void;
   onOpenSettings: () => void;
+  onOpenLibrary: () => void;
   onSelectGraph: () => void;
   onSelectPath: (path: string) => void;
   onToggleTheme: () => void;
@@ -25,12 +26,13 @@ export function WorkspaceRail({
   onClose,
   onOpen,
   onOpenSettings,
+  onOpenLibrary,
   onSelectGraph,
   onSelectPath,
   onToggleTheme,
 }: WorkspaceRailProps) {
   const groups = useMemo(() => normalizeWorkspaceTree(workspaceTree), [workspaceTree]);
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set(['_lumina', 'raw', 'wiki']));
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set(['wiki']));
 
   function togglePath(path: string) {
     setExpandedPaths((current) => {
@@ -42,7 +44,7 @@ export function WorkspaceRail({
   }
 
   return (
-    <aside className={open ? 'workspace-rail open' : 'workspace-rail'} aria-label="Workspace navigation">
+    <aside className={open ? 'workspace-rail open' : 'workspace-rail'} aria-label="Library navigation">
       <div className="activity-rail">
         <button className="activity-button active" type="button" aria-label="Graph view" onClick={onSelectGraph}>
           <GraphIcon />
@@ -50,7 +52,7 @@ export function WorkspaceRail({
         <button
           className="activity-button"
           type="button"
-          aria-label={open ? 'Close workspace tree' : 'Open workspace tree'}
+          aria-label={open ? 'Close library notes' : 'Open library notes'}
           aria-controls="workspace-tree-panel"
           aria-expanded={open}
           onClick={open ? onClose : onOpen}
@@ -73,11 +75,11 @@ export function WorkspaceRail({
       {open && (
         <div className="workspace-tree-panel" id="workspace-tree-panel">
           <header>
-            <strong>Workspace</strong>
-            <button type="button" aria-label="Close workspace tree" aria-expanded={open} onClick={onClose}>‹</button>
+            <strong>Library</strong>
+            <button type="button" aria-label="Close library notes" aria-expanded={open} onClick={onClose}>‹</button>
           </header>
-          <nav className="workspace-tree" aria-label="Workspace tree">
-            {groups.length === 0 && <p>No workspace files loaded.</p>}
+          <nav className="workspace-tree" aria-label="Library notes">
+            {groups.length === 0 && <p>No notes yet.</p>}
             {groups.map((group) => (
               <TreeRow
                 expandedPaths={expandedPaths}
@@ -89,10 +91,13 @@ export function WorkspaceRail({
               />
             ))}
           </nav>
-          <div className="workspace-switcher" title={workspaceLabel}>
+          <button className="workspace-switcher" type="button" title={workspaceLabel} onClick={onOpenLibrary}>
             <span aria-hidden="true">‹›</span>
-            <strong>{workspaceLabel || 'No workspace'}</strong>
-          </div>
+            <span>
+              <strong>{workspaceLabel}</strong>
+              <small>Switch library</small>
+            </span>
+          </button>
         </div>
       )}
     </aside>

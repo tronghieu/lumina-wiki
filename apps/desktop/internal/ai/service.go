@@ -25,9 +25,13 @@ type Service struct {
 	streams         StreamSinkFactory
 	settings        SettingsRepository
 	credentials     CredentialRepository
+	workspaceWrites *WorkspaceWriteAuthorizer
 	settingsMu      sync.Mutex
 	consentCommitMu sync.Mutex
 	activations     *activationGate
+	libraries       *libraryCoordinator
+	libraryState    LibraryStateRepository
+	resetTokens     *resetConfirmationCoordinator
 	now             func() time.Time
 }
 
@@ -40,21 +44,30 @@ func NewService(dependencies Dependencies) (*Service, error) {
 	if err := validateConsentAccessComposition(dependencies); err != nil {
 		return nil, err
 	}
-	return &Service{
+	service := &Service{
 		consentAccess: dependencies.ConsentAccess,
 		windows:       dependencies.Windows, native: dependencies.Native, validator: dependencies.Validator,
 		attacher: dependencies.Attacher, runtimes: dependencies.Runtimes, sessions: dependencies.Sessions, streams: dependencies.Streams,
 		settings: dependencies.Settings, credentials: dependencies.Credentials,
-		activations: newActivationGate(),
-		now:         defaultNow(dependencies.Now),
-	}, nil
+		workspaceWrites: NewWorkspaceWriteAuthorizer(dependencies.Sessions),
+		activations:     newActivationGate(),
+		libraryState:    dependencies.LibraryState,
+		resetTokens:     newResetConfirmationCoordinator(),
+		now:             defaultNow(dependencies.Now),
+	}
+	if dependencies.Library != nil {
+		if err := service.configureLibraryProvisioning(*dependencies.Library); err != nil {
+			return nil, err
+		}
+	}
+	return service, nil
 }
 
 func (service *Service) ServiceShutdown() error {
 	return Close(service)
 }
 
-func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (ActivationResult, error) {
+func (service *Service) chooseAndActivateWorkspace(ctx context.Context) (ActivationResult, error) {
 	window, err := service.resolveWindow(ctx)
 	if err != nil {
 		return ActivationResult{}, err
@@ -79,7 +92,7 @@ func (service *Service) ChooseAndActivateWorkspace(ctx context.Context) (Activat
 	}
 	return service.activateApproved(lease, selection.Path)
 }
-func (service *Service) ConfirmAndActivateWorkspace(ctx context.Context, typedRoot string) (ActivationResult, error) {
+func (service *Service) confirmAndActivateWorkspace(ctx context.Context, typedRoot string) (ActivationResult, error) {
 	if !validTypedRoot(typedRoot) {
 		return ActivationResult{}, ErrInvalidInput
 	}

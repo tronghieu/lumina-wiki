@@ -6,8 +6,9 @@ import (
 )
 
 type cleanupAction struct {
-	cancels []context.CancelFunc
-	runtime Runtime
+	cancels   []context.CancelFunc
+	runtime   Runtime
+	rootLease TrustedRootLease
 }
 
 func (registry *Registry) Deactivate(window WindowID, reference Reference) error {
@@ -32,6 +33,8 @@ func (registry *Registry) BeginDeactivate(window WindowID, reference Reference) 
 		return nil, ErrInvalidSession
 	}
 	delete(registry.current, window)
+	registry.advanceWindowLocked(window)
+	registry.cleanupWindowVersionLocked(window)
 	action := registry.retireLocked(session)
 	registry.mu.Unlock()
 	var once sync.Once
@@ -53,9 +56,21 @@ func (registry *Registry) CloseWindow(window WindowID) error {
 	registry.mu.Lock()
 	session := registry.current[window]
 	delete(registry.current, window)
-	action := registry.retireLocked(session)
+	registry.advanceWindowLocked(window)
+	actions := make([]cleanupAction, 0, 1)
+	for prepared := range registry.prepared {
+		if prepared.window == window {
+			actions = append(actions, registry.abortPreparedLocked(prepared))
+		}
+	}
+	registry.cleanupWindowVersionLocked(window)
+	actions = append(actions, registry.retireLocked(session))
 	registry.mu.Unlock()
-	if registry.runCleanup(action) {
+	failed := false
+	for _, action := range actions {
+		failed = registry.runCleanup(action) || failed
+	}
+	if failed {
 		return ErrRuntimeClose
 	}
 	return nil
@@ -68,11 +83,16 @@ func (registry *Registry) Close() error {
 		return nil
 	}
 	registry.closed = true
-	actions := make([]cleanupAction, 0, len(registry.current))
+	actions := make([]cleanupAction, 0, len(registry.current)+len(registry.prepared))
+	for prepared := range registry.prepared {
+		actions = append(actions, registry.abortPreparedLocked(prepared))
+	}
 	for window, session := range registry.current {
 		delete(registry.current, window)
+		registry.cleanupWindowVersionLocked(window)
 		actions = append(actions, registry.retireLocked(session))
 	}
+	clear(registry.windowVersion)
 	registry.mu.Unlock()
 
 	failed := false
@@ -96,6 +116,7 @@ func (registry *Registry) retireLocked(session *sessionState) cleanupAction {
 	}
 	closeAction := registry.closeIfUnusedLocked(session)
 	action.runtime = closeAction.runtime
+	action.rootLease = closeAction.rootLease
 	return action
 }
 
@@ -104,7 +125,7 @@ func (registry *Registry) closeIfUnusedLocked(session *sessionState) cleanupActi
 		return cleanupAction{}
 	}
 	session.closeQueued = true
-	return cleanupAction{runtime: session.runtime}
+	return cleanupAction{runtime: session.runtime, rootLease: session.rootLease}
 }
 
 func (registry *Registry) release(session *sessionState) {
@@ -121,16 +142,37 @@ func (registry *Registry) runCleanup(action cleanupAction) bool {
 	for _, cancel := range action.cancels {
 		cancel()
 	}
-	if action.runtime == nil {
-		return false
-	}
-	if err := action.runtime.Close(); err != nil {
-		if registry.onCloseError != nil {
-			registry.onCloseError(ErrRuntimeClose)
+	failed := false
+	if action.runtime != nil {
+		if err := action.runtime.Close(); err != nil {
+			if registry.onCloseError != nil {
+				registry.onCloseError(ErrRuntimeClose)
+			}
+			failed = true
 		}
-		return true
 	}
-	return false
+	if action.rootLease != nil {
+		if err := action.rootLease.Close(); err != nil {
+			if registry.onCloseError != nil {
+				registry.onCloseError(ErrRootLeaseClose)
+			}
+			failed = true
+		}
+	}
+	return failed
+}
+
+func (registry *Registry) rollbackResources(runtime Runtime, rootLease TrustedRootLease) {
+	action := cleanupAction{}
+	if validRuntime(runtime) {
+		action.runtime = runtime
+	}
+	if validRootLease(rootLease) {
+		action.rootLease = rootLease
+	}
+	if action.runtime != nil || action.rootLease != nil {
+		registry.runCleanup(action)
+	}
 }
 
 func (registry *Registry) rollbackRuntime(runtime Runtime) {

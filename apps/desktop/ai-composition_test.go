@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
@@ -17,6 +20,33 @@ func TestNewAIServiceBuildsFromTrustedPlatformRoot(t *testing.T) {
 	}
 	if service == nil {
 		t.Fatal("AI service is nil")
+	}
+	libraries := reflect.ValueOf(service).Elem().FieldByName("libraries")
+	if !libraries.IsValid() || libraries.IsNil() {
+		t.Fatal("AI service has no Phase 3 library coordinator")
+	}
+	libraryState := reflect.ValueOf(service).Elem().FieldByName("libraryState")
+	if !libraryState.IsValid() || libraryState.IsNil() {
+		t.Fatal("AI service has no recent activity store")
+	}
+}
+
+func TestDefaultLibraryParentPrefersPhysicalDocumentsAndFallsBackToHome(t *testing.T) {
+	home := t.TempDir()
+	documents := filepath.Join(home, "Documents")
+	if err := os.Mkdir(documents, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	parent, err := defaultLibraryParentFromHome(home)
+	if err != nil || parent != documents {
+		t.Fatalf("documents parent=%q err=%v", parent, err)
+	}
+	if err := os.Remove(documents); err != nil {
+		t.Fatal(err)
+	}
+	parent, err = defaultLibraryParentFromHome(home)
+	if err != nil || parent != home {
+		t.Fatalf("home fallback=%q err=%v", parent, err)
 	}
 }
 

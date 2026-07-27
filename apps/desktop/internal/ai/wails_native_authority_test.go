@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -77,6 +78,83 @@ func TestWailsNativeConfirmationPromptsNeverContainCallerPath(t *testing.T) {
 	question := driver.questions[0]
 	if question.Window != window || question.Title == "" || question.Message == "" || strings.Contains(question.Message, "/private") {
 		t.Fatalf("question=%#v", question)
+	}
+}
+
+func TestWailsNativeResetRecentActivityPromptStatesPreservedData(t *testing.T) {
+	window := application.NewWindow(application.WebviewWindowOptions{Name: "reset-owner"})
+	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}
+	driver := &nativeDialogDriverStub{answer: true}
+	authority, _ := newWailsNativeAuthority(lookup, driver)
+
+	approved, err := authority.ConfirmResetRecentActivity(
+		context.Background(), session.WindowID(window.ID()),
+	)
+	if err != nil || !approved || len(driver.questions) != 1 {
+		t.Fatalf("approved=%v err=%v questions=%d", approved, err, len(driver.questions))
+	}
+	question := driver.questions[0]
+	if question.Window != window ||
+		!strings.Contains(question.Message, "Library content") ||
+		!strings.Contains(question.Message, "workspace identities") {
+		t.Fatalf("question=%#v", question)
+	}
+}
+
+func TestWailsNativeCreatePromptsShowExactDestinationAndDistinctEmptyApproval(t *testing.T) {
+	window := application.NewWindow(application.WebviewWindowOptions{Name: "create-owner"})
+	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}
+	driver := &nativeDialogDriverStub{answer: true}
+	authority, _ := newWailsNativeAuthority(lookup, driver)
+	destination := filepath.Join(t.TempDir(), "Lumina Library")
+
+	approved, err := authority.ConfirmCreateDestination(
+		context.Background(),
+		session.WindowID(window.ID()),
+		destination,
+	)
+	if err != nil || !approved {
+		t.Fatalf("create approved=%v err=%v", approved, err)
+	}
+	approved, err = authority.ConfirmUseEmptyDirectory(
+		context.Background(),
+		session.WindowID(window.ID()),
+		destination,
+	)
+	if err != nil || !approved {
+		t.Fatalf("empty approved=%v err=%v", approved, err)
+	}
+	if len(driver.questions) != 2 {
+		t.Fatalf("questions=%d", len(driver.questions))
+	}
+	create, empty := driver.questions[0], driver.questions[1]
+	if create.Window != window || !strings.Contains(create.Message, destination) ||
+		create.ApproveLabel != "Create Library" || create.CancelLabel != "Change Location" {
+		t.Fatalf("create question=%#v", create)
+	}
+	if empty.Window != window || !strings.Contains(empty.Message, destination) ||
+		empty.ApproveLabel != "Use This Empty Folder" || empty.CancelLabel != "Cancel" ||
+		empty.Title == create.Title {
+		t.Fatalf("empty question=%#v", empty)
+	}
+}
+
+func TestWailsNativeCreatePromptsRejectUnsafeDestinationBeforeDialog(t *testing.T) {
+	window := application.NewWindow(application.WebviewWindowOptions{Name: "create-invalid"})
+	lookup := &windowLookupStub{windows: map[uint]application.Window{window.ID(): window}}
+	driver := &nativeDialogDriverStub{answer: true}
+	authority, _ := newWailsNativeAuthority(lookup, driver)
+	for _, destination := range []string{"relative", "/safe/\nspoof", strings.Repeat("x", MaxTypedRootBytes+1)} {
+		if _, err := authority.ConfirmCreateDestination(
+			context.Background(),
+			session.WindowID(window.ID()),
+			destination,
+		); !errors.Is(err, ErrNativeAuthority) {
+			t.Fatalf("destination %q err=%v", destination, err)
+		}
+	}
+	if len(driver.questions) != 0 {
+		t.Fatalf("unsafe destination prompted: %v", driver.questions)
 	}
 }
 

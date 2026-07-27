@@ -1,10 +1,14 @@
 package workspace
 
 import (
+	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/rootproof"
 )
 
 type ValidationResult struct {
@@ -24,20 +28,58 @@ func (s *Service) Validate(root string) (ValidationResult, error) {
 	if err != nil {
 		return ValidationResult{}, err
 	}
-	required := []string{"README.md", "wiki"}
-	for _, item := range required {
-		info, err := os.Stat(filepath.Join(abs, item))
-		if err != nil {
-			return ValidationResult{Root: abs, Valid: false}, errors.New("not a Lumina workspace")
-		}
-		if item == "README.md" && info.IsDir() {
-			return ValidationResult{Root: abs, Valid: false}, errors.New("not a Lumina workspace")
-		}
-		if item == "wiki" && !info.IsDir() {
-			return ValidationResult{Root: abs, Valid: false}, errors.New("not a Lumina workspace")
-		}
+	rootHandle, err := openTreeRoot(abs)
+	if err != nil {
+		return ValidationResult{Root: abs, Valid: false}, errors.New("not a Lumina workspace")
 	}
-	return ValidationResult{Root: abs, Valid: true, Packs: detectPacks(abs)}, nil
+	defer rootHandle.Close()
+	return validateServiceRoot(context.Background(), abs, rootHandle)
+}
+
+func (s *Service) ValidateTrusted(ctx context.Context, root string, proof rootproof.RootProof) (ValidationResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ValidationResult{}, err
+	}
+	if root == "" || filepath.Clean(root) != root || proof.Path() != root {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	if err := proof.Validate(); err != nil {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	reopenedProof, err := rootproof.Open(root)
+	if err != nil {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	defer reopenedProof.Close()
+	expectedSignature, expectedOK := proof.Signature()
+	openedSignature, openedOK := reopenedProof.Signature()
+	if !expectedOK || !openedOK || expectedSignature != openedSignature {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	rootHandle, err := proof.OpenRoot()
+	if err != nil {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	defer rootHandle.Close()
+	result, err := validateServiceRoot(ctx, root, rootHandle)
+	if err != nil || proof.Validate() != nil || reopenedProof.Validate() != nil {
+		return ValidationResult{}, errors.New("trusted workspace is unavailable")
+	}
+	return result, nil
+}
+
+func validateServiceRoot(ctx context.Context, path string, root *os.Root) (ValidationResult, error) {
+	if err := validateTreeWorkspace(root); err != nil {
+		return ValidationResult{Root: path, Valid: false}, errors.New("not a Lumina workspace")
+	}
+	status, err := inspectManifest(ctx, root)
+	if err != nil {
+		return ValidationResult{}, err
+	}
+	if status == manifestMalformed || status == manifestNewer {
+		return ValidationResult{Root: path, Valid: false}, errors.New("not a compatible Lumina workspace")
+	}
+	return ValidationResult{Root: path, Valid: true, Packs: detectPacksRoot(root)}, nil
 }
 
 func (s *Service) Summary(root string) (WorkspaceSummary, error) {
@@ -93,6 +135,22 @@ func detectPacks(root string) []string {
 		packs = append(packs, "reading")
 	}
 	return packs
+}
+
+func detectPacksRoot(root *os.Root) []string {
+	packs := []string{"core"}
+	if rootedDirectoryExists(root, "wiki/topics") || rootedDirectoryExists(root, "wiki/foundations") {
+		packs = append(packs, "research")
+	}
+	if rootedDirectoryExists(root, "wiki/chapters") || rootedDirectoryExists(root, "wiki/characters") {
+		packs = append(packs, "reading")
+	}
+	return packs
+}
+
+func rootedDirectoryExists(root *os.Root, name string) bool {
+	info, err := root.Lstat(name)
+	return err == nil && info.Mode()&fs.ModeSymlink == 0 && info.IsDir()
 }
 
 func exists(path string) bool {

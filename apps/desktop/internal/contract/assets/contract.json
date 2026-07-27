@@ -1,0 +1,1876 @@
+{
+  "directories": [
+    ".agents",
+    ".agents/skills",
+    ".agents/skills/lumi-ask",
+    ".agents/skills/lumi-check",
+    ".agents/skills/lumi-check/references",
+    ".agents/skills/lumi-edit",
+    ".agents/skills/lumi-help",
+    ".agents/skills/lumi-ingest",
+    ".agents/skills/lumi-ingest/references",
+    ".agents/skills/lumi-init",
+    ".agents/skills/lumi-migrate-legacy",
+    ".agents/skills/lumi-migrate-legacy/references",
+    ".agents/skills/lumi-reset",
+    ".agents/skills/lumi-verify",
+    ".agents/skills/lumi-verify/references",
+    "_lumina",
+    "_lumina/_state",
+    "_lumina/config",
+    "_lumina/schema",
+    "_lumina/scripts",
+    "_lumina/scripts/lib",
+    "_lumina/tools",
+    "raw",
+    "raw/assets",
+    "raw/download",
+    "raw/notes",
+    "raw/sources",
+    "raw/tmp",
+    "wiki",
+    "wiki/concepts",
+    "wiki/graph",
+    "wiki/outputs",
+    "wiki/people",
+    "wiki/readings",
+    "wiki/sources",
+    "wiki/summary"
+  ],
+  "limits": {
+    "directoryCount": 36,
+    "fileCount": 46,
+    "maxFileBytes": 78131,
+    "maxLogicalPathBytes": 61,
+    "totalBytes": 498356
+  },
+  "lintCheckIds": [
+    "L01",
+    "L02",
+    "L03",
+    "L04",
+    "L05",
+    "L06",
+    "L07",
+    "L08",
+    "L09",
+    "L10",
+    "L11",
+    "L12",
+    "L13",
+    "L14",
+    "L16",
+    "L17"
+  ],
+  "materialization": {
+    "allowedSubstitutions": [
+      "project_name",
+      "locale",
+      "communication_language",
+      "document_output_language",
+      "pack_core",
+      "pack_research",
+      "pack_reading",
+      "pack_learning",
+      "created_at",
+      "schema_version"
+    ],
+    "clock": {
+      "createdAt": "UTC date YYYY-MM-DD",
+      "input": "one injected instant",
+      "installedAt": "UTC RFC3339",
+      "updatedAt": "same bytes as installedAt"
+    },
+    "config": {
+      "communication_language": "English",
+      "created_at": "$runtime.now.utcDate",
+      "document_output_language": "English",
+      "ide_targets": {
+        "claude_code": false,
+        "codex": false,
+        "cursor": false,
+        "gemini_cli": false,
+        "generic": true,
+        "iflow": false,
+        "qwen": false
+      },
+      "integrations": {
+        "marp_slides": false,
+        "obsidian_vault": false,
+        "qmd_search": false
+      },
+      "lint": {
+        "checks": {
+          "broken_links": true,
+          "index_freshness": true,
+          "log_format": true,
+          "missing_reverse_links": true,
+          "orphan_pages": true,
+          "stale_claims": false
+        },
+        "default_mode": "report"
+      },
+      "locale": "en",
+      "packs": {
+        "core": true,
+        "learning": false,
+        "reading": false,
+        "research": false
+      },
+      "paths": {
+        "_lumina": "_lumina",
+        "agents": ".agents",
+        "index": "wiki/index.md",
+        "log": "wiki/log.md",
+        "raw": "raw",
+        "wiki": "wiki"
+      },
+      "project_name": "$runtime.projectName",
+      "telemetry": false,
+      "wiki": {
+        "bidirectional_links": {
+          "exemptions": [
+            "foundations/**",
+            "outputs/**",
+            "*://*"
+          ],
+          "mode": "exempt-only"
+        },
+        "graph": {
+          "edge_types_core": [
+            "related_to",
+            "builds_on",
+            "contradicts",
+            "cites",
+            "mentions",
+            "part_of"
+          ],
+          "enabled": true
+        },
+        "link_syntax": "obsidian",
+        "log_prefix": "## [{{date}}] {{skill}} | {{details}}",
+        "slug_style": "kebab-case"
+      }
+    },
+    "directoriesSource": "contract.directories",
+    "files": [
+      {
+        "action": "render-readme",
+        "path": "README.md",
+        "source": "README.md"
+      },
+      {
+        "action": "serialize-config",
+        "path": "_lumina/config/lumina.config.yaml"
+      },
+      {
+        "action": "serialize-manifest",
+        "path": "_lumina/manifest.json"
+      },
+      {
+        "action": "serialize-skills-csv",
+        "path": "_lumina/_state/skills-manifest.csv"
+      },
+      {
+        "action": "serialize-files-csv-after-target-hashes",
+        "path": "_lumina/_state/files-manifest.csv"
+      }
+    ],
+    "hash": {
+      "algorithm": "sha256",
+      "filesManifestInput": "exact materialized target bytes",
+      "output": "lowercase hex"
+    },
+    "manifest": {
+      "ideTargets": [
+        "generic"
+      ],
+      "installedAt": "$runtime.now.rfc3339",
+      "locale": "en",
+      "packageVersion": "1.9.2",
+      "packs": {
+        "core": {
+          "source": "built-in",
+          "version": "1.9.2"
+        }
+      },
+      "resolvedPaths": {
+        "agents": "$runtime.root/.agents",
+        "lumina": "$runtime.root/_lumina",
+        "projectRoot": "$runtime.root",
+        "raw": "$runtime.root/raw",
+        "wiki": "$runtime.root/wiki"
+      },
+      "schemaVersion": 4,
+      "symlinkStrategies": {},
+      "updatedAt": "$runtime.now.rfc3339"
+    },
+    "payload": {
+      "source": "contract.payload.entries",
+      "staticEntryKind": "static",
+      "templateAction": "render with materialization substitutions",
+      "templateEntryKind": "template"
+    },
+    "render": {
+      "conditionals": "non-nested-truthy",
+      "engine": "lumina-template-v1",
+      "lineEndings": "lf",
+      "readme": {
+        "defaultPurpose": "_(Describe what this wiki is for. Edit freely — Lumina will not touch this section on upgrade.)_",
+        "heading": "## Project Purpose",
+        "insertion": "immediately before the first <!-- lumina:schema --> marker",
+        "purpose": ""
+      },
+      "unknownVariables": "empty-string"
+    },
+    "runtimeInputs": [
+      "projectName",
+      "now",
+      "root"
+    ],
+    "serialization": {
+      "config": {
+        "format": "lumina-yaml-v1",
+        "header": [
+          "# lumina.config.yaml — workspace config managed by lumina-wiki installer.",
+          "# Lives at _lumina/config/lumina.config.yaml. Editable by hand.",
+          ""
+        ],
+        "indentation": 2,
+        "keyOrder": "UTF-8 byte order",
+        "lineWidth": 100
+      },
+      "csv": {
+        "delimiter": ",",
+        "escapedQuote": "\"\"",
+        "format": "lumina-csv-v1",
+        "quote": "\"",
+        "quoteWhen": "field contains comma, quote, CR, or LF"
+      },
+      "finalNewline": true,
+      "manifest": {
+        "format": "canonical-json-v1",
+        "indentation": 2,
+        "keyOrder": "UTF-8 byte order"
+      }
+    },
+    "state": {
+      "filesCsv": {
+        "columns": [
+          "relative_path",
+          "sha256",
+          "source_pack",
+          "installed_version"
+        ],
+        "installedVersion": "1.9.2",
+        "rows": "contract.state.managedFilePaths in order after exact target hashes",
+        "sourcePack": "core"
+      },
+      "skillsCsv": {
+        "columns": [
+          "canonical_id",
+          "display_name",
+          "pack",
+          "source",
+          "relative_path",
+          "target_link_path",
+          "version"
+        ],
+        "relativePath": ".agents/skills/{canonical_id}",
+        "rows": [
+          {
+            "canonical_id": "lumi-init",
+            "display_name": "/lumi-init",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-init",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-ingest",
+            "display_name": "/lumi-ingest",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-ingest",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-ask",
+            "display_name": "/lumi-ask",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-ask",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-edit",
+            "display_name": "/lumi-edit",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-edit",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-check",
+            "display_name": "/lumi-check",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-check",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-reset",
+            "display_name": "/lumi-reset",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-reset",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-verify",
+            "display_name": "/lumi-verify",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-verify",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-migrate-legacy",
+            "display_name": "/lumi-migrate-legacy",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-migrate-legacy",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          },
+          {
+            "canonical_id": "lumi-help",
+            "display_name": "/lumi-help",
+            "pack": "core",
+            "relative_path": ".agents/skills/lumi-help",
+            "source": "built-in",
+            "target_link_path": "",
+            "version": "1.9.2"
+          }
+        ]
+      },
+      "writeOrder": [
+        "payload and rendered files",
+        "_lumina/manifest.json",
+        "_lumina/_state/skills-manifest.csv",
+        "_lumina/_state/files-manifest.csv"
+      ]
+    },
+    "version": 1
+  },
+  "payload": {
+    "entries": [
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ask/SKILL.md",
+        "sha256": "457bedbc6b3158226df87562dc4db821f7dbf900c5daed2968d5175eb76163af",
+        "size": 11053
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-check/SKILL.md",
+        "sha256": "74e7079d79b970b65e3fffefc64a60f87fc07aa8452a89e0cba4b681c3288c87",
+        "size": 7465
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-check/references/lint-checks.md",
+        "sha256": "25aeda7a04680f601ae7c3c77c2b1babaf22d3bba1587f80dafef453c18a32aa",
+        "size": 3646
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-edit/SKILL.md",
+        "sha256": "7302af649a5249886aa93dcb819e012de39ef596c5906fe79a9aea9f78d253ae",
+        "size": 7708
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-help/SKILL.md",
+        "sha256": "3f0917fca15c6bab783fa6951007fa8c3ad93c599a402b4b4de98869e282d101",
+        "size": 6696
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/SKILL.md",
+        "sha256": "8bb53974c4b28f49ee81cf72ff7831af83d972deecb68f8a26632d4ac9d27861",
+        "size": 5697
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/dedup-policy.md",
+        "sha256": "433a43b0a88542cd70c044e3ecf642507f22ecb983cbf3fb186fc0f5a04d0be4",
+        "size": 4568
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/long-source.md",
+        "sha256": "4b5f4101e8c4a0fca6addcaf89f1124f238b3b612bbe4862c2612a490646515a",
+        "size": 7422
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/pdf-preprocessing.md",
+        "sha256": "ce1144eeb55caac6e9b8202cccf6f2adbada4310cb145a708cb7f8bffc497195",
+        "size": 1585
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/step-01-draft.md",
+        "sha256": "eb3ddafd71b6964e2b8b4d509c9f71e06fcef2aac2325a1e662054ccba292a39",
+        "size": 13454
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/step-02-lint.md",
+        "sha256": "8aab498ab60fb9b1cb4e7e3f25b7c37c0c85d6fce2272bdef619db622cc676a1",
+        "size": 2417
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/step-03-verify.md",
+        "sha256": "d4f9deaaa6fddece9796d5abe3e3f14b7227375f53494b7b01ff20230cc73c58",
+        "size": 8505
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-ingest/references/step-04-finalize.md",
+        "sha256": "b9a5a109246f991cfbbece2c4f464af25f73543d2e2c42e39190f3769e3db950",
+        "size": 2959
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-init/SKILL.md",
+        "sha256": "4bae2ae18a0b4d032be7fa8b93b1e98f6a85b228bb39bdb0bb6d6e47a32741fc",
+        "size": 6533
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-migrate-legacy/SKILL.md",
+        "sha256": "07be23b7290fc0bc06da1a42805ea51c96e318a2c58859ecd41fe4a2f3f5c99f",
+        "size": 19745
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-migrate-legacy/references/backfill-ids.md",
+        "sha256": "4618b5855cbf245865b87121bd7ba4a63670d0291fd9af0f83268ebc04b48736",
+        "size": 3895
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-reset/SKILL.md",
+        "sha256": "984221a83389eca94d9b20173e9241cfab7885ecc0baeaff4f6a0be93aff9760",
+        "size": 9464
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-verify/SKILL.md",
+        "sha256": "ab819dbb0f75bedc6ec26f1fe9413e7aa6f03dd0ece94312ba3852a99ea1e1c0",
+        "size": 15061
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-verify/references/reviewers.md",
+        "sha256": "448b7b14e6564901bd4fc08cb27e83b522802d7b1419a5a93965acc7a1440020",
+        "size": 5331
+      },
+      {
+        "kind": "static",
+        "path": ".agents/skills/lumi-verify/references/triage.md",
+        "sha256": "a544cea47dbafa7c578f184df43438d46b811f2d52f3e89fb74e2443468eb176",
+        "size": 3081
+      },
+      {
+        "kind": "static",
+        "path": ".gitignore",
+        "sha256": "f476c4410fcd5ee39c231788886d915e1fc2abfcfbd5911248cfdb6f4ea49580",
+        "size": 324
+      },
+      {
+        "kind": "template",
+        "path": "README.md",
+        "sha256": "065b0320be48c6bce785e0008feed22a9bf051d423fb01bc1d45bcb718273044",
+        "size": 16074
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/CHANGELOG.md",
+        "sha256": "ee58039350c65d36c4b29db13aab19c1429e0f8dc1e2738ca914eb2be87dc728",
+        "size": 45572
+      },
+      {
+        "kind": "template",
+        "path": "_lumina/schema/cross-reference-packs.md",
+        "sha256": "8a6233dd45882450623acd4f57947c55219c6b31d7c171d8791d3352e36a869a",
+        "size": 3023
+      },
+      {
+        "kind": "template",
+        "path": "_lumina/schema/graph-packs.md",
+        "sha256": "8eefc19549d98537b4e18c158050d28ec601a8eabc830b516f1c3d4dca3726d2",
+        "size": 3214
+      },
+      {
+        "kind": "template",
+        "path": "_lumina/schema/lumi-help-runbook.md",
+        "sha256": "6e20f06079b7f22500913defa5452b43fb4744bf9a82b43700911b16bf5c0405",
+        "size": 7993
+      },
+      {
+        "kind": "template",
+        "path": "_lumina/schema/lumi-help.csv",
+        "sha256": "ad1e6a2b78dc7f90a94de028f25662e6faf95268f8b1fe2a6daca7704c6f332b",
+        "size": 3127
+      },
+      {
+        "kind": "template",
+        "path": "_lumina/schema/page-templates.md",
+        "sha256": "6d6f47b0d4cd268807a465ed3db67d10f1fd70ff4c234abe968df0520608d324",
+        "size": 8359
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/build-source.mjs",
+        "sha256": "91240461ac5584b2e1c688723acf5cf9921dd84eb227131077beaea515d0dc6d",
+        "size": 976
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/discover-runner.mjs",
+        "sha256": "52618d82b2096efdaa5efa6b51ca4a2cb22d2108d33eeed883daf87246ecad72",
+        "size": 17595
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/external-ids.mjs",
+        "sha256": "0dce1f4a15e621ba3ce991e44a2fbda775df752ffca978bae30b7c1846b8055a",
+        "size": 9968
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/lib/discovery-state.mjs",
+        "sha256": "ef3ef911c2db7d8d7dc662738b5713adec082a2f886b8591e32a5f40dd9a5021",
+        "size": 1673
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/lib/watchlist-config.mjs",
+        "sha256": "b3db06346bc65a90b5b125b980416ec81c24ffa1cbd583d38d0fcf7366603155",
+        "size": 10701
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/lint.mjs",
+        "sha256": "b548583219982caa00b6946dc1275a30dc3f9d820c4332b62315bc66caa71254",
+        "size": 55985
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/merge-ids.mjs",
+        "sha256": "24aed3b8f511ac77e2a74af81add4d8f95706bf4309356423f483c40c2bf955f",
+        "size": 2775
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/parse-ids.mjs",
+        "sha256": "a5f1719f9e1d046246b3eb36a98a17fd7645e1ff6f179d0cf7c076a46ca94979",
+        "size": 1274
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/reset.mjs",
+        "sha256": "8d2723761efc7b7bcba4a430a854b332aafa185140f7b13670f471cd3cc6f7ac",
+        "size": 8587
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/schemas.mjs",
+        "sha256": "442e39376544ee9c72fc8f09fa2b5794ad98734df04248e5f25a0c2c8a12f96a",
+        "size": 24304
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/scripts/wiki.mjs",
+        "sha256": "42d16d4d8dd4c47ec68739c8d441eeaf8b0f02aff7c52aecc49c4287915d2bbd",
+        "size": 78131
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/tools/extract_pdf.py",
+        "sha256": "d2973b6b2719b4317cd7bba7bd5bacdfef40c8ac479fc4c9d5b13d52c16a9f21",
+        "size": 8551
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/tools/fetch_pdf.py",
+        "sha256": "b2e006c3d37e2703fd0525253dfffa2ee516c6a36a2f9d7ab0f879a196d29c92",
+        "size": 19747
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/tools/id_utils.py",
+        "sha256": "6581d3bed4fff6a1023f213622fef849c9cc1e965dbc36e56874a4fb99e71345",
+        "size": 13822
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/tools/requirements.txt",
+        "sha256": "a02124a7e63510c23090b310fabafe9ad4e4a12d323bd61f3abf8cbe7bef13d7",
+        "size": 1505
+      },
+      {
+        "kind": "static",
+        "path": "_lumina/tools/verify_quotes.py",
+        "sha256": "d3ed91640810a15335bf3783ed68d007aa47e1711b3fec576002c112259fe177",
+        "size": 8645
+      },
+      {
+        "kind": "static",
+        "path": "wiki/index.md",
+        "sha256": "32cd16dbd46b64d74c7c3fb89583df79c3e604a8f3f37b8b1debb63564d5464b",
+        "size": 72
+      },
+      {
+        "kind": "static",
+        "path": "wiki/log.md",
+        "sha256": "a9131ee019058e11a304cee6bad6bb3c7cc8fe9abe7f36ab756fef12ce06ab34",
+        "size": 74
+      }
+    ],
+    "rootDigest": "6f3879f4e2a9724d5df00e8b1502618664014d13074d57eeb8d7e525449ac399",
+    "rootDigestRecord": "<kind>\\0<path>\\0<size>\\0<sha256-or-dash>\\n",
+    "totalBytes": 498356,
+    "totalDirectories": 36,
+    "totalFiles": 46
+  },
+  "profile": {
+    "communicationLang": "English",
+    "documentOutputLang": "English",
+    "id": "core-generic-en",
+    "ideTargets": [
+      "generic"
+    ],
+    "locale": "en",
+    "packs": [
+      "core"
+    ],
+    "projectName": "",
+    "researchPurpose": ""
+  },
+  "schema": {
+    "edgeTypes": [
+      {
+        "from": "sources",
+        "name": "cites",
+        "pack": "core",
+        "reverse": "cited_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "cited_by",
+        "pack": "core",
+        "reverse": "cites",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "same_problem_as",
+        "pack": "core",
+        "reverse": "same_problem_as",
+        "symmetric": true,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "similar_method_to",
+        "pack": "core",
+        "reverse": "similar_method_to",
+        "symmetric": true,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "complementary_to",
+        "pack": "core",
+        "reverse": "complementary_to",
+        "symmetric": true,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "compares_against",
+        "pack": "core",
+        "reverse": "compares_against",
+        "symmetric": true,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "builds_on",
+        "pack": "core",
+        "reverse": "built_upon_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "built_upon_by",
+        "pack": "core",
+        "reverse": "builds_on",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "improves_on",
+        "pack": "core",
+        "reverse": "improved_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "improved_by",
+        "pack": "core",
+        "reverse": "improves_on",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "challenges",
+        "pack": "core",
+        "reverse": "challenged_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "challenged_by",
+        "pack": "core",
+        "reverse": "challenges",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "surveys",
+        "pack": "core",
+        "reverse": "surveyed_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "surveyed_by",
+        "pack": "core",
+        "reverse": "surveys",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "introduces_concept",
+        "pack": "core",
+        "reverse": "introduced_in",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "introduced_in",
+        "pack": "core",
+        "reverse": "introduces_concept",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "uses_concept",
+        "pack": "core",
+        "reverse": "used_in",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "used_in",
+        "pack": "core",
+        "reverse": "uses_concept",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "extends_concept",
+        "pack": "core",
+        "reverse": "extended_in",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "extended_in",
+        "pack": "core",
+        "reverse": "extends_concept",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "critiques_concept",
+        "pack": "core",
+        "reverse": "critiqued_in",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "critiqued_in",
+        "pack": "core",
+        "reverse": "critiques_concept",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "authored_by",
+        "pack": "core",
+        "reverse": "authored",
+        "symmetric": false,
+        "to": "people"
+      },
+      {
+        "from": "people",
+        "name": "authored",
+        "pack": "core",
+        "reverse": "authored_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "readings",
+        "name": "annotates",
+        "pack": "core",
+        "reverse": "annotated_by",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "annotated_by",
+        "pack": "core",
+        "reverse": "annotates",
+        "symmetric": false,
+        "to": "readings"
+      },
+      {
+        "from": "concepts",
+        "name": "related_to",
+        "pack": "core",
+        "reverse": "related_to",
+        "symmetric": true,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "part_of",
+        "pack": "core",
+        "reverse": "has_part",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "has_part",
+        "pack": "core",
+        "reverse": "part_of",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "topics",
+        "name": "includes_source",
+        "pack": "research",
+        "reverse": "included_in_topic",
+        "symmetric": false,
+        "to": "sources"
+      },
+      {
+        "from": "sources",
+        "name": "included_in_topic",
+        "pack": "research",
+        "reverse": "includes_source",
+        "symmetric": false,
+        "to": "topics"
+      },
+      {
+        "from": "topics",
+        "name": "covers_concept",
+        "pack": "research",
+        "reverse": "covered_by_topic",
+        "symmetric": false,
+        "to": "concepts"
+      },
+      {
+        "from": "concepts",
+        "name": "covered_by_topic",
+        "pack": "research",
+        "reverse": "covers_concept",
+        "symmetric": false,
+        "to": "topics"
+      },
+      {
+        "from": "*",
+        "name": "grounded_in",
+        "pack": "research",
+        "reverse": null,
+        "terminal": true,
+        "to": "foundations"
+      },
+      {
+        "from": "*",
+        "name": "produced",
+        "pack": "core",
+        "reverse": null,
+        "terminal": true,
+        "to": "outputs"
+      },
+      {
+        "from": "*",
+        "name": "see_also_url",
+        "pack": "core",
+        "reverse": null,
+        "terminal": true,
+        "to": "*"
+      },
+      {
+        "from": "chapters",
+        "name": "features",
+        "pack": "reading",
+        "reverse": "appears_in",
+        "symmetric": false,
+        "to": "characters"
+      },
+      {
+        "from": "*",
+        "name": "appears_in",
+        "pack": "reading",
+        "reverse": null,
+        "symmetric": false,
+        "to": "chapters"
+      },
+      {
+        "from": "chapters",
+        "name": "tagged_with",
+        "pack": "reading",
+        "reverse": "appears_in",
+        "symmetric": false,
+        "to": "themes"
+      },
+      {
+        "from": "themes",
+        "name": "associated_with",
+        "pack": "reading",
+        "reverse": "expresses_theme",
+        "symmetric": false,
+        "to": "characters"
+      },
+      {
+        "from": "characters",
+        "name": "expresses_theme",
+        "pack": "reading",
+        "reverse": "associated_with",
+        "symmetric": false,
+        "to": "themes"
+      },
+      {
+        "from": "characters",
+        "name": "appears_with",
+        "pack": "reading",
+        "reverse": "appears_with",
+        "symmetric": true,
+        "to": "characters"
+      }
+    ],
+    "entityDirs": {
+      "chapters": {
+        "dir": "chapters/",
+        "pack": "reading"
+      },
+      "characters": {
+        "dir": "characters/",
+        "pack": "reading"
+      },
+      "concepts": {
+        "dir": "concepts/",
+        "pack": "core"
+      },
+      "foundations": {
+        "dir": "foundations/",
+        "pack": "research"
+      },
+      "graph": {
+        "dir": "graph/",
+        "pack": "core"
+      },
+      "outputs": {
+        "dir": "outputs/",
+        "pack": "core"
+      },
+      "people": {
+        "dir": "people/",
+        "pack": "core"
+      },
+      "plot": {
+        "dir": "plot/",
+        "pack": "reading"
+      },
+      "readings": {
+        "dir": "readings/",
+        "pack": "core"
+      },
+      "reflections": {
+        "dir": "reflections/",
+        "pack": "learning"
+      },
+      "sources": {
+        "dir": "sources/",
+        "pack": "core"
+      },
+      "summary": {
+        "dir": "summary/",
+        "pack": "core"
+      },
+      "themes": {
+        "dir": "themes/",
+        "pack": "reading"
+      },
+      "topics": {
+        "dir": "topics/",
+        "pack": "research"
+      }
+    },
+    "enums": {
+      "BIDI_MODES": [
+        "strict",
+        "exempt-only",
+        "off"
+      ],
+      "IMPORTANCE": [
+        {
+          "label": "niche",
+          "value": 1
+        },
+        {
+          "label": "useful",
+          "value": 2
+        },
+        {
+          "label": "field-standard",
+          "value": 3
+        },
+        {
+          "label": "influential",
+          "value": 4
+        },
+        {
+          "label": "seminal",
+          "value": 5
+        }
+      ],
+      "LINK_SYNTAX": [
+        "obsidian"
+      ],
+      "SLUG_STYLE": [
+        "kebab-case"
+      ]
+    },
+    "exemptionGlobs": [
+      "foundations/**",
+      "outputs/**",
+      "reflections/**",
+      "*://*"
+    ],
+    "externalIdNamespaces": [
+      "doi",
+      "arxiv",
+      "s2",
+      "url",
+      "openalex"
+    ],
+    "lintCheckIds": [
+      "L01",
+      "L02",
+      "L03",
+      "L04",
+      "L05",
+      "L06",
+      "L07",
+      "L08",
+      "L09",
+      "L10",
+      "L11",
+      "L12",
+      "L13",
+      "L14",
+      "L16",
+      "L17"
+    ],
+    "packManifestShape": {
+      "description": "string?",
+      "edge_types": [
+        {
+          "from": "string",
+          "name": "string",
+          "reverse": "string | null",
+          "symmetric": "boolean?",
+          "terminal": "boolean?",
+          "to": "string"
+        }
+      ],
+      "entities": [
+        {
+          "dir": "string",
+          "required_frontmatter": "FrontmatterField[]",
+          "type": "string"
+        }
+      ],
+      "lumina_min_version": "string",
+      "name": "string",
+      "raw_dirs": [
+        "string"
+      ],
+      "skills": [
+        "string"
+      ],
+      "version": "string"
+    },
+    "rawDirs": {
+      "assets": "core",
+      "discovered": "research",
+      "download": "core",
+      "notes": "core",
+      "sources": "core",
+      "tmp": "core"
+    },
+    "requiredFrontmatter": {
+      "_base": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        }
+      ],
+      "chapters": [
+        {
+          "key": "id",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "book",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "number",
+          "pack": "reading",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "characters": [
+        {
+          "key": "id",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "book",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "first_seen",
+          "pack": "reading",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "concepts": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "key_sources",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "related_concepts",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "confidence",
+          "required": false,
+          "type": "enum",
+          "values": [
+            "high",
+            "medium",
+            "low",
+            "unverified"
+          ]
+        }
+      ],
+      "foundations": [
+        {
+          "key": "id",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "research",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "research",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "aliases",
+          "pack": "research",
+          "required": false,
+          "type": "array"
+        }
+      ],
+      "people": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "key_sources",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "affiliations",
+          "required": false,
+          "type": "array"
+        }
+      ],
+      "plot": [
+        {
+          "key": "id",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "book",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "up_to_chapter",
+          "pack": "reading",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "readings": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "source",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "part",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "key": "pages",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "reflections": [
+        {
+          "key": "id",
+          "pack": "learning",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "learning",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "learning",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "learning",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "learning",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "related_concepts",
+          "pack": "learning",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "related_sources",
+          "pack": "learning",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "evolution_count",
+          "pack": "learning",
+          "required": true,
+          "type": "number"
+        }
+      ],
+      "sources": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "authors",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "key": "year",
+          "required": true,
+          "type": "number"
+        },
+        {
+          "key": "importance",
+          "required": true,
+          "type": "enum",
+          "values": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "key": "urls",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "key": "raw_paths",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "key": "provenance",
+          "required": true,
+          "type": "enum",
+          "values": [
+            "replayable",
+            "partial",
+            "missing"
+          ]
+        },
+        {
+          "key": "confidence",
+          "required": false,
+          "type": "enum",
+          "values": [
+            "high",
+            "medium",
+            "low",
+            "unverified"
+          ]
+        },
+        {
+          "key": "ingest_status",
+          "required": false,
+          "type": "enum",
+          "values": [
+            "drafted",
+            "linted",
+            "verified",
+            "finalized"
+          ]
+        },
+        {
+          "key": "verify_status",
+          "required": false,
+          "type": "enum",
+          "values": [
+            "passed",
+            "findings_pending",
+            "drift_detected",
+            "skipped",
+            "not_applicable"
+          ]
+        },
+        {
+          "key": "findings",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "key": "external_ids",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "key": "sources",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "key": "ranking",
+          "required": false,
+          "type": "object"
+        }
+      ],
+      "summary": [
+        {
+          "key": "id",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "covers",
+          "required": true,
+          "type": "array"
+        }
+      ],
+      "themes": [
+        {
+          "key": "id",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "reading",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "book",
+          "pack": "reading",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "topics": [
+        {
+          "key": "id",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "title",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "type",
+          "pack": "research",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "key": "created",
+          "pack": "research",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "updated",
+          "pack": "research",
+          "required": true,
+          "type": "iso-date"
+        },
+        {
+          "key": "key_sources",
+          "pack": "research",
+          "required": true,
+          "type": "array"
+        }
+      ]
+    }
+  },
+  "skills": [
+    {
+      "canonicalId": "lumi-init",
+      "displayName": "/lumi-init",
+      "inert": true,
+      "name": "init",
+      "pack": "core",
+      "sourcePath": "src/skills/core/init"
+    },
+    {
+      "canonicalId": "lumi-ingest",
+      "displayName": "/lumi-ingest",
+      "inert": true,
+      "name": "ingest",
+      "pack": "core",
+      "sourcePath": "src/skills/core/ingest"
+    },
+    {
+      "canonicalId": "lumi-ask",
+      "displayName": "/lumi-ask",
+      "inert": true,
+      "name": "ask",
+      "pack": "core",
+      "sourcePath": "src/skills/core/ask"
+    },
+    {
+      "canonicalId": "lumi-edit",
+      "displayName": "/lumi-edit",
+      "inert": true,
+      "name": "edit",
+      "pack": "core",
+      "sourcePath": "src/skills/core/edit"
+    },
+    {
+      "canonicalId": "lumi-check",
+      "displayName": "/lumi-check",
+      "inert": true,
+      "name": "check",
+      "pack": "core",
+      "sourcePath": "src/skills/core/check"
+    },
+    {
+      "canonicalId": "lumi-reset",
+      "displayName": "/lumi-reset",
+      "inert": true,
+      "name": "reset",
+      "pack": "core",
+      "sourcePath": "src/skills/core/reset"
+    },
+    {
+      "canonicalId": "lumi-verify",
+      "displayName": "/lumi-verify",
+      "inert": true,
+      "name": "verify",
+      "pack": "core",
+      "sourcePath": "src/skills/core/verify"
+    },
+    {
+      "canonicalId": "lumi-migrate-legacy",
+      "displayName": "/lumi-migrate-legacy",
+      "inert": true,
+      "name": "migrate-legacy",
+      "pack": "core",
+      "sourcePath": "src/skills/core/migrate-legacy"
+    },
+    {
+      "canonicalId": "lumi-help",
+      "displayName": "/lumi-help",
+      "inert": true,
+      "name": "help",
+      "pack": "core",
+      "sourcePath": "src/skills/core/help"
+    }
+  ],
+  "state": {
+    "filesCsvHeader": "relative_path,sha256,source_pack,installed_version",
+    "filesCsvPath": "_lumina/_state/files-manifest.csv",
+    "managedFilePaths": [
+      "README.md",
+      "_lumina/config/lumina.config.yaml",
+      "_lumina/schema/page-templates.md",
+      "_lumina/schema/cross-reference-packs.md",
+      "_lumina/schema/graph-packs.md",
+      "_lumina/schema/lumi-help.csv",
+      "_lumina/schema/lumi-help-runbook.md"
+    ],
+    "manifestPath": "_lumina/manifest.json",
+    "skillsCsvHeader": "canonical_id,display_name,pack,source,relative_path,target_link_path,version",
+    "skillsCsvPath": "_lumina/_state/skills-manifest.csv"
+  },
+  "versions": {
+    "contract": 1,
+    "installerPackage": "1.9.2",
+    "manifestSchema": 4,
+    "wikiSchema": "0.1.0"
+  }
+}

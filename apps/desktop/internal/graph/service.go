@@ -2,21 +2,31 @@ package graph
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	desktopworkspace "github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 )
 
-type Service struct{}
+type Service struct {
+	beforeTrustedNoteOpen func()
+}
+
+const MaxTrustedNoteBytes = 4 * 1024 * 1024
+
+var ErrTrustedNoteUnavailable = errors.New("trusted note is unavailable")
 
 func NewService() *Service {
-	return &Service{}
+	return &Service{beforeTrustedNoteOpen: func() {}}
 }
 
 func (s *Service) Load(root string) (Graph, error) {
@@ -81,6 +91,75 @@ func (s *Service) ReadNote(root, notePath string) (NoteContent, error) {
 		return NoteContent{}, err
 	}
 	return NoteContent{Path: filepath.ToSlash(notePath), Content: string(content)}, nil
+}
+
+func (s *Service) ReadNoteTrusted(
+	ctx context.Context,
+	root string,
+	proof os.FileInfo,
+	locator string,
+) (NoteContent, error) {
+	if ctx == nil || ctx.Err() != nil || proof == nil || !proof.IsDir() ||
+		root == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root ||
+		!validTrustedNoteLocator(locator) {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	current, err := os.Lstat(root)
+	if err != nil || !current.IsDir() || !os.SameFile(current, proof) {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	opened, err := os.OpenRoot(root)
+	if err != nil {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	defer opened.Close()
+	openedInfo, err := opened.Stat(".")
+	if err != nil || !openedInfo.IsDir() || !os.SameFile(openedInfo, proof) {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	info, err := opened.Lstat(locator)
+	if err != nil || info.Mode()&fs.ModeSymlink != 0 || !info.Mode().IsRegular() ||
+		info.Size() < 0 || info.Size() > MaxTrustedNoteBytes {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	s.beforeTrustedNoteOpen()
+	file, err := opened.Open(locator)
+	if err != nil {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	defer file.Close()
+	openedLeaf, err := file.Stat()
+	currentLeaf, currentLeafErr := opened.Lstat(locator)
+	if err != nil || currentLeafErr != nil || currentLeaf.Mode()&fs.ModeSymlink != 0 ||
+		!currentLeaf.Mode().IsRegular() || !os.SameFile(info, openedLeaf) ||
+		!os.SameFile(openedLeaf, currentLeaf) {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	content, err := io.ReadAll(io.LimitReader(file, MaxTrustedNoteBytes+1))
+	if err != nil || len(content) > MaxTrustedNoteBytes || !utf8.Valid(content) || ctx.Err() != nil {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	current, err = os.Lstat(root)
+	finalInfo, finalErr := opened.Stat(".")
+	finalOpenedLeaf, finalOpenErr := file.Stat()
+	finalLeaf, finalLeafErr := opened.Lstat(locator)
+	if err != nil || finalErr != nil || finalOpenErr != nil || finalLeafErr != nil ||
+		finalLeaf.Mode()&fs.ModeSymlink != 0 || !finalLeaf.Mode().IsRegular() ||
+		!os.SameFile(current, proof) || !os.SameFile(finalInfo, proof) ||
+		!os.SameFile(info, finalOpenedLeaf) || !os.SameFile(finalOpenedLeaf, finalLeaf) {
+		return NoteContent{}, ErrTrustedNoteUnavailable
+	}
+	return NoteContent{Path: locator, Content: string(content)}, nil
+}
+
+func validTrustedNoteLocator(locator string) bool {
+	if locator == "" || len(locator) > desktopworkspace.MaxTreePathBytes ||
+		!utf8.ValidString(locator) || strings.Contains(locator, `\`) ||
+		strings.HasPrefix(locator, "/") || path.Clean(locator) != locator ||
+		!strings.HasPrefix(locator, "wiki/") || !strings.HasSuffix(locator, ".md") {
+		return false
+	}
+	return isEntityNotePath(strings.TrimPrefix(locator, "wiki/"))
 }
 
 func isEntityNotePath(notePath string) bool {

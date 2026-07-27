@@ -20,12 +20,14 @@ const (
 )
 
 var (
-	ErrInvalidInput   = errors.New("invalid session input")
-	ErrInvalidSession = errors.New("invalid or expired session")
-	ErrRequestActive  = errors.New("request already active")
-	ErrRegistryClosed = errors.New("session registry closed")
-	ErrSessionEntropy = errors.New("session ID generation failed")
-	ErrRuntimeClose   = errors.New("session runtime close failed")
+	ErrInvalidInput     = errors.New("invalid session input")
+	ErrInvalidSession   = errors.New("invalid or expired session")
+	ErrRequestActive    = errors.New("request already active")
+	ErrRegistryClosed   = errors.New("session registry closed")
+	ErrSessionEntropy   = errors.New("session ID generation failed")
+	ErrRuntimeClose     = errors.New("session runtime close failed")
+	ErrRootLeaseClose   = errors.New("trusted root lease close failed")
+	ErrStagedActivation = errors.New("staged activation is no longer valid")
 
 	requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 )
@@ -54,6 +56,7 @@ type Capability struct {
 	WorkspaceID workspaceid.WorkspaceID
 	Generation  Generation
 	Display     DisplayMetadata
+	AccessMode  AccessMode
 }
 
 func (capability Capability) Reference() Reference {
@@ -83,10 +86,18 @@ func validDisplay(display DisplayMetadata) bool {
 }
 
 func validRuntime(runtime Runtime) bool {
-	if runtime == nil {
+	return validCloseResource(runtime)
+}
+
+func validRootLease(lease TrustedRootLease) bool {
+	return validCloseResource(lease)
+}
+
+func validCloseResource(resource any) bool {
+	if resource == nil {
 		return false
 	}
-	value := reflect.ValueOf(runtime)
+	value := reflect.ValueOf(resource)
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return !value.IsNil()

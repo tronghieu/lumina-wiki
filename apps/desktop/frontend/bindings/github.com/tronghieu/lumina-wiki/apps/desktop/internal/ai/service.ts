@@ -9,9 +9,27 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function AbortPreparedLibrary(preparationToken: string): $CancellablePromise<$models.PreparedLibraryAbortDTO> {
+    return $Call.ByID(2506325843, preparationToken).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function BeginCreateLibrary(name: string): $CancellablePromise<$models.LocationCapabilityDTO> {
+    return $Call.ByID(4111397593, name).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+export function BeginResetRecentViewState(): $CancellablePromise<$models.ResetRecentViewStateConfirmationDTO> {
+    return $Call.ByID(3909384144).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function BuildIndex(request: $models.IndexRequestDTO): $CancellablePromise<$models.IndexStatusDTO> {
     return $Call.ByID(3353806509, request).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType3($result);
     });
 }
 
@@ -21,43 +39,37 @@ export function CancelChat(reference: $models.SessionReferenceDTO, requestID: st
 
 export function CancelIndex(request: $models.IndexRequestDTO): $CancellablePromise<$models.IndexCancelResultDTO> {
     return $Call.ByID(3402286973, request).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType4($result);
     });
 }
 
 export function Chat(request: $models.ChatRequestDTO): $CancellablePromise<$models.ChatCompletionDTO> {
     return $Call.ByID(1982707527, request).then(($result: any) => {
-        return $$createType2($result);
-    });
-}
-
-export function ChooseAndActivateWorkspace(): $CancellablePromise<$models.ActivationResult> {
-    return $Call.ByID(1183880485).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType5($result);
     });
 }
 
 export function ClearIndex(request: $models.IndexRequestDTO): $CancellablePromise<$models.IndexStatusDTO> {
     return $Call.ByID(1412208562, request).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType3($result);
     });
 }
 
-export function ConfirmAndActivateWorkspace(typedRoot: string): $CancellablePromise<$models.ActivationResult> {
-    return $Call.ByID(2915745038, typedRoot).then(($result: any) => {
-        return $$createType3($result);
+export function CommitPreparedLibrary(preparationToken: string): $CancellablePromise<$models.ReadyCommitDTO> {
+    return $Call.ByID(2875631328, preparationToken).then(($result: any) => {
+        return $$createType6($result);
     });
 }
 
 export function ConfirmSessionCredential(request: $models.ConfirmSessionCredentialRequestDTO): $CancellablePromise<$models.CredentialStatusDTO> {
     return $Call.ByID(285268376, request).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType7($result);
     });
 }
 
 export function CredentialStatus(request: $models.CredentialReferenceDTO): $CancellablePromise<$models.CredentialStatusDTO> {
     return $Call.ByID(3412347494, request).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType7($result);
     });
 }
 
@@ -67,122 +79,220 @@ export function DeactivateWorkspace(reference: $models.SessionReferenceDTO): $Ca
 
 export function DeleteAIProfile(request: $models.DeleteAIProfileRequestDTO): $CancellablePromise<$models.ProfileDeleteResultDTO> {
     return $Call.ByID(2054984825, request).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType8($result);
     });
 }
 
 export function DeleteAllHistory(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.HistoryDeleteAllResultDTO> {
     return $Call.ByID(3272496087, reference).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType9($result);
     });
 }
 
 export function DeleteCredential(request: $models.CredentialReferenceDTO): $CancellablePromise<$models.CredentialDeleteResultDTO> {
     return $Call.ByID(4170438715, request).then(($result: any) => {
-        return $$createType7($result);
+        return $$createType10($result);
     });
 }
 
 export function DeleteHistory(request: $models.HistoryConversationRequestDTO): $CancellablePromise<$models.HistoryDeleteResultDTO> {
     return $Call.ByID(772358710, request).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType11($result);
     });
 }
 
 export function EmbeddingConsentStatus(request: $models.EmbeddingConsentRequestDTO): $CancellablePromise<$models.EmbeddingConsentResultDTO> {
     return $Call.ByID(3901646442, request).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType12($result);
     });
 }
 
 export function GrantEmbeddingConsent(request: $models.EmbeddingConsentRequestDTO): $CancellablePromise<$models.EmbeddingConsentResultDTO> {
     return $Call.ByID(2071612592, request).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType12($result);
     });
 }
 
 export function HistoryStatus(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.HistoryStatusDTO> {
     return $Call.ByID(4121747709, reference).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType13($result);
     });
 }
 
 export function IndexStatus(request: $models.IndexRequestDTO): $CancellablePromise<$models.IndexStatusDTO> {
     return $Call.ByID(4273289337, request).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType3($result);
     });
 }
 
 export function ListAIProfiles(): $CancellablePromise<$models.AIProfilesDTO> {
     return $Call.ByID(1057427289).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType14($result);
     });
 }
 
 export function ListHistory(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.HistoryListDTO> {
     return $Call.ByID(180961631, reference).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType15($result);
+    });
+}
+
+export function ListPendingLibraryOperation(): $CancellablePromise<$models.PendingLibraryOperationDTO> {
+    return $Call.ByID(1802481300).then(($result: any) => {
+        return $$createType16($result);
+    });
+}
+
+export function ListRecentLibraries(): $CancellablePromise<$models.RecentLibrariesDTO> {
+    return $Call.ByID(4227842157).then(($result: any) => {
+        return $$createType17($result);
     });
 }
 
 export function LoadHistory(request: $models.HistoryConversationRequestDTO): $CancellablePromise<$models.HistoryRecordsDTO> {
     return $Call.ByID(1675013455, request).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType18($result);
+    });
+}
+
+export function LoadLatestHistory(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.LatestHistoryDTO> {
+    return $Call.ByID(508741790, reference).then(($result: any) => {
+        return $$createType19($result);
+    });
+}
+
+export function PrepareChooseWorkspace(): $CancellablePromise<$models.PreparedLibraryDTO> {
+    return $Call.ByID(810916738).then(($result: any) => {
+        return $$createType20($result);
+    });
+}
+
+export function PrepareCreateLibrary(capability: $models.LocationCapabilityDTO): $CancellablePromise<$models.PreparedLibraryDTO> {
+    return $Call.ByID(2527703655, capability).then(($result: any) => {
+        return $$createType20($result);
+    });
+}
+
+export function PrepareFindRecentLibrary(request: $models.FindRecentLibraryRequestDTO): $CancellablePromise<$models.PreparedContinuityDTO> {
+    return $Call.ByID(1003552427, request).then(($result: any) => {
+        return $$createType21($result);
+    });
+}
+
+export function PreparePendingLibraryOperation(recoveryID: string): $CancellablePromise<$models.PreparedLibraryDTO> {
+    return $Call.ByID(1893940347, recoveryID).then(($result: any) => {
+        return $$createType20($result);
+    });
+}
+
+export function PrepareRestoreRecentLibrary(request: $models.RestoreRecentLibraryRequestDTO): $CancellablePromise<$models.PreparedContinuityDTO> {
+    return $Call.ByID(805089244, request).then(($result: any) => {
+        return $$createType21($result);
     });
 }
 
 export function ReadCitationNote(request: $models.CitationReadRequestDTO): $CancellablePromise<$models.CitationNoteDTO> {
     return $Call.ByID(4046860084, request).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType22($result);
+    });
+}
+
+export function ReadWorkspaceNote(request: $models.WorkspaceNoteRequestDTO): $CancellablePromise<$models.NoteContentDTO> {
+    return $Call.ByID(2164445462, request).then(($result: any) => {
+        return $$createType23($result);
+    });
+}
+
+export function RemovePendingLibraryOperation(recoveryID: string): $CancellablePromise<$models.PendingLibraryRemovalDTO> {
+    return $Call.ByID(3477097704, recoveryID).then(($result: any) => {
+        return $$createType24($result);
+    });
+}
+
+export function RemoveRecentLibrary(request: $models.RecentLibraryRequestDTO): $CancellablePromise<$models.RemoveRecentLibraryResultDTO> {
+    return $Call.ByID(2650176565, request).then(($result: any) => {
+        return $$createType25($result);
+    });
+}
+
+export function ResetRecentViewState(token: string): $CancellablePromise<$models.ResetRecentViewStateResultDTO> {
+    return $Call.ByID(4039711455, token).then(($result: any) => {
+        return $$createType26($result);
     });
 }
 
 export function RevokeEmbeddingConsent(request: $models.EmbeddingConsentRequestDTO): $CancellablePromise<$models.EmbeddingConsentResultDTO> {
     return $Call.ByID(2709511094, request).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType12($result);
     });
 }
 
 export function SaveAIProfile(request: $models.SaveAIProfileRequestDTO): $CancellablePromise<$models.AIProfileDTO> {
     return $Call.ByID(4173064375, request).then(($result: any) => {
-        return $$createType15($result);
+        return $$createType27($result);
     });
 }
 
 export function SaveCredential(request: $models.SaveCredentialRequestDTO): $CancellablePromise<$models.CredentialSaveResultDTO> {
     return $Call.ByID(843284269, request).then(($result: any) => {
-        return $$createType16($result);
+        return $$createType28($result);
+    });
+}
+
+export function SaveWorkspaceView(request: $models.SaveWorkspaceViewRequestDTO): $CancellablePromise<$models.WorkspaceViewDTO> {
+    return $Call.ByID(2674641876, request).then(($result: any) => {
+        return $$createType29($result);
     });
 }
 
 export function SetHistoryEnabled(request: $models.SetHistoryEnabledRequestDTO): $CancellablePromise<$models.HistoryStatusDTO> {
     return $Call.ByID(3190712282, request).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType13($result);
+    });
+}
+
+export function WorkspaceSnapshot(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.WorkspaceSnapshotDTO> {
+    return $Call.ByID(276125670, reference).then(($result: any) => {
+        return $$createType30($result);
     });
 }
 
 export function WorkspaceTree(reference: $models.SessionReferenceDTO): $CancellablePromise<$models.WorkspaceTreeDTO> {
     return $Call.ByID(3393514150, reference).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType31($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $models.IndexStatusDTO.createFrom;
-const $$createType1 = $models.IndexCancelResultDTO.createFrom;
-const $$createType2 = $models.ChatCompletionDTO.createFrom;
-const $$createType3 = $models.ActivationResult.createFrom;
-const $$createType4 = $models.CredentialStatusDTO.createFrom;
-const $$createType5 = $models.ProfileDeleteResultDTO.createFrom;
-const $$createType6 = $models.HistoryDeleteAllResultDTO.createFrom;
-const $$createType7 = $models.CredentialDeleteResultDTO.createFrom;
-const $$createType8 = $models.HistoryDeleteResultDTO.createFrom;
-const $$createType9 = $models.EmbeddingConsentResultDTO.createFrom;
-const $$createType10 = $models.HistoryStatusDTO.createFrom;
-const $$createType11 = $models.AIProfilesDTO.createFrom;
-const $$createType12 = $models.HistoryListDTO.createFrom;
-const $$createType13 = $models.HistoryRecordsDTO.createFrom;
-const $$createType14 = $models.CitationNoteDTO.createFrom;
-const $$createType15 = $models.AIProfileDTO.createFrom;
-const $$createType16 = $models.CredentialSaveResultDTO.createFrom;
-const $$createType17 = $models.WorkspaceTreeDTO.createFrom;
+const $$createType0 = $models.PreparedLibraryAbortDTO.createFrom;
+const $$createType1 = $models.LocationCapabilityDTO.createFrom;
+const $$createType2 = $models.ResetRecentViewStateConfirmationDTO.createFrom;
+const $$createType3 = $models.IndexStatusDTO.createFrom;
+const $$createType4 = $models.IndexCancelResultDTO.createFrom;
+const $$createType5 = $models.ChatCompletionDTO.createFrom;
+const $$createType6 = $models.ReadyCommitDTO.createFrom;
+const $$createType7 = $models.CredentialStatusDTO.createFrom;
+const $$createType8 = $models.ProfileDeleteResultDTO.createFrom;
+const $$createType9 = $models.HistoryDeleteAllResultDTO.createFrom;
+const $$createType10 = $models.CredentialDeleteResultDTO.createFrom;
+const $$createType11 = $models.HistoryDeleteResultDTO.createFrom;
+const $$createType12 = $models.EmbeddingConsentResultDTO.createFrom;
+const $$createType13 = $models.HistoryStatusDTO.createFrom;
+const $$createType14 = $models.AIProfilesDTO.createFrom;
+const $$createType15 = $models.HistoryListDTO.createFrom;
+const $$createType16 = $models.PendingLibraryOperationDTO.createFrom;
+const $$createType17 = $models.RecentLibrariesDTO.createFrom;
+const $$createType18 = $models.HistoryRecordsDTO.createFrom;
+const $$createType19 = $models.LatestHistoryDTO.createFrom;
+const $$createType20 = $models.PreparedLibraryDTO.createFrom;
+const $$createType21 = $models.PreparedContinuityDTO.createFrom;
+const $$createType22 = $models.CitationNoteDTO.createFrom;
+const $$createType23 = $models.NoteContentDTO.createFrom;
+const $$createType24 = $models.PendingLibraryRemovalDTO.createFrom;
+const $$createType25 = $models.RemoveRecentLibraryResultDTO.createFrom;
+const $$createType26 = $models.ResetRecentViewStateResultDTO.createFrom;
+const $$createType27 = $models.AIProfileDTO.createFrom;
+const $$createType28 = $models.CredentialSaveResultDTO.createFrom;
+const $$createType29 = $models.WorkspaceViewDTO.createFrom;
+const $$createType30 = $models.WorkspaceSnapshotDTO.createFrom;
+const $$createType31 = $models.WorkspaceTreeDTO.createFrom;

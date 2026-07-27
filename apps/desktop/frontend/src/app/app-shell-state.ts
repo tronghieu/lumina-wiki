@@ -1,8 +1,16 @@
 export type ArtifactView = 'graph' | 'note';
+export type SemanticFocus = 'chat' | 'note' | 'graph';
 export type ResponsivePanelMode = 'desktop' | 'medium' | 'narrow';
 
 export function resolveArtifactView(requestedView: ArtifactView, selectedNodeId: string): ArtifactView {
   return requestedView === 'note' && !selectedNodeId ? 'graph' : requestedView;
+}
+
+export function resolveSemanticFocus(
+  requestedFocus: SemanticFocus,
+  selectedNodeId: string,
+): SemanticFocus {
+  return requestedFocus === 'note' && !selectedNodeId ? 'graph' : requestedFocus;
 }
 
 export function resolveResponsivePanels(width: number): {

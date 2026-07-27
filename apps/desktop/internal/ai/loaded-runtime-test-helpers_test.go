@@ -75,6 +75,21 @@ func (spy *runtimeHistorySpy) Load(context.Context, string) ([]history.Conversat
 	return append([]history.ConversationRecord(nil), spy.records...), spy.loadErr
 }
 
+func (spy *runtimeHistorySpy) LoadLatest(context.Context) (history.LatestResult, error) {
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if spy.loadErr != nil {
+		return history.LatestResult{}, spy.loadErr
+	}
+	if len(spy.records) == 0 {
+		return history.LatestResult{Status: history.LatestEmpty}, nil
+	}
+	return history.LatestResult{
+		Status:         history.LatestLoaded,
+		ConversationID: spy.records[len(spy.records)-1].ConversationID,
+	}, nil
+}
+
 func (spy *runtimeHistorySpy) Append(_ context.Context, record history.ConversationRecord) (history.AppendOutcome, error) {
 	spy.mu.Lock()
 	defer spy.mu.Unlock()

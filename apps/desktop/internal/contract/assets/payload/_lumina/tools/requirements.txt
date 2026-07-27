@@ -1,0 +1,32 @@
+# Lumina Wiki Python tools — runtime dependencies
+#
+# ─── Core tools (always installed) ───────────────────────────────────────────
+# extract_pdf.py uses pypdf (pure Python, no native extensions).
+# Install with:  pip install pypdf
+pypdf>=4.0.0
+
+# Optional fallbacks for better extraction quality on tricky PDFs:
+# pdfminer.six>=20221105
+# pdfplumber>=0.10.0
+
+# ─── Research-pack tools (only if you installed the research pack) ───────────
+# fetch_arxiv.py, fetch_s2.py, fetch_wikipedia.py, fetch_deepxiv.py, discover.py
+# fetch_openalex.py, fetch_unpaywall.py, fetch_core.py, resolve_pdf.py, fetch_rss.py
+requests>=2.31.0
+
+# RSS / Atom polling (fetch_rss.py). feedparser is pure Python and ships with
+# its own sanitization, but we still pre-parse via defusedxml to reject
+# DOCTYPE / billion-laughs payloads before feedparser ever sees them.
+feedparser>=6.0
+
+# ─── Local text-document ingestion (research pack) ──────────────────────────
+# prepare_source.py extractors for .docx/.rtf/.epub
+python-docx>=1.1.0
+striprtf>=0.0.26
+ebooklib>=0.18
+beautifulsoup4>=4.12.0
+defusedxml>=0.7.1
+
+# ─── Development ─────────────────────────────────────────────────────────────
+pytest>=7.0.0
+pytest-cov>=4.0.0

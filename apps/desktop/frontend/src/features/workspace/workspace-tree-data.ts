@@ -22,20 +22,19 @@ export type WorkspaceTreeGroup = WorkspaceTreeItem & {
   kind: 'directory';
 };
 
-const rootOrder = new Map([
-  ['_lumina', 0],
-  ['raw', 1],
-  ['wiki', 2],
-]);
-
 export function normalizeWorkspaceTree(nodes: WorkspaceTreeNode[]): WorkspaceTreeGroup[] {
   return nodes
-    .filter((node) => node.kind === 'directory' && rootOrder.has(node.path) && node.name === node.path)
-    .map((node) => normalizeNode(node) as WorkspaceTreeGroup)
-    .sort((left, right) => (rootOrder.get(left.path) ?? 0) - (rootOrder.get(right.path) ?? 0));
+    .filter((node) => (
+      node.kind === 'directory'
+      && node.name === node.path
+      && !node.name.startsWith('_')
+      && node.name !== 'raw'
+    ))
+    .map((node) => normalizeNode(node, true) as WorkspaceTreeGroup)
+    .sort(compareTreeItems);
 }
 
-function normalizeNode(node: WorkspaceTreeNode): WorkspaceTreeItem {
+function normalizeNode(node: WorkspaceTreeNode, root = false): WorkspaceTreeItem {
   const children = node.kind === 'directory'
     ? (node.children ?? [])
         .filter((child) => isValidChild(child, node.path))
@@ -45,13 +44,25 @@ function normalizeNode(node: WorkspaceTreeNode): WorkspaceTreeItem {
 
   return {
     id: node.id,
-    name: node.name,
+    name: friendlyTreeName(node.name, root),
     path: node.path,
     kind: node.kind === 'directory' ? 'directory' : 'file',
     size: node.kind === 'file' && Number.isFinite(node.size) ? Math.max(0, node.size ?? 0) : 0,
     children,
     truncated: node.truncated === true,
   };
+}
+
+function friendlyTreeName(name: string, root: boolean): string {
+  if (root && name === 'wiki') return 'Notes';
+  const directoryNames: Record<string, string> = {
+    concepts: 'Topics',
+    sources: 'Documents',
+    people: 'People',
+    summary: 'Summaries',
+    outputs: 'Writing',
+  };
+  return directoryNames[name] ?? name;
 }
 
 function isValidChild(node: WorkspaceTreeNode, parentPath: string): boolean {

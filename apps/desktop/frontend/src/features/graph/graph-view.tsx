@@ -46,8 +46,8 @@ export function GraphView({ graph, query, selectedNodeId, onSelectNode }: GraphV
       </ul>
       {nodes.length === 0 && (
         <div className="empty-state">
-          <strong>No graph nodes loaded</strong>
-          <span>Open a Lumina workspace to view its knowledge graph.</span>
+          <strong>Your graph is ready</strong>
+          <span>Relationships will appear here after your library has notes and topics.</span>
         </div>
       )}
     </section>

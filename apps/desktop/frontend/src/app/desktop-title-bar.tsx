@@ -1,18 +1,18 @@
 type DesktopTitleBarProps = {
-  workspaceLabel: string;
-  connected: boolean;
+  libraryLabel: string;
+  readOnly: boolean;
 };
 
-export function DesktopTitleBar({ workspaceLabel, connected }: DesktopTitleBarProps) {
+export function DesktopTitleBar({ libraryLabel, readOnly }: DesktopTitleBarProps) {
   return (
     <header className="desktop-title-bar" data-wails-drag>
       <div className="desktop-title-identity">
         <span className="desktop-mark" aria-hidden="true">LW</span>
         <strong>Lumina</strong>
-        {workspaceLabel && <span className="desktop-workspace-name">{workspaceLabel}</span>}
+        <span className="desktop-workspace-name">{libraryLabel}</span>
       </div>
-      <span className={connected ? 'connection-state connected' : 'connection-state'}>
-        Workspace {connected ? 'connected' : 'not connected'}
+      <span className="connection-state connected">
+        {readOnly ? 'Read-only library' : 'Library ready'}
       </span>
     </header>
   );

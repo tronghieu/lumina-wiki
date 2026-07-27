@@ -29,6 +29,7 @@ func activeResult(capability session.Capability) ActivationResult {
 			WorkspaceID: capability.WorkspaceID,
 			Generation:  capability.Generation,
 			Display:     DisplayDTO{Label: capability.Display.Label},
+			AccessMode:  capability.AccessMode,
 		},
 	}
 }

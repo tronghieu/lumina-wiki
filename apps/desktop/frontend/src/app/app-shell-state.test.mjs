@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { resolveArtifactView, resolveResponsivePanels } from './app-shell-state.ts';
+import {
+  resolveArtifactView,
+  resolveResponsivePanels,
+  resolveSemanticFocus,
+} from './app-shell-state.ts';
 
 describe('app-shell-state', () => {
   it('keeps note view unavailable until a real note is selected', () => {
@@ -25,5 +29,11 @@ describe('app-shell-state', () => {
       treeInitiallyOpen: false,
       agentInitiallyOpen: false,
     });
+  });
+
+  it('keeps one semantic focus and makes Note unavailable for an empty library', () => {
+    assert.equal(resolveSemanticFocus('note', ''), 'graph');
+    assert.equal(resolveSemanticFocus('note', 'real-note'), 'note');
+    assert.equal(resolveSemanticFocus('chat', ''), 'chat');
   });
 });

@@ -30,6 +30,7 @@ type CredentialResolver interface {
 type RuntimeHistoryStore interface {
 	Enabled(context.Context) (bool, error)
 	SetEnabled(context.Context, bool) error
+	LoadLatest(context.Context) (history.LatestResult, error)
 	List(context.Context) ([]history.ConversationMetadata, error)
 	Load(context.Context, string) ([]history.ConversationRecord, error)
 	Append(context.Context, history.ConversationRecord) (history.AppendOutcome, error)

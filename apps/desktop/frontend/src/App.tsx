@@ -8,6 +8,7 @@ import {
 import { AppShell } from './app/app-shell';
 import { useChatHistory } from './features/chat/use-chat-history';
 import type { ChatCitation } from './features/chat/chat-types';
+import { chatStateFromHistory } from './features/chat/chat-state';
 import { useChat } from './features/chat/use-chat';
 import { linkedNodes } from './features/graph/graph-data';
 import {
@@ -20,12 +21,16 @@ import {
   sessionIdentity,
 } from './features/shared/session-request-guard';
 import { useWorkspace } from './features/workspace/use-workspace';
+import {
+  WelcomeScreen,
+  workspaceAttemptLabel,
+} from './features/workspace/welcome-screen';
 
 function App() {
   const workspace = useWorkspace();
   const profileRequestGuard = useMemo(createSessionRequestGuard, []);
   const citationRequestGuard = useMemo(createSessionRequestGuard, []);
-  const activeSession = workspace.loadedWorkspace?.session ?? null;
+  const activeSession = workspace.readyLibrary?.session ?? null;
   const activeSessionKey = sessionIdentity(activeSession);
   citationRequestGuard.setSession(activeSession);
   const [aiSettings, setAISettings] = useState<SettingsViewModel>(() => normalizeSettings({}));
@@ -50,6 +55,15 @@ function App() {
   );
 
   useEffect(() => {
+    if (!workspace.restoredHistory) return;
+    chat.loadState(chatStateFromHistory(
+      workspace.restoredHistory.records,
+      workspace.restoredHistory.conversationId,
+    ));
+    workspace.clearRestoredHistory();
+  }, [chat.loadState, workspace.clearRestoredHistory, workspace.restoredHistory]);
+
+  useEffect(() => {
     const request = profileRequestGuard.begin();
     void ListAIProfiles()
       .then((profiles) => {
@@ -70,34 +84,32 @@ function App() {
     if (history.partialDeleteCount > 0) {
       workspace.setActionState({
         kind: 'error',
-        title: 'History partially cleared',
+        title: 'Recent activity partially cleared',
         message: `${history.partialDeleteCount} conversation(s) remain.`,
       });
     }
   }, [history.partialDeleteCount, workspace.setActionState]);
 
   async function openCitation(citation: ChatCitation): Promise<boolean> {
-    const loaded = workspace.loadedWorkspace;
-    if (!loaded || !citation.requestId) return false;
-    const artifactRequest = workspace.beginArtifactRead();
-    if (artifactRequest === null) return false;
+    const library = workspace.readyLibrary;
+    if (!library || !citation.requestId) return false;
     const request = citationRequestGuard.begin();
     try {
       const note = await ReadCitationNote({
-        session: loaded.session,
+        session: library.session,
         requestId: citation.requestId,
         citationId: citation.citationId,
       });
-      if (!citationRequestGuard.isCurrent(request) || !workspace.isArtifactReadCurrent(artifactRequest)) return false;
+      if (!citationRequestGuard.isCurrent(request)) return false;
       workspace.showCitationNote(note);
       workspace.setActionState({
         kind: 'success',
         title: 'Citation opened',
-        message: note.heading || note.path,
+        message: note.heading || 'The cited note is ready.',
       });
       return true;
     } catch {
-      if (!citationRequestGuard.isCurrent(request) || !workspace.isArtifactReadCurrent(artifactRequest)) return false;
+      if (!citationRequestGuard.isCurrent(request)) return false;
       workspace.setActionState({
         kind: 'error',
         title: 'Citation unavailable',
@@ -107,46 +119,89 @@ function App() {
     }
   }
 
+  if (
+    workspace.screen.kind === 'booting'
+    || (
+      workspace.screen.kind === 'activating'
+      && workspace.screen.attempt.kind === 'restore'
+      && workspace.screen.previousLibrary === null
+    )
+  ) {
+    return (
+      <main className="boot-screen" aria-busy="true" aria-live="polite">
+        <strong>Opening Lumina</strong>
+        <span>Getting your library ready…</span>
+      </main>
+    );
+  }
+
+  if (workspace.screen.kind === 'welcome' || (
+    workspace.screen.kind === 'activating' && workspace.screen.previousLibrary === null
+  )) {
+    const screen = workspace.screen;
+    return (
+      <WelcomeScreen
+        busy={screen.kind === 'activating'}
+        currentLibraryLabel={screen.previousLibrary?.libraryLabel}
+        notice={screen.kind === 'welcome'
+          ? screen.notice ?? workspace.recentNotice
+          : workspace.recentNotice}
+        recentLibraries={workspace.recentLibraries}
+        recovery={screen.recovery}
+        onCreate={workspace.createLibrary}
+        onOpen={workspace.openLibrary}
+        onRemoveRecovery={workspace.removeRecovery}
+        onRetryRecovery={workspace.retryRecovery}
+        onReturnToLibrary={screen.previousLibrary ? workspace.returnToReady : undefined}
+        onRestoreRecent={workspace.restoreRecentLibrary}
+        onFindRecent={workspace.findRecentLibrary}
+        onRemoveRecent={workspace.removeRecentLibrary}
+        onClearRecentActivity={workspace.clearRecentActivity}
+      />
+    );
+  }
+
+  const library = workspace.readyLibrary;
+  if (!library) return null;
+
   return (
     <AppShell
+      accessMode={library.accessMode}
       actionState={workspace.actionState}
+      activationLabel={workspace.screen.kind === 'activating'
+        ? workspaceAttemptLabel(workspace.screen.attempt.kind)
+        : null}
       aiSession={activeSession}
-      canChat={Boolean(workspace.loadedWorkspace && activeAISettings.chat.model)}
+      canChat={Boolean(activeAISettings.chat.model)}
       cancellingChat={chat.cancelling}
       chat={chat.state}
       graph={workspace.graph}
       history={history.history}
       historyBusy={history.historyBusy}
       historyEnabled={workspace.historyEnabled}
+      libraryLabel={library.libraryLabel}
+      librarySummary={library.summary}
       noteState={workspace.noteState}
       query={workspace.query}
       selectedNodeId={workspace.selectedNodeId}
-      sourcePath={workspace.sourcePath}
-      workspaceDraftRoot={workspace.draftWorkspaceRoot}
-      workspaceRoot={workspace.loadedWorkspace?.root ?? ''}
-      workspaceSummary={workspace.workspaceSummary}
-      workspaceTree={workspace.workspaceTree}
-      onActivateWorkspace={() => void workspace.activateWorkspace()}
+      restoredFocus={workspace.restoredFocus}
+      workspaceTree={library.tree}
       onCancelChat={chat.cancel}
-      onChooseSourcePath={workspace.chooseSourcePath}
-      onChooseWorkspace={workspace.chooseWorkspace}
       onCitation={openCitation}
       onDeleteAllHistory={history.deleteAllHistory}
       onDeleteHistory={history.deleteHistory}
-      onImportSource={workspace.importSource}
       onLoadHistory={history.loadHistory}
       onNewChat={() => chat.reset()}
+      onOpenLibrary={workspace.showWelcome}
       onProfilesChange={updateAISettings}
       onQueryChange={workspace.setQuery}
-      onRefreshGraph={workspace.refreshGraph}
+      onRefreshGraph={() => void workspace.refreshSnapshot()}
       onRefreshHistory={history.refreshHistory}
       onRetryChat={chat.retry}
-      onRunCheck={workspace.runCheck}
       onSelectNode={workspace.selectNode}
-      onSourcePathChange={workspace.setSourcePath}
       onSubmitChat={chat.submit}
       onToggleHistory={history.toggleHistory}
-      onWorkspaceRootChange={workspace.updateWorkspaceRoot}
+      onWorkspaceFocusChange={workspace.saveWorkspaceView}
     />
   );
 }

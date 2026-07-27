@@ -90,7 +90,7 @@ export function AgentPanel({
         <button type="button" aria-label="Close Agent panel" onClick={onClose}>›</button>
         <div>
           <h2>{historyOpen ? 'History' : 'Agent'}</h2>
-          <span>{historyOpen ? (historyEnabled ? 'Saved for this workspace' : 'History is off') : contextLabel}</span>
+          <span>{historyOpen ? (historyEnabled ? 'Saved for this library' : 'History is off') : contextLabel}</span>
         </div>
         {historyOpen ? (
           <button type="button" onClick={() => setHistoryOpen(false)}>Back</button>
@@ -110,12 +110,12 @@ export function AgentPanel({
             <button ref={confirmClearRef} type="button" disabled={historyBusy} onClick={() => {
                   onDeleteAllHistory();
                   setConfirmClear(false);
-                }}>Confirm clear all</button>
+                }}>Clear recent activity</button>
                 <button type="button" onClick={() => setConfirmClear(false)}>Keep history</button>
               </>
             ) : (
               <button type="button" disabled={active || historyBusy || history.length === 0} onClick={() => setConfirmClear(true)}>
-                Clear all
+                Clear recent activity
               </button>
             )}
           </div>
@@ -178,7 +178,7 @@ export function AgentPanel({
           <div className="agent-messages" aria-busy={active}>
             {chat.messages.length === 0 && (
               <p className="agent-empty">
-                {canChat ? 'Ask about the loaded workspace.' : 'Load a workspace and configure a chat profile.'}
+                {canChat ? 'Ask about this library.' : 'Open a library and configure chat in Advanced settings.'}
               </p>
             )}
             {chat.messages.map((message) => (
@@ -193,7 +193,7 @@ export function AgentPanel({
                   <button
                     key={citation.citationId}
                     type="button"
-                    aria-label={`Open citation ${citation.modelId}: ${citation.heading || citation.path}`}
+                    aria-label={`Open citation ${citation.modelId}: ${citation.heading || 'cited note'}`}
                     onClick={() => onCitation(citation)}
                   >
                     [{citation.modelId}]
@@ -211,7 +211,7 @@ export function AgentPanel({
               ref={composerRef}
               aria-label="Chat input"
               disabled={!canChat || active}
-              placeholder="Ask about this workspace"
+              placeholder="Ask about this library"
               rows={2}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -233,8 +233,8 @@ export function AgentPanel({
 
 function semanticLabel(status: string, warning: string): string {
   if (status === 'ready' || status === 'active') return 'Semantic search';
-  if (status === 'fallback' || warning) return 'Workspace text fallback';
-  return 'Workspace search';
+  if (status === 'fallback' || warning) return 'Library text search';
+  return 'Library search';
 }
 
 function chatStatus(chat: ChatState, cancelling: boolean): string {

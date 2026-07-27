@@ -7,10 +7,16 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as history$0 from "./history/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as session$0 from "./session/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as workspaceid$0 from "./workspaceid/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as appstate$0 from "../appstate/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../../../../../time/models.js";
@@ -109,47 +115,41 @@ export class AIProfilesDTO {
     }
 }
 
-export class ActivationResult {
-    "status": ActivationStatus;
-    "capability"?: CapabilityDTO | null;
+export class ArtifactLocatorV1DTO {
+    "version": number;
+    "kind": string;
+    "relativePath": string;
 
-    /** Creates a new ActivationResult instance. */
-    constructor($$source: Partial<ActivationResult> = {}) {
-        if (!("status" in $$source)) {
-            this["status"] = ActivationStatus.$zero;
+    /** Creates a new ArtifactLocatorV1DTO instance. */
+    constructor($$source: Partial<ArtifactLocatorV1DTO> = {}) {
+        if (!("version" in $$source)) {
+            this["version"] = 0;
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("relativePath" in $$source)) {
+            this["relativePath"] = "";
         }
 
         Object.assign(this, $$source);
     }
 
     /**
-     * Creates a new ActivationResult instance from a string or object.
+     * Creates a new ArtifactLocatorV1DTO instance from a string or object.
      */
-    static createFrom($$source: any = {}): ActivationResult {
-        const $$createField1_0 = $$createType3;
+    static createFrom($$source: any = {}): ArtifactLocatorV1DTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("capability" in $$parsedSource) {
-            $$parsedSource["capability"] = $$createField1_0($$parsedSource["capability"]);
-        }
-        return new ActivationResult($$parsedSource as Partial<ActivationResult>);
+        return new ArtifactLocatorV1DTO($$parsedSource as Partial<ArtifactLocatorV1DTO>);
     }
 }
-
-export enum ActivationStatus {
-    /**
-     * The Go zero value for the underlying type of the enum.
-     */
-    $zero = "",
-
-    ActivationActive = "active",
-    ActivationCancelled = "cancelled",
-};
 
 export class CapabilityDTO {
     "sessionId": session$0.SessionID;
     "workspaceId": workspaceid$0.WorkspaceID;
     "generation": session$0.Generation;
     "display": DisplayDTO;
+    "accessMode": session$0.AccessMode;
 
     /** Creates a new CapabilityDTO instance. */
     constructor($$source: Partial<CapabilityDTO> = {}) {
@@ -165,6 +165,9 @@ export class CapabilityDTO {
         if (!("display" in $$source)) {
             this["display"] = (new DisplayDTO());
         }
+        if (!("accessMode" in $$source)) {
+            this["accessMode"] = session$0.AccessMode.$zero;
+        }
 
         Object.assign(this, $$source);
     }
@@ -173,7 +176,7 @@ export class CapabilityDTO {
      * Creates a new CapabilityDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): CapabilityDTO {
-        const $$createField3_0 = $$createType4;
+        const $$createField3_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("display" in $$parsedSource) {
             $$parsedSource["display"] = $$createField3_0($$parsedSource["display"]);
@@ -271,10 +274,10 @@ export class ChatRequestDTO {
      * Creates a new ChatRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ChatRequestDTO {
-        const $$createField0_0 = $$createType5;
-        const $$createField5_0 = $$createType6;
-        const $$createField6_0 = $$createType7;
-        const $$createField8_0 = $$createType8;
+        const $$createField0_0 = $$createType3;
+        const $$createField5_0 = $$createType4;
+        const $$createField6_0 = $$createType5;
+        const $$createField8_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -345,7 +348,7 @@ export class CitationReadRequestDTO {
      * Creates a new CitationReadRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): CitationReadRequestDTO {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -382,6 +385,17 @@ export class ConfirmSessionCredentialRequestDTO {
         return new ConfirmSessionCredentialRequestDTO($$parsedSource as Partial<ConfirmSessionCredentialRequestDTO>);
     }
 }
+
+export enum ContinuityStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    ContinuityLoaded = "loaded",
+    ContinuityEmpty = "empty",
+    ContinuityUnavailable = "unavailable",
+};
 
 export class CredentialChallengeDTO {
     "nonce": string;
@@ -475,7 +489,7 @@ export class CredentialSaveResultDTO {
      * Creates a new CredentialSaveResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): CredentialSaveResultDTO {
-        const $$createField1_0 = $$createType10;
+        const $$createField1_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("challenge" in $$parsedSource) {
             $$parsedSource["challenge"] = $$createField1_0($$parsedSource["challenge"]);
@@ -571,7 +585,7 @@ export class EmbeddingConsentRequestDTO {
      * Creates a new EmbeddingConsentRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): EmbeddingConsentRequestDTO {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -610,6 +624,27 @@ export class EmbeddingConsentResultDTO {
     static createFrom($$source: any = {}): EmbeddingConsentResultDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new EmbeddingConsentResultDTO($$parsedSource as Partial<EmbeddingConsentResultDTO>);
+    }
+}
+
+export class FindRecentLibraryRequestDTO {
+    "workspaceId": workspaceid$0.WorkspaceID;
+
+    /** Creates a new FindRecentLibraryRequestDTO instance. */
+    constructor($$source: Partial<FindRecentLibraryRequestDTO> = {}) {
+        if (!("workspaceId" in $$source)) {
+            this["workspaceId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new FindRecentLibraryRequestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): FindRecentLibraryRequestDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new FindRecentLibraryRequestDTO($$parsedSource as Partial<FindRecentLibraryRequestDTO>);
     }
 }
 
@@ -658,7 +693,7 @@ export class HistoryConversationRequestDTO {
      * Creates a new HistoryConversationRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): HistoryConversationRequestDTO {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -699,10 +734,10 @@ export class HistoryDeleteAllResultDTO {
      * Creates a new HistoryDeleteAllResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): HistoryDeleteAllResultDTO {
-        const $$createField0_0 = $$createType8;
-        const $$createField1_0 = $$createType8;
-        const $$createField2_0 = $$createType8;
-        const $$createField3_0 = $$createType8;
+        const $$createField0_0 = $$createType6;
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType6;
+        const $$createField3_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("deletedIds" in $$parsedSource) {
             $$parsedSource["deletedIds"] = $$createField0_0($$parsedSource["deletedIds"]);
@@ -761,7 +796,7 @@ export class HistoryListDTO {
      * Creates a new HistoryListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): HistoryListDTO {
-        const $$createField0_0 = $$createType12;
+        const $$createField0_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("conversations" in $$parsedSource) {
             $$parsedSource["conversations"] = $$createField0_0($$parsedSource["conversations"]);
@@ -848,8 +883,8 @@ export class HistoryRecordDTO {
      * Creates a new HistoryRecordDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): HistoryRecordDTO {
-        const $$createField8_0 = $$createType14;
-        const $$createField10_0 = $$createType15;
+        const $$createField8_0 = $$createType12;
+        const $$createField10_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("citations" in $$parsedSource) {
             $$parsedSource["citations"] = $$createField8_0($$parsedSource["citations"]);
@@ -877,7 +912,7 @@ export class HistoryRecordsDTO {
      * Creates a new HistoryRecordsDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): HistoryRecordsDTO {
-        const $$createField0_0 = $$createType17;
+        const $$createField0_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("records" in $$parsedSource) {
             $$parsedSource["records"] = $$createField0_0($$parsedSource["records"]);
@@ -973,7 +1008,7 @@ export class IndexRequestDTO {
      * Creates a new IndexRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): IndexRequestDTO {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
@@ -1012,6 +1047,266 @@ export class IndexStatusDTO {
     static createFrom($$source: any = {}): IndexStatusDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new IndexStatusDTO($$parsedSource as Partial<IndexStatusDTO>);
+    }
+}
+
+export class LatestHistoryDTO {
+    "status": history$0.LatestStatus;
+    "conversationId"?: string;
+    "records"?: HistoryRecordDTO[];
+
+    /** Creates a new LatestHistoryDTO instance. */
+    constructor($$source: Partial<LatestHistoryDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = history$0.LatestStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LatestHistoryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): LatestHistoryDTO {
+        const $$createField2_0 = $$createType15;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("records" in $$parsedSource) {
+            $$parsedSource["records"] = $$createField2_0($$parsedSource["records"]);
+        }
+        return new LatestHistoryDTO($$parsedSource as Partial<LatestHistoryDTO>);
+    }
+}
+
+export enum LibraryOperationKind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    LibraryOperationCreate = "create",
+    LibraryOperationOpen = "open",
+    LibraryOperationRecovery = "recovery",
+};
+
+export class LocationCapabilityDTO {
+    "status": LocationStatus;
+    "token"?: string;
+
+    /** Creates a new LocationCapabilityDTO instance. */
+    constructor($$source: Partial<LocationCapabilityDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = LocationStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LocationCapabilityDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): LocationCapabilityDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LocationCapabilityDTO($$parsedSource as Partial<LocationCapabilityDTO>);
+    }
+}
+
+export enum LocationStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    LocationApproved = "approved",
+    LocationCancelled = "cancelled",
+};
+
+export class NoteContentDTO {
+    "artifact": ArtifactLocatorV1DTO;
+    "content": string;
+
+    /** Creates a new NoteContentDTO instance. */
+    constructor($$source: Partial<NoteContentDTO> = {}) {
+        if (!("artifact" in $$source)) {
+            this["artifact"] = (new ArtifactLocatorV1DTO());
+        }
+        if (!("content" in $$source)) {
+            this["content"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NoteContentDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NoteContentDTO {
+        const $$createField0_0 = $$createType16;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField0_0($$parsedSource["artifact"]);
+        }
+        return new NoteContentDTO($$parsedSource as Partial<NoteContentDTO>);
+    }
+}
+
+export class PendingLibraryOperationDTO {
+    "available": boolean;
+    "recoveryId"?: string;
+    "name"?: string;
+    "phase"?: PendingLibraryPhase;
+
+    /** Creates a new PendingLibraryOperationDTO instance. */
+    constructor($$source: Partial<PendingLibraryOperationDTO> = {}) {
+        if (!("available" in $$source)) {
+            this["available"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PendingLibraryOperationDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PendingLibraryOperationDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PendingLibraryOperationDTO($$parsedSource as Partial<PendingLibraryOperationDTO>);
+    }
+}
+
+export enum PendingLibraryPhase {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    PendingLibraryApproved = "approved",
+    PendingLibraryMutating = "mutating",
+    PendingLibraryCommitted = "committed",
+};
+
+export class PendingLibraryRemovalDTO {
+    "removed": boolean;
+
+    /** Creates a new PendingLibraryRemovalDTO instance. */
+    constructor($$source: Partial<PendingLibraryRemovalDTO> = {}) {
+        if (!("removed" in $$source)) {
+            this["removed"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PendingLibraryRemovalDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PendingLibraryRemovalDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PendingLibraryRemovalDTO($$parsedSource as Partial<PendingLibraryRemovalDTO>);
+    }
+}
+
+export enum PreparationStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    PreparationReady = "ready",
+    PreparationCancelled = "cancelled",
+};
+
+export class PreparedContinuityDTO {
+    "prepared": PreparedLibraryDTO;
+    "focus": WorkspaceFocus;
+    "artifactStatus": ContinuityStatus;
+    "artifact"?: NoteContentDTO | null;
+    "historyStatus": history$0.LatestStatus;
+    "conversationId"?: string;
+
+    /** Creates a new PreparedContinuityDTO instance. */
+    constructor($$source: Partial<PreparedContinuityDTO> = {}) {
+        if (!("prepared" in $$source)) {
+            this["prepared"] = (new PreparedLibraryDTO());
+        }
+        if (!("focus" in $$source)) {
+            this["focus"] = WorkspaceFocus.$zero;
+        }
+        if (!("artifactStatus" in $$source)) {
+            this["artifactStatus"] = ContinuityStatus.$zero;
+        }
+        if (!("historyStatus" in $$source)) {
+            this["historyStatus"] = history$0.LatestStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PreparedContinuityDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PreparedContinuityDTO {
+        const $$createField0_0 = $$createType17;
+        const $$createField3_0 = $$createType19;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("prepared" in $$parsedSource) {
+            $$parsedSource["prepared"] = $$createField0_0($$parsedSource["prepared"]);
+        }
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField3_0($$parsedSource["artifact"]);
+        }
+        return new PreparedContinuityDTO($$parsedSource as Partial<PreparedContinuityDTO>);
+    }
+}
+
+export class PreparedLibraryAbortDTO {
+    "cancelled": boolean;
+
+    /** Creates a new PreparedLibraryAbortDTO instance. */
+    constructor($$source: Partial<PreparedLibraryAbortDTO> = {}) {
+        if (!("cancelled" in $$source)) {
+            this["cancelled"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PreparedLibraryAbortDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PreparedLibraryAbortDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PreparedLibraryAbortDTO($$parsedSource as Partial<PreparedLibraryAbortDTO>);
+    }
+}
+
+export class PreparedLibraryDTO {
+    "status": PreparationStatus;
+    "preparationToken"?: string;
+    "kind"?: LibraryOperationKind;
+    "snapshot": WorkspaceSnapshotDTO;
+
+    /** Creates a new PreparedLibraryDTO instance. */
+    constructor($$source: Partial<PreparedLibraryDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = PreparationStatus.$zero;
+        }
+        if (!("snapshot" in $$source)) {
+            this["snapshot"] = (new WorkspaceSnapshotDTO());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PreparedLibraryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PreparedLibraryDTO {
+        const $$createField3_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("snapshot" in $$parsedSource) {
+            $$parsedSource["snapshot"] = $$createField3_0($$parsedSource["snapshot"]);
+        }
+        return new PreparedLibraryDTO($$parsedSource as Partial<PreparedLibraryDTO>);
     }
 }
 
@@ -1063,6 +1358,241 @@ export class ProfileSelectionDTO {
     static createFrom($$source: any = {}): ProfileSelectionDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ProfileSelectionDTO($$parsedSource as Partial<ProfileSelectionDTO>);
+    }
+}
+
+export class ReadyCommitDTO {
+    "status": ReadyCommitStatus;
+    "capability"?: CapabilityDTO | null;
+    "snapshot"?: WorkspaceSnapshotDTO | null;
+    "pending"?: PendingLibraryOperationDTO | null;
+    "recoveryRetained"?: boolean;
+    "continuityWarning"?: boolean;
+
+    /** Creates a new ReadyCommitDTO instance. */
+    constructor($$source: Partial<ReadyCommitDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = ReadyCommitStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReadyCommitDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReadyCommitDTO {
+        const $$createField1_0 = $$createType22;
+        const $$createField2_0 = $$createType23;
+        const $$createField3_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("capability" in $$parsedSource) {
+            $$parsedSource["capability"] = $$createField1_0($$parsedSource["capability"]);
+        }
+        if ("snapshot" in $$parsedSource) {
+            $$parsedSource["snapshot"] = $$createField2_0($$parsedSource["snapshot"]);
+        }
+        if ("pending" in $$parsedSource) {
+            $$parsedSource["pending"] = $$createField3_0($$parsedSource["pending"]);
+        }
+        return new ReadyCommitDTO($$parsedSource as Partial<ReadyCommitDTO>);
+    }
+}
+
+export enum ReadyCommitStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    CommitCancelledBeforeCommit = "cancelled_before_commit",
+    CommitCreatedAndActive = "created_and_active",
+    CommitCreatedNotActive = "created_not_active",
+    CommitOpenedAndActive = "opened_and_active",
+};
+
+export class RecentLibrariesDTO {
+    "libraries": RecentLibraryDTO[];
+
+    /** Creates a new RecentLibrariesDTO instance. */
+    constructor($$source: Partial<RecentLibrariesDTO> = {}) {
+        if (!("libraries" in $$source)) {
+            this["libraries"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecentLibrariesDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RecentLibrariesDTO {
+        const $$createField0_0 = $$createType27;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("libraries" in $$parsedSource) {
+            $$parsedSource["libraries"] = $$createField0_0($$parsedSource["libraries"]);
+        }
+        return new RecentLibrariesDTO($$parsedSource as Partial<RecentLibrariesDTO>);
+    }
+}
+
+export class RecentLibraryDTO {
+    "workspaceId": workspaceid$0.WorkspaceID;
+    "label": string;
+    "activatedAt": time$0.Time;
+    "status": RecentLibraryStatus;
+    "focus"?: WorkspaceFocus;
+
+    /** Creates a new RecentLibraryDTO instance. */
+    constructor($$source: Partial<RecentLibraryDTO> = {}) {
+        if (!("workspaceId" in $$source)) {
+            this["workspaceId"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("activatedAt" in $$source)) {
+            this["activatedAt"] = null;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = RecentLibraryStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecentLibraryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RecentLibraryDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecentLibraryDTO($$parsedSource as Partial<RecentLibraryDTO>);
+    }
+}
+
+export class RecentLibraryRequestDTO {
+    "workspaceId": workspaceid$0.WorkspaceID;
+
+    /** Creates a new RecentLibraryRequestDTO instance. */
+    constructor($$source: Partial<RecentLibraryRequestDTO> = {}) {
+        if (!("workspaceId" in $$source)) {
+            this["workspaceId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecentLibraryRequestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RecentLibraryRequestDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RecentLibraryRequestDTO($$parsedSource as Partial<RecentLibraryRequestDTO>);
+    }
+}
+
+export enum RecentLibraryStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    RecentLibraryAvailable = "available",
+    RecentLibraryUnavailable = "unavailable",
+};
+
+export class RemoveRecentLibraryResultDTO {
+    "removed": boolean;
+
+    /** Creates a new RemoveRecentLibraryResultDTO instance. */
+    constructor($$source: Partial<RemoveRecentLibraryResultDTO> = {}) {
+        if (!("removed" in $$source)) {
+            this["removed"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemoveRecentLibraryResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RemoveRecentLibraryResultDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemoveRecentLibraryResultDTO($$parsedSource as Partial<RemoveRecentLibraryResultDTO>);
+    }
+}
+
+export enum ResetConfirmationStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    ResetConfirmationReady = "ready",
+    ResetConfirmationCancelled = "cancelled",
+};
+
+export class ResetRecentViewStateConfirmationDTO {
+    "status": ResetConfirmationStatus;
+    "token"?: string;
+
+    /** Creates a new ResetRecentViewStateConfirmationDTO instance. */
+    constructor($$source: Partial<ResetRecentViewStateConfirmationDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = ResetConfirmationStatus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResetRecentViewStateConfirmationDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ResetRecentViewStateConfirmationDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ResetRecentViewStateConfirmationDTO($$parsedSource as Partial<ResetRecentViewStateConfirmationDTO>);
+    }
+}
+
+export class ResetRecentViewStateResultDTO {
+    "status": appstate$0.ResetOutcome;
+
+    /** Creates a new ResetRecentViewStateResultDTO instance. */
+    constructor($$source: Partial<ResetRecentViewStateResultDTO> = {}) {
+        if (!("status" in $$source)) {
+            this["status"] = appstate$0.ResetOutcome.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResetRecentViewStateResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ResetRecentViewStateResultDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ResetRecentViewStateResultDTO($$parsedSource as Partial<ResetRecentViewStateResultDTO>);
+    }
+}
+
+export class RestoreRecentLibraryRequestDTO {
+    "workspaceId": workspaceid$0.WorkspaceID;
+
+    /** Creates a new RestoreRecentLibraryRequestDTO instance. */
+    constructor($$source: Partial<RestoreRecentLibraryRequestDTO> = {}) {
+        if (!("workspaceId" in $$source)) {
+            this["workspaceId"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RestoreRecentLibraryRequestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RestoreRecentLibraryRequestDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RestoreRecentLibraryRequestDTO($$parsedSource as Partial<RestoreRecentLibraryRequestDTO>);
     }
 }
 
@@ -1158,6 +1688,40 @@ export class SaveCredentialRequestDTO {
     }
 }
 
+export class SaveWorkspaceViewRequestDTO {
+    "session": SessionReferenceDTO;
+    "focus": WorkspaceFocus;
+    "artifact"?: ArtifactLocatorV1DTO | null;
+
+    /** Creates a new SaveWorkspaceViewRequestDTO instance. */
+    constructor($$source: Partial<SaveWorkspaceViewRequestDTO> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new SessionReferenceDTO());
+        }
+        if (!("focus" in $$source)) {
+            this["focus"] = WorkspaceFocus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SaveWorkspaceViewRequestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SaveWorkspaceViewRequestDTO {
+        const $$createField0_0 = $$createType3;
+        const $$createField2_0 = $$createType28;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField2_0($$parsedSource["artifact"]);
+        }
+        return new SaveWorkspaceViewRequestDTO($$parsedSource as Partial<SaveWorkspaceViewRequestDTO>);
+    }
+}
+
 export class SessionReferenceDTO {
     "sessionId": session$0.SessionID;
     "generation": session$0.Generation;
@@ -1203,12 +1767,246 @@ export class SetHistoryEnabledRequestDTO {
      * Creates a new SetHistoryEnabledRequestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SetHistoryEnabledRequestDTO {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("session" in $$parsedSource) {
             $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
         }
         return new SetHistoryEnabledRequestDTO($$parsedSource as Partial<SetHistoryEnabledRequestDTO>);
+    }
+}
+
+export enum WorkspaceFocus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    WorkspaceFocusChat = "chat",
+    WorkspaceFocusNote = "note",
+    WorkspaceFocusGraph = "graph",
+};
+
+export class WorkspaceGraphDTO {
+    "nodes": WorkspaceGraphNodeDTO[];
+    "edges": WorkspaceGraphEdgeDTO[];
+
+    /** Creates a new WorkspaceGraphDTO instance. */
+    constructor($$source: Partial<WorkspaceGraphDTO> = {}) {
+        if (!("nodes" in $$source)) {
+            this["nodes"] = [];
+        }
+        if (!("edges" in $$source)) {
+            this["edges"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceGraphDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceGraphDTO {
+        const $$createField0_0 = $$createType30;
+        const $$createField1_0 = $$createType32;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
+        }
+        if ("edges" in $$parsedSource) {
+            $$parsedSource["edges"] = $$createField1_0($$parsedSource["edges"]);
+        }
+        return new WorkspaceGraphDTO($$parsedSource as Partial<WorkspaceGraphDTO>);
+    }
+}
+
+export class WorkspaceGraphEdgeDTO {
+    "from": string;
+    "type": string;
+    "to": string;
+
+    /** Creates a new WorkspaceGraphEdgeDTO instance. */
+    constructor($$source: Partial<WorkspaceGraphEdgeDTO> = {}) {
+        if (!("from" in $$source)) {
+            this["from"] = "";
+        }
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+        if (!("to" in $$source)) {
+            this["to"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceGraphEdgeDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceGraphEdgeDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceGraphEdgeDTO($$parsedSource as Partial<WorkspaceGraphEdgeDTO>);
+    }
+}
+
+export class WorkspaceGraphNodeDTO {
+    "id": string;
+    "title": string;
+    "type": string;
+    "path": string;
+    "preview"?: string;
+
+    /** Creates a new WorkspaceGraphNodeDTO instance. */
+    constructor($$source: Partial<WorkspaceGraphNodeDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceGraphNodeDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceGraphNodeDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceGraphNodeDTO($$parsedSource as Partial<WorkspaceGraphNodeDTO>);
+    }
+}
+
+export class WorkspaceNoteRequestDTO {
+    "session": SessionReferenceDTO;
+    "artifact": ArtifactLocatorV1DTO;
+
+    /** Creates a new WorkspaceNoteRequestDTO instance. */
+    constructor($$source: Partial<WorkspaceNoteRequestDTO> = {}) {
+        if (!("session" in $$source)) {
+            this["session"] = (new SessionReferenceDTO());
+        }
+        if (!("artifact" in $$source)) {
+            this["artifact"] = (new ArtifactLocatorV1DTO());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceNoteRequestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceNoteRequestDTO {
+        const $$createField0_0 = $$createType3;
+        const $$createField1_0 = $$createType16;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("session" in $$parsedSource) {
+            $$parsedSource["session"] = $$createField0_0($$parsedSource["session"]);
+        }
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField1_0($$parsedSource["artifact"]);
+        }
+        return new WorkspaceNoteRequestDTO($$parsedSource as Partial<WorkspaceNoteRequestDTO>);
+    }
+}
+
+export class WorkspaceSnapshotDTO {
+    "display": DisplayDTO;
+    "summary": WorkspaceSummaryDTO;
+    "graph": WorkspaceGraphDTO;
+    "tree": WorkspaceTreeDTO;
+    "accessMode": session$0.AccessMode;
+    "noteAvailable": boolean;
+    "warnings": WorkspaceWarningDTO[];
+
+    /** Creates a new WorkspaceSnapshotDTO instance. */
+    constructor($$source: Partial<WorkspaceSnapshotDTO> = {}) {
+        if (!("display" in $$source)) {
+            this["display"] = (new DisplayDTO());
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = (new WorkspaceSummaryDTO());
+        }
+        if (!("graph" in $$source)) {
+            this["graph"] = (new WorkspaceGraphDTO());
+        }
+        if (!("tree" in $$source)) {
+            this["tree"] = (new WorkspaceTreeDTO());
+        }
+        if (!("accessMode" in $$source)) {
+            this["accessMode"] = session$0.AccessMode.$zero;
+        }
+        if (!("noteAvailable" in $$source)) {
+            this["noteAvailable"] = false;
+        }
+        if (!("warnings" in $$source)) {
+            this["warnings"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceSnapshotDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceSnapshotDTO {
+        const $$createField0_0 = $$createType2;
+        const $$createField1_0 = $$createType33;
+        const $$createField2_0 = $$createType34;
+        const $$createField3_0 = $$createType35;
+        const $$createField6_0 = $$createType37;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("display" in $$parsedSource) {
+            $$parsedSource["display"] = $$createField0_0($$parsedSource["display"]);
+        }
+        if ("summary" in $$parsedSource) {
+            $$parsedSource["summary"] = $$createField1_0($$parsedSource["summary"]);
+        }
+        if ("graph" in $$parsedSource) {
+            $$parsedSource["graph"] = $$createField2_0($$parsedSource["graph"]);
+        }
+        if ("tree" in $$parsedSource) {
+            $$parsedSource["tree"] = $$createField3_0($$parsedSource["tree"]);
+        }
+        if ("warnings" in $$parsedSource) {
+            $$parsedSource["warnings"] = $$createField6_0($$parsedSource["warnings"]);
+        }
+        return new WorkspaceSnapshotDTO($$parsedSource as Partial<WorkspaceSnapshotDTO>);
+    }
+}
+
+export class WorkspaceSummaryDTO {
+    "notes": number;
+    "sources": number;
+    "relationships": number;
+
+    /** Creates a new WorkspaceSummaryDTO instance. */
+    constructor($$source: Partial<WorkspaceSummaryDTO> = {}) {
+        if (!("notes" in $$source)) {
+            this["notes"] = 0;
+        }
+        if (!("sources" in $$source)) {
+            this["sources"] = 0;
+        }
+        if (!("relationships" in $$source)) {
+            this["relationships"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceSummaryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceSummaryDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceSummaryDTO($$parsedSource as Partial<WorkspaceSummaryDTO>);
     }
 }
 
@@ -1236,8 +2034,8 @@ export class WorkspaceTreeDTO {
      * Creates a new WorkspaceTreeDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceTreeDTO {
-        const $$createField0_0 = $$createType19;
-        const $$createField1_0 = $$createType21;
+        const $$createField0_0 = $$createType39;
+        const $$createField1_0 = $$createType41;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("nodes" in $$parsedSource) {
             $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
@@ -1280,7 +2078,7 @@ export class WorkspaceTreeNodeDTO {
      * Creates a new WorkspaceTreeNodeDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): WorkspaceTreeNodeDTO {
-        const $$createField5_0 = $$createType19;
+        const $$createField5_0 = $$createType39;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("children" in $$parsedSource) {
             $$parsedSource["children"] = $$createField5_0($$parsedSource["children"]);
@@ -1314,26 +2112,94 @@ export class WorkspaceTreeWarningDTO {
     }
 }
 
+export class WorkspaceViewDTO {
+    "focus": WorkspaceFocus;
+    "artifact"?: ArtifactLocatorV1DTO | null;
+
+    /** Creates a new WorkspaceViewDTO instance. */
+    constructor($$source: Partial<WorkspaceViewDTO> = {}) {
+        if (!("focus" in $$source)) {
+            this["focus"] = WorkspaceFocus.$zero;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceViewDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceViewDTO {
+        const $$createField1_0 = $$createType28;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("artifact" in $$parsedSource) {
+            $$parsedSource["artifact"] = $$createField1_0($$parsedSource["artifact"]);
+        }
+        return new WorkspaceViewDTO($$parsedSource as Partial<WorkspaceViewDTO>);
+    }
+}
+
+export class WorkspaceWarningDTO {
+    "code": string;
+    "path"?: string;
+
+    /** Creates a new WorkspaceWarningDTO instance. */
+    constructor($$source: Partial<WorkspaceWarningDTO> = {}) {
+        if (!("code" in $$source)) {
+            this["code"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceWarningDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): WorkspaceWarningDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceWarningDTO($$parsedSource as Partial<WorkspaceWarningDTO>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = AIProfileDTO.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = CapabilityDTO.createFrom;
-const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = DisplayDTO.createFrom;
-const $$createType5 = SessionReferenceDTO.createFrom;
-const $$createType6 = ProfileSelectionDTO.createFrom;
-const $$createType7 = ChatHistoryOptionsDTO.createFrom;
-const $$createType8 = $Create.Array($Create.Any);
-const $$createType9 = CredentialChallengeDTO.createFrom;
-const $$createType10 = $Create.Nullable($$createType9);
-const $$createType11 = HistoryMetadataDTO.createFrom;
+const $$createType2 = DisplayDTO.createFrom;
+const $$createType3 = SessionReferenceDTO.createFrom;
+const $$createType4 = ProfileSelectionDTO.createFrom;
+const $$createType5 = ChatHistoryOptionsDTO.createFrom;
+const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = CredentialChallengeDTO.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = HistoryMetadataDTO.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = HistoryCitationDTO.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = HistoryCitationDTO.createFrom;
-const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = HistoryUsageDTO.createFrom;
-const $$createType16 = HistoryRecordDTO.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = WorkspaceTreeNodeDTO.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = WorkspaceTreeWarningDTO.createFrom;
-const $$createType21 = $Create.Array($$createType20);
+const $$createType13 = HistoryUsageDTO.createFrom;
+const $$createType14 = HistoryRecordDTO.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = ArtifactLocatorV1DTO.createFrom;
+const $$createType17 = PreparedLibraryDTO.createFrom;
+const $$createType18 = NoteContentDTO.createFrom;
+const $$createType19 = $Create.Nullable($$createType18);
+const $$createType20 = WorkspaceSnapshotDTO.createFrom;
+const $$createType21 = CapabilityDTO.createFrom;
+const $$createType22 = $Create.Nullable($$createType21);
+const $$createType23 = $Create.Nullable($$createType20);
+const $$createType24 = PendingLibraryOperationDTO.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = RecentLibraryDTO.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = $Create.Nullable($$createType16);
+const $$createType29 = WorkspaceGraphNodeDTO.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = WorkspaceGraphEdgeDTO.createFrom;
+const $$createType32 = $Create.Array($$createType31);
+const $$createType33 = WorkspaceSummaryDTO.createFrom;
+const $$createType34 = WorkspaceGraphDTO.createFrom;
+const $$createType35 = WorkspaceTreeDTO.createFrom;
+const $$createType36 = WorkspaceWarningDTO.createFrom;
+const $$createType37 = $Create.Array($$createType36);
+const $$createType38 = WorkspaceTreeNodeDTO.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = WorkspaceTreeWarningDTO.createFrom;
+const $$createType41 = $Create.Array($$createType40);

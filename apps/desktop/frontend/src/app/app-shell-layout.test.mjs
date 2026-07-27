@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const readSource = (relativePath) => readFileSync(new URL(relativePath, import.meta.url), 'utf8');
 const shellSource = readSource('./app-shell.tsx');
+const appSource = readSource('../App.tsx');
 const titleSource = readSource('./desktop-title-bar.tsx');
 const railSource = readSource('../features/workspace/workspace-rail.tsx');
 const artifactSource = readSource('../features/graph/artifact-pane.tsx');
@@ -16,19 +17,23 @@ test('app shell composes the reference semantic zones', () => {
   assert.match(shellSource, /<ArtifactPane/);
   assert.match(shellSource, /<AgentPanel/);
   assert.match(titleSource, /data-wails-drag/);
-  assert.match(titleSource, /Workspace \{connected \? 'connected' : 'not connected'\}/);
-  assert.match(railSource, /aria-label="Workspace navigation"/);
-  assert.match(artifactSource, /aria-label="Workspace artifact"/);
+  assert.match(titleSource, /Library ready/);
+  assert.match(railSource, /aria-label="Library navigation"/);
+  assert.match(artifactSource, /aria-label="Library content"/);
   assert.match(agentSource, /aria-label="Agent panel"/);
 });
 
-test('artifact pane keeps every real workspace action reachable', () => {
-  for (const label of ['Open', 'Refresh', 'Source', 'Check', 'Import']) {
-    assert.match(artifactSource, new RegExp(`>${label}<`));
+test('artifact pane keeps only MVP-A library actions reachable', () => {
+  for (const label of ['Switch library', 'Refresh']) {
+    assert.match(artifactSource, new RegExp(`>\\s*${label}\\s*<`));
   }
-  for (const callback of ['onChooseWorkspace', 'onRefreshGraph', 'onChooseSourcePath', 'onRunCheck', 'onImportSource']) {
+  for (const callback of ['onOpenLibrary', 'onRefreshGraph']) {
     assert.ok(artifactSource.includes(`onClick={${callback}}`));
   }
+  assert.doesNotMatch(artifactSource, />\s*(Source|Check|Import)\s*</);
+  assert.doesNotMatch(artifactSource, /workspace-root-control|Workspace root/);
+  assert.match(appSource, /onOpenLibrary=\{workspace\.showWelcome\}/);
+  assert.doesNotMatch(appSource, /onOpenLibrary=\{workspace\.openLibrary\}/);
 });
 
 test('graph and note remain real selectable artifact views', () => {
@@ -44,7 +49,7 @@ test('graph and note remain real selectable artifact views', () => {
 });
 
 test('tree and agent regions have explicit reopen controls', () => {
-  assert.match(railSource, /aria-label=\{open \? 'Close workspace tree' : 'Open workspace tree'\}/);
+  assert.match(railSource, /aria-label=\{open \? 'Close library notes' : 'Open library notes'\}/);
   assert.match(shellSource, /aria-label="Open Agent panel"/);
   assert.match(railSource, /aria-expanded=/);
   assert.match(agentSource, /aria-label="Close Agent panel"/);

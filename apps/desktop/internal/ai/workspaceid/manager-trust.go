@@ -47,11 +47,20 @@ func (m *Manager) Close() error {
 		handles = append(handles, pending.candidate.handle)
 		delete(m.pending, token)
 	}
+	prepared := make([]*preparedAttachState, 0, len(m.prepared))
+	for state := range m.prepared {
+		prepared = append(prepared, state)
+		delete(m.prepared, state)
+	}
 	for key, trusted := range m.trusted {
 		handles = append(handles, trusted.handle)
 		delete(m.trusted, key)
 	}
 	m.mu.Unlock()
+	for _, state := range prepared {
+		attach := &PreparedAttach{state: state}
+		_ = attach.Abort()
+	}
 	for _, handle := range handles {
 		_ = handle.Close()
 	}

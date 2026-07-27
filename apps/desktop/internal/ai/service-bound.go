@@ -31,6 +31,9 @@ func (service *Service) DeactivateWorkspace(ctx context.Context, reference Sessi
 	if err != nil {
 		return ErrSessionCleanup
 	}
+	if service.libraries != nil {
+		service.libraries.removeActive(window, reference.sessionReference())
+	}
 	return nil
 }
 
@@ -55,6 +58,9 @@ func CloseWindow(service *Service, window session.WindowID) error {
 	}
 	service.consentCommitMu.Lock()
 	service.activations.CloseWindow(window)
+	if service.libraries != nil {
+		service.libraries.closeWindow(window)
+	}
 	service.consentCommitMu.Unlock()
 	if err := service.sessions.CloseWindow(window); err != nil {
 		return ErrSessionCleanup
@@ -68,6 +74,9 @@ func Close(service *Service) error {
 	}
 	service.consentCommitMu.Lock()
 	service.activations.Close()
+	if service.libraries != nil {
+		service.libraries.close()
+	}
 	service.consentCommitMu.Unlock()
 	if err := service.sessions.Close(); err != nil {
 		return ErrSessionCleanup

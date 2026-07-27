@@ -1,6 +1,6 @@
 package workspaceid
 
-func classifyCandidate(registry Registry, candidate Candidate) (AttachKind, int) {
+func classifyCandidate(registry Registry, candidate Candidate, legacySignature ...Signature) (AttachKind, int) {
 	pathMatches := make([]int, 0, 1)
 	signatureMatches := make([]int, 0, 1)
 	for index, record := range registry.Records {
@@ -11,6 +11,9 @@ func classifyCandidate(registry Registry, candidate Candidate) (AttachKind, int)
 			pathMatches = append(pathMatches, index)
 		}
 		if candidate.HasSignature && record.FilesystemSignature == candidate.Signature {
+			signatureMatches = append(signatureMatches, index)
+		} else if len(legacySignature) == 1 && legacySignature[0] != "" &&
+			record.FilesystemSignature == legacySignature[0] {
 			signatureMatches = append(signatureMatches, index)
 		}
 	}

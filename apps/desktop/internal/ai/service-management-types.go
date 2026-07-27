@@ -1,6 +1,10 @@
 package ai
 
-import "time"
+import (
+	"time"
+
+	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/history"
+)
 
 type WorkspaceTreeDTO struct {
 	Nodes     []WorkspaceTreeNodeDTO    `json:"nodes"`
@@ -43,6 +47,11 @@ type HistoryMetadataDTO struct {
 }
 type HistoryRecordsDTO struct {
 	Records []HistoryRecordDTO `json:"records"`
+}
+type LatestHistoryDTO struct {
+	Status         history.LatestStatus `json:"status"`
+	ConversationID string               `json:"conversationId,omitempty"`
+	Records        []HistoryRecordDTO   `json:"records,omitempty"`
 }
 type HistoryRecordDTO struct {
 	ConversationID   string               `json:"conversationId"`

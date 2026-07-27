@@ -14,10 +14,12 @@ import (
 
 func TestManagementFacadeMapsSafeTreeAndHistoryDTOs(t *testing.T) {
 	now := time.Date(2026, 7, 12, 1, 2, 3, 0, time.UTC)
+	record := history.ConversationRecord{SchemaVersion: history.CurrentSchemaVersion, ConversationID: "conversation", AttemptID: "attempt", CreatedAt: now, FinishedAt: now, Status: history.StatusCompleted, UserMessage: "question", AssistantOutput: "answer", Citations: []history.Citation{{ID: "cit_1", Label: "Note"}}, Usage: history.UsageCounts{InputTokens: 2, OutputTokens: 3}}
 	runtime := &managementRuntimeStub{enabled: true,
 		tree:         workspace.WorkspaceTree{Nodes: []workspace.TreeNode{{ID: "node_0123456789abcdef0123456789abcdef", Name: "wiki", Path: "wiki", Kind: "directory", Children: []workspace.TreeNode{{ID: "node_abcdef0123456789abcdef0123456789", Name: "note.md", Path: "wiki/note.md", Kind: "file", Size: 4}}}}, Warnings: []workspace.TreeWarning{}, Truncated: false},
 		metadata:     []history.ConversationMetadata{{ConversationID: "conversation", CreatedAt: now, UpdatedAt: now, Attempts: 1, LatestStatus: history.StatusCompleted}},
-		records:      []history.ConversationRecord{{SchemaVersion: history.CurrentSchemaVersion, ConversationID: "conversation", AttemptID: "attempt", CreatedAt: now, FinishedAt: now, Status: history.StatusCompleted, UserMessage: "question", AssistantOutput: "answer", Citations: []history.Citation{{ID: "cit_1", Label: "Note"}}, Usage: history.UsageCounts{InputTokens: 2, OutputTokens: 3}}},
+		records:      []history.ConversationRecord{record},
+		latest:       history.LatestResult{Status: history.LatestLoaded, ConversationID: "conversation", Records: []history.ConversationRecord{record}},
 		deleteResult: history.DeleteResult{Removed: true, Durable: true}, deleteAllResult: history.DeleteAllResult{DeletedIDs: []string{"conversation"}, DurableDeletedIDs: []string{"conversation"}, UncertainDeletedIDs: []string{}, RemainingIDs: []string{}, Durable: true}}
 	service, capability, _ := newBridgeService(t, 7, runtime)
 	reference := bridgeReference(capability)
@@ -41,6 +43,11 @@ func TestManagementFacadeMapsSafeTreeAndHistoryDTOs(t *testing.T) {
 	if err != nil || len(loaded.Records) != 1 || loaded.Records[0].AssistantOutput != "answer" {
 		t.Fatalf("load=%+v err=%v", loaded, err)
 	}
+	latest, err := service.LoadLatestHistory(context.Background(), reference)
+	if err != nil || latest.Status != history.LatestLoaded ||
+		latest.ConversationID != "conversation" || len(latest.Records) != 1 {
+		t.Fatalf("latest=%+v err=%v", latest, err)
+	}
 	deleted, err := service.DeleteHistory(context.Background(), HistoryConversationRequestDTO{Session: reference, ConversationID: "conversation"})
 	if err != nil || !deleted.Removed || !deleted.Durable {
 		t.Fatalf("delete=%+v err=%v", deleted, err)
@@ -49,7 +56,7 @@ func TestManagementFacadeMapsSafeTreeAndHistoryDTOs(t *testing.T) {
 	if err != nil || len(all.DeletedIDs) != 1 || !all.Durable {
 		t.Fatalf("all=%+v err=%v", all, err)
 	}
-	for _, value := range []any{tree, listed, loaded, all} {
+	for _, value := range []any{tree, listed, loaded, latest, all} {
 		raw, marshalErr := json.Marshal(value)
 		if marshalErr != nil || strings.Contains(string(raw), "/private/") || containsJSONField(raw, "root") || containsJSONField(raw, "provider") || containsJSONField(raw, "secret") {
 			t.Fatalf("unsafe JSON=%s err=%v", raw, marshalErr)

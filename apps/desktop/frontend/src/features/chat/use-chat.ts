@@ -138,6 +138,10 @@ export function useChat({
   }, [cancelling]);
 
   const retry = useCallback(() => begin(stateRef.current.lastQuestion, true), [begin]);
+  const loadState = useCallback((next: ChatState): void => {
+    stateSessionKeyRef.current = sessionKey;
+    dispatch({ type: 'load', state: next });
+  }, [sessionKey]);
 
   return {
     state: visibleState,
@@ -146,10 +150,7 @@ export function useChat({
     cancel,
     retry,
     reset,
-    loadState: (next: ChatState) => {
-      stateSessionKeyRef.current = sessionKey;
-      dispatch({ type: 'load', state: next });
-    },
+    loadState,
   };
 }
 

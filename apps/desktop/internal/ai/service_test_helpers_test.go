@@ -50,6 +50,8 @@ type nativeAuthorityStub struct {
 	embeddingOK     bool
 	embeddingErr    error
 	embeddingPrompt EmbeddingDisclosure
+	resetOK         bool
+	resetErr        error
 }
 
 func (stub *nativeAuthorityStub) ChooseDirectory(context.Context, session.WindowID) (DirectorySelection, error) {
@@ -65,6 +67,11 @@ func (stub *nativeAuthorityStub) ConfirmDirectory(context.Context, session.Windo
 func (stub *nativeAuthorityStub) ConfirmAttachDecision(context.Context, session.WindowID, workspaceid.AttachKind) (bool, error) {
 	stub.log.add("confirm-decision")
 	return stub.attachDecision, stub.attachPromptErr
+}
+
+func (stub *nativeAuthorityStub) ConfirmResetRecentActivity(context.Context, session.WindowID) (bool, error) {
+	stub.log.add("confirm-reset-recent")
+	return stub.resetOK, stub.resetErr
 }
 
 type validatorStub struct {

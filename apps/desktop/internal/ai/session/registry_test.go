@@ -30,6 +30,25 @@ func (runtime *runtimeSpy) closeCount() int {
 	return runtime.closes
 }
 
+type trustedRootLeaseSpy struct {
+	mu     sync.Mutex
+	closes int
+	err    error
+}
+
+func (lease *trustedRootLeaseSpy) Close() error {
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	lease.closes++
+	return lease.err
+}
+
+func (lease *trustedRootLeaseSpy) closeCount() int {
+	lease.mu.Lock()
+	defer lease.mu.Unlock()
+	return lease.closes
+}
+
 func entropy(values ...byte) *bytes.Reader {
 	raw := make([]byte, 0, len(values)*32)
 	for _, value := range values {

@@ -23,7 +23,9 @@ type DirectoryHandle interface {
 
 type ownedCandidate struct {
 	Candidate
-	handle DirectoryHandle
+	handle             DirectoryHandle
+	legacySignature    Signature
+	hasLegacySignature bool
 }
 
 type OpenDirectory func(string) (DirectoryHandle, error)
@@ -76,8 +78,12 @@ func resolveOwnedCandidate(root string, canonicalizer Canonicalizer, open OpenDi
 		owned.Signature, owned.HasSignature, err = pathProbe(path)
 	} else {
 		owned.Signature, owned.HasSignature, err = handleProbe(handle)
+		if err == nil {
+			owned.legacySignature, owned.hasLegacySignature, err = platformLegacyHandleSignature(handle)
+		}
 	}
-	if err != nil || (owned.HasSignature && !validSignature(owned.Signature)) {
+	if err != nil || (owned.HasSignature && !validSignature(owned.Signature)) ||
+		(owned.hasLegacySignature && !validSignature(owned.legacySignature)) {
 		return ownedCandidate{}, errors.New("workspace identity probe failed")
 	}
 	if err := revalidateHandle(owned); err != nil {

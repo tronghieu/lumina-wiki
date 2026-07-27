@@ -1,57 +1,44 @@
-import type { WorkspaceSummary } from '../../../bindings/github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace/models';
 import type { KeyboardEvent } from 'react';
 import type { ArtifactView } from '../../app/app-shell-state';
-import { formatWorkspaceOverviewStats } from '../workspace/workspace-actions';
+import type { LibrarySummary } from '../workspace/ready-library-state';
 import { GraphView } from './graph-view';
 import type { KnowledgeGraph } from './graph-types';
 import type { NoteContentState } from './note-content';
 import { NoteView } from './note-view';
 
-type ArtifactPaneProps = {
+interface ArtifactPaneProps {
   activeView: ArtifactView;
   graph: KnowledgeGraph;
+  libraryLabel: string;
+  librarySummary: LibrarySummary;
   noteState: NoteContentState;
   query: string;
   selectedNodeId: string;
-  workspaceSummary: WorkspaceSummary | null;
-  workspaceDraftRoot: string;
-  workspaceRoot: string;
-  onActivateWorkspace: () => void;
   onActiveViewChange: (view: ArtifactView) => void;
-  onChooseSourcePath: () => void;
-  onChooseWorkspace: () => void;
-  onImportSource: () => void;
+  onOpenLibrary: () => void;
   onQueryChange: (query: string) => void;
   onRefreshGraph: () => void;
-  onRunCheck: () => void;
   onSelectNode: (nodeId: string) => void;
-  onWorkspaceDraftChange: (path: string) => void;
-};
+}
 
-export function ArtifactPane({
+export const ArtifactPane: React.FC<ArtifactPaneProps> = ({
   activeView,
   graph,
+  libraryLabel,
+  librarySummary,
   noteState,
   query,
   selectedNodeId,
-  workspaceSummary,
-  workspaceDraftRoot,
-  workspaceRoot,
-  onActivateWorkspace,
   onActiveViewChange,
-  onChooseSourcePath,
-  onChooseWorkspace,
-  onImportSource,
+  onOpenLibrary,
   onQueryChange,
   onRefreshGraph,
-  onRunCheck,
   onSelectNode,
-  onWorkspaceDraftChange,
-}: ArtifactPaneProps) {
+}) => {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId);
-  const title = selectedNode?.title ?? (workspaceRoot ? 'Knowledge graph' : 'Open a workspace');
+  const title = selectedNode?.title ?? 'Knowledge graph';
 
-  function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const currentView = (event.target as HTMLElement).id === 'artifact-tab-note' ? 'note' : 'graph';
@@ -66,39 +53,21 @@ export function ArtifactPane({
   }
 
   return (
-    <section className="main-artifact" aria-label="Workspace artifact">
+    <section className="main-artifact" aria-label="Library content">
       <header className="artifact-header">
         <div className="artifact-heading">
-          <span>{selectedNode?.path ?? (workspaceRoot || 'No workspace connected')}</span>
+          <span>{selectedNode ? friendlyNodeType(selectedNode.type) : libraryLabel}</span>
           <h1>{title}</h1>
         </div>
-        <div className="artifact-actions" aria-label="Workspace actions">
-          <button type="button" onClick={onChooseWorkspace}>Open</button>
-          <button type="button" onClick={onRefreshGraph} disabled={!workspaceRoot}>Refresh</button>
-          <button type="button" onClick={onChooseSourcePath}>Source</button>
-          <button type="button" onClick={onRunCheck} disabled={!workspaceRoot}>Check</button>
-          <button className="primary-action" type="button" onClick={onImportSource} disabled={!workspaceRoot}>Import</button>
+        <div className="artifact-actions" aria-label="Library actions">
+          <button type="button" onClick={onOpenLibrary}>Switch library</button>
+          <button type="button" onClick={onRefreshGraph}>Refresh</button>
         </div>
-        <form className="workspace-root-control" onSubmit={(event) => {
-          event.preventDefault();
-          onActivateWorkspace();
-        }}>
-          <label>
-            <span className="visually-hidden">Workspace root</span>
-            <input
-              aria-label="Workspace root"
-              value={workspaceDraftRoot}
-              placeholder="Workspace path"
-              onChange={(event) => onWorkspaceDraftChange(event.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={!workspaceDraftRoot.trim()}>Connect</button>
-        </form>
         <div className="artifact-controls">
           <div
             className="artifact-tabs"
             role="tablist"
-            aria-label="Artifact view"
+            aria-label="Library view"
             onKeyDown={handleTabKeyDown}
           >
             <button
@@ -126,31 +95,26 @@ export function ArtifactPane({
             </button>
           </div>
           <label className="graph-search">
-            <span className="visually-hidden">Search graph nodes</span>
+            <span className="visually-hidden">Search notes and topics</span>
             <input
-              aria-label="Search graph nodes"
+              aria-label="Search notes and topics"
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search graph nodes"
+              placeholder="Search notes and topics"
               value={query}
             />
           </label>
-          <div className="artifact-counts" aria-label="Graph totals">
-            <span><strong>{graph.nodes.length}</strong> nodes</span>
-            <span><strong>{graph.edges.length}</strong> links</span>
+          <div className="artifact-counts" aria-label="Library totals">
+            <span><strong>{librarySummary.notes}</strong> notes</span>
+            <span><strong>{librarySummary.relationships}</strong> relationships</span>
           </div>
         </div>
       </header>
 
-      {workspaceSummary && (
-        <section className="overview-strip" aria-label="Workspace overview">
-          {formatWorkspaceOverviewStats(workspaceSummary).map((stat) => (
-            <div className="overview-stat" key={stat.label}>
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </div>
-          ))}
-        </section>
-      )}
+      <section className="overview-strip" aria-label="Library overview">
+        <div className="overview-stat"><span>Notes</span><strong>{librarySummary.notes}</strong></div>
+        <div className="overview-stat"><span>Documents</span><strong>{librarySummary.documents}</strong></div>
+        <div className="overview-stat"><span>Relationships</span><strong>{librarySummary.relationships}</strong></div>
+      </section>
 
       <div
         id={`artifact-panel-${activeView}`}
@@ -166,4 +130,19 @@ export function ArtifactPane({
       </div>
     </section>
   );
+};
+
+export default ArtifactPane;
+
+function friendlyNodeType(type: string): string {
+  const types: Record<string, string> = {
+    concept: 'Topic',
+    concepts: 'Topic',
+    source: 'Document',
+    sources: 'Document',
+    people: 'Person',
+    person: 'Person',
+    summary: 'Summary',
+  };
+  return types[type.toLowerCase()] ?? 'Note';
 }

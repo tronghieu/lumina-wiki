@@ -13,6 +13,8 @@ const (
 	MaxCanonicalPathBytes = 4096
 	MaxSignatureBytes     = 256
 	MaxActiveDecisions    = 64
+	MaxRecentWorkspaces   = 12
+	MaxRecentLabelBytes   = 256
 	DefaultDecisionTTL    = 5 * time.Minute
 )
 
@@ -21,7 +23,13 @@ var (
 	ErrRegistryBusy                = errors.New("workspace registry is busy")
 	ErrRegistryConflict            = errors.New("workspace registry changed; try again")
 	ErrCandidateChanged            = errors.New("workspace changed during confirmation")
+	ErrPreparedAttach              = errors.New("prepared workspace attachment is no longer valid")
 	ErrTrustedWorkspaceUnavailable = errors.New("trusted workspace is unavailable")
+	ErrInvalidRecentWorkspace      = errors.New("recent workspace request is invalid")
+	ErrRecentWorkspaceUnknown      = errors.New("recent workspace is unknown")
+	ErrRecentWorkspaceInactive     = errors.New("recent workspace is inactive")
+	ErrRecentWorkspaceUnavailable  = errors.New("recent workspace is unavailable")
+	ErrRecentWorkspaceChanged      = errors.New("recent workspace identity changed")
 	workspaceIDPattern             = regexp.MustCompile(`^ws_[a-f0-9]{32}$`)
 )
 
@@ -70,6 +78,12 @@ type Record struct {
 type Registry struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Records       []Record `json:"records"`
+}
+
+type RecentWorkspace struct {
+	WorkspaceID WorkspaceID `json:"workspaceId"`
+	Label       string      `json:"label"`
+	LastSeenAt  time.Time   `json:"lastSeenAt"`
 }
 
 func emptyRegistry() Registry {

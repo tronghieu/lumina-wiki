@@ -7,9 +7,6 @@ import (
 
 	desktopai "github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai"
 	"github.com/tronghieu/lumina-wiki/apps/desktop/internal/ai/session"
-	desktopgraph "github.com/tronghieu/lumina-wiki/apps/desktop/internal/graph"
-	desktopimporter "github.com/tronghieu/lumina-wiki/apps/desktop/internal/importer"
-	desktoptools "github.com/tronghieu/lumina-wiki/apps/desktop/internal/tools"
 	desktopworkspace "github.com/tronghieu/lumina-wiki/apps/desktop/internal/workspace"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -23,12 +20,6 @@ func main() {
 	app := application.New(application.Options{
 		Name:        info.Name,
 		Description: info.Description,
-		Services: []application.Service{
-			application.NewService(workspaceService),
-			application.NewService(desktopgraph.NewService()),
-			application.NewService(desktoptools.NewService()),
-			application.NewService(desktopimporter.NewService()),
-		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},

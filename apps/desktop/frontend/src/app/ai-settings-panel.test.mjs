@@ -27,3 +27,10 @@ test('semantic mode changes propagate to the app chat configuration', () => {
     /function enableSemantic[\s\S]*const nextSettings[\s\S]*const appSettings[\s\S]*onProfilesChange\(appSettings\)/,
   );
 });
+
+test('model and provider controls are identified as Advanced settings', () => {
+  assert.match(panel, />Advanced settings</);
+  assert.match(panel, />Provider</);
+  assert.match(panel, />Model</);
+  assert.doesNotMatch(panel, /Fast|Balanced|Deep/);
+});
