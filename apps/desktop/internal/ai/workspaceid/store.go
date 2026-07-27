@@ -2,6 +2,7 @@ package workspaceid
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -72,8 +73,10 @@ func (store *registryStore) ensureDir(create bool) (bool, error) {
 			return false, errors.New("registry directory permissions must be private")
 		}
 	}
-	if !create && !platformValidatePrivateDirectory(store.dir, info) {
-		return false, errors.New("registry directory permissions must be private")
+	if !create {
+		if err := platformPrivateDirectoryValidationError(store.dir, info); err != nil {
+			return false, fmt.Errorf("registry directory permissions must be private: %w", err)
+		}
 	}
 	if create {
 		if err := platformSecurePrivateDirectory(store.dir, info); err != nil {

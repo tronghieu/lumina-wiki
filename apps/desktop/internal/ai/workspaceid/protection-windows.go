@@ -40,13 +40,26 @@ func platformSecurePrivateDirectory(path string, expected os.FileInfo) error {
 }
 
 func platformValidatePrivateDirectory(path string, expected os.FileInfo) bool {
+	return platformPrivateDirectoryValidationError(path, expected) == nil
+}
+
+func platformPrivateDirectoryValidationError(path string, expected os.FileInfo) error {
 	directory, err := os.Open(path)
 	if err != nil {
-		return false
+		return errors.New("open registry directory security handle failed")
 	}
 	defer directory.Close()
 	opened, err := directory.Stat()
-	return err == nil && os.SameFile(expected, opened) && validateRegistryHandle(directory) == nil
+	if err != nil {
+		return errors.New("stat registry directory security handle failed")
+	}
+	if !os.SameFile(expected, opened) {
+		return errors.New("registry directory identity changed")
+	}
+	if err := validateRegistryHandle(directory); err != nil {
+		return err
+	}
+	return nil
 }
 
 func platformSecurePrivateFile(file *os.File) error { return protectRegistryHandle(file) }
