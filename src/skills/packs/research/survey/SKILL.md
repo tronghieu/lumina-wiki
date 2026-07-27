@@ -123,8 +123,15 @@ node _lumina/scripts/wiki.mjs log research-survey "saved survey <slug>"
 node _lumina/scripts/lint.mjs --fix --json
 ```
 
-   If `summary.errors > 0`, read the lint output, address each error, and
-   re-run before telling the user the skill is done.
+   Re-run in read mode (no `--fix`) to see the true count — the `--fix` run's
+   own `summary.errors` still counts findings it just repaired:
+
+```bash
+node _lumina/scripts/lint.mjs --json
+```
+
+   If that re-run's `summary.errors > 0`, read the lint output, address each
+   error, and re-run before telling the user the skill is done.
 
 10. Suggest `/lumi-check` in a fresh session or via a subagent after saving. A
     blank context catches bias from the reasoning chain that just wrote the
@@ -167,7 +174,8 @@ cited source and concept slug plus the `## Survey` / `## Gaps` sections, log
 - Saved survey pages have valid summary frontmatter, including a non-empty
   `covers` array listing every cited page.
 - The survey file was written only after the user explicitly asked to save it.
-- If saved, lint leaves `summary.errors === 0`, `wiki/index.md` is current, and
-  `wiki/log.md` has an append-only `research-survey` entry.
+- If saved, a read-only lint re-run (no `--fix`) shows `summary.errors === 0`,
+  `wiki/index.md` is current, and `wiki/log.md` has an append-only
+  `research-survey` entry.
 - If the page already existed, the user's choice (skip / refresh / abort) is
   logged in `wiki/log.md` with the actual decision taken.

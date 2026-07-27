@@ -3132,3 +3132,58 @@ describe('--suggest output', () => {
     assert.ok(!outNoSuggest.includes('suggestion:'));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRESSION: CLI stdout integrity on large --json output (async pipe write vs
+// process.exit race)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CLI: stdout is not truncated on a large --json payload', () => {
+  // On POSIX, process.stdout writes to a pipe (not a TTY or a file) are
+  // asynchronous. main() used to call `process.exit(...)` immediately after
+  // printing the --json/--summary body; when a parent captured stdout via a
+  // pipe (e.g. spawnSync, exactly how the installer's post-upgrade banner
+  // invokes this script), a large enough payload could still be queued when
+  // the process tore down, silently truncating stdout to a fixed ~8 KB with
+  // no error surfaced at all — `result.error` stayed undefined and the exit
+  // code looked normal, but stdout was invalid JSON. main() now sets
+  // `process.exitCode` and lets the event loop drain instead, which lets the
+  // queued write flush before Node exits. This test drives the real CLI
+  // entry point (not the `runLint` library function) via spawnSync, because
+  // the bug lived entirely in how main() exits, not in what it computes.
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('spawnSync of the real CLI on a wiki with enough findings to exceed 8KB of pretty-printed JSON returns fully parsable stdout', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const lintScript = fileURLToPath(new URL('./lint.mjs', import.meta.url));
+
+    const wikiDir = await makeWiki(tmpDir);
+    // Each page links to a nonexistent slug — a cheap, reliable way to
+    // generate one L05 finding per file. 150 files comfortably clears the
+    // ~8KB truncation threshold observed pre-fix (that threshold was hit
+    // well under 50 files) while staying fast to write and lint.
+    for (let i = 0; i < 150; i++) {
+      await writeFile(
+        join(wikiDir, 'concepts', `concept-${i}.md`),
+        `---\nid: concept-${i}\ntitle: Concept ${i}\ntype: concept\ncreated: '2026-01-01'\nupdated: '2026-01-01'\n---\n\nSee [[nonexistent-target-${i}]] for details.\n`,
+      );
+    }
+
+    const result = spawnSync(process.execPath, [lintScript, tmpDir, '--suggest', '--json'], {
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.equal(result.error, undefined, 'spawnSync should not report a spawn error');
+    assert.equal(result.status, 1, 'expected findings, so exit code 1');
+    assert.ok(result.stdout.length > 8192, 'test payload should exceed the previously-observed truncation point');
+
+    let parsed;
+    assert.doesNotThrow(() => { parsed = JSON.parse(result.stdout); }, 'stdout must be complete, parsable JSON, not truncated');
+    assert.ok(Array.isArray(parsed.findings));
+    assert.ok(parsed.findings.some(f => f.id === 'L05-broken-wikilink'));
+  });
+});

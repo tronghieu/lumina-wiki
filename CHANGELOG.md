@@ -80,6 +80,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   not handle, without changing any file.
 - An optional field can be cleared again, and a rejected value now says how
   to supply it as written text.
+- Saving an entry no longer stalls when the automatic repair had already
+  cleaned up every problem it found. The step deciding whether an entry is
+  finished was still counting problems that had just been repaired, so a
+  clean entry could be left marked unfinished and you would be asked to
+  resolve something that was no longer wrong. The same miscount affected
+  editing a page and three of the research steps, and is fixed in all of
+  them.
+- The command that changes a single field now refuses the placeholder word
+  `TODO`, the same way the page check already rejects it. This was the last
+  remaining way to write that placeholder back into a page and recreate the
+  exact problem the rest of this release removes. The refusal message says
+  to supply a real value rather than suggesting a way of quoting it, which
+  could not have helped here.
+- The notice shown after an upgrade works again on wikis larger than a few
+  dozen pages. Its reading of the wiki was being cut short partway through
+  with no sign that anything had gone wrong, so on most real wikis the
+  notice simply never appeared at all. It also now confirms which problems
+  the automatic repair can genuinely resolve before recommending it, rather
+  than trusting an early guess, so it no longer points you at a repair that
+  would decline the work.
 
 ### Added
 

@@ -2738,7 +2738,17 @@ async function main() {
   }
 
   const hasUnresolved = findings.some(f => !f.fix_applied && (f.severity === 'error' || f.severity === 'warning'));
-  process.exit(hasUnresolved ? 1 : 0);
+  // Set exitCode and let the event loop drain instead of calling
+  // process.exit() here. On POSIX, process.stdout writes to a pipe (as
+  // opposed to a TTY or a file) are asynchronous; a large --json/--summary
+  // payload from reportJson/reportSummary above can still be queued when
+  // process.exit() would tear the process down immediately, silently
+  // truncating stdout (observed: truncated to exactly 8192 bytes,
+  // regardless of payload size, with no error surfaced to the caller —
+  // e.g. a parent process reading via spawnSync sees a clean exit code but
+  // unparsable JSON). Letting main() return normally allows the queued
+  // write to flush before Node exits on its own.
+  process.exitCode = hasUnresolved ? 1 : 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

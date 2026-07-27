@@ -618,6 +618,95 @@ describe('set-meta schema validation', () => {
     }
   });
 
+  test('rejects TODO for a declared string field: exit 2, structured stderr, file unchanged', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-string-todo');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(['set-meta', 'sources/sv-string-todo', 'title', 'TODO'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"title" is set to the placeholder "TODO", which is not a real value/);
+      // The TODO rejection is not a quoting problem, so the coercible-type
+      // hint suggesting the value be PASSED WITH --json-value (the one other
+      // violations get) must NOT appear — the error may still reference
+      // --json-value to say it *won't* help, just not to suggest using it.
+      assert.doesNotMatch(errJson.error, /pass it with --json-value/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects TODO for a declared string field via --json-value too', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-string-todo-json');
+      const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo-json.md');
+      const before = await readFile(filePath, 'utf8');
+
+      const r = runWiki(
+        ['set-meta', 'sources/sv-string-todo-json', 'title', '"TODO"', '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"title" is set to the placeholder "TODO", which is not a real value/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, '--json-value must not bypass the TODO placeholder gate');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('still accepts a normal string for a declared string field', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-string-valid');
+
+      const r = runWiki(['set-meta', 'sources/sv-string-valid', 'title', 'A Real Title'], { cwd: tmp });
+      assert.equal(r.status, 0, `set-meta failed: ${r.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/sv-string-valid'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.title, 'A Real Title');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('still allows clearing an optional field with null despite the TODO gate', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeVerifySource(tmp, 'sv-clear-optional');
+
+      // 'confidence' is declared optional (required: false) for sources.
+      const r = runWiki(['set-meta', 'sources/sv-clear-optional', 'confidence', 'null'], { cwd: tmp });
+      assert.equal(r.status, 0, `clearing optional field failed: ${r.stderr}`);
+
+      const read = runWiki(['read-meta', 'sources/sv-clear-optional'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const json = parseJson(read.stdout);
+      assert.equal(json.frontmatter.confidence, null);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('rejects a non-number for a number field', async () => {
     const tmp = await makeTmp();
     try {

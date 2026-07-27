@@ -759,20 +759,67 @@ export async function printPostUpgradeBanner({ projectRoot, fromVersion, toVersi
   let parsed;
   try {
     const lintScript = join(projectRoot, '_lumina', 'scripts', 'lint.mjs');
-    const result = spawnSync(
+
+    // maxBuffer: measured ~281 bytes/finding for plain pretty-printed --json.
+    // --suggest (below) adds a `suggestion` string, and for L05 a
+    // `candidates` array, to every unresolved finding — call it ~2x the
+    // plain-mode cost as a conservative estimate, so ~560 bytes/finding.
+    // 16 MB comfortably covers ~28,000 findings, an order of magnitude past
+    // anything a real wiki should produce, while staying small enough that
+    // buffering it in memory for a one-shot upgrade banner is a non-issue.
+    const runLintJson = (args) => spawnSync(
       process.execPath,
-      [lintScript, '--json'],
-      { cwd: projectRoot, encoding: 'utf8', timeout: 30000 },
+      [lintScript, ...args],
+      { cwd: projectRoot, encoding: 'utf8', timeout: 30000, maxBuffer: 16 * 1024 * 1024 },
     );
 
-    // Exit codes: 0 = clean, 1 = findings. Anything else (crash / ENOENT) → skip.
-    if (result.error || (result.status !== 0 && result.status !== 1)) {
-      return;
+    // Exit codes: 0 = clean, 1 = findings. Anything else (crash / ENOENT) →
+    // treat as unusable. Returns the parsed body, or null if the spawn
+    // failed, the exit code was unexpected, or stdout wasn't valid JSON
+    // (e.g. truncated output — see the ENOBUFS/truncation comment below).
+    const tryParseLintOutput = (result) => {
+      if (result.error || (result.status !== 0 && result.status !== 1)) {
+        return null;
+      }
+      try {
+        return JSON.parse(result.stdout.trim());
+      } catch {
+        return null;
+      }
+    };
+
+    // `--suggest` (without `--fix`/`--dry-run`) makes runLint execute
+    // applyFixes in its no-write dry-run mode purely to learn which findings
+    // a fixer would actually resolve — the truth pass documented in
+    // lint.mjs's runLint (search "Apply fixes if requested"). Without it,
+    // `fixable` is only the check-time prediction, which can tell the user
+    // to run --fix for something it will silently decline, or hide guidance
+    // for something that is in fact repairable. --suggest never writes to
+    // disk: every write inside applyFixes is gated on `!opts.dryRun`, and
+    // --suggest alone forces `dryRun: true` internally (see runLint).
+    parsed = tryParseLintOutput(runLintJson(['--suggest', '--json']));
+
+    // Fallback: the full findings list can still fail to come back even
+    // with a 16 MB maxBuffer — either genuine ENOBUFS on an enormous wiki,
+    // or (the flavor actually seen while building this: see lint.mjs's
+    // main(), which now sets `process.exitCode` instead of calling
+    // `process.exit()` right after writing stdout) silent truncation of a
+    // large pipe write that races an explicit exit, which produces no
+    // `result.error` at all, just invalid JSON. Rather than silently
+    // dropping the entire banner (the bug this replaces) on either failure
+    // mode, degrade to the compact `--summary` shape, whose size is fixed
+    // regardless of finding count, so it cannot repeat either failure.
+    // Still `--suggest`, so `fixable` in the summary reflects the same
+    // truth pass, not just the prediction.
+    if (parsed === null) {
+      try {
+        parsed = tryParseLintOutput(runLintJson(['--suggest', '--summary']));
+      } catch {
+        return;
+      }
     }
 
-    try {
-      parsed = JSON.parse(result.stdout.trim());
-    } catch {
+    if (parsed === null) {
       return;
     }
   } catch {

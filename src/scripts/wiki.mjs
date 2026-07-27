@@ -689,15 +689,31 @@ async function setMeta(projectRoot, slug, key, value) {
     if (field && !clearingOptional) {
       const violation = _checkFieldType(field, value);
       if (violation) {
-        // Scalars arrive already coerced by parseScalar, so a value the user
-        // typed as text can reach us as a number or a bare string where the
-        // schema wants a list. That is exactly what --json-value is for, and an
-        // error that does not say so reads as "this value is forbidden" rather
-        // than "quote it".
-        const coercible = field.type === 'string' || field.type === 'array' || field.type === 'object';
-        const hint = coercible
-          ? ' — if this is the value you meant, pass it with --json-value (e.g. --json-value \'"1706.03762"\' or \'["a","b"]\')'
-          : '';
+        // The TODO sentinel gets its own hint: --json-value re-encodes the
+        // same string ("TODO" stays "TODO" whether it arrives via parseScalar
+        // or JSON.parse), so pointing the user at --json-value here would be
+        // actively wrong — it cannot make this value acceptable. Every other
+        // violation is a real type/shape mismatch, where --json-value (or
+        // quoting the value) genuinely can fix it. Detected off the
+        // violation text itself (not the raw value) so a "TODO" rejected by
+        // a DIFFERENT branch — e.g. an iso-date field, which keeps its own
+        // "must be an ISO date" message — still gets that branch's own hint
+        // (none, today) rather than this one.
+        const isTodoPlaceholder = /is set to the placeholder "TODO"/.test(violation);
+        let hint;
+        if (isTodoPlaceholder) {
+          hint = ' — supply a real value; this is not a quoting issue, so --json-value will not help';
+        } else {
+          // Scalars arrive already coerced by parseScalar, so a value the user
+          // typed as text can reach us as a number or a bare string where the
+          // schema wants a list. That is exactly what --json-value is for, and an
+          // error that does not say so reads as "this value is forbidden" rather
+          // than "quote it".
+          const coercible = field.type === 'string' || field.type === 'array' || field.type === 'object';
+          hint = coercible
+            ? ' — if this is the value you meant, pass it with --json-value (e.g. --json-value \'"1706.03762"\' or \'["a","b"]\')'
+            : '';
+        }
         const err = new Error(`Schema violation: ${violation}${hint}`);
         err.code = 2;
         throw err;
@@ -1648,7 +1664,14 @@ async function readCitationsForSlug(projectRoot, slug) {
  * Mirrors lint.mjs's L02 check word-for-word so the two can never diverge —
  * this is the single source of truth for frontmatter type semantics, used
  * both by whole-document validation (_validateFrontmatter, read-only) and
- * by the setMeta write-path gate (single-key, hard reject, no --force).
+ * by the setMeta write-path gate (single-key, hard reject, no --force). That
+ * includes L02's TODO-placeholder rule, which lives in checkL02's 'string'
+ * branch only (not a blanket pre-switch guard): the literal "TODO" (trimmed,
+ * case-sensitive) is never a real value for a declared string field, so
+ * setMeta can no longer be used to write the exact defect L02 flags on read.
+ * Other types keep their own natural mismatch message for a "TODO" value
+ * (e.g. iso-date still says "must be an ISO date... got \"TODO\""), exactly
+ * as checkL02 does — only the 'string' branch's outcome changes.
  *
  * @param {import('./schemas.mjs').FrontmatterField} field
  * @param {any} val - Already-present value (never undefined/null; callers
@@ -1660,6 +1683,15 @@ function _checkFieldType(field, val) {
     case 'string':
       if (typeof val !== 'string') {
         return `"${field.key}" must be a string, got ${typeof val}`;
+      } else if (val.trim() === 'TODO') {
+        // Task 2 sentinel rule (mirrors checkL02 in lint.mjs word-for-word):
+        // the exact literal "TODO" (trimmed, case-sensitive) is never a real
+        // value for a DECLARED schema field — it is the placeholder a prior
+        // Lumina version could write for a missing string field. It satisfies
+        // `typeof val === 'string'` above, so without this check the write
+        // path would happily persist it — precisely the defect this gate
+        // exists to close.
+        return `"${field.key}" is set to the placeholder "TODO", which is not a real value`;
       }
       break;
     case 'number':

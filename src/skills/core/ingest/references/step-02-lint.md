@@ -60,14 +60,17 @@ for (const m of body.matchAll(/\[\[([^\]]+)\]\]/g)) {
 }
 const j = JSON.parse(fs.readFileSync('/tmp/lumi-lint-<slug>.json', 'utf8'));
 const relevant = j.findings.filter(f => touched.has(f.file));
-const errors = relevant.filter(f => f.severity === 'error');
+const errors = relevant.filter(f => f.severity === 'error' && !f.fix_applied);
 console.log(JSON.stringify({ errors_count: errors.length, relevant }, null, 2));
 "
 ```
 
 Two cases, based on `errors_count` from that scoped projection — **not** the
 wiki-wide `summary.errors`, which can include unrelated debt this ingest did
-not cause and should not be gated on:
+not cause and should not be gated on. `errors_count` only counts errors that
+are still unresolved after `--fix`; a finding `--fix` already repaired
+(`fix_applied: true`) stays in `relevant` for visibility but never blocks the
+gate:
 
 **Case A — `errors_count === 0`:**
 - Auto-fix may have rewritten files. Inspect the diff and tell the user one short sentence in the user's language, avoiding tool words. Example: "I cleaned up two missing return links and the page list is current."
@@ -86,7 +89,10 @@ not cause and should not be gated on:
 - Do **not** write `ingest_status: linted`. This is the gate the incident
   above is about — an entry with a standing error on its own pages must never
   be marked clean.
-- Explain each remaining issue in plain language with the page path. Include
+- Explain each remaining issue in plain language with the page path. A
+  "remaining" issue is a `relevant` entry with `fix_applied: false` — never
+  mention an entry `--fix` already repaired, which would report a solved
+  problem as outstanding. Include
   rule codes only after the explanation in parentheses for debugging. For
   anything that needs a judgment call, run
   `node _lumina/scripts/lint.mjs --suggest --json` and read the matching
