@@ -132,6 +132,8 @@ npm run test:update        # update-check timeouts
 
 Publishing is tag-driven: pushing a `v*` tag runs `.github/workflows/publish.yml`, which re-runs the gates against the tagged commit, publishes to npm, and opens a GitHub Release from the matching `CHANGELOG.md` entry.
 
+Publish from that workflow, never from a laptop. `npm publish` runs with `--provenance`, which signs the tarball with the workflow's OIDC identity so npm can attest which repository, commit and run built it. A publish run anywhere else cannot produce that attestation: npm does not refuse it, but the package lands with no provenance, which is visible on npmjs.com and to `npm audit signatures`.
+
 The npm dist-tag is derived from the version itself — the workflow never takes it as an input:
 
 | `package.json` version | git tag | npm dist-tag | GitHub Release |
