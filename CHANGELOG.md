@@ -7,8 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.12.0] - 2026-08-12
 
-> 1.11.0 was prepared in the changelog but never tagged, so it never reached
-> npm — the last published version was 1.10.1. Its fixes ship here.
+> This release also carries everything prepared for 1.11.0 on 2026-07-27:
+> that version was bumped and documented but never tagged, so it never
+> reached npm. The last published version was 1.10.1.
 
 ### Added
 
@@ -20,11 +21,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   identifier that cannot be read as one fails the publish rather than
   guessing — and such releases are marked as pre-releases on GitHub.
   Documented in `docs/DEVELOPMENT.md` §6.
-- Published packages now carry npm provenance. Every publish is signed with
-  the release workflow's OIDC identity, so npm can attest which repository,
-  commit and workflow run produced the tarball, and anyone can verify it
-  with `npm audit signatures`. A stolen npm token can no longer be used to
-  ship a package that looks like it came from this repository.
+- Published packages now carry npm provenance. Every publish from the
+  release workflow is signed with its OIDC identity, so npm records which
+  repository, commit and workflow run produced the tarball; `npm audit
+  signatures` verifies it and npmjs.com links back to the build. This does
+  not block a publish made with a stolen token — npm still accepts an
+  unsigned one — but such a package arrives with no attestation at all,
+  and that absence is visible to anyone who looks.
+- The six page templates above now match the wiki's frontmatter rules
+  exactly, and a new automated test compares every template against the
+  schema so they can't silently drift out of sync again.
+- `lint.mjs --fix` recovers more on its own now: an empty list for
+  list-type fields, a date recovered from an older field name or the
+  file's own save timestamp, a page's `id` recovered from an older field
+  name or its file path, its `type` from the folder it lives in, and its
+  title from the page's own heading. Where no safe value exists — a
+  publication year, an importance rating — it leaves the field reported as
+  missing instead of guessing, so a wrong value never quietly passes as
+  fixed.
+- `lint.mjs --fix` gained two further repairs: it corrects fields holding
+  the wrong kind of value (including rebuilding a page's source list and
+  related-concepts list straight from the link graph, which already held
+  the real answer), and it fixes wiki links that are missing their folder
+  name whenever exactly one page could be the intended target — never when
+  more than one page could match.
+- `lint.mjs --suggest` now actually does something. It had been accepted as
+  a flag since it shipped but silently did nothing; it now lists a concrete
+  next step for every finding the automatic repair could not resolve on its
+  own.
+- `lint.mjs --fix` now clears out an old field name once its replacement is
+  confirmed to hold the same information — for example, once a page's `id`
+  is in place, a leftover, older `slug` field carrying the identical value
+  is removed instead of being reported forever. "Matches" now also covers
+  the most common near-miss found in real wikis: an `id` that names both
+  its own folder and the old `slug` value together (for example
+  `concepts/ab-testing` next to a `slug` of `ab-testing`) counts as a
+  match, since the shorter value is fully contained inside the longer one
+  — nothing is lost by keeping the longer `id` and dropping the duplicate
+  `slug`. This only happens when the replacement field is present, holds a
+  valid value, and matches the old one this way; if the two genuinely
+  disagree, both are left in place and the warning keeps showing, because
+  that mismatch needs a person to look at it, not an automatic guess.
+- The notice shown after an upgrade now separates what will be repaired
+  automatically from what still needs a person's judgment, and only names
+  the commands that actually apply to what was found — instead of always
+  suggesting the same two commands regardless of what is wrong.
+- `/lumi-ingest` now checks its own new and updated pages before marking an
+  entry done, instead of trusting that the step succeeded.
+  `/lumi-migrate-legacy` now also picks up the specific findings the
+  automatic repair leaves standing (an ambiguous link, a rating with no
+  safe default), not only the fields a Lumina version explicitly renamed.
 
 ### Fixed
 
@@ -33,11 +79,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   to: `1.12.0-next.0` and `1.12.0` looked identical to it. Version comparison
   now follows semver precedence — stable outranks its own pre-releases,
   numeric identifiers compare numerically, and build metadata is ignored.
-
-## [1.11.0] - 2026-07-27
-
-### Fixed
-
 - Six page templates (source, concept, person, summary, topic, foundation)
   had drifted out of step with the wiki's own rules: each one was missing
   required frontmatter fields (`id`, `created`, `updated`) and instead
@@ -131,52 +172,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the automatic repair can genuinely resolve before recommending it, rather
   than trusting an early guess, so it no longer points you at a repair that
   would decline the work.
-
-### Added
-
-- The six page templates above now match the wiki's frontmatter rules
-  exactly, and a new automated test compares every template against the
-  schema so they can't silently drift out of sync again.
-- `lint.mjs --fix` recovers more on its own now: an empty list for
-  list-type fields, a date recovered from an older field name or the
-  file's own save timestamp, a page's `id` recovered from an older field
-  name or its file path, its `type` from the folder it lives in, and its
-  title from the page's own heading. Where no safe value exists — a
-  publication year, an importance rating — it leaves the field reported as
-  missing instead of guessing, so a wrong value never quietly passes as
-  fixed.
-- `lint.mjs --fix` gained two further repairs: it corrects fields holding
-  the wrong kind of value (including rebuilding a page's source list and
-  related-concepts list straight from the link graph, which already held
-  the real answer), and it fixes wiki links that are missing their folder
-  name whenever exactly one page could be the intended target — never when
-  more than one page could match.
-- `lint.mjs --suggest` now actually does something. It had been accepted as
-  a flag since it shipped but silently did nothing; it now lists a concrete
-  next step for every finding the automatic repair could not resolve on its
-  own.
-- `lint.mjs --fix` now clears out an old field name once its replacement is
-  confirmed to hold the same information — for example, once a page's `id`
-  is in place, a leftover, older `slug` field carrying the identical value
-  is removed instead of being reported forever. "Matches" now also covers
-  the most common near-miss found in real wikis: an `id` that names both
-  its own folder and the old `slug` value together (for example
-  `concepts/ab-testing` next to a `slug` of `ab-testing`) counts as a
-  match, since the shorter value is fully contained inside the longer one
-  — nothing is lost by keeping the longer `id` and dropping the duplicate
-  `slug`. This only happens when the replacement field is present, holds a
-  valid value, and matches the old one this way; if the two genuinely
-  disagree, both are left in place and the warning keeps showing, because
-  that mismatch needs a person to look at it, not an automatic guess.
-- The notice shown after an upgrade now separates what will be repaired
-  automatically from what still needs a person's judgment, and only names
-  the commands that actually apply to what was found — instead of always
-  suggesting the same two commands regardless of what is wrong.
-- `/lumi-ingest` now checks its own new and updated pages before marking an
-  entry done, instead of trusting that the step succeeded.
-  `/lumi-migrate-legacy` now also picks up the specific findings the
-  automatic repair leaves standing (an ambiguous link, a rating with no
-  safe default), not only the fields a Lumina version explicitly renamed.
 
 ### Migration
 
