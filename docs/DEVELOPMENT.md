@@ -140,7 +140,7 @@ The npm dist-tag is derived from the version itself — the workflow never takes
 | `1.12.0-next.0` | `v1.12.0-next.0` | `next` | pre-release |
 | `1.12.0-rc.1` | `v1.12.0-rc.1` | `rc` | pre-release |
 
-A version with a pre-release identifier publishes to a channel of that name and **leaves `latest` untouched**, so nobody running `npx lumina-wiki install` is affected. An identifier the workflow cannot read as a channel — empty, uppercase, purely numeric, or literally `latest` — fails the job rather than guessing.
+A version with a pre-release identifier publishes to a channel of that name and **leaves `latest` untouched**, so nobody running `npx lumina-wiki install` is affected. Build metadata is not part of the channel (`1.12.0+build-next` is a stable release, not a `next` one). An identifier the workflow cannot read as a channel — empty, uppercase, purely numeric, literally `latest`, or one npm itself refuses because it parses as a version range (`x`, `v1`) — fails the job rather than guessing.
 
 ### Cutting a pre-release
 

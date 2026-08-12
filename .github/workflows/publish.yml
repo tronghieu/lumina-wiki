@@ -43,10 +43,20 @@ jobs:
           #   1.12.0-rc.1   -> rc
           # A pre-release publish must never move `latest`, so an identifier we
           # cannot read is a hard stop rather than a silent fallback.
-          if [[ "$version" == *-* ]]; then
-            channel="${version#*-}"
+          #
+          # Build metadata is stripped first: it is not part of the pre-release,
+          # yet it may itself contain a hyphen (1.2.3+build-next is a *stable*
+          # release) or trail one (1.2.3-next+build).
+          precedence="${version%%+*}"
+          if [[ "$precedence" == *-* ]]; then
+            channel="${precedence#*-}"
             channel="${channel%%.*}"
-            if [[ ! "$channel" =~ ^[a-z][a-z0-9-]*$ ]] || [ "$channel" = "latest" ]; then
+            # npm refuses any dist-tag that parses as a SemVer range, so "x" and
+            # "v1" are caught here rather than after the gates have run.
+            if [[ ! "$channel" =~ ^[a-z][a-z0-9-]*$ ]] \
+              || [ "$channel" = "latest" ] \
+              || [ "$channel" = "x" ] \
+              || [[ "$channel" =~ ^v[0-9]+$ ]]; then
               echo "Refusing to publish ${version}: unusable pre-release channel '${channel}'." >&2
               exit 1
             fi
