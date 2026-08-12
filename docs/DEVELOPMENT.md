@@ -128,6 +128,48 @@ npm run test:update        # update-check timeouts
 
 ---
 
+## 6. Releasing — `latest` and pre-release channels
+
+Publishing is tag-driven: pushing a `v*` tag runs `.github/workflows/publish.yml`, which re-runs the gates against the tagged commit, publishes to npm, and opens a GitHub Release from the matching `CHANGELOG.md` entry.
+
+The npm dist-tag is derived from the version itself — the workflow never takes it as an input:
+
+| `package.json` version | git tag | npm dist-tag | GitHub Release |
+|---|---|---|---|
+| `1.12.0` | `v1.12.0` | `latest` | normal |
+| `1.12.0-next.0` | `v1.12.0-next.0` | `next` | pre-release |
+| `1.12.0-rc.1` | `v1.12.0-rc.1` | `rc` | pre-release |
+
+A version with a pre-release identifier publishes to a channel of that name and **leaves `latest` untouched**, so nobody running `npx lumina-wiki install` is affected. Build metadata is not part of the channel (`1.12.0+build-next` is a stable release, not a `next` one). An identifier the workflow cannot read as a channel — empty, uppercase, purely numeric, literally `latest`, or one npm itself refuses because it parses as a version range (`x`, `v1`) — fails the job rather than guessing.
+
+### Cutting a pre-release
+
+```bash
+# 1.12.0-next.0, .next.1, … as many as the change needs
+npm version 1.12.0-next.0 --no-git-tag-version
+git commit -am "chore(release): 1.12.0-next.0"
+git tag v1.12.0-next.0
+git push origin main --tags
+```
+
+Testers then run:
+
+```bash
+npx lumina-wiki@next install
+```
+
+When the change is ready, bump to the plain `1.12.0`, tag it, and the same workflow moves `latest`.
+
+### What pre-release users see
+
+`checkForUpdate()` always queries the `latest` dist-tag, and `isNewerVersion()` follows semver precedence — a stable release outranks the pre-release that led to it. So someone on `1.12.0-next.0` is nudged to upgrade the moment `1.12.0` ships, but is not nagged while only pre-releases exist. They are *not* notified about a newer build within the same channel; re-running `npx lumina-wiki@next install` is the way to pick that up.
+
+### Before tagging anything
+
+Prefer `npm pack` (cycle 3 above) over a pre-release for a change you can verify yourself. A pre-release is for putting a build in *someone else's* hands; the tarball is faster and leaves no published artifact behind.
+
+---
+
 ## Testing AI-agent global installs (`--agents`)
 
 `--agents openclaw` / `--agents hermes` write skills into a **global**, user-level skills directory (see `docs/specs/spec-librarian-mode/platform-integration.md` for the exact paths per platform), not into a project. That means a careless manual test can drop files into your real home directory.

@@ -49,6 +49,55 @@ describe('isNewerVersion', () => {
 });
 
 // ---------------------------------------------------------------------------
+// isNewerVersion — pre-release channels (npx lumina-wiki@next)
+// ---------------------------------------------------------------------------
+
+describe('isNewerVersion — pre-release', () => {
+  test('stable outranks the pre-release of the same version', () => {
+    assert.equal(isNewerVersion('1.12.0', '1.12.0-next.0'), true);
+  });
+
+  test('pre-release does not outrank its own stable release', () => {
+    assert.equal(isNewerVersion('1.12.0-next.0', '1.12.0'), false);
+  });
+
+  test('pre-release of a future version outranks current stable', () => {
+    assert.equal(isNewerVersion('1.12.0-next.0', '1.11.0'), true);
+  });
+
+  test('older stable does not outrank a newer pre-release', () => {
+    assert.equal(isNewerVersion('1.11.0', '1.12.0-next.0'), false);
+  });
+
+  test('later build within the same channel is newer', () => {
+    assert.equal(isNewerVersion('1.12.0-next.1', '1.12.0-next.0'), true);
+    assert.equal(isNewerVersion('1.12.0-next.0', '1.12.0-next.1'), false);
+  });
+
+  test('numeric identifiers compare numerically, not as strings', () => {
+    assert.equal(isNewerVersion('1.12.0-next.10', '1.12.0-next.9'), true);
+  });
+
+  test('identical pre-releases are not newer', () => {
+    assert.equal(isNewerVersion('1.12.0-next.0', '1.12.0-next.0'), false);
+  });
+
+  test('alphanumeric identifiers rank above numeric ones', () => {
+    assert.equal(isNewerVersion('1.12.0-rc.1', '1.12.0-beta.1'), true);
+    assert.equal(isNewerVersion('1.12.0-alpha.1', '1.12.0-beta.1'), false);
+  });
+
+  test('a longer identifier list wins when shared fields are equal', () => {
+    assert.equal(isNewerVersion('1.12.0-next.0.1', '1.12.0-next.0'), true);
+  });
+
+  test('build metadata is ignored for precedence', () => {
+    assert.equal(isNewerVersion('1.12.0+build.9', '1.12.0'), false);
+    assert.equal(isNewerVersion('1.12.1+build.1', '1.12.0'), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // checkForUpdate — environment variable suppression
 // ---------------------------------------------------------------------------
 
