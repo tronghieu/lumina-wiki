@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-08-12
+
+> 1.11.0 was prepared in the changelog but never tagged, so it never reached
+> npm — the last published version was 1.10.1. Its fixes ship here.
+
 ### Added
 
 - Pre-release publishing channel. A tag whose version carries a pre-release
@@ -15,6 +20,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   identifier that cannot be read as one fails the publish rather than
   guessing — and such releases are marked as pre-releases on GitHub.
   Documented in `docs/DEVELOPMENT.md` §6.
+- Published packages now carry npm provenance. Every publish is signed with
+  the release workflow's OIDC identity, so npm can attest which repository,
+  commit and workflow run produced the tarball, and anyone can verify it
+  with `npm audit signatures`. A stolen npm token can no longer be used to
+  ship a package that looks like it came from this repository.
 
 ### Fixed
 
@@ -1039,7 +1049,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.12.0
 [1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0

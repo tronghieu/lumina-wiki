@@ -80,7 +80,10 @@ jobs:
         run: npm run ci:package
 
       - name: Publish package
-        run: npm publish --tag "${{ steps.channel.outputs.npm_tag }}"
+        # --provenance signs the tarball with the workflow's OIDC identity, so
+        # npm can attest which repo, commit and run built it. Requires the
+        # id-token: write permission granted above.
+        run: npm publish --provenance --tag "${{ steps.channel.outputs.npm_tag }}"
 
       - name: Create GitHub Release
         env:
