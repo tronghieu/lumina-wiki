@@ -31,10 +31,31 @@ jobs:
           package-manager-cache: false
 
       - name: Verify tag matches package version
+        id: channel
         shell: bash
         run: |
           version="$(node -p "require('./package.json').version")"
           test "${GITHUB_REF_NAME}" = "v${version}"
+
+          # The npm dist-tag comes from the version's pre-release identifier:
+          #   1.12.0        -> latest   (the default channel every user gets)
+          #   1.12.0-next.0 -> next     (npx lumina-wiki@next)
+          #   1.12.0-rc.1   -> rc
+          # A pre-release publish must never move `latest`, so an identifier we
+          # cannot read is a hard stop rather than a silent fallback.
+          if [[ "$version" == *-* ]]; then
+            channel="${version#*-}"
+            channel="${channel%%.*}"
+            if [[ ! "$channel" =~ ^[a-z][a-z0-9-]*$ ]] || [ "$channel" = "latest" ]; then
+              echo "Refusing to publish ${version}: unusable pre-release channel '${channel}'." >&2
+              exit 1
+            fi
+            echo "npm_tag=${channel}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Node dependencies
         run: npm ci
@@ -49,14 +70,19 @@ jobs:
         run: npm run ci:package
 
       - name: Publish package
-        run: npm publish
+        run: npm publish --tag "${{ steps.channel.outputs.npm_tag }}"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.channel.outputs.prerelease }}
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
+          flags=(--verify-tag --title "${GITHUB_REF_NAME}")
+          if [ "$PRERELEASE" = "true" ]; then
+            flags+=(--prerelease)
+          fi
           notes="$(awk -v prefix="## [${version}]" '
             index($0, prefix) == 1 { flag = 1; next }
             /^## \[/ && flag { exit }
@@ -65,10 +91,8 @@ jobs:
           notes="$(printf '%s\n' "$notes" | sed -e '/./,$!d')"
           if [ -n "$notes" ]; then
             printf '%s\n' "$notes" > release-notes.md
-            gh release create "${GITHUB_REF_NAME}" --verify-tag \
-              --title "${GITHUB_REF_NAME}" --notes-file release-notes.md
+            gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --notes-file release-notes.md
           else
             echo "No CHANGELOG entry for ${version}; falling back to generated notes."
-            gh release create "${GITHUB_REF_NAME}" --verify-tag \
-              --title "${GITHUB_REF_NAME}" --generate-notes
+            gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --generate-notes
           fi

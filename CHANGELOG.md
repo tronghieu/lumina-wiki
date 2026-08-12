@@ -3,6 +3,27 @@
 All notable changes to Lumina-Wiki are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- Pre-release publishing channel. A tag whose version carries a pre-release
+  identifier (`v1.12.0-next.0`, `v1.12.0-rc.1`) now publishes to an npm
+  dist-tag of that name instead of `latest`, so a build can be handed to
+  testers with `npx lumina-wiki@next install` without touching what everyone
+  else installs. The channel is derived from the version alone — an
+  identifier that cannot be read as one fails the publish rather than
+  guessing — and such releases are marked as pre-releases on GitHub.
+  Documented in `docs/DEVELOPMENT.md` §6.
+
+### Fixed
+
+- The update check compared versions by their numeric core only, so anyone
+  running a pre-release build was never told about the stable release it led
+  to: `1.12.0-next.0` and `1.12.0` looked identical to it. Version comparison
+  now follows semver precedence — stable outranks its own pre-releases,
+  numeric identifiers compare numerically, and build metadata is ignored.
+
 ## [1.11.0] - 2026-07-27
 
 ### Fixed
@@ -1018,7 +1039,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.11.0...HEAD
 [1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
