@@ -27,13 +27,19 @@ import { dirname, join, resolve, relative, sep } from 'node:path';
 
 import {
   ENTITY_DIRS,
-  EDGE_TYPES,
   SCHEMA_VERSION,
   REQUIRED_FRONTMATTER,
 } from './schemas.mjs';
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
+import {
+  edgeTypeByName,
+  skipReverseFor,
+  reverseEdgeFor,
+  edgeKey,
+  normalizeEdge,
+} from './lib/edges.mjs';
 
 // ---------------------------------------------------------------------------
 // 2. Constants
@@ -793,36 +799,6 @@ async function writeJsonl(filePath, records) {
 }
 
 /**
- * Create a canonical edge key for deduplication.
- * For symmetric edges: sorted endpoints joined with `|`.
- * For asymmetric edges: `from|type|to`.
- * @param {object} edge
- * @returns {string}
- */
-function edgeKey(edge) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edge.type);
-  if (typeDef && typeDef.symmetric) {
-    const endpoints = [edge.from, edge.to].sort();
-    return `${endpoints[0]}|${edge.type}|${endpoints[1]}`;
-  }
-  return `${edge.from}|${edge.type}|${edge.to}`;
-}
-
-/**
- * Normalize a symmetric edge so endpoints are sorted.
- * @param {object} edge
- * @returns {object}
- */
-function normalizeEdge(edge) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edge.type);
-  if (typeDef && typeDef.symmetric) {
-    const [a, b] = [edge.from, edge.to].sort();
-    return { ...edge, from: a, to: b };
-  }
-  return edge;
-}
-
-/**
  * Add an edge (and its reverse unless target is exempt or edge is terminal).
  * Idempotent: re-running same add-edge produces byte-identical files.
  *
@@ -835,7 +811,7 @@ function normalizeEdge(edge) {
  * @returns {Promise<{added: boolean, reason: string}>}
  */
 async function addEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edgeType);
+  const typeDef = edgeTypeByName(edgeType);
   if (!typeDef) {
     const err = new Error(`Unknown edge type: ${edgeType}`);
     err.code = 2;
@@ -870,26 +846,9 @@ async function addEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
 
   const toAdd = [forwardEdge];
 
-  // Add reverse unless:
-  // 1. edge is terminal
-  // 2. target matches EXEMPTION_GLOBS
-  // 3. edge is symmetric (already covered by sorted endpoints)
-  const skipReverse =
-    typeDef.terminal ||
-    isExempt(toSlug) ||
-    typeDef.symmetric;
-
-  if (!skipReverse && typeDef.reverse) {
-    const reverseEdge = {
-      from: toSlug,
-      type: typeDef.reverse,
-      to: fromSlug,
-      ...(opts.confidence ? { confidence: opts.confidence } : {}),
-    };
-    const revKey = edgeKey(reverseEdge);
-    if (!existingKeys.has(revKey)) {
-      toAdd.push(reverseEdge);
-    }
+  const reverseEdge = reverseEdgeFor(typeDef, fromSlug, toSlug, opts.confidence);
+  if (reverseEdge && !existingKeys.has(edgeKey(reverseEdge))) {
+    toAdd.push(reverseEdge);
   }
 
   const newEdges = [...existing, ...toAdd];
@@ -996,7 +955,7 @@ async function batchEdges(projectRoot, jsonFilePath) {
       errors.push(`Record ${i}: missing from, type, or to`);
       continue;
     }
-    const typeDef = EDGE_TYPES.find(t => t.name === rec.type);
+    const typeDef = edgeTypeByName(rec.type);
     if (!typeDef) {
       errors.push(`Record ${i}: unknown edge type '${rec.type}'`);
     }
@@ -1023,7 +982,7 @@ async function batchEdges(projectRoot, jsonFilePath) {
   const toAdd = [];
 
   for (const rec of records) {
-    const typeDef = EDGE_TYPES.find(t => t.name === rec.type);
+    const typeDef = edgeTypeByName(rec.type);
     const forwardEdge = normalizeEdge({
       from: rec.from,
       type: rec.type,
@@ -1041,18 +1000,8 @@ async function batchEdges(projectRoot, jsonFilePath) {
     existingKeys.add(fwdKey);
     added++;
 
-    const skipReverse =
-      typeDef.terminal ||
-      isExempt(rec.to) ||
-      typeDef.symmetric;
-
-    if (!skipReverse && typeDef.reverse) {
-      const reverseEdge = {
-        from: rec.to,
-        type: typeDef.reverse,
-        to: rec.from,
-        ...(rec.confidence ? { confidence: rec.confidence } : {}),
-      };
+    const reverseEdge = reverseEdgeFor(typeDef, rec.from, rec.to, rec.confidence);
+    if (reverseEdge) {
       const revKey = edgeKey(reverseEdge);
       if (!existingKeys.has(revKey)) {
         toAdd.push(reverseEdge);
@@ -1099,18 +1048,6 @@ async function dedupEdges(projectRoot) {
 }
 
 /**
- * Same reverse-skip gate used by addEdge/batchEdges: no reverse edge when the
- * type is terminal, the target is exempt (EXEMPTION_GLOBS), or the type is
- * symmetric (already covered by sorted endpoints).
- * @param {object} typeDef
- * @param {string} toSlug
- * @returns {boolean}
- */
-function skipReverseFor(typeDef, toSlug) {
-  return Boolean(typeDef.terminal || isExempt(toSlug) || typeDef.symmetric);
-}
-
-/**
  * Partition an edge list into the edges matching a from/type/to relationship
  * (forward + its reverse, per the same gate addEdge uses) versus the rest.
  * Confidence is ignored when matching (edgeKey already ignores it).
@@ -1132,7 +1069,7 @@ function partitionEdgesForRemoval(edges, fromSlug, typeDef, toSlug) {
   const fwdKey = edgeKey(normalizeEdge({ from: fromSlug, type: typeDef.name, to: toSlug }));
 
   let revKey = null;
-  if (!skipReverseFor(typeDef, toSlug) && typeDef.reverse) {
+  if (!skipReverseFor(typeDef, toSlug)) {
     revKey = edgeKey(normalizeEdge({ from: toSlug, type: typeDef.reverse, to: fromSlug }));
   }
 
@@ -1213,7 +1150,7 @@ async function collectRemovalAdvisories(projectRoot, fromSlug, toSlug) {
  * @returns {Promise<object>}
  */
 async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edgeType);
+  const typeDef = edgeTypeByName(edgeType);
   if (!typeDef) {
     const err = new Error(`Unknown edge type: ${edgeType}`);
     err.code = 2;
@@ -1274,13 +1211,13 @@ async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
  * @returns {Promise<object>}
  */
 async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts = {}) {
-  const oldTypeDef = EDGE_TYPES.find(t => t.name === oldType);
+  const oldTypeDef = edgeTypeByName(oldType);
   if (!oldTypeDef) {
     const err = new Error(`Unknown edge type: ${oldType}`);
     err.code = 2;
     throw err;
   }
-  const newTypeDef = EDGE_TYPES.find(t => t.name === newType);
+  const newTypeDef = edgeTypeByName(newType);
   if (!newTypeDef) {
     const err = new Error(`Unknown edge type: ${newType}`);
     err.code = 2;
@@ -1324,7 +1261,7 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
   }
 
   let reverseEdge = null;
-  if (!skipReverseFor(newTypeDef, toSlug) && newTypeDef.reverse) {
+  if (!skipReverseFor(newTypeDef, toSlug)) {
     reverseEdge = { from: toSlug, type: newTypeDef.reverse, to: fromSlug };
     const candidate = { ...reverseEdge, ...(confidence ? { confidence } : {}) };
     const revKey = edgeKey(candidate);
@@ -2204,7 +2141,7 @@ async function main(argv) {
         }
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
         const direction = flags.direction && typeof flags.direction === 'string' ? flags.direction : 'both';
-        if (typeFilter && !EDGE_TYPES.some(t => t.name === typeFilter)) {
+        if (typeFilter && !edgeTypeByName(typeFilter)) {
           emitError(`Unknown edge type: ${typeFilter}`, 2);
           process.exit(2);
         }

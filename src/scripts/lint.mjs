@@ -51,7 +51,6 @@ import { join, basename, dirname, relative, normalize, resolve } from 'node:path
 import {
   SCHEMA_VERSION,
   ENTITY_DIRS,
-  EDGE_TYPES,
   REQUIRED_FRONTMATTER,
 } from './schemas.mjs';
 import {
@@ -61,6 +60,12 @@ import {
 } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
+import {
+  edgeTypeByName,
+  skipReverseFor,
+  reverseEdgeFor,
+  edgeKey,
+} from './lib/edges.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -1361,11 +1366,8 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
 function checkL06(edges, edgeSet) {
   const findings = [];
   for (const edge of edges) {
-    if (isExempt(edge.to)) continue;
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
-    if (!edgeType) continue;
-    if (edgeType.terminal || edgeType.reverse === null) continue;
-    if (edgeType.symmetric) continue; // L07 handles symmetric
+    const edgeType = edgeTypeByName(edge.type);
+    if (!edgeType || skipReverseFor(edgeType, edge.to)) continue; // L07 handles symmetric
 
     const reverseKey = `${edge.to}|${edgeType.reverse}|${edge.from}`;
     if (!edgeSet.has(reverseKey)) {
@@ -1389,25 +1391,17 @@ function checkL07(edges, edgeSet) {
   const findings = [];
   const seen = new Set();
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.symmetric) continue;
 
-    const [a, b] = [edge.from, edge.to].sort();
-    const canonical = `${a}|${edge.type}|${b}`;
+    const canonical = edgeKey(edge);
     const reverse = `${edge.to}|${edge.type}|${edge.from}`;
 
-    if (!seen.has(canonical)) {
-      seen.add(canonical);
-      // Check if both orderings appear in edgeSet (stored both ways)
-      if (edgeSet.has(reverse) && edge.from !== edge.to) {
-        findings.push(finding(
-          'L07-symmetric-edge-duplicate', 'warning', true,
-          edge.from, null,
-          `Symmetric edge "${edge.type}" stored both ways between "${edge.from}" and "${edge.to}"; should be stored once with sorted endpoints`
-        ));
-      }
-    } else {
-      // Duplicate line (same canonical key seen again)
+    // Either ordering already seen, or both orderings present in the file.
+    const duplicate = seen.has(canonical)
+      || (edgeSet.has(reverse) && edge.from !== edge.to);
+    seen.add(canonical);
+    if (duplicate) {
       findings.push(finding(
         'L07-symmetric-edge-duplicate', 'warning', true,
         edge.from, null,
@@ -1426,7 +1420,7 @@ function checkL07(edges, edgeSet) {
 function checkL08(edges) {
   const findings = [];
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.confidenceRequired) continue;
 
     const validConfidence = ['high', 'medium', 'low'];
@@ -2076,15 +2070,12 @@ async function fixL05(wikiRelPath, wikiRoot, l05findings, pendingRenames = new S
 function fixL06(edgesPath, edgesContent, edges, edgeSet) {
   const toAdd = [];
   for (const edge of edges) {
-    if (isExempt(edge.to)) continue;
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
-    if (!edgeType || edgeType.terminal || edgeType.reverse === null) continue;
-    if (edgeType.symmetric) continue;
+    const edgeType = edgeTypeByName(edge.type);
+    if (!edgeType || skipReverseFor(edgeType, edge.to)) continue;
 
     const reverseKey = `${edge.to}|${edgeType.reverse}|${edge.from}`;
     if (!edgeSet.has(reverseKey)) {
-      const revEdge = { from: edge.to, to: edge.from, type: edgeType.reverse };
-      if (edge.confidence) revEdge.confidence = edge.confidence;
+      const revEdge = reverseEdgeFor(edgeType, edge.from, edge.to, edge.confidence);
       toAdd.push(revEdge);
       edgeSet.add(reverseKey); // prevent duplicate adds in same run
     }
@@ -2108,7 +2099,7 @@ function fixL07(edgesContent, edges) {
   const removed = [];
 
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.symmetric) {
       const key = `${edge.from}|${edge.type}|${edge.to}`;
       canonical.set(key, edge);
