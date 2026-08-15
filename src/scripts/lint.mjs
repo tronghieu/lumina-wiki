@@ -297,7 +297,7 @@ async function deriveIsoDateValue(fm, absPath) {
  * branch), so a quoted list item would round-trip as a literal quoted string
  * instead of the bare value. wiki.mjs's parser does strip them. Unifying the
  * pair means unifying the two parsers first — a behaviour change for `--fix`,
- * not a refactor. Note this copy handles `val === ''` and wiki.mjs's does not.
+ * not a refactor.
  * @param {string} val
  * @returns {string}
  */
