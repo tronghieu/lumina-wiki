@@ -2226,13 +2226,30 @@ async function runLint(projectRoot, opts) {
   const knownSlugs = new Set(allWikiRel.map(f => f.replace(/\.md$/, '')));
 
   // Build wikilink maps.
+  // One snapshot of every scanned file, shared by the link scan, the per-file
+  // checks and the foundations pass below. Nothing writes to the wiki until
+  // applyFixes runs, so the three passes cannot observe different bytes; the
+  // fixers deliberately re-read, because by then earlier fixes have landed.
+  const contentCache = new Map();
+  {
+    const POOL = 32;
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(POOL, allWikiRel.length) }, async () => {
+        for (let i = next++; i < allWikiRel.length; i = next++) {
+          const rel = allWikiRel[i];
+          contentCache.set(rel, await readFile(safejoin(wikiRoot, rel), 'utf8'));
+        }
+      }),
+    );
+  }
+
   const outboundMap = new Map(); // wikiRelPath -> Set<slug>
   const inboundSet = new Set();  // wikiRelPath values that have inbound links
   const linkRe = new RegExp(WIKILINK_RE.source, 'g');
 
   for (const wikiRelPath of allWikiRel) {
-    const abs = safejoin(wikiRoot, wikiRelPath);
-    const content = await readFile(abs, 'utf8');
+    const content = contentCache.get(wikiRelPath);
     const slugs = new Set();
     const lines = content.split('\n');
     for (const line of lines) {
@@ -2263,8 +2280,7 @@ async function runLint(projectRoot, opts) {
   const allFindings = [];
 
   for (const wikiRelPath of allWikiRel) {
-    const abs = safejoin(wikiRoot, wikiRelPath);
-    const content = await readFile(abs, 'utf8');
+    const content = contentCache.get(wikiRelPath);
     const parsed = parseFrontmatter(content);
     const fm = parsed ? parsed.data : {};
 
@@ -2293,8 +2309,7 @@ async function runLint(projectRoot, opts) {
     const foundationEntries = [];
     for (const wikiRelPath of entityFiles) {
       if (!wikiRelPath.startsWith('foundations/')) continue;
-      const abs = safejoin(wikiRoot, wikiRelPath);
-      const content = await readFile(abs, 'utf8');
+      const content = contentCache.get(wikiRelPath);
       const parsed = parseFrontmatter(content);
       foundationEntries.push({ wikiRelPath, fm: parsed ? parsed.data : {} });
     }
