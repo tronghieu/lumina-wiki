@@ -1302,6 +1302,47 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve a checkpoint file's path, rejecting any skill/phase that would put it
+ * somewhere other than _lumina/_state.
+ *
+ * These two are identifiers, not paths, and were previously interpolated into a
+ * filename with no validation at all -- the only wiki.mjs arguments reaching a
+ * constructed path without even a `..` check. `phase` in particular carries the
+ * basename of a user's raw file (`checkpoint-read ingest <file-basename>`), so
+ * it is attacker-influenced and cannot be assumed clean. A separator in either
+ * value escaped the state dir, and the read side turned that into an arbitrary
+ * file read printed to stdout.
+ *
+ * Only separators are rejected. Characters that are merely awkward in a
+ * filename -- spaces, dots, parentheses -- stay legal, because real basenames
+ * contain them, they cannot traverse, and refusing them would break resuming an
+ * ingest of `Paper (2017).pdf`. The pathSafe call is a backstop on the composed
+ * path so the guarantee is asserted rather than only argued.
+ * @param {string} projectRoot
+ * @param {string} skill
+ * @param {string} phase
+ * @returns {string} absolute path to the checkpoint file
+ */
+function checkpointPath(projectRoot, skill, phase) {
+  for (const [label, value] of [['skill', skill], ['phase', phase]]) {
+    if (value.includes('/') || value.includes('\\') || value.includes('\0')) {
+      const err = new Error(
+        `Invalid checkpoint ${label}: ${JSON.stringify(value)} may not contain a path separator`,
+      );
+      err.code = 2;
+      throw err;
+    }
+  }
+  const rel = join('_lumina', '_state', `${skill}-${phase}.json`);
+  if (!pathSafe(rel, projectRoot)) {
+    const err = new Error(`Unsafe checkpoint path for skill ${JSON.stringify(skill)} phase ${JSON.stringify(phase)}`);
+    err.code = 2;
+    throw err;
+  }
+  return join(projectRoot, rel);
+}
+
+/**
  * Read a checkpoint file. Returns {} if missing.
  * @param {string} projectRoot
  * @param {string} skill
@@ -1309,8 +1350,7 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
  * @returns {Promise<object>}
  */
 async function checkpointRead(projectRoot, skill, phase) {
-  const stateDir = join(projectRoot, '_lumina', '_state');
-  const cpFile = join(stateDir, `${skill}-${phase}.json`);
+  const cpFile = checkpointPath(projectRoot, skill, phase);
   try {
     const content = await readFile(cpFile, 'utf8');
     return JSON.parse(content);
@@ -1328,9 +1368,8 @@ async function checkpointRead(projectRoot, skill, phase) {
  * @param {object} data
  */
 async function checkpointWrite(projectRoot, skill, phase, data) {
-  const stateDir = join(projectRoot, '_lumina', '_state');
-  await ensureDir(stateDir);
-  const cpFile = join(stateDir, `${skill}-${phase}.json`);
+  const cpFile = checkpointPath(projectRoot, skill, phase);
+  await ensureDir(join(projectRoot, '_lumina', '_state'));
   await atomicWrite(cpFile, JSON.stringify(data, null, 2) + '\n');
 }
 
@@ -1672,10 +1711,12 @@ function fail(message, code) {
  * inside the project, and neither endpoint may contain `..`. Extracted from
  * three verbatim copies in the dispatch. Never returns on rejection.
  *
- * Note the citation and checkpoint subcommands deliberately still carry their
- * own, narrower checks — they run before requireProjectRoot(), so they have no
- * projectRoot to validate against, and widening them here would change which
- * error a user sees outside a project.
+ * Note the citation subcommands deliberately still carry their own, narrower
+ * checks: they run before requireProjectRoot(), so they have no projectRoot to
+ * validate against, and widening them here would change which error a user sees
+ * outside a project. That reasoning once named the checkpoint subcommands too,
+ * which was simply wrong -- they call requireProjectRoot() before doing any
+ * work, and they now validate in checkpointPath().
  * @param {string} fromSlug
  * @param {string} toSlug
  * @param {string} projectRoot
