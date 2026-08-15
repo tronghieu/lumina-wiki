@@ -1067,8 +1067,30 @@ function entityTypeForPath(wikiRelPath) {
  * @param {string} message
  * @returns {Finding}
  */
-function finding(id, severity, fixable, file, line, message) {
-  return { id, severity, fixable, file, line, message, fix_applied: false };
+function finding(id, severity, fixable, file, line, message, extra) {
+  return { id, severity, fixable, file, line, message, fix_applied: false, ...extra };
+}
+
+/**
+ * Build an L02 type-violation finding. The key, the schema type and the
+ * expected-type phrase travel as fields; the fixers and computeSuggestion
+ * read those instead of regex-ing them back out of `message`, which coupled
+ * ten call sites to the exact wording of two English sentences.
+ * reportJson strips them from the public --json shape.
+ *
+ * @param {string} wikiRelPath
+ * @param {{key: string, type: string}} field
+ * @param {boolean} fixable
+ * @param {string} expected  Phrase after "must be", e.g. `an array`.
+ * @param {string} got       Phrase after "got".
+ * @returns {object}
+ */
+function l02TypeFinding(wikiRelPath, field, fixable, expected, got) {
+  return finding(
+    'L02-frontmatter-types', 'error', fixable, wikiRelPath, null,
+    `"${field.key}" must be ${expected}, got ${got}`,
+    { key: field.key, fieldType: field.type, expected },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1123,7 +1145,8 @@ function checkL01(wikiRelPath, fm) {
       findings.push(finding(
         'L01-frontmatter-required', 'error', isL01Fixable(type, field),
         wikiRelPath, null,
-        `Missing required frontmatter key: "${field.key}" (type: ${field.type})`
+        `Missing required frontmatter key: "${field.key}" (type: ${field.type})`,
+        { key: field.key, fieldType: field.type },
       ));
     }
   }
@@ -1149,8 +1172,7 @@ function checkL02(wikiRelPath, fm) {
     switch (field.type) {
       case 'string':
         if (typeof val !== 'string') {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be a string, got ${typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'a string', `${typeof val}`));
         } else if (val.trim() === 'TODO') {
           // Task 2 sentinel rule: the exact literal "TODO" (trimmed,
           // case-sensitive) is never a real value for a DECLARED schema
@@ -1163,14 +1185,15 @@ function checkL02(wikiRelPath, fm) {
           // entity type (we're inside that loop) — a free-form key a user
           // set to "TODO" as their own note is a different key entirely
           // and is never inspected here.
-          findings.push(finding('L02-frontmatter-types', 'error', DERIVABLE_STRING_KEYS.has(field.key), wikiRelPath, null,
-            `"${field.key}" is set to the placeholder "TODO", which is not a real value`));
+          findings.push(finding('L02-frontmatter-types', 'error', DERIVABLE_STRING_KEYS.has(field.key),
+            wikiRelPath, null,
+            `"${field.key}" is set to the placeholder "TODO", which is not a real value`,
+            { key: field.key, fieldType: field.type, todoPlaceholder: true }));
         }
         break;
       case 'number':
         if (typeof val !== 'number' || isNaN(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be a number, got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'a number', JSON.stringify(val)));
         }
         break;
       case 'array':
@@ -1182,8 +1205,7 @@ function checkL02(wikiRelPath, fm) {
           // rendered as list items, so it is reported for a human instead.
           const isNonEmptyMapping = val !== null && typeof val === 'object'
             && !Array.isArray(val) && Object.keys(val).length > 0;
-          findings.push(finding('L02-frontmatter-types', 'error', !isNonEmptyMapping, wikiRelPath, null,
-            `"${field.key}" must be an array, got ${typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, !isNonEmptyMapping, 'an array', `${typeof val}`));
         }
         break;
       case 'iso-date':
@@ -1191,20 +1213,20 @@ function checkL02(wikiRelPath, fm) {
           // Only the TODO sentinel (written by the pre-fix fixL01) has a safe
           // derivation; any other malformed date is left for a human to fix.
           const fixableIsoDate = typeof val === 'string' && val.trim() === 'TODO';
-          findings.push(finding('L02-frontmatter-types', 'error', fixableIsoDate, wikiRelPath, null,
-            `"${field.key}" must be an ISO date (YYYY-MM-DD), got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, fixableIsoDate,
+            'an ISO date (YYYY-MM-DD)', JSON.stringify(val)));
         }
         break;
       case 'enum':
         if (field.values && !field.values.includes(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be one of [${field.values.join(', ')}], got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false,
+            `one of [${field.values.join(', ')}]`, JSON.stringify(val)));
         }
         break;
       case 'object':
         if (typeof val !== 'object' || val === null || Array.isArray(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be an object, got ${Array.isArray(val) ? 'array' : typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'an object',
+            Array.isArray(val) ? 'array' : `${typeof val}`));
         }
         break;
     }
@@ -1230,7 +1252,8 @@ function checkL02(wikiRelPath, fm) {
       const targetValid = targetPresent && Boolean(targetFieldDef) && isLegacyTargetValid(targetFieldDef.type, targetVal);
       const removable = targetValid && isLegacyValueEquivalent(targetFieldDef.type, fm[oldKey], targetVal);
       findings.push(finding('L02-frontmatter-types', 'warning', removable, wikiRelPath, null,
-        `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`));
+        `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`,
+        { legacyOldKey: oldKey, legacyNewKey: info.newKey }));
     }
   }
 
@@ -1793,10 +1816,9 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
   const additions = [];
   for (const f of l01findings) {
     if (f.id !== 'L01-frontmatter-required') continue;
-    const m = f.message.match(/"([^"]+)"\s*\(type:\s*([^)]+)\)/);
-    if (!m) continue;
-    const key = m[1];
-    const fieldType = m[2].trim();
+    const key = f.key;
+    const fieldType = f.fieldType;
+    if (!key || !fieldType) continue;
     if (!isL01Fixable(entityType, { key, type: fieldType })) continue;
 
     let value;
@@ -1866,18 +1888,16 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
   const entityType = entityTypeForPath(wikiRelPath);
   const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
   const slugs = knownSlugs || new Set();
-  const LEGACY_MSG_RE = /^Legacy frontmatter field "([^"]+)" was renamed to "([^"]+)"/;
 
   const changes = [];   // { key, value } — repaired type-mismatch / TODO-iso-date fixes.
   const removals = [];  // { oldKey, newKey } — legacy fields safe to delete (Task 1).
 
   for (const f of l02findings) {
     if (f.id !== 'L02-frontmatter-types') continue;
-    if (LEGACY_MSG_RE.test(f.message)) continue; // handled in the removal pass below.
+    if (f.legacyOldKey) continue; // handled in the removal pass below.
 
-    const m = f.message.match(/^"([^"]+)"/);
-    if (!m) continue;
-    const key = m[1];
+    const key = f.key;
+    if (!key) continue;
     const fieldDef = fieldDefs.find(fd => fd.key === key);
     if (!fieldDef) continue;
     const val = fm[key];
@@ -1923,9 +1943,8 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
   };
   for (const f of l02findings) {
     if (f.id !== 'L02-frontmatter-types') continue;
-    const m = f.message.match(LEGACY_MSG_RE);
-    if (!m) continue;
-    const [, oldKey, newKey] = m;
+    const { legacyOldKey: oldKey, legacyNewKey: newKey } = f;
+    if (!oldKey || !newKey) continue;
     const targetFieldDef = fieldDefs.find(fd => fd.key === newKey);
     if (!targetFieldDef) continue;
     const targetVal = effectiveValue(newKey);
@@ -2323,8 +2342,7 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
         content = newContent;
         const fixedSet = new Set(fixedKeys);
         for (const f of l01findings) {
-          const km = f.message.match(/"([^"]+)"/);
-          if (!km || !fixedSet.has(km[1])) continue;
+          if (!f.key || !fixedSet.has(f.key)) continue;
           if (opts.dryRun) f.proposed_fix = preview;
           else f.fix_applied = true;
         }
@@ -2338,8 +2356,8 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
         content = newContent;
         const fixedSet = new Set(fixedKeys);
         for (const f of l02findings) {
-          const km = f.message.match(/^"([^"]+)"/) || f.message.match(/^Legacy frontmatter field "([^"]+)"/);
-          if (!km || !fixedSet.has(km[1])) continue;
+          const key = f.key ?? f.legacyOldKey;
+          if (!key || !fixedSet.has(key)) continue;
           if (opts.dryRun) f.proposed_fix = preview;
           else f.fix_applied = true;
         }
@@ -2493,21 +2511,17 @@ function computeSuggestion(f) {
 
   if (f.id === 'L01-frontmatter-required') {
     if (f.fixable) return null; // --fix already handles this one.
-    const m = f.message.match(/"([^"]+)"\s*\(type:\s*([^)]+)\)/);
-    if (m) return `${m[1]}: ${m[2].trim()}, cannot be inferred — provide a value manually.`;
+    if (f.key && f.fieldType) return `${f.key}: ${f.fieldType}, cannot be inferred — provide a value manually.`;
   }
 
   if (f.id === 'L02-frontmatter-types') {
     if (f.fixable) return null; // --fix already handles this one (including a safe legacy-field removal).
-    const legacyMatch = f.message.match(/^Legacy frontmatter field "([^"]+)" was renamed to "([^"]+)"/);
-    if (legacyMatch) {
-      const [, oldKey, newKey] = legacyMatch;
+    if (f.legacyOldKey && f.legacyNewKey) {
+      const { legacyOldKey: oldKey, legacyNewKey: newKey } = f;
       return `"${oldKey}" survives because "${newKey}" is missing, invalid, or disagrees with it — resolve "${newKey}" by hand, then re-run --fix to drop "${oldKey}".`;
     }
-    const todoMatch = f.message.match(/^"([^"]+)" is set to the placeholder "TODO"/);
-    if (todoMatch) return `${todoMatch[1]}: currently "TODO" — no automatic derivation exists for this field; provide a real value manually.`;
-    const m = f.message.match(/^"([^"]+)"\s+must be ([^,]+),/);
-    if (m) return `${m[1]}: expected ${m[2].trim()}, cannot be safely inferred — provide a value manually.`;
+    if (f.todoPlaceholder) return `${f.key}: currently "TODO" — no automatic derivation exists for this field; provide a real value manually.`;
+    if (f.key && f.expected) return `${f.key}: expected ${f.expected}, cannot be safely inferred — provide a value manually.`;
   }
 
   if (f.id === 'L05-broken-wikilink') {
@@ -2610,12 +2624,17 @@ function reportJson(findings, scannedFiles, opts = {}) {
   const infos = findings.filter(f => f.severity === 'info').length;
   const fixes = findings.filter(f => f.fix_applied).length;
 
-  // Strip internal-only fields (candidates/brokenSlug/suppressedRepair — set by
-  // checkL05 for fixL05's and computeSuggestion's own use) from the public
-  // shape; re-add `candidates` and the new `suggestion` key only when
-  // --suggest was requested.
+  // Strip internal-only fields from the public shape: candidates/brokenSlug/
+  // suppressedRepair (checkL05, for fixL05 and computeSuggestion) and
+  // key/fieldType/expected/todoPlaceholder/legacyOldKey/legacyNewKey (checkL01
+  // and checkL02, for their fixers and computeSuggestion). `candidates` and
+  // the `suggestion` key are re-added only when --suggest was requested.
   const outputFindings = findings.map(f => {
-    const { candidates, brokenSlug, suppressedRepair, ...rest } = f;
+    const {
+      candidates, brokenSlug, suppressedRepair,
+      key, fieldType, expected, todoPlaceholder, legacyOldKey, legacyNewKey,
+      ...rest
+    } = f;
     if (opts.suggest) {
       const suggestion = computeSuggestion(f);
       if (suggestion) rest.suggestion = suggestion;
