@@ -1,6 +1,6 @@
 /**
  * @module lint
- * @description LuminaWiki v0.1 wiki linter — 11 schema checks, optional --fix.
+ * @description LuminaWiki v0.1 wiki linter — schema checks, optional --fix.
  *
  * CLI usage:
  *   node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json] [--summary]
@@ -62,6 +62,7 @@ import {
 } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
+import { slugify } from './lib/slug.mjs';
 import {
   edgeTypeByName,
   skipReverseFor,
@@ -85,7 +86,7 @@ const isIndexExempt = (f) => INDEX_EXEMPT_PREFIXES.some(p => f.startsWith(p));
 /** All check IDs in run order.
  *  L15 is intentionally absent — collision check was deferred as premature
  *  for typical wiki size. Adding L15 later is the natural next slot. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17', 'L18'];
 
 /**
  * Legacy frontmatter fields that have been renamed across versions.
@@ -1742,6 +1743,55 @@ function checkL17(edges, knownSlugs) {
   return findings;
 }
 
+/**
+ * L18: the frontmatter `id` still names the file it lives in.
+ *
+ * Nothing resolves a page by its `id` — every lookup goes through the filename
+ * — so a stale one is inert, silent, and permanent. It is also the fingerprint
+ * of a page an older `lint --fix` renamed without updating: L03 stops firing
+ * the moment the basename is kebab-case, and no other check ever compared the
+ * two. Reported, never repaired: an author who chose a different `id` on
+ * purpose would lose it, and the correct value is not always guessable.
+ *
+ * `deriveIdFromPath` supplies the expected shape, which is not one rule but
+ * three — bare basename on flat dirs, full wiki-relative path on nested ones,
+ * `reflection-` prefix under reflections/.
+ * @param {string} wikiRelPath
+ * @param {object} fm  Parsed frontmatter.
+ * @returns {Finding[]}
+ */
+function checkL18(wikiRelPath, fm) {
+  // Same gate L01/L02 use: a dir with no field spec (`graph/`, `outputs/`) has
+  // no `id` contract to hold it to, and `outputs/` pages are written by
+  // /lumi-ask under a convention nothing enforces.
+  const entityType = entityTypeForPath(wikiRelPath);
+  if (!entityType || !REQUIRED_FRONTMATTER[entityType]) return [];
+  const raw = fm.id;
+  if (typeof raw !== 'string') return []; // missing or mistyped: L01/L02 own it.
+  const actual = raw.trim();
+  if (actual === '' || actual === 'TODO') return []; // likewise.
+
+  const expected = deriveIdFromPath(wikiRelPath, null);
+  if (actual === expected) return [];
+
+  // `id: concepts/ab-testing` on a flat type is the pre-v0.1 `slug` -> `id`
+  // migration's own output: it carries strictly more information than the bare
+  // id, never less, and `--fix` deliberately never rewrites it back. One real
+  // 813-page wiki held 179 of them. Not a mismatch.
+  const slash = actual.indexOf('/');
+  if (slash > 0
+    && actual.slice(slash + 1) === expected
+    && Object.prototype.hasOwnProperty.call(ENTITY_DIRS, actual.slice(0, slash))) {
+    return [];
+  }
+
+  return [finding(
+    'L18-id-filename-mismatch', 'warning', false,
+    wikiRelPath, null,
+    `Frontmatter id "${actual}" does not name this file; the path derives "${expected}"`
+  )];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1934,42 +1984,223 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
 }
 
 /**
- * Fixer for L03: rename file to kebab-case + rewrite all wikilinks pointing to old slug.
- * Returns a list of { from, to, newContent } operations.
- * @param {string} wikiRelPath
+ * Plan the L03 renames — pure path work plus one existence probe each, no
+ * mutation.
+ *
+ * Separated from the apply step because the plan has to be known BEFORE fixL05
+ * runs: fixL05 deliberately leaves alone any link pointing at a file L03 is
+ * about to rename, so that fixL03's bare-form rewrite can handle it in the same
+ * pass. Deciding the plan later meant that skip applied to files that turned
+ * out never to move, leaving those links unrepaired for as long as whatever
+ * blocked the rename lasted.
+ *
+ * A finding this run will not act on carries the reason in `renameBlocked`,
+ * which `computeSuggestion` turns into advice; it is never marked fixed.
+ * @param {Finding[]} l03findings
  * @param {string} wikiRoot  Absolute wiki dir.
- * @param {string[]} allMdFiles  Absolute paths of all .md files.
- * @returns {Promise<Array<{absPath:string, newContent:string|null, newPath:string|null}>>}
+ * @returns {Promise<Array<{finding:Finding, relPath:string, newRelPath:string, absOld:string, absNew:string, oldSlug:string, newSlug:string}>>}
  */
-async function fixL03(wikiRelPath, wikiRoot, allMdFiles) {
-  const base = basename(wikiRelPath, '.md');
-  const kebab = base
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/^-+|-+$/g, '');
+async function planL03(l03findings, wikiRoot) {
+  const plans = [];
+  const claimedBy = new Map(); // absNew -> the plan that already claims it
+  for (const f of l03findings) {
+    const relPath = f.file;
+    const oldSlug = basename(relPath, '.md');
+    // The shared slugify, not a second hand-written kebab transform: the old
+    // local copy skipped NFD entirely and deleted every non-ASCII character
+    // instead of decomposing it, so `lint --fix` renamed `Nhà-Nguyễn.md` to
+    // `nh-nguyn.md` — a name `wiki.mjs slug` would never produce for the same
+    // title, and one no reader can recognise.
+    const newSlug = slugify(oldSlug);
 
-  const oldSlug = base;
-  const newSlug = kebab;
-  if (oldSlug === newSlug) return [];
+    if (newSlug === '') {
+      // e.g. "___.md" or "!!!.md". The old code renamed these to ".md": a
+      // dotfile with an empty basename, i.e. the page silently left the wiki.
+      f.renameBlocked = `"${oldSlug}" has no kebab-case form — every character is punctuation, so there would be no filename left. Rename it by hand.`;
+      continue;
+    }
+    if (newSlug === oldSlug) continue; // already kebab; checkL03 cannot flag this, guard anyway.
 
-  const ops = [];
-  const absOld = safejoin(wikiRoot, wikiRelPath);
-  const absNew = safejoin(wikiRoot, dirname(wikiRelPath), newSlug + '.md');
-  ops.push({ absPath: absOld, newContent: null, newPath: absNew });
+    const absOld = safejoin(wikiRoot, relPath);
+    const newRelPath = join(dirname(relPath), newSlug + '.md').replace(/\\/g, '/');
+    const absNew = safejoin(wikiRoot, newRelPath);
 
-  // Rewrite wikilinks in all other files.
-  for (const f of allMdFiles) {
-    if (f === absOld) continue;
-    const fc = await readFile(f, 'utf8');
-    if (fc.includes(`[[${oldSlug}]]`) || fc.includes(`[[${oldSlug}|`)) {
-      const updated = fc
-        .replace(new RegExp(`\\[\\[${escapeRegex(oldSlug)}(\\|[^\\]]*)?\\]\\]`, 'g'),
-          (_, alias) => `[[${newSlug}${alias || ''}]]`);
-      ops.push({ absPath: f, newContent: updated, newPath: null });
+    const claimed = claimedBy.get(absNew);
+    if (claimed) {
+      f.renameBlocked = `"${oldSlug}" and "${claimed.oldSlug}" both kebab-case to "${newSlug}" — renaming both would leave one page on top of the other. Rename one of them by hand first.`;
+      continue;
+    }
+    if (await occupiedByAnotherFile(absNew, absOld)) {
+      f.renameBlocked = `"${newSlug}.md" already exists in the same directory — renaming would overwrite it and lose its contents. Merge the two pages, or rename one by hand.`;
+      continue;
+    }
+
+    const plan = { finding: f, relPath, newRelPath, absOld, absNew, oldSlug, newSlug };
+    claimedBy.set(absNew, plan);
+    plans.push(plan);
+  }
+  return plans;
+}
+
+/**
+ * True when `absNew` already holds a file that is not `absOld` itself.
+ *
+ * `rename()` overwrites its destination without a word, so this is the only
+ * thing standing between a slug collision and a page that is simply gone.
+ * The identity check matters on case-insensitive filesystems (macOS by
+ * default), where a case-only rename finds its own source sitting at the
+ * destination path — same inode, not a collision.
+ * @param {string} absNew
+ * @param {string} absOld
+ * @returns {Promise<boolean>}
+ */
+async function occupiedByAnotherFile(absNew, absOld) {
+  let dest;
+  try {
+    dest = await stat(absNew);
+  } catch {
+    return false; // nothing there — the rename is free to proceed.
+  }
+  try {
+    const source = await stat(absOld);
+    if (source.ino === dest.ino && source.dev === dest.dev) return false;
+  } catch {
+    // Source unreadable: refuse rather than guess.
+  }
+  return true;
+}
+
+/**
+ * Fixer for L03: rename each planned file to its kebab-case name, then repair
+ * every wikilink that pointed at it and the `id`/`slug` frontmatter of the
+ * pages that moved.
+ *
+ * One pass over the wiki for all renames together. The previous shape re-read
+ * every page once per finding, against a file list captured before any rename
+ * had happened — which cost O(findings x pages) full reads and, worse, threw
+ * ENOENT and aborted the entire `--fix` run (exit 3, no JSON on stdout, wiki
+ * left half-repaired) the moment a second finding reached a path the first had
+ * already renamed away.
+ * @param {Array<object>} plans  Output of planL03.
+ * @param {string[]} allMdFiles  Absolute paths of all .md files, pre-rename.
+ * @param {{dryRun?: boolean}} opts
+ * @returns {Promise<Array<object>>}  The plans whose rename actually happened.
+ */
+async function fixL03(plans, allMdFiles, opts) {
+  if (plans.length === 0) return [];
+
+  // Keyed by old basename, which two plans in different directories can share:
+  // both rewrite `[[Foo_Bar]]` to the same thing, so the replacement runs once
+  // and every plan that asked for it gets the credit.
+  const bySlug = new Map();
+  for (const p of plans) {
+    if (!bySlug.has(p.oldSlug)) bySlug.set(p.oldSlug, { newSlug: p.newSlug, plans: [] });
+    bySlug.get(p.oldSlug).plans.push(p);
+  }
+  const planByAbsOld = new Map(plans.map(p => [p.absOld, p]));
+  const rewrittenBy = new Map(plans.map(p => [p.finding, []])); // finding -> abs paths it changes
+
+  const renamed = [];
+  if (!opts.dryRun) {
+    for (const p of plans) {
+      try {
+        await rename(p.absOld, p.absNew);
+        renamed.push(p);
+      } catch (err) {
+        // One unwritable file must not cost the caller the whole report: the
+        // old code let this escape, and runLint's caller turns any throw into
+        // exit 3 with nothing on stdout, stranding the wiki half-repaired.
+        p.finding.renameBlocked = `Could not rename to "${p.newSlug}.md": ${err.message}`;
+        planByAbsOld.delete(p.absOld);
+        for (const entry of bySlug.values()) {
+          entry.plans = entry.plans.filter(q => q !== p);
+        }
+      }
+    }
+    for (const [slug, entry] of bySlug) {
+      if (entry.plans.length === 0) bySlug.delete(slug);
+    }
+  } else {
+    renamed.push(...plans);
+  }
+
+  for (const abs of allMdFiles) {
+    const moved = planByAbsOld.get(abs);
+    // After the renames above, a moved page only exists at its new path.
+    const current = (moved && !opts.dryRun) ? moved.absNew : abs;
+    let content;
+    try {
+      content = await readFile(current, 'utf8');
+    } catch {
+      continue; // vanished under us (concurrent edit) — nothing to repair here.
+    }
+
+    let updated = content;
+    for (const [oldSlug, entry] of bySlug) {
+      if (!updated.includes(`[[${oldSlug}]]`) && !updated.includes(`[[${oldSlug}|`)) continue;
+      updated = updated.replace(
+        new RegExp(`\\[\\[${escapeRegex(oldSlug)}(\\|[^\\]]*)?\\]\\]`, 'g'),
+        (_, alias) => `[[${entry.newSlug}${alias || ''}]]`,
+      );
+      for (const p of entry.plans) rewrittenBy.get(p.finding).push(current);
+    }
+    if (moved) updated = retargetIdAfterRename(updated, moved);
+
+    if (updated !== content && !opts.dryRun) await atomicWrite(current, updated);
+  }
+
+  for (const p of renamed) {
+    if (opts.dryRun) {
+      p.finding.proposed_fix = [
+        `rename: ${p.absOld} -> ${p.absNew}`,
+        ...rewrittenBy.get(p.finding).map(abs => `rewrite wikilinks in: ${abs}`),
+      ].join('\n');
+    } else {
+      p.finding.fix_applied = true;
     }
   }
-  return ops;
+  return renamed;
+}
+
+/**
+ * Point a moved page's own `id` (and legacy `slug`) at its new filename.
+ *
+ * Renaming the file without this left the frontmatter naming a path that no
+ * longer existed — and invisibly, because L03 stops firing the instant the
+ * basename is kebab-case, and no other check compares the two. Only a value
+ * that still matches what the OLD path derives is rewritten; an id the author
+ * chose deliberately is left alone.
+ * @param {string} content
+ * @param {{relPath:string, newRelPath:string}} plan
+ * @returns {string}
+ */
+function retargetIdAfterRename(content, plan) {
+  const parsed = parseFrontmatter(content);
+  if (!parsed) return content;
+
+  const oldId = deriveIdFromPath(plan.relPath, null);
+  const newId = deriveIdFromPath(plan.newRelPath, null);
+  if (oldId === newId) return content;
+
+  let fmText = parsed.fmText;
+  let changed = false;
+  for (const key of ['id', 'slug']) {
+    const val = parsed.data[key];
+    if (typeof val !== 'string') continue;
+    // The `<entity-dir>/<slug>` shape the pre-v0.1 slug->id migration leaves
+    // behind is just as much a name for this file as the bare one, and keeping
+    // its prefix is what stops the rename from stranding it.
+    const actual = val.trim();
+    let next = null;
+    if (actual === oldId) next = newId;
+    else if (actual.endsWith(`/${oldId}`) && Object.prototype.hasOwnProperty.call(ENTITY_DIRS, actual.slice(0, actual.length - oldId.length - 1))) {
+      next = `${actual.slice(0, actual.length - oldId.length - 1)}/${newId}`;
+    }
+    if (next === null) continue;
+    fmText = replaceFrontmatterKeyLines(fmText, key, renderYamlLine(key, next));
+    changed = true;
+  }
+  return changed ? `---\n${fmText}${parsed.tail}` : content;
 }
 
 function escapeRegex(s) {
@@ -2233,6 +2464,7 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL13(wikiRelPath, fm));
     allFindings.push(...checkL14(wikiRelPath, fm));
     allFindings.push(...checkL16(wikiRelPath, fm));
+    allFindings.push(...checkL18(wikiRelPath, fm));
   }
 
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
@@ -2370,9 +2602,8 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
   // fixL03 rewrite the bare link correctly in this same run; whatever prefix is
   // still missing afterwards is picked up by the next run, with no page left
   // pointing at a file that never existed.
-  const pendingRenames = new Set(
-    findings.filter(f => f.id === 'L03-slug-style').map(f => f.file.replace(/\.md$/, ''))
-  );
+  const l03plans = await planL03(findings.filter(f => f.id === 'L03-slug-style'), wikiRoot);
+  const pendingRenames = new Set(l03plans.map(p => p.relPath.replace(/\.md$/, '')));
   const l05ByFile = new Map();
   for (const f of findings.filter(f => f.id === 'L05-broken-wikilink')) {
     if (!l05ByFile.has(f.file)) l05ByFile.set(f.file, []);
@@ -2396,24 +2627,14 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     }
   }
 
-  // Fix L03.
-  const l03findings = findings.filter(f => f.id === 'L03-slug-style');
-  for (const f of l03findings) {
-    const ops = await fixL03(f.file, wikiRoot, allAbsMd);
-    if (opts.dryRun) {
-      f.proposed_fix = ops.map(op => op.newPath
-        ? `rename: ${op.absPath} -> ${op.newPath}`
-        : `rewrite wikilinks in: ${op.absPath}`
-      ).join('\n');
-    } else {
-      for (const op of ops) {
-        if (op.newPath) {
-          await rename(op.absPath, op.newPath);
-        } else if (op.newContent !== null) {
-          await atomicWrite(op.absPath, op.newContent);
-        }
-      }
-      f.fix_applied = true;
+  // Fix L03 (planned above, before fixL05, so its skip list is accurate).
+  const l03renamed = await fixL03(l03plans, allAbsMd, opts);
+  // L09 renders the index from `entityFiles`, captured before the renames
+  // above. Left stale it would list a page under the name it no longer has.
+  if (!opts.dryRun) {
+    for (const p of l03renamed) {
+      const i = entityFiles.indexOf(p.relPath);
+      if (i !== -1) entityFiles[i] = p.newRelPath;
     }
   }
 
@@ -2477,6 +2698,14 @@ function computeSuggestion(f) {
     }
     if (f.todoPlaceholder) return `${f.key}: currently "TODO" — no automatic derivation exists for this field; provide a real value manually.`;
     if (f.key && f.expected) return `${f.key}: expected ${f.expected}, cannot be safely inferred — provide a value manually.`;
+  }
+
+  if (f.id === 'L18-id-filename-mismatch') {
+    return 'Set `id` to the value the path derives, or rename the file to match the id — whichever of the two is the one you meant. Nothing resolves pages by id, so neither is urgent.';
+  }
+
+  if (f.id === 'L03-slug-style' && f.renameBlocked) {
+    return f.renameBlocked;
   }
 
   if (f.id === 'L05-broken-wikilink') {
@@ -2580,14 +2809,16 @@ function reportJson(findings, scannedFiles, opts = {}) {
   const fixes = findings.filter(f => f.fix_applied).length;
 
   // Strip internal-only fields from the public shape: candidates/brokenSlug/
-  // suppressedRepair (checkL05, for fixL05 and computeSuggestion) and
+  // suppressedRepair (checkL05, for fixL05 and computeSuggestion),
   // key/fieldType/expected/todoPlaceholder/legacyOldKey/legacyNewKey (checkL01
-  // and checkL02, for their fixers and computeSuggestion). `candidates` and
+  // and checkL02, for their fixers and computeSuggestion), and renameBlocked
+  // (planL03, whose user-facing form is the suggestion). `candidates` and
   // the `suggestion` key are re-added only when --suggest was requested.
   const outputFindings = findings.map(f => {
     const {
       candidates, brokenSlug, suppressedRepair,
       key, fieldType, expected, todoPlaceholder, legacyOldKey, legacyNewKey,
+      renameBlocked,
       ...rest
     } = f;
     if (opts.suggest) {
@@ -2715,8 +2946,8 @@ export {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17,
-  fixL01, fixL02, fixL03, fixL05, fixL06, fixL07, fixL09,
+  checkL13, checkL14, checkL16, checkL17, checkL18,
+  fixL01, fixL02, planL03, fixL03, fixL05, fixL06, fixL07, fixL09,
   runLint,
   reportSummary,
   reportHuman,
