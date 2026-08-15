@@ -369,38 +369,6 @@ function roundTripsAsFrontmatter(key, value) {
 }
 
 /**
- * Split raw file content into the frontmatter text (no `---` delimiters)
- * and the tail (starting with the newline before the closing `---`,
- * through end of file). Returns null when there is no parseable
- * frontmatter block. Shared by fixL01 and fixL02 so both fixers rewrite
- * the frontmatter block the same way.
- * @param {string} content
- * @returns {{ fmText: string, tail: string }|null}
- */
-function splitRawFrontmatter(content) {
-  if (!content.startsWith('---')) return null;
-  const rest = content.slice(3);
-  const nlIdx = rest.indexOf('\n');
-  if (nlIdx === -1) return null;
-  // Mirror parseFrontmatter's rule for where the block starts, exactly. It
-  // treats a non-empty first line as part of the frontmatter when it is a YAML
-  // key line, and rejects the block outright otherwise. Diverging here makes
-  // the two disagree about which keys exist: unconditionally skipping the first
-  // line drops `---id: x` on rewrite, and accepting a block parseFrontmatter
-  // rejects leaves fixL01 with an empty view of the frontmatter, so it appends
-  // a second copy of every key that was already there.
-  const afterDash = rest.slice(0, nlIdx).trim();
-  if (afterDash !== '' && !/^[a-zA-Z_][a-zA-Z0-9_]*\s*:/.test(afterDash)) return null;
-  const bodyStart = rest.indexOf('\n---');
-  if (bodyStart === -1) return null;
-  const fmText = afterDash !== ''
-    ? rest.slice(0, bodyStart)
-    : rest.slice(nlIdx + 1, bodyStart);
-  const tail = rest.slice(bodyStart); // "\n---\n<body>"
-  return { fmText, tail };
-}
-
-/**
  * Replace the line(s) for an existing top-level frontmatter key (the key's
  * own line plus any indented continuation lines it owns — a block list or
  * block mapping) with new rendered line(s). Used by fixL02 to repair a
@@ -909,7 +877,7 @@ function safejoin(base, ...parts) {
  * Returns { data: object, body: string, end: number } or null if no frontmatter.
  * Supports string, number, array (- item per line), and inline YAML arrays.
  * @param {string} content
- * @returns {{ data: Record<string,unknown>, body: string, fmLines: string[] }|null}
+ * @returns {{ data: Record<string,unknown>, body: string, fmText: string, tail: string }|null}
  */
 function parseFrontmatter(content) {
   if (!content.startsWith('---')) return null;
@@ -928,10 +896,10 @@ function parseFrontmatter(content) {
     ? rest.slice(0, bodyStart)
     : rest.slice(nlIdx + 1, bodyStart);
   const body = rest.slice(bodyStart + 4);
+  const tail = rest.slice(bodyStart); // "\n---\n<body>" — what the fixers rewrite around.
 
   const data = {};
   const lines = fmText.split('\n');
-  const fmLines = lines;
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -990,7 +958,7 @@ function parseFrontmatter(content) {
     i++;
   }
 
-  return { data, body, fmLines };
+  return { data, body, fmText, tail };
 }
 
 /**
@@ -1798,13 +1766,11 @@ function checkL17(edges, knownSlugs) {
  * @returns {Promise<{ newContent: string, preview: string }>}
  */
 async function fixL01(absPath, wikiRelPath, content, l01findings) {
-  const split = splitRawFrontmatter(content);
   const parsed = parseFrontmatter(content);
-  // Both parsers must agree the block is readable. If parseFrontmatter cannot
-  // read it, we have no reliable view of which keys already exist, and
+  // No readable block means no reliable view of which keys already exist, and
   // appending would duplicate them.
-  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
-  const { fmText, tail } = split;
+  if (!parsed) return { newContent: content, preview: '', fixedKeys: [] };
+  const { fmText, tail } = parsed;
 
   const fm = parsed.data;
   const body = parsed.body;
@@ -1875,10 +1841,9 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
  * @returns {Promise<{ newContent: string, preview: string }>}
  */
 async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSlugs) {
-  const split = splitRawFrontmatter(content);
   const parsed = parseFrontmatter(content);
-  // Same agreement requirement as fixL01 — see the comment there.
-  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
+  // Same readability requirement as fixL01 — see the comment there.
+  if (!parsed) return { newContent: content, preview: '', fixedKeys: [] };
 
   const fm = parsed.data;
   const body = parsed.body;
@@ -1953,14 +1918,14 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
 
   if (changes.length === 0 && removals.length === 0) return { newContent: content, preview: '', fixedKeys: [] };
 
-  let fmText = split.fmText;
+  let fmText = parsed.fmText;
   for (const { key, value } of changes) {
     fmText = replaceFrontmatterKeyLines(fmText, key, renderYamlLine(key, value));
   }
   for (const { oldKey } of removals) {
     fmText = removeFrontmatterKeyLines(fmText, oldKey);
   }
-  const newContent = `---\n${fmText}${split.tail}`;
+  const newContent = `---\n${fmText}${parsed.tail}`;
   const preview = [
     ...changes.map(({ key, value }) => `~ ${renderYamlLine(key, value)}`),
     ...removals.map(({ oldKey }) => `- ${oldKey} (redundant with its already-valid replacement)`),
