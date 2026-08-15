@@ -1712,31 +1712,48 @@ function checkL16(wikiRelPath, fm) {
  * about edge-pair symmetry and never check that either endpoint's file
  * actually exists.
  *
- * Resolution mirrors L05 exactly: an endpoint is "internal" unless it
- * contains '://' (an external URL, e.g. a see_also_url target), and an
- * internal endpoint resolves iff it is a member of knownSlugs — the same
- * set L05 checks wikilinks against. No extra exemption is applied for
- * foundations/**, outputs/**, or reflections/**: those dirs hold real
- * entity files that land in knownSlugs like any other, so a genuine file
- * there resolves fine and a missing one is correctly flagged.
+ * Resolution goes through resolveWikilinkTarget, the same helper L05 uses:
+ * an endpoint is "internal" unless it contains '://' (an external URL, e.g. a
+ * see_also_url target), and an internal endpoint resolves either by exact
+ * match against knownSlugs or by unique basename. It used to test
+ * `knownSlugs.has(target)` alone, which this comment already described as
+ * mirroring L05 but did not: knownSlugs holds wiki-relative paths, so every
+ * edge written with a bare slug — which `add-edge <from> <type> <to>` accepts
+ * and stores verbatim — was reported dangling even when its file plainly
+ * existed. Sharing the resolver makes one notion of "resolves" hold for
+ * wikilinks and edges alike; where it refuses to guess between two candidates,
+ * so does this check, and the message says which.
+ *
+ * No extra exemption is applied for foundations/**, outputs/**, or
+ * reflections/**: those dirs hold real entity files that land in knownSlugs
+ * like any other, so a genuine file there resolves fine and a missing one is
+ * correctly flagged.
  *
  * @param {Array<{from:string,to:string,type:string}>} edges
  * @param {Set<string>} knownSlugs  - Set of wiki-relative paths (without .md), same as passed to checkL05.
+ * @param {Map<string,string[]>} [basenameIndex]  - Shared basename index; built from knownSlugs when omitted.
  * @returns {Finding[]}
  */
-function checkL17(edges, knownSlugs) {
+function checkL17(edges, knownSlugs, basenameIndex = buildBasenameIndex(knownSlugs)) {
   const findings = [];
   for (const edge of edges) {
     for (const key of ['from', 'to']) {
       const target = edge[key];
       if (typeof target !== 'string' || target.includes('://')) continue; // external URL, not a slug
-      if (!knownSlugs.has(target)) {
-        findings.push(finding(
-          'L17-dangling-edge', 'error', false,
-          edge.from, null,
-          `Dangling edge endpoint: ${target} in edge ${edge.from} --${edge.type}--> ${edge.to} does not resolve to any wiki file`
-        ));
-      }
+      if (resolveWikilinkTarget(target, knownSlugs, basenameIndex)) continue;
+      // Unresolvable for one of two reasons that need different fixes: no such
+      // file at all, or a bare basename matching several files, which the
+      // resolver refuses to guess between. Saying "does not resolve to any
+      // wiki file" for the second would be plainly false to anyone looking.
+      const candidates = basenameIndex.get(basename(target.replace(/\.md$/, ''))) || [];
+      const reason = candidates.length > 1
+        ? `is ambiguous — matches ${candidates.join(', ')}`
+        : 'does not resolve to any wiki file';
+      findings.push(finding(
+        'L17-dangling-edge', 'error', false,
+        edge.from, null,
+        `Dangling edge endpoint: ${target} in edge ${edge.from} --${edge.type}--> ${edge.to} ${reason}`
+      ));
     }
   }
   return findings;
