@@ -20,6 +20,16 @@ import { isExempt } from './globs.mjs';
 const BY_NAME = new Map(EDGE_TYPES.map(t => [t.name, t]));
 
 /**
+ * Edge types that are declared in EDGE_TYPES but do not belong in
+ * edges.jsonl: citations have their own file (`graph/citations.jsonl`) and
+ * their own commands. They stay in the schema because lint has to recognise
+ * the pair in order to reason about rows an older version already wrote into
+ * the wrong file.
+ * @type {Set<string>}
+ */
+export const CITATION_EDGE_TYPES = new Set(['cites', 'cited_by']);
+
+/**
  * Look up an edge type definition by name.
  * @param {string} name
  * @returns {object|null} The EDGE_TYPES entry, or null when unknown.

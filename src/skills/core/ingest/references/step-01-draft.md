@@ -192,6 +192,9 @@ node _lumina/scripts/wiki.mjs add-edge sources/<slug> builds_on sources/<other>
 
 Exemptions: `foundations/**`, `outputs/**`, external URLs.
 
+`add-edge` refuses `cites`/`cited_by` (exit 2) — citations are not graph
+edges; use `add-citation` in Phase 6 instead.
+
 Write checkpoint: `phase: "edges"`.
 
 ### Phase 6 — Citations

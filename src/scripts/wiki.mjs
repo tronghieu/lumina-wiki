@@ -36,6 +36,7 @@ import { sanitizeExternalIdsObject } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
 import {
+  CITATION_EDGE_TYPES,
   edgeTypeByName,
   skipReverseFor,
   reverseEdgeFor,
@@ -49,6 +50,18 @@ import {
 
 /** Minimum valid edge confidence values. */
 const CONFIDENCE_VALUES = new Set(EDGE_CONFIDENCE);
+
+/**
+ * Message for a command that was handed a citation edge type. `remove` points
+ * at the removal command, `add` at the creation one.
+ * @param {'add'|'remove'} direction
+ * @returns {string}
+ */
+function citationEdgeMessage(direction) {
+  return direction === 'add'
+    ? 'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `add-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument). Writing one as a graph edge puts it in the wrong file, where read-citations cannot see it and remove-citation cannot remove it.'
+    : 'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `remove-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument).';
+}
 
 /** Regex for a single frontmatter line: `key: value` */
 const FM_LINE_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)/;
@@ -815,6 +828,15 @@ async function addEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
     err.code = 2;
     throw err;
   }
+  // Guarded here rather than at the dispatch case, so a future caller of
+  // addEdge cannot reopen the hole. remove-edge and replace-edge have refused
+  // citation types since they were written; add-edge never did, which is the
+  // wrong way round — it let the rows in and then left no way to take them out.
+  if (CITATION_EDGE_TYPES.has(edgeType)) {
+    const err = new Error(citationEdgeMessage('add'));
+    err.code = 2;
+    throw err;
+  }
 
   if (opts.confidence && !CONFIDENCE_VALUES.has(opts.confidence)) {
     const err = new Error(`Invalid confidence: ${opts.confidence}. Must be high|medium|low`);
@@ -956,6 +978,9 @@ async function batchEdges(projectRoot, jsonFilePath) {
     const typeDef = edgeTypeByName(rec.type);
     if (!typeDef) {
       errors.push(`Record ${i}: unknown edge type '${rec.type}'`);
+    }
+    if (CITATION_EDGE_TYPES.has(rec.type)) {
+      errors.push(`Record ${i}: ${citationEdgeMessage('add')}`);
     }
     if (rec.confidence && !CONFIDENCE_VALUES.has(rec.confidence)) {
       errors.push(`Record ${i}: invalid confidence '${rec.confidence}'`);
@@ -1980,11 +2005,8 @@ async function main(argv) {
           fail('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
         }
 
-        if (edgeType === 'cites' || edgeType === 'cited_by') {
-          emitError(
-            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `remove-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument).',
-            2,
-          );
+        if (CITATION_EDGE_TYPES.has(edgeType)) {
+          emitError(citationEdgeMessage('remove'), 2);
           process.exit(2);
         }
 
@@ -2009,7 +2031,7 @@ async function main(argv) {
           fail('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
         }
 
-        if ([oldType, newType].includes('cites') || [oldType, newType].includes('cited_by')) {
+        if (CITATION_EDGE_TYPES.has(oldType) || CITATION_EDGE_TYPES.has(newType)) {
           emitError(
             'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges. Use add-citation / remove-citation to manage citations.',
             2,

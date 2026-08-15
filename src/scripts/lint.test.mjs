@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17,
+  checkL13, checkL14, checkL16, checkL17, checkL19,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
   runLint,
@@ -769,15 +769,15 @@ describe('L05 broken-wikilink', () => {
 describe('L06 missing-reverse-edge', () => {
   test('clean: both directions present', () => {
     const edges = [
-      { from: 'sources/a.md', to: 'sources/b.md', type: 'cites' },
-      { from: 'sources/b.md', to: 'sources/a.md', type: 'cited_by' },
+      { from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' },
+      { from: 'sources/b.md', to: 'sources/a.md', type: 'built_upon_by' },
     ];
     const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
     assert.equal(checkL06(edges, edgeSet).length, 0);
   });
 
   test('violation: reverse missing', () => {
-    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'cites' }];
+    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' }];
     const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
     const result = checkL06(edges, edgeSet);
     assert.equal(result[0].id, 'L06-missing-reverse-edge');
@@ -826,8 +826,8 @@ describe('L07 symmetric-edge-duplicate', () => {
 
 describe('L08 edge-confidence-required', () => {
   test('clean: no confidenceRequired edges', () => {
-    // Standard edges like 'cites' don't require confidence.
-    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'cites' }];
+    // Standard edges like 'builds_on' don't require confidence.
+    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' }];
     assert.equal(checkL08(edges).length, 0);
   });
 
@@ -1447,17 +1447,17 @@ describe('fixL05', () => {
 
 describe('fixL06', () => {
   test('appends missing reverse edge', () => {
-    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'cites' }];
-    const edgeSet = new Set(['sources/a.md|cites|sources/b.md']);
+    const edges = [{ from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' }];
+    const edgeSet = new Set(['sources/a.md|builds_on|sources/b.md']);
     const { newContent } = fixL06('/tmp/edges.jsonl', '', edges, edgeSet);
     const parsed = newContent.trim().split('\n').map(l => JSON.parse(l));
-    assert.ok(parsed.some(e => e.type === 'cited_by' && e.from === 'sources/b.md' && e.to === 'sources/a.md'));
+    assert.ok(parsed.some(e => e.type === 'built_upon_by' && e.from === 'sources/b.md' && e.to === 'sources/a.md'));
   });
 
   test('does not duplicate existing reverse', () => {
     const edges = [
-      { from: 'sources/a.md', to: 'sources/b.md', type: 'cites' },
-      { from: 'sources/b.md', to: 'sources/a.md', type: 'cited_by' },
+      { from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' },
+      { from: 'sources/b.md', to: 'sources/a.md', type: 'built_upon_by' },
     ];
     const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
     const existing = edges.map(e => JSON.stringify(e)).join('\n') + '\n';
@@ -1488,8 +1488,8 @@ describe('fixL07', () => {
 
   test('non-symmetric edges preserved', () => {
     const edges = [
-      { from: 'sources/a.md', to: 'sources/b.md', type: 'cites' },
-      { from: 'sources/b.md', to: 'sources/a.md', type: 'cited_by' },
+      { from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' },
+      { from: 'sources/b.md', to: 'sources/a.md', type: 'built_upon_by' },
     ];
     const content = edges.map(e => JSON.stringify(e)).join('\n') + '\n';
     const { newContent } = fixL07(content, edges);
@@ -1685,7 +1685,7 @@ describe('runLint L06 fix idempotency', () => {
 
   test('fix adds reverse edge, second run is clean for L06', async () => {
     await makeWiki(tmpDir, {
-      edgesContent: JSON.stringify({ from: 'sources/a.md', to: 'sources/b.md', type: 'cites' }) + '\n',
+      edgesContent: JSON.stringify({ from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' }) + '\n',
     });
 
     const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
@@ -1723,6 +1723,95 @@ describe('runLint L07 fix idempotency', () => {
     const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
     const l07Again = r2.findings.filter(f => f.id === 'L07-symmetric-edge-duplicate');
     assert.equal(l07Again.length, 0, 'L07 violations should be gone after fix');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: runLint L19 fix idempotency (group-4 citation edges fix)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L19 fix idempotency', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  const JUNK_LINE = 'not valid json {{{';
+
+  test('fix migrates cites/cited_by rows to citations.jsonl, dedupes against migrated + pre-existing rows, preserves the real edge pair and the unparseable line; second run is clean', async () => {
+    const edgesLines = [
+      { from: 'sources/p', type: 'cites', to: 'sources/q' },
+      { from: 'sources/q', type: 'cited_by', to: 'sources/p' }, // mirrors the row above — same citation, written both ways by the old bug
+      { from: 'sources/m', type: 'cites', to: 'sources/n' },    // this citation already exists in citations.jsonl below
+      { from: 'sources/c', type: 'builds_on', to: 'sources/d' },
+      { from: 'sources/d', type: 'built_upon_by', to: 'sources/c' },
+    ];
+    const edgesContent = edgesLines.map(e => JSON.stringify(e)).join('\n') + '\n' + JUNK_LINE + '\n';
+    await makeWiki(tmpDir, { edgesContent });
+
+    const citationsFile = join(tmpDir, 'wiki', 'graph', 'citations.jsonl');
+    await writeFile(citationsFile, JSON.stringify({ from: 'sources/m', type: 'cites', to: 'sources/n' }) + '\n');
+
+    const r1 = await runLint(tmpDir, { fix: true, dryRun: false });
+    const l19Fixed = r1.findings.filter(f => f.id === 'L19-citation-in-edges' && f.fix_applied);
+    assert.equal(l19Fixed.length, 3, 'all three citation rows found in edges.jsonl should be marked fixed');
+
+    // edges.jsonl: the real pair and the junk line survive; no citation rows remain.
+    const edgesFile = join(tmpDir, 'wiki', 'graph', 'edges.jsonl');
+    const edgesAfter = (await readFile(edgesFile, 'utf8')).split('\n').filter(l => l.trim());
+    assert.equal(edgesAfter.length, 3, `expected the real pair + junk line only, got: ${JSON.stringify(edgesAfter)}`);
+    assert.ok(edgesAfter.includes(JUNK_LINE), 'unparseable line must survive untouched in edges.jsonl');
+    const parsedSurvivors = edgesAfter.filter(l => l !== JUNK_LINE).map(l => JSON.parse(l));
+    assert.equal(parsedSurvivors.length, 2);
+    assert.ok(parsedSurvivors.some(e => e.from === 'sources/c' && e.type === 'builds_on' && e.to === 'sources/d'), 'real forward edge survives');
+    assert.ok(parsedSurvivors.some(e => e.from === 'sources/d' && e.type === 'built_upon_by' && e.to === 'sources/c'), 'real reverse edge survives');
+    assert.ok(parsedSurvivors.every(e => e.type !== 'cites' && e.type !== 'cited_by'), 'no citation rows should remain in edges.jsonl');
+
+    // citations.jsonl: exactly one new row (the p/q pair collapsed); the
+    // pre-existing m/n row is carried forward, not duplicated by the third
+    // migrated (and redundant) cites row.
+    const citationsAfter = (await readFile(citationsFile, 'utf8')).split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+    assert.equal(citationsAfter.length, 2, 'exactly one new row beyond the pre-existing one');
+    assert.equal(citationsAfter.filter(c => c.from === 'sources/m' && c.to === 'sources/n').length, 1, 'pre-existing citation must not be duplicated');
+    const pq = citationsAfter.filter(c => c.from === 'sources/p' && c.to === 'sources/q');
+    assert.equal(pq.length, 1, 'the cites row and its mirrored cited_by row must collapse into exactly one citations row');
+    assert.equal(pq[0].type, 'cites');
+
+    const r2 = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l19Again = r2.findings.filter(f => f.id === 'L19-citation-in-edges');
+    assert.equal(l19Again.length, 0, 'L19 violations should be gone after fix');
+  });
+
+  test('--dry-run sets proposed_fix on the L19 findings and writes to neither edges.jsonl nor citations.jsonl', async () => {
+    const tmp2 = await makeTmp();
+    try {
+      const edgesContent = JSON.stringify({ from: 'sources/p', type: 'cites', to: 'sources/q' }) + '\n';
+      await makeWiki(tmp2, { edgesContent });
+
+      const edgesFile = join(tmp2, 'wiki', 'graph', 'edges.jsonl');
+      const citationsFile = join(tmp2, 'wiki', 'graph', 'citations.jsonl');
+      const edgesBefore = await readFile(edgesFile, 'utf8');
+
+      const result = await runLint(tmp2, { fix: true, dryRun: true });
+      const l19 = result.findings.filter(f => f.id === 'L19-citation-in-edges');
+      assert.equal(l19.length, 1);
+      assert.ok(l19[0].proposed_fix, 'expected a non-empty proposed_fix preview');
+      assert.match(l19[0].proposed_fix, /sources\/p cites sources\/q/);
+      assert.equal(l19[0].fix_applied, false, 'dry-run must not mark the finding as fixed');
+
+      const edgesAfter = await readFile(edgesFile, 'utf8');
+      assert.equal(edgesAfter, edgesBefore, 'dry-run must not write to edges.jsonl');
+
+      // citations.jsonl must not even be created by a dry-run.
+      let citationsExists = true;
+      try {
+        await access(citationsFile, fsConstants.F_OK);
+      } catch {
+        citationsExists = false;
+      }
+      assert.equal(citationsExists, false, 'dry-run must not create citations.jsonl');
+    } finally {
+      await removeTmp(tmp2);
+    }
   });
 });
 
@@ -2146,7 +2235,7 @@ describe('--fix --dry-run writes nothing', () => {
   test('dry-run: no writes, proposed_fix populated', async () => {
     const edgesPath = join(tmpDir, 'wiki', 'graph', 'edges.jsonl');
     await makeWiki(tmpDir, {
-      edgesContent: JSON.stringify({ from: 'sources/a.md', to: 'sources/b.md', type: 'cites' }) + '\n',
+      edgesContent: JSON.stringify({ from: 'sources/a.md', to: 'sources/b.md', type: 'builds_on' }) + '\n',
     });
     const beforeContent = await readFile(edgesPath, 'utf8');
 
@@ -2366,29 +2455,29 @@ describe('B3 regression: parseFrontmatter accepts wiki.mjs no-blank-line format'
 
 describe('B2 regression: L06 detects missing reverse edge with correct key format', () => {
   test('L06 fires when reverse edge is absent', () => {
-    // Use a non-symmetric type with a reverse. Pick 'cites'/'cited-by' if available,
-    // otherwise use whatever EDGE_TYPES provides.
+    // Use a non-symmetric type with a reverse: builds_on/built_upon_by.
+    // (`cites`/`cited_by` are not graph edges — see L19.)
     // We construct edges manually using from|type|to format (wiki.mjs's format).
     // checkL06 receives an edgeSet built as from|type|to — the fixed format.
     const edges = [
-      { from: 'sources/a.md', type: 'cites', to: 'sources/b.md' },
+      { from: 'sources/a.md', type: 'builds_on', to: 'sources/b.md' },
     ];
-    // edgeSet only contains the forward edge — reverse (cited-by) is absent
-    const edgeSet = new Set(['sources/a.md|cites|sources/b.md']);
+    // edgeSet only contains the forward edge — reverse (built_upon_by) is absent
+    const edgeSet = new Set(['sources/a.md|builds_on|sources/b.md']);
     const findings = checkL06(edges, edgeSet);
-    // If 'cites' has a reverse defined, L06 should fire
+    // If 'builds_on' has a reverse defined, L06 should fire
     // If not, findings will be empty — still a valid (non-crashing) result
     assert.ok(Array.isArray(findings));
   });
 
   test('L06 does NOT fire when reverse edge is present', () => {
     const edges = [
-      { from: 'sources/a.md', type: 'cites', to: 'sources/b.md' },
-      { from: 'sources/b.md', type: 'cited_by', to: 'sources/a.md' },
+      { from: 'sources/a.md', type: 'builds_on', to: 'sources/b.md' },
+      { from: 'sources/b.md', type: 'built_upon_by', to: 'sources/a.md' },
     ];
     const edgeSet = new Set([
-      'sources/a.md|cites|sources/b.md',
-      'sources/b.md|cited_by|sources/a.md',
+      'sources/a.md|builds_on|sources/b.md',
+      'sources/b.md|built_upon_by|sources/a.md',
     ]);
     const findings = checkL06(edges, edgeSet);
     const l06 = findings.filter(f => f.id === 'L06-missing-reverse-edge');
@@ -2426,7 +2515,7 @@ describe('R3 regression: fixL07 idempotency for non-symmetric duplicate', () => 
   after(async () => { await removeTmp(tmpDir); });
 
   test('lint --fix removes L07 duplicate and second run produces zero L07 findings', async () => {
-    // 'cites' is non-symmetric; write A→B related_to twice using a symmetric type
+    // 'builds_on' is non-symmetric; write A→B twice using a symmetric type
     // so the fixL07 dedup key path under test is exercised. Use 'same_problem_as'
     // which is symmetric — list A→B twice in canonical sort order.
     const edgesContent = [
@@ -3002,6 +3091,61 @@ describe('L17 dangling-edge', () => {
     const result = checkL17(edges, knownSlugs);
     assert.equal(result.length, 1);
     assert.equal(result[0].id, 'L17-dangling-edge');
+  });
+
+  // Regression (group-4 citation edges fix): L19 now owns cites/cited_by rows,
+  // so L06/L07/L08/L17 must skip them even when they would otherwise look
+  // like a real violation to that check.
+  test('does NOT flag a cites row whose "to" endpoint is unresolved — L19 owns citation rows, not L17', () => {
+    const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
+    const knownSlugs = new Set(['sources/a']); // sources/ghost deliberately absent
+    assert.equal(checkL17(edges, knownSlugs).length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L19: citation-in-edges
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L19 citation-in-edges', () => {
+  test('flags a cites row and a cited_by row; cited_by message names the citing source first', () => {
+    const edges = [
+      { from: 'sources/a', to: 'sources/b', type: 'cites' },
+      { from: 'sources/b', to: 'sources/a', type: 'cited_by' }, // "b is cited_by a" == "a cites b"
+    ];
+    const result = checkL19(edges);
+    assert.equal(result.length, 2);
+
+    const [citesFinding, citedByFinding] = result;
+    assert.equal(citesFinding.id, 'L19-citation-in-edges');
+    assert.equal(citesFinding.severity, 'error');
+    assert.equal(citesFinding.fixable, true);
+    assert.match(citesFinding.message, /sources\/a cites sources\/b/);
+
+    assert.equal(citedByFinding.id, 'L19-citation-in-edges');
+    // The stored edge is "b --cited_by--> a", but the citing source (a) must
+    // be named FIRST in the message — endpoints swapped relative to the raw
+    // from/to on the cited_by row itself.
+    assert.match(citedByFinding.message, /sources\/a cites sources\/b/);
+    assert.doesNotMatch(citedByFinding.message, /as sources\/b cites sources\/a/);
+  });
+
+  test('returns [] for a normal (non-citation) edge', () => {
+    const edges = [{ from: 'sources/a', to: 'sources/b', type: 'builds_on' }];
+    assert.equal(checkL19(edges).length, 0);
+  });
+
+  test('returns [] for an empty edge list', () => {
+    assert.equal(checkL19([]).length, 0);
+  });
+
+  test('checkL06 does NOT flag a cites row as missing its reverse — L19 owns citation rows, not L06', () => {
+    // `cites` declares a real reverse (`cited_by`) in EDGE_TYPES, so without
+    // the CITATION_EDGE_TYPES skip in checkL06 this lone forward row would
+    // be reported as missing its reverse, same as any other asymmetric type.
+    const edges = [{ from: 'sources/a', to: 'sources/b', type: 'cites' }];
+    const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
+    assert.equal(checkL06(edges, edgeSet).length, 0);
   });
 });
 

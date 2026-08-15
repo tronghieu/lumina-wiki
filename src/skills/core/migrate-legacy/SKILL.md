@@ -40,7 +40,7 @@ Key workspace paths:
 - `_lumina/manifest.json` — `packageVersion`, `legacyMigrationNeeded`
 - `_lumina/CHANGELOG.md` — `### Migration` sections per version (the spec)
 - `_lumina/scripts/lint.mjs` — runs checks; `--fix` repairs L01/L02/L03/L05/
-  L06/L07/L09 wherever it safely can; L01 = missing required field (error),
+  L06/L07/L09/L19 wherever it safely can; L01 = missing required field (error),
   L02 = wrong frontmatter type (error), L05 = broken wikilink (error), L11 =
   missing `confidence` (warning) — this skill only ever sees the L01/L02/L05
   findings that `--fix` left standing, plus every L11; `--suggest` adds a
@@ -66,7 +66,7 @@ Proceed to the lint check regardless.
 
 **Step 1.2 — Run the deterministic fix pass first.**
 
-`lint.mjs --fix` now repairs L01, L02, L03, L05, L06, L07, and L09
+`lint.mjs --fix` now repairs L01, L02, L03, L05, L06, L07, L09, and L19
 automatically wherever it safely can. Run it before spending any inference
 effort, so this skill only has to reason about what deterministic repair
 genuinely could not resolve. It is idempotent — safe to run even if a

@@ -1020,6 +1020,68 @@ describe('add-edge', () => {
       await cleanTmp(tmp);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Regression (group-4 citation edges fix): add-edge must refuse cites/
+  // cited_by — those rows belong in citations.jsonl, not edges.jsonl — while
+  // still accepting every non-citation edge type as before.
+  // -------------------------------------------------------------------------
+
+  test('rejects cites: exit 2, structured stderr pointing at add-citation, edges.jsonl never created', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['add-edge', 'src-a', 'cites', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stdout: ${r.stdout}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /add-citation/);
+
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      assert.equal(await hashFile(edgesFile), null, 'edges.jsonl must not be created by a rejected add-edge');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects cited_by: exit 2, structured stderr pointing at add-citation, edges.jsonl never created', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['add-edge', 'src-a', 'cited_by', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stdout: ${r.stdout}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /add-citation/);
+
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      assert.equal(await hashFile(edgesFile), null, 'edges.jsonl must not be created by a rejected add-edge');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('still accepts builds_on: the citation guard does not over-reach onto other edge types', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['add-edge', 'src-a', 'builds_on', 'src-b'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-edge failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.added);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      const edges = content.trim().split('\n').map(l => JSON.parse(l));
+      const fwd = edges.find(e => e.from === 'src-a' && e.type === 'builds_on' && e.to === 'src-b');
+      const rev = edges.find(e => e.from === 'src-b' && e.type === 'built_upon_by' && e.to === 'src-a');
+      assert.ok(fwd, 'forward edge present');
+      assert.ok(rev, 'reverse edge present');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1080,6 +1142,33 @@ describe('add-citation', () => {
       initWorkspace(tmp);
       const r = runWiki(['add-citation', '..', 'src-b'], { cwd: tmp });
       assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  // Regression (group-4 citation edges fix): add-citation is the ONLY
+  // correct way to write a citation — it must land a `cites`-typed row in
+  // citations.jsonl and must never touch edges.jsonl (the file add-edge/
+  // batch-edges now refuse to write cites/cited_by into).
+  test('still works after the fix: writes a cites row to citations.jsonl, never touches edges.jsonl', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['add-citation', 'src-alpha', 'src-beta'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-citation failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.added);
+
+      const content = await readFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'), 'utf8');
+      const citations = content.trim().split('\n').map(l => JSON.parse(l));
+      assert.equal(citations.length, 1);
+      assert.equal(citations[0].from, 'src-alpha');
+      assert.equal(citations[0].to, 'src-beta');
+      assert.equal(citations[0].type, 'cites');
+
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      assert.equal(await hashFile(edgesFile), null, 'add-citation must never create/touch edges.jsonl');
     } finally {
       await cleanTmp(tmp);
     }
@@ -1293,6 +1382,36 @@ describe('batch-edges', () => {
       ]), 'utf8');
       const r = runWiki(['batch-edges', batchFile], { cwd: tmp });
       assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  // Regression (group-4 citation edges fix): validation is all-or-nothing —
+  // one bad `cites` record must fail the whole batch before anything is
+  // written, including the otherwise-valid record alongside it.
+  test('rejects a batch mixing a valid record with a cites record; writes nothing at all', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const batchFile = join(tmp, 'batch.json');
+      await writeFile(batchFile, JSON.stringify([
+        { from: 'src-1', type: 'builds_on', to: 'src-2' },
+        { from: 'src-3', type: 'cites', to: 'src-4' },
+      ]), 'utf8');
+
+      const r = runWiki(['batch-edges', batchFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stdout: ${r.stdout}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /add-citation/);
+
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      assert.equal(
+        await hashFile(edgesFile), null,
+        'edges.jsonl must not be created — the valid builds_on record must not land when another record fails validation',
+      );
     } finally {
       await cleanTmp(tmp);
     }
