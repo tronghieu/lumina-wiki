@@ -20,31 +20,35 @@
 // 1. Imports + schemas import
 // ---------------------------------------------------------------------------
 
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { open, readFile, writeFile, rename, unlink, mkdir, access, stat, readdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { readFile, mkdir, access, readdir } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { dirname, join, resolve, relative, normalize, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createReadStream } from 'node:fs';
+import { dirname, join, resolve, relative, sep } from 'node:path';
 
 import {
   ENTITY_DIRS,
-  EDGE_TYPES,
-  EXEMPTION_GLOBS,
   SCHEMA_VERSION,
   REQUIRED_FRONTMATTER,
+  EDGE_CONFIDENCE,
+  LEGACY_ENUM_DEFAULTS,
 } from './schemas.mjs';
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
+import { isExempt } from './lib/globs.mjs';
+import {
+  edgeTypeByName,
+  skipReverseFor,
+  reverseEdgeFor,
+  edgeKey,
+  normalizeEdge,
+} from './lib/edges.mjs';
 
 // ---------------------------------------------------------------------------
 // 2. Constants
 // ---------------------------------------------------------------------------
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /** Minimum valid edge confidence values. */
-const CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
+const CONFIDENCE_VALUES = new Set(EDGE_CONFIDENCE);
 
 /** Regex for a single frontmatter line: `key: value` */
 const FM_LINE_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)/;
@@ -58,32 +62,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ---------------------------------------------------------------------------
 // 3. Utils
 // ---------------------------------------------------------------------------
-
-/**
- * Write content to path atomically: write to <path>.tmp, fsync fd, rename.
- * @param {string} filePath - Destination path.
- * @param {string} content - String content to write (UTF-8).
- * @returns {Promise<void>}
- */
-async function atomicWrite(filePath, content) {
-  const tmpPath = filePath + '.tmp';
-  let fd;
-  try {
-    fd = await open(tmpPath, 'w');
-    await fd.writeFile(content, 'utf8');
-    await fd.datasync();
-    await fd.close();
-    fd = null;
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    if (fd) {
-      try { await fd.close(); } catch (_) { /* ignore */ }
-    }
-    // Best-effort cleanup of .tmp
-    await unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 
 /**
  * Convert a title string to a kebab-case slug.
@@ -221,16 +199,6 @@ function parseFrontmatter(content) {
         currentMapKey = null;
       }
       continue;
-    }
-
-    // Indented list item without matching pattern (fallback)
-    if (line.match(/^\s+-\s/) && currentListKey !== null) {
-      const rawFallback = line.replace(/^\s+-\s+/, '').trim();
-      if (rawFallback.startsWith('{') && rawFallback.endsWith('}')) {
-        frontmatter[currentListKey].push(_parseFlowMapping(rawFallback));
-      } else {
-        frontmatter[currentListKey].push(unquoteValue(rawFallback));
-      }
     }
   }
 
@@ -428,11 +396,9 @@ function quoteIfNeeded(val) {
  * Reassemble a markdown file from parsed frontmatter + body.
  * @param {Record<string,any>} fm
  * @param {string} body
- * @param {boolean} hasFrontmatter
  * @returns {string}
  */
-function assembleMd(fm, body, hasFrontmatter) {
-  if (!hasFrontmatter && Object.keys(fm).length === 0) return body;
+function assembleMd(fm, body) {
   const yamlBlock = stringifyFrontmatter(fm);
   return `---\n${yamlBlock}\n---\n${body}`;
 }
@@ -491,55 +457,6 @@ function today() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-/**
- * Check whether a target slug/path matches any of the exemption globs.
- * Supported glob patterns: `**` anywhere, `*` (single segment).
- * @param {string} target
- * @returns {boolean}
- */
-function isExempt(target) {
-  for (const glob of EXEMPTION_GLOBS) {
-    if (matchGlob(glob, target)) return true;
-  }
-  return false;
-}
-
-/**
- * Simple glob matcher supporting `*` and `**`.
- * @param {string} pattern
- * @param {string} str
- * @returns {boolean}
- */
-function matchGlob(pattern, str) {
-  // Normalize separators
-  const p = pattern.replace(/\\/g, '/');
-  const s = str.replace(/\\/g, '/');
-
-  // Special pattern: *://* matches URLs
-  if (p === '*://*') {
-    return /^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(s);
-  }
-
-  // Convert glob to regex
-  const regexStr = p
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars
-    .replace(/\*\*/g, '{{DOUBLESTAR}}')
-    .replace(/\*/g, '[^/]*')
-    .replace(/{{DOUBLESTAR}}/g, '.*');
-
-  const re = new RegExp(`^${regexStr}$`);
-  return re.test(s);
-}
-
-/**
- * Compute SHA-256 hash of a string.
- * @param {string} content
- * @returns {string} hex digest
- */
-function sha256(content) {
-  return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 /**
@@ -677,7 +594,7 @@ async function setMeta(projectRoot, slug, key, value) {
 
   const entityType = _entityTypeForFilePath(projectRoot, filePath);
   if (entityType) {
-    const fields = _getRequiredFrontmatterFields(entityType);
+    const fields = REQUIRED_FRONTMATTER[entityType] ?? null;
     const field = fields ? fields.find((f) => f.key === key) : null;
     // Clearing an OPTIONAL declared field stays allowed. The gate exists to stop
     // wrong-typed values, and `null` on a field the schema marks `required:
@@ -732,7 +649,7 @@ async function setMeta(projectRoot, slug, key, value) {
   } else {
     frontmatter[key] = value;
   }
-  const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
+  const newContent = assembleMd(frontmatter, body);
   await atomicWrite(filePath, newContent);
   return { filePath };
 }
@@ -745,10 +662,6 @@ async function setMeta(projectRoot, slug, key, value) {
  * make legacy state explicit so verify/lint can flag what still needs review,
  * rather than silently asserting trust.
  */
-const LEGACY_DEFAULTS = {
-  sources:  { provenance: 'missing', confidence: 'unverified' },
-  concepts: { confidence: 'unverified' },
-};
 
 /**
  * Backfill missing frontmatter fields on legacy entities (sources/concepts).
@@ -765,7 +678,7 @@ async function migrateLegacyDefaults(projectRoot, dryRun) {
   let skipped = 0;
 
   for (const entity of entities) {
-    const defaults = LEGACY_DEFAULTS[entity.type];
+    const defaults = LEGACY_ENUM_DEFAULTS[entity.type];
     if (!defaults) { skipped++; continue; }
 
     const content = await readFile(entity.filePath, 'utf8');
@@ -782,7 +695,7 @@ async function migrateLegacyDefaults(projectRoot, dryRun) {
     if (Object.keys(added).length === 0) { skipped++; continue; }
 
     if (!dryRun) {
-      const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
+      const newContent = assembleMd(frontmatter, body);
       await atomicWrite(entity.filePath, newContent);
     }
     updated.push({ slug: entity.slug, type: entity.type, added });
@@ -884,36 +797,6 @@ async function writeJsonl(filePath, records) {
 }
 
 /**
- * Create a canonical edge key for deduplication.
- * For symmetric edges: sorted endpoints joined with `|`.
- * For asymmetric edges: `from|type|to`.
- * @param {object} edge
- * @returns {string}
- */
-function edgeKey(edge) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edge.type);
-  if (typeDef && typeDef.symmetric) {
-    const endpoints = [edge.from, edge.to].sort();
-    return `${endpoints[0]}|${edge.type}|${endpoints[1]}`;
-  }
-  return `${edge.from}|${edge.type}|${edge.to}`;
-}
-
-/**
- * Normalize a symmetric edge so endpoints are sorted.
- * @param {object} edge
- * @returns {object}
- */
-function normalizeEdge(edge) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edge.type);
-  if (typeDef && typeDef.symmetric) {
-    const [a, b] = [edge.from, edge.to].sort();
-    return { ...edge, from: a, to: b };
-  }
-  return edge;
-}
-
-/**
  * Add an edge (and its reverse unless target is exempt or edge is terminal).
  * Idempotent: re-running same add-edge produces byte-identical files.
  *
@@ -926,7 +809,7 @@ function normalizeEdge(edge) {
  * @returns {Promise<{added: boolean, reason: string}>}
  */
 async function addEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edgeType);
+  const typeDef = edgeTypeByName(edgeType);
   if (!typeDef) {
     const err = new Error(`Unknown edge type: ${edgeType}`);
     err.code = 2;
@@ -961,26 +844,9 @@ async function addEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
 
   const toAdd = [forwardEdge];
 
-  // Add reverse unless:
-  // 1. edge is terminal
-  // 2. target matches EXEMPTION_GLOBS
-  // 3. edge is symmetric (already covered by sorted endpoints)
-  const skipReverse =
-    typeDef.terminal ||
-    isExempt(toSlug) ||
-    typeDef.symmetric;
-
-  if (!skipReverse && typeDef.reverse) {
-    const reverseEdge = {
-      from: toSlug,
-      type: typeDef.reverse,
-      to: fromSlug,
-      ...(opts.confidence ? { confidence: opts.confidence } : {}),
-    };
-    const revKey = edgeKey(reverseEdge);
-    if (!existingKeys.has(revKey)) {
-      toAdd.push(reverseEdge);
-    }
+  const reverseEdge = reverseEdgeFor(typeDef, fromSlug, toSlug, opts.confidence);
+  if (reverseEdge && !existingKeys.has(edgeKey(reverseEdge))) {
+    toAdd.push(reverseEdge);
   }
 
   const newEdges = [...existing, ...toAdd];
@@ -1087,7 +953,7 @@ async function batchEdges(projectRoot, jsonFilePath) {
       errors.push(`Record ${i}: missing from, type, or to`);
       continue;
     }
-    const typeDef = EDGE_TYPES.find(t => t.name === rec.type);
+    const typeDef = edgeTypeByName(rec.type);
     if (!typeDef) {
       errors.push(`Record ${i}: unknown edge type '${rec.type}'`);
     }
@@ -1114,7 +980,7 @@ async function batchEdges(projectRoot, jsonFilePath) {
   const toAdd = [];
 
   for (const rec of records) {
-    const typeDef = EDGE_TYPES.find(t => t.name === rec.type);
+    const typeDef = edgeTypeByName(rec.type);
     const forwardEdge = normalizeEdge({
       from: rec.from,
       type: rec.type,
@@ -1132,18 +998,8 @@ async function batchEdges(projectRoot, jsonFilePath) {
     existingKeys.add(fwdKey);
     added++;
 
-    const skipReverse =
-      typeDef.terminal ||
-      isExempt(rec.to) ||
-      typeDef.symmetric;
-
-    if (!skipReverse && typeDef.reverse) {
-      const reverseEdge = {
-        from: rec.to,
-        type: typeDef.reverse,
-        to: rec.from,
-        ...(rec.confidence ? { confidence: rec.confidence } : {}),
-      };
+    const reverseEdge = reverseEdgeFor(typeDef, rec.from, rec.to, rec.confidence);
+    if (reverseEdge) {
       const revKey = edgeKey(reverseEdge);
       if (!existingKeys.has(revKey)) {
         toAdd.push(reverseEdge);
@@ -1190,18 +1046,6 @@ async function dedupEdges(projectRoot) {
 }
 
 /**
- * Same reverse-skip gate used by addEdge/batchEdges: no reverse edge when the
- * type is terminal, the target is exempt (EXEMPTION_GLOBS), or the type is
- * symmetric (already covered by sorted endpoints).
- * @param {object} typeDef
- * @param {string} toSlug
- * @returns {boolean}
- */
-function skipReverseFor(typeDef, toSlug) {
-  return Boolean(typeDef.terminal || isExempt(toSlug) || typeDef.symmetric);
-}
-
-/**
  * Partition an edge list into the edges matching a from/type/to relationship
  * (forward + its reverse, per the same gate addEdge uses) versus the rest.
  * Confidence is ignored when matching (edgeKey already ignores it).
@@ -1223,7 +1067,7 @@ function partitionEdgesForRemoval(edges, fromSlug, typeDef, toSlug) {
   const fwdKey = edgeKey(normalizeEdge({ from: fromSlug, type: typeDef.name, to: toSlug }));
 
   let revKey = null;
-  if (!skipReverseFor(typeDef, toSlug) && typeDef.reverse) {
+  if (!skipReverseFor(typeDef, toSlug)) {
     revKey = edgeKey(normalizeEdge({ from: toSlug, type: typeDef.reverse, to: fromSlug }));
   }
 
@@ -1304,7 +1148,7 @@ async function collectRemovalAdvisories(projectRoot, fromSlug, toSlug) {
  * @returns {Promise<object>}
  */
 async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
-  const typeDef = EDGE_TYPES.find(t => t.name === edgeType);
+  const typeDef = edgeTypeByName(edgeType);
   if (!typeDef) {
     const err = new Error(`Unknown edge type: ${edgeType}`);
     err.code = 2;
@@ -1365,13 +1209,13 @@ async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
  * @returns {Promise<object>}
  */
 async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts = {}) {
-  const oldTypeDef = EDGE_TYPES.find(t => t.name === oldType);
+  const oldTypeDef = edgeTypeByName(oldType);
   if (!oldTypeDef) {
     const err = new Error(`Unknown edge type: ${oldType}`);
     err.code = 2;
     throw err;
   }
-  const newTypeDef = EDGE_TYPES.find(t => t.name === newType);
+  const newTypeDef = edgeTypeByName(newType);
   if (!newTypeDef) {
     const err = new Error(`Unknown edge type: ${newType}`);
     err.code = 2;
@@ -1415,7 +1259,7 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
   }
 
   let reverseEdge = null;
-  if (!skipReverseFor(newTypeDef, toSlug) && newTypeDef.reverse) {
+  if (!skipReverseFor(newTypeDef, toSlug)) {
     reverseEdge = { from: toSlug, type: newTypeDef.reverse, to: fromSlug };
     const candidate = { ...reverseEdge, ...(confidence ? { confidence } : {}) };
     const revKey = edgeKey(candidate);
@@ -1731,10 +1575,7 @@ function _checkFieldType(field, val) {
  * @returns {string[]}
  */
 function _validateFrontmatter(frontmatter, entityType) {
-  // Import REQUIRED_FRONTMATTER from the already-imported schemas module.
-  // Because schemas.mjs is pure data, this import is a no-op (already cached).
-  // We use a dynamic import workaround via a re-export alias loaded at startup.
-  const fields = _getRequiredFrontmatterFields(entityType);
+  const fields = REQUIRED_FRONTMATTER[entityType] ?? null;
   if (!fields) return [`Unknown entity type: ${entityType}`];
 
   const errors = [];
@@ -1791,24 +1632,6 @@ function _validateFindingsItems(findings) {
   return errors;
 }
 
-/**
- * Lookup required frontmatter fields for an entity type.
- * Merges _base fields with type-specific fields.
- * @param {string} entityType
- * @returns {import('./schemas.mjs').FrontmatterField[]|null}
- */
-function _getRequiredFrontmatterFields(entityType) {
-  // REQUIRED_FRONTMATTER is imported at module level from schemas.mjs.
-  // We access it through the module-scoped import binding.
-  const typeFields = _REQUIRED_FRONTMATTER[entityType];
-  if (!typeFields) return null;
-  return typeFields;
-}
-
-// Module-level alias to the imported REQUIRED_FRONTMATTER for use by
-// _getRequiredFrontmatterFields without a dynamic import inside the function.
-const _REQUIRED_FRONTMATTER = REQUIRED_FRONTMATTER;
-
 // ---------------------------------------------------------------------------
 // 10. Output helpers
 // ---------------------------------------------------------------------------
@@ -1832,11 +1655,41 @@ function emitError(message, code) {
 }
 
 /**
- * Print info/status to stderr (non-JSON, non-blocking).
+ * Emit the error envelope and exit with that same code. Never returns — the
+ * CLI dispatch paired `emitError(msg, N); process.exit(N);` at every one of
+ * these call sites.
  * @param {string} message
+ * @param {number} code
+ * @returns {never}
  */
-function info(message) {
-  process.stderr.write(`[wiki] ${message}\n`);
+function fail(message, code) {
+  emitError(message, code);
+  process.exit(code);
+}
+
+/**
+ * Reject an edge command's endpoint pair: a path-shaped slug must resolve
+ * inside the project, and neither endpoint may contain `..`. Extracted from
+ * three verbatim copies in the dispatch. Never returns on rejection.
+ *
+ * Note the citation and checkpoint subcommands deliberately still carry their
+ * own, narrower checks — they run before requireProjectRoot(), so they have no
+ * projectRoot to validate against, and widening them here would change which
+ * error a user sees outside a project.
+ * @param {string} fromSlug
+ * @param {string} toSlug
+ * @param {string} projectRoot
+ */
+function requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot) {
+  if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
+    fail(`Unsafe from-slug: ${fromSlug}`, 2);
+  }
+  if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
+    fail(`Unsafe to-slug: ${toSlug}`, 2);
+  }
+  if (fromSlug.includes('..') || toSlug.includes('..')) {
+    fail('Slug may not contain ..', 2);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1880,8 +1733,7 @@ function parseArgs(args) {
 async function requireProjectRoot(startDir) {
   const root = await findProjectRoot(startDir);
   if (!root) {
-    emitError('No Lumina workspace found (wiki/ directory not found in current directory or ancestors). Run `node wiki.mjs init` first.', 2);
-    process.exit(2);
+    fail('No Lumina workspace found (wiki/ directory not found in current directory or ancestors). Run `node wiki.mjs init` first.', 2);
   }
   return root;
 }
@@ -1955,8 +1807,7 @@ async function main(argv) {
         const projectRoot = process.cwd();
         const pack = flags.pack && typeof flags.pack === 'string' ? flags.pack : undefined;
         if (pack && !INSTALLABLE_PACKS.includes(pack)) {
-          emitError(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
-          process.exit(2);
+          fail(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
         }
         const result = await initWorkspace(projectRoot, { pack });
         emitJson({ ok: true, created: result.created, skipped: result.skipped });
@@ -1967,8 +1818,7 @@ async function main(argv) {
       case 'slug': {
         const title = positional.join(' ');
         if (!title) {
-          emitError('slug requires a title argument', 2);
-          process.exit(2);
+          fail('slug requires a title argument', 2);
         }
         emitJson({ slug: slugify(title) });
         break;
@@ -1979,12 +1829,10 @@ async function main(argv) {
         const skill = positional[0];
         const details = positional.slice(1).join(' ');
         if (!skill) {
-          emitError('log requires <skill> argument', 2);
-          process.exit(2);
+          fail('log requires <skill> argument', 2);
         }
         if (!details) {
-          emitError('log requires <details> argument', 2);
-          process.exit(2);
+          fail('log requires <details> argument', 2);
         }
         const projectRoot = await requireProjectRoot();
         await appendLog(projectRoot, skill, details);
@@ -1996,13 +1844,11 @@ async function main(argv) {
       case 'read-meta': {
         const slug = positional[0];
         if (!slug) {
-          emitError('read-meta requires <slug> argument', 2);
-          process.exit(2);
+          fail('read-meta requires <slug> argument', 2);
         }
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
         emitJson({ slug, filePath: relative(projectRoot, filePath), frontmatter });
@@ -2016,14 +1862,12 @@ async function main(argv) {
         const rawValue = positional[2];
 
         if (!slug || !key || rawValue === undefined) {
-          emitError('set-meta requires <slug> <key> <value>', 2);
-          process.exit(2);
+          fail('set-meta requires <slug> <key> <value>', 2);
         }
 
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
 
         let value;
@@ -2031,8 +1875,7 @@ async function main(argv) {
           try {
             value = JSON.parse(rawValue);
           } catch (err) {
-            emitError(`Invalid JSON value: ${err.message}`, 2);
-            process.exit(2);
+            fail(`Invalid JSON value: ${err.message}`, 2);
           }
         } else {
           // Auto-coerce scalar types (number, boolean) — mirrors YAML parsing behavior.
@@ -2052,25 +1895,13 @@ async function main(argv) {
         const toSlug = positional[2];
 
         if (!fromSlug || !edgeType || !toSlug) {
-          emitError('add-edge requires <from-slug> <edge-type> <to-slug>', 2);
-          process.exit(2);
+          fail('add-edge requires <from-slug> <edge-type> <to-slug>', 2);
         }
 
         const projectRoot = await requireProjectRoot();
 
         // Path safety for slugs (only if they look like paths)
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const confidence = flags.confidence && typeof flags.confidence === 'string'
           ? flags.confidence
@@ -2087,12 +1918,10 @@ async function main(argv) {
         const toSlug = positional[1];
 
         if (!fromSlug || !toSlug) {
-          emitError('add-citation requires <from-slug> <to-slug>', 2);
-          process.exit(2);
+          fail('add-citation requires <from-slug> <to-slug>', 2);
         }
         if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -2107,12 +1936,10 @@ async function main(argv) {
         const toSlug = positional[1];
 
         if (!fromSlug || !toSlug) {
-          emitError('remove-citation requires <from-slug> <to-slug>', 2);
-          process.exit(2);
+          fail('remove-citation requires <from-slug> <to-slug>', 2);
         }
         if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -2126,8 +1953,7 @@ async function main(argv) {
       case 'batch-edges': {
         const jsonFile = positional[0];
         if (!jsonFile) {
-          emitError('batch-edges requires <json-file>', 2);
-          process.exit(2);
+          fail('batch-edges requires <json-file>', 2);
         }
         const projectRoot = await requireProjectRoot();
         const resolvedFile = resolve(jsonFile);
@@ -2151,8 +1977,7 @@ async function main(argv) {
         const toSlug = positional[2];
 
         if (!fromSlug || !edgeType || !toSlug) {
-          emitError('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
-          process.exit(2);
+          fail('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
         }
 
         if (edgeType === 'cites' || edgeType === 'cited_by') {
@@ -2165,18 +1990,7 @@ async function main(argv) {
 
         const projectRoot = await requireProjectRoot();
 
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const dryRun = Boolean(flags['dry-run']);
         const result = await removeEdge(projectRoot, fromSlug, edgeType, toSlug, { dryRun });
@@ -2192,8 +2006,7 @@ async function main(argv) {
         const newType = positional[3];
 
         if (!fromSlug || !oldType || !toSlug || !newType) {
-          emitError('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
-          process.exit(2);
+          fail('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
         }
 
         if ([oldType, newType].includes('cites') || [oldType, newType].includes('cited_by')) {
@@ -2206,18 +2019,7 @@ async function main(argv) {
 
         const projectRoot = await requireProjectRoot();
 
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const confidence = flags.confidence && typeof flags.confidence === 'string'
           ? flags.confidence
@@ -2234,8 +2036,7 @@ async function main(argv) {
         const skill = positional[0];
         const phase = positional[1];
         if (!skill || !phase) {
-          emitError('checkpoint-read requires <skill> <phase>', 2);
-          process.exit(2);
+          fail('checkpoint-read requires <skill> <phase>', 2);
         }
         const projectRoot = await requireProjectRoot();
         const data = await checkpointRead(projectRoot, skill, phase);
@@ -2250,8 +2051,7 @@ async function main(argv) {
         const source = positional[2]; // json-file path, '-', or undefined (stdin)
 
         if (!skill || !phase) {
-          emitError('checkpoint-write requires <skill> <phase> [<json-file>|-]', 2);
-          process.exit(2);
+          fail('checkpoint-write requires <skill> <phase> [<json-file>|-]', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -2261,8 +2061,7 @@ async function main(argv) {
           try {
             data = await readStdin();
           } catch (err) {
-            emitError(err.message, 2);
-            process.exit(2);
+            fail(err.message, 2);
           }
         } else {
           const absSource = resolve(source);
@@ -2273,8 +2072,7 @@ async function main(argv) {
             const msg = err.code === 'ENOENT'
               ? `File not found: ${source}`
               : `Error reading ${source}: ${err.message}`;
-            emitError(msg, 2);
-            process.exit(2);
+            fail(msg, 2);
           }
         }
 
@@ -2289,12 +2087,10 @@ async function main(argv) {
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
         const prefix = positional[0] || null;
         if (typeFilter && !ENTITY_DIRS[typeFilter]) {
-          emitError(`Unknown entity type: ${typeFilter}. Valid types: ${Object.keys(ENTITY_DIRS).join(', ')}`, 2);
-          process.exit(2);
+          fail(`Unknown entity type: ${typeFilter}. Valid types: ${Object.keys(ENTITY_DIRS).join(', ')}`, 2);
         }
         if (prefix && !pathSafe(prefix, projectRoot)) {
-          emitError(`Unsafe prefix: ${prefix}`, 2);
-          process.exit(2);
+          fail(`Unsafe prefix: ${prefix}`, 2);
         }
         const entities = await listEntities(projectRoot, prefix);
         const filtered = typeFilter ? entities.filter(e => e.type === typeFilter) : entities;
@@ -2315,22 +2111,18 @@ async function main(argv) {
       case 'read-edges': {
         const slug = (flags.from && typeof flags.from === 'string') ? flags.from : positional[0];
         if (!slug) {
-          emitError('read-edges requires <slug> or --from <slug>', 2);
-          process.exit(2);
+          fail('read-edges requires <slug> or --from <slug>', 2);
         }
         if (slug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
         const direction = flags.direction && typeof flags.direction === 'string' ? flags.direction : 'both';
-        if (typeFilter && !EDGE_TYPES.some(t => t.name === typeFilter)) {
-          emitError(`Unknown edge type: ${typeFilter}`, 2);
-          process.exit(2);
+        if (typeFilter && !edgeTypeByName(typeFilter)) {
+          fail(`Unknown edge type: ${typeFilter}`, 2);
         }
         if (!['outbound', 'inbound', 'both'].includes(direction)) {
-          emitError(`Invalid --direction: ${direction}. Must be outbound, inbound, or both.`, 2);
-          process.exit(2);
+          fail(`Invalid --direction: ${direction}. Must be outbound, inbound, or both.`, 2);
         }
         const projectRoot = await requireProjectRoot();
         const { outbound, inbound } = await readEdgesForSlug(projectRoot, slug, { type: typeFilter, direction });
@@ -2342,12 +2134,10 @@ async function main(argv) {
       case 'read-citations': {
         const slug = positional[0];
         if (!slug) {
-          emitError('read-citations requires <slug>', 2);
-          process.exit(2);
+          fail('read-citations requires <slug>', 2);
         }
         if (slug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
         const projectRoot = await requireProjectRoot();
         const { citing, citedBy } = await readCitationsForSlug(projectRoot, slug);
@@ -2359,13 +2149,11 @@ async function main(argv) {
       case 'verify-frontmatter': {
         const slug = positional[0];
         if (!slug) {
-          emitError('verify-frontmatter requires <slug>', 2);
-          process.exit(2);
+          fail('verify-frontmatter requires <slug>', 2);
         }
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
 
@@ -2416,8 +2204,7 @@ async function main(argv) {
       // -----------------------------------------------------------------------
       case 'migrate': {
         if (!flags['add-defaults']) {
-          emitError('migrate requires --add-defaults (no other migration modes are defined)', 2);
-          process.exit(2);
+          fail('migrate requires --add-defaults (no other migration modes are defined)', 2);
         }
         const projectRoot = await requireProjectRoot();
         const dryRun = Boolean(flags['dry-run']);
@@ -2430,12 +2217,12 @@ async function main(argv) {
       case 'resolve-alias': {
         const text = positional.join(' ').trim();
         if (!text) {
-          emitError('resolve-alias requires <text>', 2);
-          process.exit(2);
+          fail('resolve-alias requires <text>', 2);
         }
         const projectRoot = await requireProjectRoot();
-        const allEntities = await listEntities(projectRoot);
-        const foundations = allEntities.filter(e => e.type === 'foundations');
+        // Scoped scan: listEntities walks all 13 entity dirs without a prefix,
+        // and every result but foundations/ was discarded a line later.
+        const foundations = await listEntities(projectRoot, 'foundations');
 
         const needle = text.toLowerCase();
         const matches = [];
@@ -2476,8 +2263,7 @@ async function main(argv) {
         }
 
         if (matches.length === 0) {
-          emitError(`no match for query: ${text}`, 2);
-          process.exit(2);
+          fail(`no match for query: ${text}`, 2);
         }
 
         // Sort ascending by slug for deterministic output
@@ -2493,8 +2279,7 @@ async function main(argv) {
 
       // -----------------------------------------------------------------------
       default: {
-        emitError(`Unknown subcommand: ${subcommand}. Run node wiki.mjs --help for usage.`, 2);
-        process.exit(2);
+        fail(`Unknown subcommand: ${subcommand}. Run node wiki.mjs --help for usage.`, 2);
       }
     }
   } catch (err) {

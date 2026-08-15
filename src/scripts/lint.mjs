@@ -44,25 +44,30 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { readFile, writeFile, rename, mkdir, readdir, stat, access, unlink } from 'node:fs/promises';
+import { readFile, rename, readdir, stat, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join, basename, dirname, relative, normalize, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
-import { randomBytes } from 'node:crypto';
 
 import {
   SCHEMA_VERSION,
   ENTITY_DIRS,
-  EDGE_TYPES,
   REQUIRED_FRONTMATTER,
-  ENUMS,
-  EXEMPTION_GLOBS,
+  EDGE_CONFIDENCE,
+  LEGACY_ENUM_DEFAULTS,
 } from './schemas.mjs';
 import {
   EXTERNAL_ID_NAMESPACES,
   normalizeExternalId,
   parseUrlToExternalIds,
 } from './external-ids.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
+import { isExempt } from './lib/globs.mjs';
+import {
+  edgeTypeByName,
+  skipReverseFor,
+  reverseEdgeFor,
+  edgeKey,
+} from './lib/edges.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -122,17 +127,6 @@ const LEGACY_RENAMED_FIELDS = {
   },
 };
 
-/**
- * Defaults for enum fields that have a known-safe fallback value.
- * Mirrors `LEGACY_DEFAULTS` in wiki.mjs (see wiki.mjs's `migrateLegacyDefaults`
- * for the canonical original) — duplicated here, not imported, so lint.mjs
- * stays decoupled from wiki.mjs. Keep the two in sync by hand if either
- * changes.
- */
-const LINT_LEGACY_DEFAULTS = {
-  sources: { provenance: 'missing', confidence: 'unverified' },
-  concepts: { confidence: 'unverified' },
-};
 
 /**
  * Entity dirs whose `id` is the FULL wiki-relative path (dir included),
@@ -293,13 +287,17 @@ async function deriveIsoDateValue(fm, absPath) {
 }
 
 /**
- * Quote a scalar string for frontmatter output only when required —
- * mirrors wiki.mjs's `quoteIfNeeded` (not imported; see LINT_LEGACY_DEFAULTS
- * comment for why the modules stay decoupled). Only used for top-level
- * scalar lines; block-list items are never quoted because lint.mjs's own
- * `parseFrontmatter` does not strip quotes from list items (see its
- * `listM` branch), so a quoted list item would round-trip as a literal
- * quoted string instead of the bare value.
+ * Quote a scalar string for frontmatter output only when required.
+ *
+ * Still separate from wiki.mjs's `quoteIfNeeded`, and not for decoupling —
+ * the two modules already share lib/. They genuinely serialise different
+ * dialects today: this one is only used for top-level scalar lines, and
+ * block-list items are never quoted because lint.mjs's own
+ * `parseFrontmatter` does not strip quotes from list items (see its `listM`
+ * branch), so a quoted list item would round-trip as a literal quoted string
+ * instead of the bare value. wiki.mjs's parser does strip them. Unifying the
+ * pair means unifying the two parsers first — a behaviour change for `--fix`,
+ * not a refactor. Note this copy handles `val === ''` and wiki.mjs's does not.
  * @param {string} val
  * @returns {string}
  */
@@ -368,38 +366,6 @@ function roundTripsAsFrontmatter(key, value) {
     return got !== null && typeof got === 'object' && !Array.isArray(got);
   }
   return got === value;
-}
-
-/**
- * Split raw file content into the frontmatter text (no `---` delimiters)
- * and the tail (starting with the newline before the closing `---`,
- * through end of file). Returns null when there is no parseable
- * frontmatter block. Shared by fixL01 and fixL02 so both fixers rewrite
- * the frontmatter block the same way.
- * @param {string} content
- * @returns {{ fmText: string, tail: string }|null}
- */
-function splitRawFrontmatter(content) {
-  if (!content.startsWith('---')) return null;
-  const rest = content.slice(3);
-  const nlIdx = rest.indexOf('\n');
-  if (nlIdx === -1) return null;
-  // Mirror parseFrontmatter's rule for where the block starts, exactly. It
-  // treats a non-empty first line as part of the frontmatter when it is a YAML
-  // key line, and rejects the block outright otherwise. Diverging here makes
-  // the two disagree about which keys exist: unconditionally skipping the first
-  // line drops `---id: x` on rewrite, and accepting a block parseFrontmatter
-  // rejects leaves fixL01 with an empty view of the frontmatter, so it appends
-  // a second copy of every key that was already there.
-  const afterDash = rest.slice(0, nlIdx).trim();
-  if (afterDash !== '' && !/^[a-zA-Z_][a-zA-Z0-9_]*\s*:/.test(afterDash)) return null;
-  const bodyStart = rest.indexOf('\n---');
-  if (bodyStart === -1) return null;
-  const fmText = afterDash !== ''
-    ? rest.slice(0, bodyStart)
-    : rest.slice(nlIdx + 1, bodyStart);
-  const tail = rest.slice(bodyStart); // "\n---\n<body>"
-  return { fmText, tail };
 }
 
 /**
@@ -676,13 +642,18 @@ const ARRAY_FIELD_TARGET_DIR = {
  * @param {Set<string>} knownSlugs
  * @returns {Map<string,string[]>}
  */
+const _basenameIndexCache = new WeakMap();
+
 function buildBasenameIndex(knownSlugs) {
+  const cached = _basenameIndexCache.get(knownSlugs);
+  if (cached) return cached;
   const index = new Map();
   for (const slug of knownSlugs) {
     const base = basename(slug);
     if (!index.has(base)) index.set(base, []);
     index.get(base).push(slug);
   }
+  _basenameIndexCache.set(knownSlugs, index);
   return index;
 }
 
@@ -762,9 +733,10 @@ function reconstructArrayFromBody(field, selfSlug, body, knownSlugs) {
   const results = new Set();
   const lines = body.split('\n');
   const inFence = fencedCodeLines(lines);
+  const re = new RegExp(WIKILINK_RE.source, 'g');
   for (let li = 0; li < lines.length; li++) {
     if (inFence[li]) continue; // sample syntax in a code block is not a relationship.
-    const re = new RegExp(WIKILINK_RE.source, 'g');
+    re.lastIndex = 0;
     let m;
     while ((m = re.exec(lines[li])) !== null) {
       const resolved = resolveWikilinkTarget(m[1], knownSlugs, basenameIndex);
@@ -845,25 +817,6 @@ function err(text) { return useColor() ? `\x1b[31m[ERR]\x1b[0m ${text}` : `[ERR]
 function info(text) { return useColor() ? `\x1b[36m[INFO]\x1b[0m ${text}` : `[INFO] ${text}`; }
 
 /**
- * Atomic write: write to a temp file, fsync via close, then rename into place.
- * @param {string} filePath  Absolute destination path.
- * @param {string} content   UTF-8 content to write.
- */
-async function atomicWrite(filePath, content) {
-  const dir = dirname(filePath);
-  await mkdir(dir, { recursive: true });
-  const tmp = join(dir, `.lint-tmp-${randomBytes(6).toString('hex')}`);
-  try {
-    await writeFile(tmp, content, { encoding: 'utf8', flag: 'w' });
-    await rename(tmp, filePath);
-  } catch (e) {
-    // Best-effort cleanup of tmp on failure.
-    await unlink(tmp).catch(() => {});
-    throw e;
-  }
-}
-
-/**
  * Recursively walk a directory, yielding absolute paths of all .md files.
  * @param {string} dir
  * @returns {Promise<string[]>}
@@ -924,7 +877,7 @@ function safejoin(base, ...parts) {
  * Returns { data: object, body: string, end: number } or null if no frontmatter.
  * Supports string, number, array (- item per line), and inline YAML arrays.
  * @param {string} content
- * @returns {{ data: Record<string,unknown>, body: string, fmLines: string[] }|null}
+ * @returns {{ data: Record<string,unknown>, body: string, fmText: string, tail: string }|null}
  */
 function parseFrontmatter(content) {
   if (!content.startsWith('---')) return null;
@@ -943,10 +896,10 @@ function parseFrontmatter(content) {
     ? rest.slice(0, bodyStart)
     : rest.slice(nlIdx + 1, bodyStart);
   const body = rest.slice(bodyStart + 4);
+  const tail = rest.slice(bodyStart); // "\n---\n<body>" — what the fixers rewrite around.
 
   const data = {};
   const lines = fmText.split('\n');
-  const fmLines = lines;
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -1005,7 +958,7 @@ function parseFrontmatter(content) {
     i++;
   }
 
-  return { data, body, fmLines };
+  return { data, body, fmText, tail };
 }
 
 /**
@@ -1037,20 +990,6 @@ async function parseEdgesJsonl(edgesPath) {
  * @param {string} target
  * @returns {boolean}
  */
-function isExempt(target) {
-  for (const glob of EXEMPTION_GLOBS) {
-    if (glob === '*://*') {
-      if (/^[a-z][a-z0-9+\-.]*:\/\//i.test(target)) return true;
-    } else if (glob.endsWith('/**')) {
-      const prefix = glob.slice(0, -3);
-      if (target === prefix || target.startsWith(prefix + '/')) return true;
-    } else if (target === glob) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Determine entity type dir for a wiki-relative file path.
  * e.g. "sources/lora.md" => "sources"
@@ -1091,8 +1030,30 @@ function entityTypeForPath(wikiRelPath) {
  * @param {string} message
  * @returns {Finding}
  */
-function finding(id, severity, fixable, file, line, message) {
-  return { id, severity, fixable, file, line, message, fix_applied: false };
+function finding(id, severity, fixable, file, line, message, extra) {
+  return { id, severity, fixable, file, line, message, fix_applied: false, ...extra };
+}
+
+/**
+ * Build an L02 type-violation finding. The key, the schema type and the
+ * expected-type phrase travel as fields; the fixers and computeSuggestion
+ * read those instead of regex-ing them back out of `message`, which coupled
+ * ten call sites to the exact wording of two English sentences.
+ * reportJson strips them from the public --json shape.
+ *
+ * @param {string} wikiRelPath
+ * @param {{key: string, type: string}} field
+ * @param {boolean} fixable
+ * @param {string} expected  Phrase after "must be", e.g. `an array`.
+ * @param {string} got       Phrase after "got".
+ * @returns {object}
+ */
+function l02TypeFinding(wikiRelPath, field, fixable, expected, got) {
+  return finding(
+    'L02-frontmatter-types', 'error', fixable, wikiRelPath, null,
+    `"${field.key}" must be ${expected}, got ${got}`,
+    { key: field.key, fieldType: field.type, expected },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1105,7 +1066,7 @@ function finding(id, severity, fixable, file, line, message) {
  * this must stay a pure, check-time decision):
  *   - array / object / iso-date: always derivable ([]/{}/mtime-or-legacy-date).
  *   - string: only `id`, `type`, `title` have a defined derivation rule.
- *   - enum: only if LINT_LEGACY_DEFAULTS has a safe default for this key.
+ *   - enum: only if LEGACY_ENUM_DEFAULTS has a safe default for this key.
  *   - number, and any other case: never — a wrong guess is worse than a
  *     loud "missing" finding.
  * @param {string} entityType
@@ -1121,7 +1082,7 @@ function isL01Fixable(entityType, field) {
     case 'string':
       return DERIVABLE_STRING_KEYS.has(field.key);
     case 'enum':
-      return Boolean(LINT_LEGACY_DEFAULTS[entityType] && field.key in LINT_LEGACY_DEFAULTS[entityType]);
+      return Boolean(LEGACY_ENUM_DEFAULTS[entityType] && field.key in LEGACY_ENUM_DEFAULTS[entityType]);
     case 'number':
     default:
       return false;
@@ -1147,7 +1108,8 @@ function checkL01(wikiRelPath, fm) {
       findings.push(finding(
         'L01-frontmatter-required', 'error', isL01Fixable(type, field),
         wikiRelPath, null,
-        `Missing required frontmatter key: "${field.key}" (type: ${field.type})`
+        `Missing required frontmatter key: "${field.key}" (type: ${field.type})`,
+        { key: field.key, fieldType: field.type },
       ));
     }
   }
@@ -1173,8 +1135,7 @@ function checkL02(wikiRelPath, fm) {
     switch (field.type) {
       case 'string':
         if (typeof val !== 'string') {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be a string, got ${typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'a string', `${typeof val}`));
         } else if (val.trim() === 'TODO') {
           // Task 2 sentinel rule: the exact literal "TODO" (trimmed,
           // case-sensitive) is never a real value for a DECLARED schema
@@ -1187,14 +1148,15 @@ function checkL02(wikiRelPath, fm) {
           // entity type (we're inside that loop) — a free-form key a user
           // set to "TODO" as their own note is a different key entirely
           // and is never inspected here.
-          findings.push(finding('L02-frontmatter-types', 'error', DERIVABLE_STRING_KEYS.has(field.key), wikiRelPath, null,
-            `"${field.key}" is set to the placeholder "TODO", which is not a real value`));
+          findings.push(finding('L02-frontmatter-types', 'error', DERIVABLE_STRING_KEYS.has(field.key),
+            wikiRelPath, null,
+            `"${field.key}" is set to the placeholder "TODO", which is not a real value`,
+            { key: field.key, fieldType: field.type, todoPlaceholder: true }));
         }
         break;
       case 'number':
         if (typeof val !== 'number' || isNaN(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be a number, got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'a number', JSON.stringify(val)));
         }
         break;
       case 'array':
@@ -1206,8 +1168,7 @@ function checkL02(wikiRelPath, fm) {
           // rendered as list items, so it is reported for a human instead.
           const isNonEmptyMapping = val !== null && typeof val === 'object'
             && !Array.isArray(val) && Object.keys(val).length > 0;
-          findings.push(finding('L02-frontmatter-types', 'error', !isNonEmptyMapping, wikiRelPath, null,
-            `"${field.key}" must be an array, got ${typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, !isNonEmptyMapping, 'an array', `${typeof val}`));
         }
         break;
       case 'iso-date':
@@ -1215,20 +1176,20 @@ function checkL02(wikiRelPath, fm) {
           // Only the TODO sentinel (written by the pre-fix fixL01) has a safe
           // derivation; any other malformed date is left for a human to fix.
           const fixableIsoDate = typeof val === 'string' && val.trim() === 'TODO';
-          findings.push(finding('L02-frontmatter-types', 'error', fixableIsoDate, wikiRelPath, null,
-            `"${field.key}" must be an ISO date (YYYY-MM-DD), got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, fixableIsoDate,
+            'an ISO date (YYYY-MM-DD)', JSON.stringify(val)));
         }
         break;
       case 'enum':
         if (field.values && !field.values.includes(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be one of [${field.values.join(', ')}], got ${JSON.stringify(val)}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false,
+            `one of [${field.values.join(', ')}]`, JSON.stringify(val)));
         }
         break;
       case 'object':
         if (typeof val !== 'object' || val === null || Array.isArray(val)) {
-          findings.push(finding('L02-frontmatter-types', 'error', false, wikiRelPath, null,
-            `"${field.key}" must be an object, got ${Array.isArray(val) ? 'array' : typeof val}`));
+          findings.push(l02TypeFinding(wikiRelPath, field, false, 'an object',
+            Array.isArray(val) ? 'array' : `${typeof val}`));
         }
         break;
     }
@@ -1254,7 +1215,8 @@ function checkL02(wikiRelPath, fm) {
       const targetValid = targetPresent && Boolean(targetFieldDef) && isLegacyTargetValid(targetFieldDef.type, targetVal);
       const removable = targetValid && isLegacyValueEquivalent(targetFieldDef.type, fm[oldKey], targetVal);
       findings.push(finding('L02-frontmatter-types', 'warning', removable, wikiRelPath, null,
-        `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`));
+        `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`,
+        { legacyOldKey: oldKey, legacyNewKey: info.newKey }));
     }
   }
 
@@ -1316,12 +1278,13 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
 
   const lines = rawContent.split('\n');
   const inFence = fencedCodeLines(lines);
+  const lineRe = new RegExp(WIKILINK_RE.source, 'g');
   for (let li = 0; li < lines.length; li++) {
     // A `[[...]]` inside a fenced code block is sample syntax, not a link.
     // Reporting it would also be unfixable-by-design: rewriting it corrupts
     // the very example the author wrote, so the finding could never clear.
     if (inFence[li]) continue;
-    const lineRe = new RegExp(WIKILINK_RE.source, 'g');
+    lineRe.lastIndex = 0;
     while ((match = lineRe.exec(lines[li])) !== null) {
       const slug = match[1].trim();
       if (!knownSlugs.has(slug)) {
@@ -1389,11 +1352,8 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
 function checkL06(edges, edgeSet) {
   const findings = [];
   for (const edge of edges) {
-    if (isExempt(edge.to)) continue;
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
-    if (!edgeType) continue;
-    if (edgeType.terminal || edgeType.reverse === null) continue;
-    if (edgeType.symmetric) continue; // L07 handles symmetric
+    const edgeType = edgeTypeByName(edge.type);
+    if (!edgeType || skipReverseFor(edgeType, edge.to)) continue; // L07 handles symmetric
 
     const reverseKey = `${edge.to}|${edgeType.reverse}|${edge.from}`;
     if (!edgeSet.has(reverseKey)) {
@@ -1417,25 +1377,17 @@ function checkL07(edges, edgeSet) {
   const findings = [];
   const seen = new Set();
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.symmetric) continue;
 
-    const [a, b] = [edge.from, edge.to].sort();
-    const canonical = `${a}|${edge.type}|${b}`;
+    const canonical = edgeKey(edge);
     const reverse = `${edge.to}|${edge.type}|${edge.from}`;
 
-    if (!seen.has(canonical)) {
-      seen.add(canonical);
-      // Check if both orderings appear in edgeSet (stored both ways)
-      if (edgeSet.has(reverse) && edge.from !== edge.to) {
-        findings.push(finding(
-          'L07-symmetric-edge-duplicate', 'warning', true,
-          edge.from, null,
-          `Symmetric edge "${edge.type}" stored both ways between "${edge.from}" and "${edge.to}"; should be stored once with sorted endpoints`
-        ));
-      }
-    } else {
-      // Duplicate line (same canonical key seen again)
+    // Either ordering already seen, or both orderings present in the file.
+    const duplicate = seen.has(canonical)
+      || (edgeSet.has(reverse) && edge.from !== edge.to);
+    seen.add(canonical);
+    if (duplicate) {
       findings.push(finding(
         'L07-symmetric-edge-duplicate', 'warning', true,
         edge.from, null,
@@ -1454,11 +1406,10 @@ function checkL07(edges, edgeSet) {
 function checkL08(edges) {
   const findings = [];
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.confidenceRequired) continue;
 
-    const validConfidence = ['high', 'medium', 'low'];
-    if (!edge.confidence || !validConfidence.includes(edge.confidence)) {
+    if (!edge.confidence || !EDGE_CONFIDENCE.includes(edge.confidence)) {
       findings.push(finding(
         'L08-edge-confidence-required', 'error', false,
         edge.from, null,
@@ -1651,16 +1602,25 @@ function checkL11(wikiRelPath, fm) {
  * @param {Record<string,unknown>} fm
  * @returns {Finding[]}
  */
-function checkL13(wikiRelPath, fm) {
-  const type = entityTypeForPath(wikiRelPath);
-  if (type !== 'sources') return [];
+/**
+ * Shared preamble for L13 and L16: both only apply to source pages with
+ * urls[], and both need the same two things — the declared external_ids
+ * mapping, and the non-url namespaces derivable from urls[] (deduped by
+ * namespace, first url wins). Parsing every url twice per page was the only
+ * difference between the two copies.
+ *
+ * @param {string} wikiRelPath
+ * @param {Record<string,any>} fm
+ * @returns {{ext: Record<string,any>, derived: Record<string,string>}|null}
+ *   null when the checks do not apply to this page.
+ */
+function deriveNamespacesFromUrls(wikiRelPath, fm) {
+  if (entityTypeForPath(wikiRelPath) !== 'sources') return null;
   const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
-  if (urls.length === 0) return [];
+  if (urls.length === 0) return null;
   const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
     ? fm.external_ids
     : {};
-
-  // Collect derived non-url namespaces across all urls; dedupe by namespace.
   const derived = {};
   for (const url of urls) {
     const ids = parseUrlToExternalIds(url);
@@ -1669,6 +1629,13 @@ function checkL13(wikiRelPath, fm) {
       if (!(ns in derived)) derived[ns] = ids[ns];
     }
   }
+  return { ext, derived };
+}
+
+function checkL13(wikiRelPath, fm) {
+  const ctx = deriveNamespacesFromUrls(wikiRelPath, fm);
+  if (!ctx) return [];
+  const { ext, derived } = ctx;
   const findings = [];
   for (const [ns, val] of Object.entries(derived)) {
     const cur = ext[ns];
@@ -1718,22 +1685,9 @@ function checkL14(wikiRelPath, fm) {
  * @returns {Finding[]}
  */
 function checkL16(wikiRelPath, fm) {
-  const type = entityTypeForPath(wikiRelPath);
-  if (type !== 'sources') return [];
-  const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
-  const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
-    ? fm.external_ids
-    : {};
-  if (urls.length === 0) return [];
-
-  const derived = {};
-  for (const url of urls) {
-    const ids = parseUrlToExternalIds(url);
-    for (const ns of Object.keys(ids)) {
-      if (ns === 'url') continue;
-      if (!(ns in derived)) derived[ns] = ids[ns];
-    }
-  }
+  const ctx = deriveNamespacesFromUrls(wikiRelPath, fm);
+  if (!ctx) return [];
+  const { ext, derived } = ctx;
   const findings = [];
   for (const [ns, urlVal] of Object.entries(derived)) {
     const cur = ext[ns];
@@ -1801,7 +1755,7 @@ function checkL17(edges, knownSlugs) {
  *   - string `id` -> legacy `slug` if present, else derived from path
  *   - string `type` -> derived from the entity directory
  *   - string `title` -> first H1 in the body, else Title-Cased basename
- *   - enum -> only if LINT_LEGACY_DEFAULTS has a safe default
+ *   - enum -> only if LEGACY_ENUM_DEFAULTS has a safe default
  *   - number, and any other case -> NOT written; the finding stays unfixed
  *     (see isL01Fixable, which decided `finding.fixable` at check time —
  *     this fixer's per-key decision mirrors it exactly).
@@ -1812,26 +1766,22 @@ function checkL17(edges, knownSlugs) {
  * @returns {Promise<{ newContent: string, preview: string }>}
  */
 async function fixL01(absPath, wikiRelPath, content, l01findings) {
-  const split = splitRawFrontmatter(content);
   const parsed = parseFrontmatter(content);
-  // Both parsers must agree the block is readable. If parseFrontmatter cannot
-  // read it, we have no reliable view of which keys already exist, and
+  // No readable block means no reliable view of which keys already exist, and
   // appending would duplicate them.
-  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
-  const { fmText, tail } = split;
+  if (!parsed) return { newContent: content, preview: '', fixedKeys: [] };
+  const { fmText, tail } = parsed;
 
   const fm = parsed.data;
-  const body = parsed ? parsed.body : '';
+  const body = parsed.body;
   const entityType = entityTypeForPath(wikiRelPath);
-  const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
 
   const additions = [];
   for (const f of l01findings) {
     if (f.id !== 'L01-frontmatter-required') continue;
-    const m = f.message.match(/"([^"]+)"\s*\(type:\s*([^)]+)\)/);
-    if (!m) continue;
-    const key = m[1];
-    const fieldType = m[2].trim();
+    const key = f.key;
+    const fieldType = f.fieldType;
+    if (!key || !fieldType) continue;
     if (!isL01Fixable(entityType, { key, type: fieldType })) continue;
 
     let value;
@@ -1845,7 +1795,7 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
         else if (key === 'title') value = deriveTitleFromContent(wikiRelPath, body);
         break;
       case 'enum': {
-        const defaults = LINT_LEGACY_DEFAULTS[entityType];
+        const defaults = LEGACY_ENUM_DEFAULTS[entityType];
         value = defaults ? defaults[key] : undefined;
         break;
       }
@@ -1891,28 +1841,25 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
  * @returns {Promise<{ newContent: string, preview: string }>}
  */
 async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSlugs) {
-  const split = splitRawFrontmatter(content);
   const parsed = parseFrontmatter(content);
-  // Same agreement requirement as fixL01 — see the comment there.
-  if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
+  // Same readability requirement as fixL01 — see the comment there.
+  if (!parsed) return { newContent: content, preview: '', fixedKeys: [] };
 
   const fm = parsed.data;
-  const body = parsed ? parsed.body : '';
+  const body = parsed.body;
   const entityType = entityTypeForPath(wikiRelPath);
   const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
   const slugs = knownSlugs || new Set();
-  const LEGACY_MSG_RE = /^Legacy frontmatter field "([^"]+)" was renamed to "([^"]+)"/;
 
   const changes = [];   // { key, value } — repaired type-mismatch / TODO-iso-date fixes.
   const removals = [];  // { oldKey, newKey } — legacy fields safe to delete (Task 1).
 
   for (const f of l02findings) {
     if (f.id !== 'L02-frontmatter-types') continue;
-    if (LEGACY_MSG_RE.test(f.message)) continue; // handled in the removal pass below.
+    if (f.legacyOldKey) continue; // handled in the removal pass below.
 
-    const m = f.message.match(/^"([^"]+)"/);
-    if (!m) continue;
-    const key = m[1];
+    const key = f.key;
+    if (!key) continue;
     const fieldDef = fieldDefs.find(fd => fd.key === key);
     if (!fieldDef) continue;
     const val = fm[key];
@@ -1958,9 +1905,8 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
   };
   for (const f of l02findings) {
     if (f.id !== 'L02-frontmatter-types') continue;
-    const m = f.message.match(LEGACY_MSG_RE);
-    if (!m) continue;
-    const [, oldKey, newKey] = m;
+    const { legacyOldKey: oldKey, legacyNewKey: newKey } = f;
+    if (!oldKey || !newKey) continue;
     const targetFieldDef = fieldDefs.find(fd => fd.key === newKey);
     if (!targetFieldDef) continue;
     const targetVal = effectiveValue(newKey);
@@ -1972,14 +1918,14 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
 
   if (changes.length === 0 && removals.length === 0) return { newContent: content, preview: '', fixedKeys: [] };
 
-  let fmText = split.fmText;
+  let fmText = parsed.fmText;
   for (const { key, value } of changes) {
     fmText = replaceFrontmatterKeyLines(fmText, key, renderYamlLine(key, value));
   }
   for (const { oldKey } of removals) {
     fmText = removeFrontmatterKeyLines(fmText, oldKey);
   }
-  const newContent = `---\n${fmText}${split.tail}`;
+  const newContent = `---\n${fmText}${parsed.tail}`;
   const preview = [
     ...changes.map(({ key, value }) => `~ ${renderYamlLine(key, value)}`),
     ...removals.map(({ oldKey }) => `- ${oldKey} (redundant with its already-valid replacement)`),
@@ -2105,15 +2051,12 @@ async function fixL05(wikiRelPath, wikiRoot, l05findings, pendingRenames = new S
 function fixL06(edgesPath, edgesContent, edges, edgeSet) {
   const toAdd = [];
   for (const edge of edges) {
-    if (isExempt(edge.to)) continue;
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
-    if (!edgeType || edgeType.terminal || edgeType.reverse === null) continue;
-    if (edgeType.symmetric) continue;
+    const edgeType = edgeTypeByName(edge.type);
+    if (!edgeType || skipReverseFor(edgeType, edge.to)) continue;
 
     const reverseKey = `${edge.to}|${edgeType.reverse}|${edge.from}`;
     if (!edgeSet.has(reverseKey)) {
-      const revEdge = { from: edge.to, to: edge.from, type: edgeType.reverse };
-      if (edge.confidence) revEdge.confidence = edge.confidence;
+      const revEdge = reverseEdgeFor(edgeType, edge.from, edge.to, edge.confidence);
       toAdd.push(revEdge);
       edgeSet.add(reverseKey); // prevent duplicate adds in same run
     }
@@ -2137,7 +2080,7 @@ function fixL07(edgesContent, edges) {
   const removed = [];
 
   for (const edge of edges) {
-    const edgeType = EDGE_TYPES.find(et => et.name === edge.type);
+    const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.symmetric) {
       const key = `${edge.from}|${edge.type}|${edge.to}`;
       canonical.set(key, edge);
@@ -2222,18 +2165,36 @@ async function runLint(projectRoot, opts) {
   const knownSlugs = new Set(allWikiRel.map(f => f.replace(/\.md$/, '')));
 
   // Build wikilink maps.
+  // One snapshot of every scanned file, shared by the link scan, the per-file
+  // checks and the foundations pass below. Nothing writes to the wiki until
+  // applyFixes runs, so the three passes cannot observe different bytes; the
+  // fixers deliberately re-read, because by then earlier fixes have landed.
+  const contentCache = new Map();
+  {
+    const POOL = 32;
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(POOL, allWikiRel.length) }, async () => {
+        for (let i = next++; i < allWikiRel.length; i = next++) {
+          const rel = allWikiRel[i];
+          contentCache.set(rel, await readFile(safejoin(wikiRoot, rel), 'utf8'));
+        }
+      }),
+    );
+  }
+
   const outboundMap = new Map(); // wikiRelPath -> Set<slug>
   const inboundSet = new Set();  // wikiRelPath values that have inbound links
+  const linkRe = new RegExp(WIKILINK_RE.source, 'g');
 
   for (const wikiRelPath of allWikiRel) {
-    const abs = safejoin(wikiRoot, wikiRelPath);
-    const content = await readFile(abs, 'utf8');
+    const content = contentCache.get(wikiRelPath);
     const slugs = new Set();
     const lines = content.split('\n');
     for (const line of lines) {
-      const re = new RegExp(WIKILINK_RE.source, 'g');
+      linkRe.lastIndex = 0;
       let m;
-      while ((m = re.exec(line)) !== null) {
+      while ((m = linkRe.exec(line)) !== null) {
         const slug = m[1].trim();
         slugs.add(slug);
         // Mark as having inbound link if slug resolves to a known file.
@@ -2258,8 +2219,7 @@ async function runLint(projectRoot, opts) {
   const allFindings = [];
 
   for (const wikiRelPath of allWikiRel) {
-    const abs = safejoin(wikiRoot, wikiRelPath);
-    const content = await readFile(abs, 'utf8');
+    const content = contentCache.get(wikiRelPath);
     const parsed = parseFrontmatter(content);
     const fm = parsed ? parsed.data : {};
 
@@ -2280,18 +2240,15 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL08(edges));
   allFindings.push(...checkL17(edges, knownSlugs));
 
-  if (indexContent !== undefined) {
-    const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
-    allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
-  }
+  const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
+  allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
 
   // L10: collect all foundation frontmatters in one pass, then check for alias conflicts.
   {
     const foundationEntries = [];
     for (const wikiRelPath of entityFiles) {
       if (!wikiRelPath.startsWith('foundations/')) continue;
-      const abs = safejoin(wikiRoot, wikiRelPath);
-      const content = await readFile(abs, 'utf8');
+      const content = contentCache.get(wikiRelPath);
       const parsed = parseFrontmatter(content);
       foundationEntries.push({ wikiRelPath, fm: parsed ? parsed.data : {} });
     }
@@ -2309,6 +2266,32 @@ async function runLint(projectRoot, opts) {
   }
 
   return { findings: allFindings, scannedFiles: allWikiRel.length };
+}
+
+/**
+ * Run a fixer that rewrites one whole file, and mark its findings.
+ *
+ * @param {object[]} findings   All findings for this run.
+ * @param {string} id           Finding id this fixer owns.
+ * @param {string} targetPath   File the fixer rewrites.
+ * @param {() => Promise<string>} readCurrent  Reads the file's current content.
+ *   A thunk, not a value: the read must not happen when there is nothing to
+ *   fix, and must happen after any earlier fixer wrote to the same file.
+ * @param {(current: string) => {newContent: string, preview: string}} runFixer
+ * @param {object} opts
+ */
+async function applyWholeFileFix(findings, id, targetPath, readCurrent, runFixer, opts) {
+  const hits = findings.filter(f => f.id === id);
+  if (hits.length === 0) return;
+  const current = await readCurrent();
+  const { newContent, preview } = runFixer(current);
+  if (newContent === current) return;
+  if (opts.dryRun) {
+    for (const f of hits) { f.proposed_fix = preview; }
+    return;
+  }
+  await atomicWrite(targetPath, newContent);
+  for (const f of hits) { f.fix_applied = true; }
 }
 
 /**
@@ -2347,8 +2330,7 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
         content = newContent;
         const fixedSet = new Set(fixedKeys);
         for (const f of l01findings) {
-          const km = f.message.match(/"([^"]+)"/);
-          if (!km || !fixedSet.has(km[1])) continue;
+          if (!f.key || !fixedSet.has(f.key)) continue;
           if (opts.dryRun) f.proposed_fix = preview;
           else f.fix_applied = true;
         }
@@ -2362,8 +2344,8 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
         content = newContent;
         const fixedSet = new Set(fixedKeys);
         for (const f of l02findings) {
-          const km = f.message.match(/^"([^"]+)"/) || f.message.match(/^Legacy frontmatter field "([^"]+)"/);
-          if (!km || !fixedSet.has(km[1])) continue;
+          const key = f.key ?? f.legacyOldKey;
+          if (!key || !fixedSet.has(key)) continue;
           if (opts.dryRun) f.proposed_fix = preview;
           else f.fix_applied = true;
         }
@@ -2435,51 +2417,18 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     }
   }
 
-  // Fix L06.
-  const l06findings = findings.filter(f => f.id === 'L06-missing-reverse-edge');
-  if (l06findings.length > 0) {
-    let edgesContent = '';
-    try { edgesContent = await readFile(edgesPath, 'utf8'); } catch {}
-    const { newContent, preview } = fixL06(edgesPath, edgesContent, edges, edgeSet);
-    if (newContent !== edgesContent) {
-      if (opts.dryRun) {
-        for (const f of l06findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(edgesPath, newContent);
-        for (const f of l06findings) { f.fix_applied = true; }
-      }
-    }
-  }
-
-  // Fix L07.
-  const l07findings = findings.filter(f => f.id === 'L07-symmetric-edge-duplicate');
-  if (l07findings.length > 0) {
-    let edgesContent = '';
-    try { edgesContent = await readFile(edgesPath, 'utf8'); } catch {}
-    const { newContent, preview } = fixL07(edgesContent, edges);
-    if (newContent !== edgesContent) {
-      if (opts.dryRun) {
-        for (const f of l07findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(edgesPath, newContent);
-        for (const f of l07findings) { f.fix_applied = true; }
-      }
-    }
-  }
-
-  // Fix L09.
-  const l09findings = findings.filter(f => f.id === 'L09-index-stale');
-  if (l09findings.length > 0) {
-    const { newContent, preview } = fixL09(indexContent, entityFiles.filter(f => !isIndexExempt(f)));
-    if (newContent !== indexContent) {
-      if (opts.dryRun) {
-        for (const f of l09findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(indexPath, newContent);
-        for (const f of l09findings) { f.fix_applied = true; }
-      }
-    }
-  }
+  // L06/L07/L09 each rewrite one whole file; the three blocks differed only in
+  // the finding id, the target, and the fixer call.
+  const readEdges = async () => {
+    try { return await readFile(edgesPath, 'utf8'); } catch { return ''; }
+  };
+  await applyWholeFileFix(findings, 'L06-missing-reverse-edge', edgesPath, readEdges,
+    current => fixL06(edgesPath, current, edges, edgeSet), opts);
+  // Deliberately re-reads: under --fix, L06 has already rewritten this file.
+  await applyWholeFileFix(findings, 'L07-symmetric-edge-duplicate', edgesPath, readEdges,
+    current => fixL07(current, edges), opts);
+  await applyWholeFileFix(findings, 'L09-index-stale', indexPath, async () => indexContent,
+    current => fixL09(current, entityFiles.filter(f => !isIndexExempt(f))), opts);
 
   // Truth pass. `fixable` is decided at check time from the finding's shape
   // alone, before any fixer has looked at the file, so it is a prediction. Some
@@ -2517,21 +2466,17 @@ function computeSuggestion(f) {
 
   if (f.id === 'L01-frontmatter-required') {
     if (f.fixable) return null; // --fix already handles this one.
-    const m = f.message.match(/"([^"]+)"\s*\(type:\s*([^)]+)\)/);
-    if (m) return `${m[1]}: ${m[2].trim()}, cannot be inferred — provide a value manually.`;
+    if (f.key && f.fieldType) return `${f.key}: ${f.fieldType}, cannot be inferred — provide a value manually.`;
   }
 
   if (f.id === 'L02-frontmatter-types') {
     if (f.fixable) return null; // --fix already handles this one (including a safe legacy-field removal).
-    const legacyMatch = f.message.match(/^Legacy frontmatter field "([^"]+)" was renamed to "([^"]+)"/);
-    if (legacyMatch) {
-      const [, oldKey, newKey] = legacyMatch;
+    if (f.legacyOldKey && f.legacyNewKey) {
+      const { legacyOldKey: oldKey, legacyNewKey: newKey } = f;
       return `"${oldKey}" survives because "${newKey}" is missing, invalid, or disagrees with it — resolve "${newKey}" by hand, then re-run --fix to drop "${oldKey}".`;
     }
-    const todoMatch = f.message.match(/^"([^"]+)" is set to the placeholder "TODO"/);
-    if (todoMatch) return `${todoMatch[1]}: currently "TODO" — no automatic derivation exists for this field; provide a real value manually.`;
-    const m = f.message.match(/^"([^"]+)"\s+must be ([^,]+),/);
-    if (m) return `${m[1]}: expected ${m[2].trim()}, cannot be safely inferred — provide a value manually.`;
+    if (f.todoPlaceholder) return `${f.key}: currently "TODO" — no automatic derivation exists for this field; provide a real value manually.`;
+    if (f.key && f.expected) return `${f.key}: expected ${f.expected}, cannot be safely inferred — provide a value manually.`;
   }
 
   if (f.id === 'L05-broken-wikilink') {
@@ -2634,12 +2579,17 @@ function reportJson(findings, scannedFiles, opts = {}) {
   const infos = findings.filter(f => f.severity === 'info').length;
   const fixes = findings.filter(f => f.fix_applied).length;
 
-  // Strip internal-only fields (candidates/brokenSlug/suppressedRepair — set by
-  // checkL05 for fixL05's and computeSuggestion's own use) from the public
-  // shape; re-add `candidates` and the new `suggestion` key only when
-  // --suggest was requested.
+  // Strip internal-only fields from the public shape: candidates/brokenSlug/
+  // suppressedRepair (checkL05, for fixL05 and computeSuggestion) and
+  // key/fieldType/expected/todoPlaceholder/legacyOldKey/legacyNewKey (checkL01
+  // and checkL02, for their fixers and computeSuggestion). `candidates` and
+  // the `suggestion` key are re-added only when --suggest was requested.
   const outputFindings = findings.map(f => {
-    const { candidates, brokenSlug, suppressedRepair, ...rest } = f;
+    const {
+      candidates, brokenSlug, suppressedRepair,
+      key, fieldType, expected, todoPlaceholder, legacyOldKey, legacyNewKey,
+      ...rest
+    } = f;
     if (opts.suggest) {
       const suggestion = computeSuggestion(f);
       if (suggestion) rest.suggestion = suggestion;

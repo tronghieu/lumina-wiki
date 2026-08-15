@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { access, mkdir, readdir, readFile, rename, unlink, open } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { access, readdir, readFile } from 'node:fs/promises';
+import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { loadWatchlistConfig, WatchlistConfigError } from './lib/watchlist-config.mjs';
+import {
+  loadWatchlistConfig,
+  WatchlistConfigError,
+  VALID_SCHEDULES,
+  VALID_SOURCES,
+} from './lib/watchlist-config.mjs';
 import {
   getItemState,
   hasSeen,
@@ -14,11 +19,16 @@ import {
   readDiscoveryState,
   writeDiscoveryState,
 } from './lib/discovery-state.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
-const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex', 'rss']);
+/**
+ * What `--source` accepts on the CLI: the fetchable providers plus `rss`,
+ * which selects feed items rather than a per-topic search source. Kept
+ * separate from VALID_SOURCES so the filter set and the fetcher dispatch set
+ * are visibly different rather than accidentally so.
+ */
+const VALID_CLI_SOURCES = new Set([...VALID_SOURCES, 'rss']);
 
 export async function runDiscover(options = {}) {
   const projectRoot = resolve(options.projectRoot ?? process.cwd());
@@ -202,21 +212,19 @@ function fetchFeed({ projectRoot, item, maxNew }) {
   }));
 }
 
+/** Per-provider fetcher: script name and the flag it spells `limit` with. */
+const FETCHERS = {
+  arxiv:    { script: 'fetch_arxiv.py',    limitFlag: '--max' },
+  s2:       { script: 'fetch_s2.py',       limitFlag: '--limit' },
+  openalex: { script: 'fetch_openalex.py', limitFlag: '--limit' },
+};
+
 function fetchSource({ projectRoot, source, query, limit }) {
-  if (!VALID_SOURCES.has(source)) throw new Error(`Unknown source: ${source}`);
+  const fetcher = FETCHERS[source];
+  if (!fetcher) throw new Error(`Unknown source: ${source}`);
   const toolsDir = join(projectRoot, '_lumina', 'tools');
-  const scriptByName = {
-    arxiv: 'fetch_arxiv.py',
-    s2: 'fetch_s2.py',
-    openalex: 'fetch_openalex.py',
-  };
-  const script = scriptByName[source];
-  const argsByName = {
-    arxiv: [join(toolsDir, script), 'search', query, '--max', String(limit)],
-    s2: [join(toolsDir, script), 'search', query, '--limit', String(limit)],
-    openalex: [join(toolsDir, script), 'search', query, '--limit', String(limit)],
-  };
-  const args = argsByName[source];
+  const script = fetcher.script;
+  const args = [join(toolsDir, script), 'search', query, fetcher.limitFlag, String(limit)];
   const result = spawnSync('python3', args, {
     cwd: projectRoot,
     encoding: 'utf8',
@@ -360,25 +368,6 @@ async function writeCandidate(filePath, record) {
   await atomicWrite(filePath, `${JSON.stringify(record, null, 2)}\n`);
 }
 
-async function atomicWrite(filePath, content) {
-  await mkdir(dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp`;
-  let fd;
-  try {
-    fd = await open(tmpPath, 'w');
-    await fd.writeFile(content, 'utf8');
-    await fd.datasync();
-    await fd.close();
-    fd = null;
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    if (fd) {
-      try { await fd.close(); } catch (_) {}
-    }
-    await unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 
 function printSummary(summary) {
   console.log([
@@ -457,7 +446,7 @@ function safeFilePart(value) {
 function normalizeSourceFilter(value) {
   if (!value || value === 'all') return null;
   const source = String(value).trim().toLowerCase();
-  if (!VALID_SOURCES.has(source)) throw new WatchlistConfigError(`Unknown source "${source}".`);
+  if (!VALID_CLI_SOURCES.has(source)) throw new WatchlistConfigError(`Unknown source "${source}".`);
   return source;
 }
 

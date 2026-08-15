@@ -873,7 +873,7 @@ describe('L09 index-stale', () => {
 
 describe('fixL01', () => {
   function fakeL01(key, type) {
-    return [{ id: 'L01-frontmatter-required', message: `Missing required frontmatter key: "${key}" (type: ${type})` }];
+    return [{ id: 'L01-frontmatter-required', key, fieldType: type, message: `Missing required frontmatter key: "${key}" (type: ${type})` }];
   }
 
   function todayYmd() {
@@ -993,7 +993,7 @@ describe('fixL01', () => {
 describe('fixL02', () => {
   test('string where array expected: wraps losslessly', async () => {
     const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: "[[sources/foo]]"\nrelated_concepts: []\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
     assert.ok(newContent.includes('key_sources:\n  - [[sources/foo]]'), newContent);
   });
@@ -1004,7 +1004,7 @@ describe('fixL02', () => {
       { from: 'concepts/my-concept', to: 'sources/paper-a', type: 'introduced_in' },
       { from: 'sources/paper-b', to: 'concepts/my-concept', type: 'uses_concept' },
     ];
-    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, edges);
     assert.ok(newContent.includes('[[sources/paper-a]]'));
     assert.ok(newContent.includes('[[sources/paper-b]]'));
@@ -1016,7 +1016,7 @@ describe('fixL02', () => {
       { from: 'concepts/concept-a', to: 'concepts/concept-b', type: 'related_to' }, // self is "from"
       { from: 'concepts/concept-c', to: 'concepts/concept-a', type: 'related_to' }, // self is "to" (alpha-sorted)
     ];
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/concept-a.md', 'concepts/concept-a.md', content, findings, edges);
     assert.ok(newContent.includes('[[concepts/concept-b]]'));
     assert.ok(newContent.includes('[[concepts/concept-c]]'));
@@ -1028,7 +1028,7 @@ describe('fixL02', () => {
       { from: 'people/alice', to: 'sources/paper-a', type: 'authored' },
       { from: 'sources/paper-b', to: 'people/alice', type: 'authored_by' },
     ];
-    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/people/alice.md', 'people/alice.md', content, findings, edges);
     assert.ok(newContent.includes('[[sources/paper-a]]'));
     assert.ok(newContent.includes('[[sources/paper-b]]'));
@@ -1040,7 +1040,7 @@ describe('fixL02', () => {
       { from: 'topics/my-topic', to: 'sources/paper-a', type: 'includes_source' },
       { from: 'sources/paper-b', to: 'topics/my-topic', type: 'included_in_topic' },
     ];
-    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/topics/my-topic.md', 'topics/my-topic.md', content, findings, edges);
     assert.ok(newContent.includes('[[sources/paper-a]]'));
     assert.ok(newContent.includes('[[sources/paper-b]]'));
@@ -1051,8 +1051,8 @@ describe('fixL02', () => {
     // Even with a matching-looking edge present, reflections must stay [].
     const edges = [{ from: 'reflections/reflection-x', to: 'concepts/some-concept', type: 'related_to' }];
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' },
-      { id: 'L02-frontmatter-types', message: '"related_sources" must be an array, got string' },
+      { id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' },
+      { id: 'L02-frontmatter-types', key: 'related_sources', fieldType: 'array', expected: 'an array', message: '"related_sources" must be an array, got string' },
     ];
     const { newContent } = await fixL02('/tmp/fake/reflections/reflection-x.md', 'reflections/reflection-x.md', content, findings, edges);
     assert.ok(newContent.includes('related_concepts: []'));
@@ -1061,14 +1061,14 @@ describe('fixL02', () => {
 
   test('no matching edges: falls back to []', async () => {
     const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: TODO\nrelated_concepts: []\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
     assert.ok(newContent.includes('key_sources: []'));
   });
 
   test('TODO in iso-date: same derivation as fixL01 (legacy date_added)', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: TODO\nupdated: 2026-01-01\ndate_added: 2019-09-09\nauthors: []\nyear: 2024\nimportance: 3\nprovenance: replayable\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'created', fieldType: 'iso-date', expected: 'an ISO date (YYYY-MM-DD)', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' }];
     const { newContent } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(newContent.includes('created: 2019-09-09'));
   });
@@ -1076,8 +1076,8 @@ describe('fixL02', () => {
   test('TODO in number/enum: left unchanged, not repairable', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: TODO\nimportance: TODO\nprovenance: replayable\n---\nbody`;
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"year" must be a number, got "TODO"' },
-      { id: 'L02-frontmatter-types', message: '"importance" must be one of [1, 2, 3, 4, 5], got "TODO"' },
+      { id: 'L02-frontmatter-types', key: 'year', fieldType: 'number', expected: 'a number', message: '"year" must be a number, got "TODO"' },
+      { id: 'L02-frontmatter-types', key: 'importance', fieldType: 'enum', expected: 'one of [1, 2, 3, 4, 5]', message: '"importance" must be one of [1, 2, 3, 4, 5], got "TODO"' },
     ];
     const { newContent } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.equal(newContent, content);
@@ -1089,7 +1089,7 @@ describe('fixL02', () => {
 
   test('TODO in "id" with no legacy "slug": derives from the file path', async () => {
     const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'id', fieldType: 'string', todoPlaceholder: true, message: '"id" is set to the placeholder "TODO", which is not a real value' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/my-paper.md', 'sources/my-paper.md', content, findings, []);
     assert.ok(newContent.includes('id: my-paper'), `expected id derived from path, got:\n${newContent}`);
     assert.deepEqual(fixedKeys, ['id']);
@@ -1097,7 +1097,7 @@ describe('fixL02', () => {
 
   test('TODO in "id" WITH legacy "slug" present: derives "id" from "slug" (lossless recovery)', async () => {
     const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: real-value\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'id', fieldType: 'string', todoPlaceholder: true, message: '"id" is set to the placeholder "TODO", which is not a real value' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/my-paper.md', 'sources/my-paper.md', content, findings, []);
     assert.ok(newContent.includes('id: real-value'), `expected id derived from slug, got:\n${newContent}`);
     assert.deepEqual(fixedKeys, ['id']);
@@ -1105,7 +1105,7 @@ describe('fixL02', () => {
 
   test('TODO in "type": derives from the entity directory', async () => {
     const content = `---\nid: x\ntitle: X\ntype: TODO\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"type" is set to the placeholder "TODO", which is not a real value' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'type', fieldType: 'string', todoPlaceholder: true, message: '"type" is set to the placeholder "TODO", which is not a real value' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(newContent.includes('type: source'), `expected type derived from directory, got:\n${newContent}`);
     assert.deepEqual(fixedKeys, ['type']);
@@ -1113,7 +1113,7 @@ describe('fixL02', () => {
 
   test('TODO in "title": derives from the body H1', async () => {
     const content = `---\nid: x\ntitle: TODO\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\n# Real Title Here\n\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"title" is set to the placeholder "TODO", which is not a real value' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'title', fieldType: 'string', todoPlaceholder: true, message: '"title" is set to the placeholder "TODO", which is not a real value' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(newContent.includes('title: Real Title Here'), `expected title derived from H1, got:\n${newContent}`);
     assert.deepEqual(fixedKeys, ['title']);
@@ -1121,7 +1121,7 @@ describe('fixL02', () => {
 
   test('TODO in a non-derivable string field ("source" on readings): left unchanged', async () => {
     const content = `---\nid: readings/deep-work/01-focus\ntitle: Part 1\ntype: reading\ncreated: 2026-01-01\nupdated: 2026-01-01\nsource: TODO\npart: 1\n---\nbody`;
-    const findings = [{ id: 'L02-frontmatter-types', message: '"source" is set to the placeholder "TODO", which is not a real value' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'source', fieldType: 'string', todoPlaceholder: true, message: '"source" is set to the placeholder "TODO", which is not a real value' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/readings/deep-work/01-focus.md', 'readings/deep-work/01-focus.md', content, findings, []);
     assert.equal(newContent, content, '"source" has no derivation rule — must be left untouched');
     assert.deepEqual(fixedKeys, []);
@@ -1136,8 +1136,8 @@ describe('fixL02', () => {
     // equality already covers it).
     const content = `---\nid: TODO\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: real-value\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"id" is set to the placeholder "TODO", which is not a real value' },
-      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+      { id: 'L02-frontmatter-types', key: 'id', fieldType: 'string', todoPlaceholder: true, message: '"id" is set to the placeholder "TODO", which is not a real value' },
+      { id: 'L02-frontmatter-types', legacyOldKey: 'slug', legacyNewKey: 'id', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
     ];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(newContent.includes('id: real-value'), `expected id recovered from slug, got:\n${newContent}`);
@@ -1157,7 +1157,7 @@ describe('fixL02', () => {
     // merged in.
     const edges = [{ from: 'concepts/concept-a', to: 'concepts/concept-b', type: 'related_to' }];
     const knownSlugs = new Set(['concepts/concept-a', 'concepts/concept-b', 'concepts/concept-z']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/concept-a.md', 'concepts/concept-a.md', content, findings, edges, knownSlugs);
     assert.ok(newContent.includes('[[concepts/concept-b]]'), 'graph-derived value must be used');
     assert.ok(!newContent.includes('[[concepts/concept-z]]'), 'body value must NOT be used when graph tier is non-empty');
@@ -1166,7 +1166,7 @@ describe('fixL02', () => {
   test('tier 2 (body) recovers related_concepts when graph has no related_to edges', async () => {
     const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[concepts/tool-using-agents]] and [[concepts/planning-agents]].`;
     const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents', 'concepts/planning-agents']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
     assert.ok(newContent.includes('[[concepts/tool-using-agents]]'));
     assert.ok(newContent.includes('[[concepts/planning-agents]]'));
@@ -1179,7 +1179,7 @@ describe('fixL02', () => {
     // unique-basename heuristic, without requiring L05 to run first.
     const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[tool-using-agents]] for details.`;
     const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/tool-using-agents']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
     assert.ok(newContent.includes('[[concepts/tool-using-agents]]'));
   });
@@ -1187,7 +1187,7 @@ describe('fixL02', () => {
   test('tier 2 filters by entity type: a [[sources/x]] link must not land in related_concepts', async () => {
     const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nSee [[sources/some-paper]] for background.`;
     const knownSlugs = new Set(['concepts/my-concept', 'sources/some-paper']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, [], knownSlugs);
     assert.ok(newContent.includes('related_concepts: []'), 'a sources/* link must not satisfy related_concepts');
   });
@@ -1196,7 +1196,7 @@ describe('fixL02', () => {
     const content = `---\nid: agent-taxonomy\ntitle: Agent Taxonomy\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\n` +
       `See [[concepts/agent-taxonomy]] (self), [[concepts/planning-agents|Planning Agents]], and again [[concepts/planning-agents]].`;
     const knownSlugs = new Set(['concepts/agent-taxonomy', 'concepts/planning-agents']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/agent-taxonomy.md', 'concepts/agent-taxonomy.md', content, findings, [], knownSlugs);
     assert.ok(!newContent.includes('[[concepts/agent-taxonomy]]\n  - [[concepts/agent-taxonomy]]'), 'sanity: not double-inserted');
     // Self-link excluded entirely.
@@ -1209,7 +1209,7 @@ describe('fixL02', () => {
   test('both tiers empty: falls back to [] (no graph edges, no resolvable body links)', async () => {
     const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: TODO\n---\nNo links here at all.`;
     const knownSlugs = new Set(['concepts/my-concept']);
-    const findings = [{ id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' }];
+    const findings = [{ id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' }];
     const { newContent } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, [], knownSlugs);
     assert.ok(newContent.includes('related_concepts: []'));
   });
@@ -1218,8 +1218,8 @@ describe('fixL02', () => {
     const content = `---\nid: reflection-x\ntitle: X\ntype: reflection\ncreated: 2026-01-01\nupdated: 2026-01-01\nrelated_concepts: TODO\nrelated_sources: TODO\nevolution_count: 0\n---\nSee [[concepts/some-concept]] and [[sources/some-source]].`;
     const knownSlugs = new Set(['reflections/reflection-x', 'concepts/some-concept', 'sources/some-source']);
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"related_concepts" must be an array, got string' },
-      { id: 'L02-frontmatter-types', message: '"related_sources" must be an array, got string' },
+      { id: 'L02-frontmatter-types', key: 'related_concepts', fieldType: 'array', expected: 'an array', message: '"related_concepts" must be an array, got string' },
+      { id: 'L02-frontmatter-types', key: 'related_sources', fieldType: 'array', expected: 'an array', message: '"related_sources" must be an array, got string' },
     ];
     const { newContent } = await fixL02('/tmp/fake/reflections/reflection-x.md', 'reflections/reflection-x.md', content, findings, [], knownSlugs);
     assert.ok(newContent.includes('related_concepts: []'));
@@ -1236,7 +1236,7 @@ describe('fixL02', () => {
 
   test('legacy "slug" -> "id": removes "slug" when it equals "id" verbatim', async () => {
     const content = `---\nid: test-source\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'slug', legacyNewKey: 'id', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/test-source.md', 'sources/test-source.md', content, findings, []);
     assert.ok(!newContent.includes('slug:'), `expected "slug" removed, got:\n${newContent}`);
     assert.ok(newContent.includes('id: test-source'), 'id must be untouched');
@@ -1248,7 +1248,7 @@ describe('fixL02', () => {
     // runs in the real pipeline; simulate the case where, for whatever reason,
     // id is still missing at fixL02 time by omitting it entirely.
     const content = `---\ntitle: Test Source\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nslug: test-source\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'slug', legacyNewKey: 'id', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/test-source.md', 'sources/test-source.md', content, findings, []);
     assert.equal(newContent, content, 'id absent — slug is the only copy, must not be touched');
     assert.deepEqual(fixedKeys, []);
@@ -1256,7 +1256,7 @@ describe('fixL02', () => {
 
   test('legacy "date_added" -> "created": target ("created") INVALID — never removes "date_added"', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: not-a-date\nupdated: 2026-01-01\ndate_added: 2020-01-01\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'date_added', legacyNewKey: 'created', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.equal(newContent, content, 'created is invalid — date_added must survive for a human to look at');
     assert.deepEqual(fixedKeys, []);
@@ -1264,7 +1264,7 @@ describe('fixL02', () => {
 
   test('legacy "date_added" -> "created": values DISAGREE — never removes "date_added" (real conflict)', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\ndate_added: 2020-05-05\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'date_added', legacyNewKey: 'created', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.equal(newContent, content, 'created and date_added disagree — kept for manual resolution, not silently resolved either way');
     assert.deepEqual(fixedKeys, []);
@@ -1272,7 +1272,7 @@ describe('fixL02', () => {
 
   test('legacy "date_added" -> "created": equal valid dates — removes "date_added"', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2020-05-05\nupdated: 2026-01-01\ndate_added: 2020-05-05\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'date_added', legacyNewKey: 'created', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(!newContent.includes('date_added:'));
     assert.ok(newContent.includes('created: 2020-05-05'));
@@ -1285,8 +1285,8 @@ describe('fixL02', () => {
     // "TODO") when deciding whether date_added is now redundant.
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: TODO\nupdated: 2026-01-01\ndate_added: 2019-09-09\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' },
-      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+      { id: 'L02-frontmatter-types', key: 'created', fieldType: 'iso-date', expected: 'an ISO date (YYYY-MM-DD)', message: '"created" must be an ISO date (YYYY-MM-DD), got "TODO"' },
+      { id: 'L02-frontmatter-types', legacyOldKey: 'date_added', legacyNewKey: 'created', message: 'Legacy frontmatter field "date_added" was renamed to "created" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
     ];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(newContent.includes('created: 2019-09-09'), `expected created repaired, got:\n${newContent}`);
@@ -1296,7 +1296,7 @@ describe('fixL02', () => {
 
   test('legacy "url" -> "urls": urls[] already contains the url string — removes "url"', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nurl: https://arxiv.org/abs/1234\nurls:\n  - https://arxiv.org/abs/1234\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'url', legacyNewKey: 'urls', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.ok(!newContent.includes('url:'), `expected "url" removed, got:\n${newContent}`);
     assert.ok(newContent.includes('urls:\n  - https://arxiv.org/abs/1234'), 'urls[] must be untouched');
@@ -1305,7 +1305,7 @@ describe('fixL02', () => {
 
   test('legacy "url" -> "urls": urls[] present but does NOT contain the url string — never removes "url" (real conflict)', async () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nurl: https://arxiv.org/abs/1234\nurls:\n  - https://example.com/other\nauthors: []\nyear: 2026\nimportance: 3\nprovenance: replayable\n---\nBody.`;
-    const findings = [{ id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
+    const findings = [{ id: 'L02-frontmatter-types', legacyOldKey: 'url', legacyNewKey: 'urls', message: 'Legacy frontmatter field "url" was renamed to "urls" in v0.8. Run /lumi-migrate-legacy to upgrade.' }];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/sources/x.md', 'sources/x.md', content, findings, []);
     assert.equal(newContent, content, 'urls[] does not carry the legacy value — must not be silently dropped');
     assert.deepEqual(fixedKeys, []);
@@ -1314,8 +1314,8 @@ describe('fixL02', () => {
   test('legacy removal appears alongside an unrelated type-mismatch fix in the same preview/fixedKeys', async () => {
     const content = `---\nid: my-concept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\nslug: my-concept\n---\nBody.`;
     const findings = [
-      { id: 'L02-frontmatter-types', message: '"key_sources" must be an array, got string' }, // won't actually apply (already array) — sanity no-op guard
-      { id: 'L02-frontmatter-types', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
+      { id: 'L02-frontmatter-types', key: 'key_sources', fieldType: 'array', expected: 'an array', message: '"key_sources" must be an array, got string' }, // won't actually apply (already array) — sanity no-op guard
+      { id: 'L02-frontmatter-types', legacyOldKey: 'slug', legacyNewKey: 'id', message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.' },
     ];
     const { newContent, fixedKeys } = await fixL02('/tmp/fake/concepts/my-concept.md', 'concepts/my-concept.md', content, findings, []);
     assert.ok(!newContent.includes('slug:'));
@@ -3021,6 +3021,7 @@ describe('--suggest output', () => {
   test('computeSuggestion: L01 unfixable field names the type and says it cannot be inferred', () => {
     const f = {
       id: 'L01-frontmatter-required', fixable: false, fix_applied: false,
+      key: 'year', fieldType: 'number',
       message: 'Missing required frontmatter key: "year" (type: number)',
     };
     const s = computeSuggestion(f);
@@ -3031,6 +3032,7 @@ describe('--suggest output', () => {
   test('computeSuggestion: L02 unfixable field names the expected type', () => {
     const f = {
       id: 'L02-frontmatter-types', fixable: false, fix_applied: false,
+      key: 'importance', fieldType: 'enum', expected: 'one of [1, 2, 3, 4, 5]',
       message: '"importance" must be one of [1, 2, 3, 4, 5], got 99',
     };
     const s = computeSuggestion(f);
@@ -3040,6 +3042,7 @@ describe('--suggest output', () => {
   test('computeSuggestion: unresolved legacy-field conflict names both keys', () => {
     const f = {
       id: 'L02-frontmatter-types', fixable: false, fix_applied: false,
+      legacyOldKey: 'slug', legacyNewKey: 'id',
       message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.',
     };
     const s = computeSuggestion(f);
@@ -3050,6 +3053,7 @@ describe('--suggest output', () => {
   test('computeSuggestion: a REMOVED legacy field (fixable: true) returns null — --fix already handled it', () => {
     const f = {
       id: 'L02-frontmatter-types', fixable: true, fix_applied: true,
+      legacyOldKey: 'slug', legacyNewKey: 'id',
       message: 'Legacy frontmatter field "slug" was renamed to "id" in v0.1. Run /lumi-migrate-legacy to upgrade.',
     };
     assert.equal(computeSuggestion(f), null);
@@ -3058,12 +3062,14 @@ describe('--suggest output', () => {
   test('computeSuggestion: returns null for a fixable or already-fixed finding', () => {
     const fixableF = {
       id: 'L01-frontmatter-required', fixable: true, fix_applied: false,
+      key: 'authors', fieldType: 'array',
       message: 'Missing required frontmatter key: "authors" (type: array)',
     };
     assert.equal(computeSuggestion(fixableF), null);
 
     const fixedF = {
       id: 'L02-frontmatter-types', fixable: true, fix_applied: true,
+      key: 'key_sources', fieldType: 'array', expected: 'an array',
       message: '"key_sources" must be an array, got string',
     };
     assert.equal(computeSuggestion(fixedF), null);
@@ -3092,6 +3098,7 @@ describe('--suggest output', () => {
     const findings = [{
       id: 'L01-frontmatter-required', severity: 'error', fixable: false,
       file: 'sources/a.md', line: null,
+      key: 'year', fieldType: 'number',
       message: 'Missing required frontmatter key: "year" (type: number)',
       fix_applied: false,
     }];
@@ -3122,6 +3129,7 @@ describe('--suggest output', () => {
     const findings = [{
       id: 'L01-frontmatter-required', severity: 'error', fixable: false,
       file: 'sources/a.md', line: null,
+      key: 'year', fieldType: 'number',
       message: 'Missing required frontmatter key: "year" (type: number)',
       fix_applied: false,
     }];

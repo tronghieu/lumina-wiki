@@ -1,8 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 
-const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
-const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex']);
+/** Schedules a watchlist item may declare. */
+export const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
+
+/**
+ * Providers a `topic` item may list under `sources`. `rss` is deliberately
+ * NOT here: it is a feed provider reached through an item's `url`, never a
+ * per-topic search source. discover-runner's CLI --source filter accepts it
+ * as an extra token (VALID_CLI_SOURCES there) precisely because the two sets
+ * are different, not because one of them is out of date.
+ */
+export const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex']);
 const VALID_ITEM_TYPES = new Set(['topic', 'feed']);
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;

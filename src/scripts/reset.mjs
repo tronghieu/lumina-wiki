@@ -7,13 +7,13 @@
  * Exit codes: 0 success/dry-run, 2 user error, 3 internal error
  */
 
-import { readdir, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, rm, stat, mkdir } from 'node:fs/promises';
 import { join, resolve, relative, sep, parse as parsePath } from 'node:path';
 import { existsSync } from 'node:fs';
+import { atomicWrite } from './lib/fsx.mjs';
 
 // --- Output helpers ---------------------------------------------------------
 
-const NO_COLOR = process.env.NO_COLOR !== undefined || !process.stdout.isTTY; // eslint-disable-line no-unused-vars
 
 /** @param {string} msg */
 function out(msg) { process.stdout.write(msg + '\n'); }
@@ -80,7 +80,7 @@ function safePath(projectRoot, target) {
  * @param {string} dir @param {string} [base]
  * @returns {Promise<{path:string, size:number, isDir:boolean}[]>}
  */
-async function collectEntries(dir, base) {
+async function collectEntries(dir, base, withSizes = true) {
   base = base ?? dir;
   const results = [];
   let entries;
@@ -91,10 +91,14 @@ async function collectEntries(dir, base) {
     const rel  = relative(base, full);
     if (e.isDirectory()) {
       results.push({ path: rel, size: 0, isDir: true });
-      results.push(...await collectEntries(full, base));
+      results.push(...await collectEntries(full, base, withSizes));
     } else {
+      // Only the plan preview reports bytes; the delete path counts files and
+      // discards every size, so it skips a stat() per file.
       let size = 0;
-      try { size = (await stat(full)).size; } catch { /* ignore */ }
+      if (withSizes) {
+        try { size = (await stat(full)).size; } catch { /* ignore */ }
+      }
       results.push({ path: rel, size, isDir: false });
     }
   }
@@ -177,7 +181,7 @@ async function executeDelete(plan, root) {
     safePath(root, target);
 
     if (plan.checkpointsOnly) {
-      const entries = await collectEntries(target).catch(() => []);
+      const entries = await collectEntries(target, undefined, false).catch(() => []);
       for (const e of entries.filter(f => !f.isDir && CHECKPOINT_RE.test(f.path))) {
         const full = join(target, e.path);
         safePath(root, full);
@@ -189,7 +193,7 @@ async function executeDelete(plan, root) {
       for (const e of entries) {
         const full = join(target, e.name);
         safePath(root, full);
-        const pre = await collectEntries(full).catch(() => []);
+        const pre = await collectEntries(full, undefined, false).catch(() => []);
         const fileCount = pre.filter(x => !x.isDir).length || (e.isDirectory() ? 0 : 1);
         await rm(full, { force: false, recursive: true });
         count += fileCount;
@@ -199,7 +203,7 @@ async function executeDelete(plan, root) {
 
   for (const r of plan.recreate) {
     await mkdir(resolve(r.path, '..'), { recursive: true });
-    await writeFile(r.path, r.content, 'utf8');
+    await atomicWrite(r.path, r.content);
   }
 
   return count;
