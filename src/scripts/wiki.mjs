@@ -1654,6 +1654,44 @@ function emitError(message, code) {
   process.exitCode = code;
 }
 
+/**
+ * Emit the error envelope and exit with that same code. Never returns — the
+ * CLI dispatch paired `emitError(msg, N); process.exit(N);` at every one of
+ * these call sites.
+ * @param {string} message
+ * @param {number} code
+ * @returns {never}
+ */
+function fail(message, code) {
+  emitError(message, code);
+  process.exit(code);
+}
+
+/**
+ * Reject an edge command's endpoint pair: a path-shaped slug must resolve
+ * inside the project, and neither endpoint may contain `..`. Extracted from
+ * three verbatim copies in the dispatch. Never returns on rejection.
+ *
+ * Note the citation and checkpoint subcommands deliberately still carry their
+ * own, narrower checks — they run before requireProjectRoot(), so they have no
+ * projectRoot to validate against, and widening them here would change which
+ * error a user sees outside a project.
+ * @param {string} fromSlug
+ * @param {string} toSlug
+ * @param {string} projectRoot
+ */
+function requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot) {
+  if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
+    fail(`Unsafe from-slug: ${fromSlug}`, 2);
+  }
+  if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
+    fail(`Unsafe to-slug: ${toSlug}`, 2);
+  }
+  if (fromSlug.includes('..') || toSlug.includes('..')) {
+    fail('Slug may not contain ..', 2);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 10. CLI dispatch
 // ---------------------------------------------------------------------------
@@ -1695,8 +1733,7 @@ function parseArgs(args) {
 async function requireProjectRoot(startDir) {
   const root = await findProjectRoot(startDir);
   if (!root) {
-    emitError('No Lumina workspace found (wiki/ directory not found in current directory or ancestors). Run `node wiki.mjs init` first.', 2);
-    process.exit(2);
+    fail('No Lumina workspace found (wiki/ directory not found in current directory or ancestors). Run `node wiki.mjs init` first.', 2);
   }
   return root;
 }
@@ -1770,8 +1807,7 @@ async function main(argv) {
         const projectRoot = process.cwd();
         const pack = flags.pack && typeof flags.pack === 'string' ? flags.pack : undefined;
         if (pack && !INSTALLABLE_PACKS.includes(pack)) {
-          emitError(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
-          process.exit(2);
+          fail(`Invalid --pack value: ${pack}. Must be one of: ${INSTALLABLE_PACKS.join(', ')}.`, 2);
         }
         const result = await initWorkspace(projectRoot, { pack });
         emitJson({ ok: true, created: result.created, skipped: result.skipped });
@@ -1782,8 +1818,7 @@ async function main(argv) {
       case 'slug': {
         const title = positional.join(' ');
         if (!title) {
-          emitError('slug requires a title argument', 2);
-          process.exit(2);
+          fail('slug requires a title argument', 2);
         }
         emitJson({ slug: slugify(title) });
         break;
@@ -1794,12 +1829,10 @@ async function main(argv) {
         const skill = positional[0];
         const details = positional.slice(1).join(' ');
         if (!skill) {
-          emitError('log requires <skill> argument', 2);
-          process.exit(2);
+          fail('log requires <skill> argument', 2);
         }
         if (!details) {
-          emitError('log requires <details> argument', 2);
-          process.exit(2);
+          fail('log requires <details> argument', 2);
         }
         const projectRoot = await requireProjectRoot();
         await appendLog(projectRoot, skill, details);
@@ -1811,13 +1844,11 @@ async function main(argv) {
       case 'read-meta': {
         const slug = positional[0];
         if (!slug) {
-          emitError('read-meta requires <slug> argument', 2);
-          process.exit(2);
+          fail('read-meta requires <slug> argument', 2);
         }
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
         emitJson({ slug, filePath: relative(projectRoot, filePath), frontmatter });
@@ -1831,14 +1862,12 @@ async function main(argv) {
         const rawValue = positional[2];
 
         if (!slug || !key || rawValue === undefined) {
-          emitError('set-meta requires <slug> <key> <value>', 2);
-          process.exit(2);
+          fail('set-meta requires <slug> <key> <value>', 2);
         }
 
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
 
         let value;
@@ -1846,8 +1875,7 @@ async function main(argv) {
           try {
             value = JSON.parse(rawValue);
           } catch (err) {
-            emitError(`Invalid JSON value: ${err.message}`, 2);
-            process.exit(2);
+            fail(`Invalid JSON value: ${err.message}`, 2);
           }
         } else {
           // Auto-coerce scalar types (number, boolean) — mirrors YAML parsing behavior.
@@ -1867,25 +1895,13 @@ async function main(argv) {
         const toSlug = positional[2];
 
         if (!fromSlug || !edgeType || !toSlug) {
-          emitError('add-edge requires <from-slug> <edge-type> <to-slug>', 2);
-          process.exit(2);
+          fail('add-edge requires <from-slug> <edge-type> <to-slug>', 2);
         }
 
         const projectRoot = await requireProjectRoot();
 
         // Path safety for slugs (only if they look like paths)
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const confidence = flags.confidence && typeof flags.confidence === 'string'
           ? flags.confidence
@@ -1902,12 +1918,10 @@ async function main(argv) {
         const toSlug = positional[1];
 
         if (!fromSlug || !toSlug) {
-          emitError('add-citation requires <from-slug> <to-slug>', 2);
-          process.exit(2);
+          fail('add-citation requires <from-slug> <to-slug>', 2);
         }
         if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -1922,12 +1936,10 @@ async function main(argv) {
         const toSlug = positional[1];
 
         if (!fromSlug || !toSlug) {
-          emitError('remove-citation requires <from-slug> <to-slug>', 2);
-          process.exit(2);
+          fail('remove-citation requires <from-slug> <to-slug>', 2);
         }
         if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -1941,8 +1953,7 @@ async function main(argv) {
       case 'batch-edges': {
         const jsonFile = positional[0];
         if (!jsonFile) {
-          emitError('batch-edges requires <json-file>', 2);
-          process.exit(2);
+          fail('batch-edges requires <json-file>', 2);
         }
         const projectRoot = await requireProjectRoot();
         const resolvedFile = resolve(jsonFile);
@@ -1966,8 +1977,7 @@ async function main(argv) {
         const toSlug = positional[2];
 
         if (!fromSlug || !edgeType || !toSlug) {
-          emitError('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
-          process.exit(2);
+          fail('remove-edge requires <from-slug> <edge-type> <to-slug>', 2);
         }
 
         if (edgeType === 'cites' || edgeType === 'cited_by') {
@@ -1980,18 +1990,7 @@ async function main(argv) {
 
         const projectRoot = await requireProjectRoot();
 
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const dryRun = Boolean(flags['dry-run']);
         const result = await removeEdge(projectRoot, fromSlug, edgeType, toSlug, { dryRun });
@@ -2007,8 +2006,7 @@ async function main(argv) {
         const newType = positional[3];
 
         if (!fromSlug || !oldType || !toSlug || !newType) {
-          emitError('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
-          process.exit(2);
+          fail('replace-edge requires <from-slug> <old-type> <to-slug> <new-type>', 2);
         }
 
         if ([oldType, newType].includes('cites') || [oldType, newType].includes('cited_by')) {
@@ -2021,18 +2019,7 @@ async function main(argv) {
 
         const projectRoot = await requireProjectRoot();
 
-        if (fromSlug.includes('/') && !pathSafe(fromSlug, projectRoot)) {
-          emitError(`Unsafe from-slug: ${fromSlug}`, 2);
-          process.exit(2);
-        }
-        if (toSlug.includes('/') && !pathSafe(toSlug, projectRoot)) {
-          emitError(`Unsafe to-slug: ${toSlug}`, 2);
-          process.exit(2);
-        }
-        if (fromSlug.includes('..') || toSlug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
-        }
+        requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot);
 
         const confidence = flags.confidence && typeof flags.confidence === 'string'
           ? flags.confidence
@@ -2049,8 +2036,7 @@ async function main(argv) {
         const skill = positional[0];
         const phase = positional[1];
         if (!skill || !phase) {
-          emitError('checkpoint-read requires <skill> <phase>', 2);
-          process.exit(2);
+          fail('checkpoint-read requires <skill> <phase>', 2);
         }
         const projectRoot = await requireProjectRoot();
         const data = await checkpointRead(projectRoot, skill, phase);
@@ -2065,8 +2051,7 @@ async function main(argv) {
         const source = positional[2]; // json-file path, '-', or undefined (stdin)
 
         if (!skill || !phase) {
-          emitError('checkpoint-write requires <skill> <phase> [<json-file>|-]', 2);
-          process.exit(2);
+          fail('checkpoint-write requires <skill> <phase> [<json-file>|-]', 2);
         }
 
         const projectRoot = await requireProjectRoot();
@@ -2076,8 +2061,7 @@ async function main(argv) {
           try {
             data = await readStdin();
           } catch (err) {
-            emitError(err.message, 2);
-            process.exit(2);
+            fail(err.message, 2);
           }
         } else {
           const absSource = resolve(source);
@@ -2088,8 +2072,7 @@ async function main(argv) {
             const msg = err.code === 'ENOENT'
               ? `File not found: ${source}`
               : `Error reading ${source}: ${err.message}`;
-            emitError(msg, 2);
-            process.exit(2);
+            fail(msg, 2);
           }
         }
 
@@ -2104,12 +2087,10 @@ async function main(argv) {
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
         const prefix = positional[0] || null;
         if (typeFilter && !ENTITY_DIRS[typeFilter]) {
-          emitError(`Unknown entity type: ${typeFilter}. Valid types: ${Object.keys(ENTITY_DIRS).join(', ')}`, 2);
-          process.exit(2);
+          fail(`Unknown entity type: ${typeFilter}. Valid types: ${Object.keys(ENTITY_DIRS).join(', ')}`, 2);
         }
         if (prefix && !pathSafe(prefix, projectRoot)) {
-          emitError(`Unsafe prefix: ${prefix}`, 2);
-          process.exit(2);
+          fail(`Unsafe prefix: ${prefix}`, 2);
         }
         const entities = await listEntities(projectRoot, prefix);
         const filtered = typeFilter ? entities.filter(e => e.type === typeFilter) : entities;
@@ -2130,22 +2111,18 @@ async function main(argv) {
       case 'read-edges': {
         const slug = (flags.from && typeof flags.from === 'string') ? flags.from : positional[0];
         if (!slug) {
-          emitError('read-edges requires <slug> or --from <slug>', 2);
-          process.exit(2);
+          fail('read-edges requires <slug> or --from <slug>', 2);
         }
         if (slug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
         const typeFilter = flags.type && typeof flags.type === 'string' ? flags.type : null;
         const direction = flags.direction && typeof flags.direction === 'string' ? flags.direction : 'both';
         if (typeFilter && !edgeTypeByName(typeFilter)) {
-          emitError(`Unknown edge type: ${typeFilter}`, 2);
-          process.exit(2);
+          fail(`Unknown edge type: ${typeFilter}`, 2);
         }
         if (!['outbound', 'inbound', 'both'].includes(direction)) {
-          emitError(`Invalid --direction: ${direction}. Must be outbound, inbound, or both.`, 2);
-          process.exit(2);
+          fail(`Invalid --direction: ${direction}. Must be outbound, inbound, or both.`, 2);
         }
         const projectRoot = await requireProjectRoot();
         const { outbound, inbound } = await readEdgesForSlug(projectRoot, slug, { type: typeFilter, direction });
@@ -2157,12 +2134,10 @@ async function main(argv) {
       case 'read-citations': {
         const slug = positional[0];
         if (!slug) {
-          emitError('read-citations requires <slug>', 2);
-          process.exit(2);
+          fail('read-citations requires <slug>', 2);
         }
         if (slug.includes('..')) {
-          emitError('Slug may not contain ..', 2);
-          process.exit(2);
+          fail('Slug may not contain ..', 2);
         }
         const projectRoot = await requireProjectRoot();
         const { citing, citedBy } = await readCitationsForSlug(projectRoot, slug);
@@ -2174,13 +2149,11 @@ async function main(argv) {
       case 'verify-frontmatter': {
         const slug = positional[0];
         if (!slug) {
-          emitError('verify-frontmatter requires <slug>', 2);
-          process.exit(2);
+          fail('verify-frontmatter requires <slug>', 2);
         }
         const projectRoot = await requireProjectRoot();
         if (!pathSafe(slug, projectRoot)) {
-          emitError(`Unsafe slug: ${slug}`, 2);
-          process.exit(2);
+          fail(`Unsafe slug: ${slug}`, 2);
         }
         const { frontmatter, filePath } = await readMeta(projectRoot, slug);
 
@@ -2231,8 +2204,7 @@ async function main(argv) {
       // -----------------------------------------------------------------------
       case 'migrate': {
         if (!flags['add-defaults']) {
-          emitError('migrate requires --add-defaults (no other migration modes are defined)', 2);
-          process.exit(2);
+          fail('migrate requires --add-defaults (no other migration modes are defined)', 2);
         }
         const projectRoot = await requireProjectRoot();
         const dryRun = Boolean(flags['dry-run']);
@@ -2245,8 +2217,7 @@ async function main(argv) {
       case 'resolve-alias': {
         const text = positional.join(' ').trim();
         if (!text) {
-          emitError('resolve-alias requires <text>', 2);
-          process.exit(2);
+          fail('resolve-alias requires <text>', 2);
         }
         const projectRoot = await requireProjectRoot();
         const allEntities = await listEntities(projectRoot);
@@ -2291,8 +2262,7 @@ async function main(argv) {
         }
 
         if (matches.length === 0) {
-          emitError(`no match for query: ${text}`, 2);
-          process.exit(2);
+          fail(`no match for query: ${text}`, 2);
         }
 
         // Sort ascending by slug for deterministic output
@@ -2308,8 +2278,7 @@ async function main(argv) {
 
       // -----------------------------------------------------------------------
       default: {
-        emitError(`Unknown subcommand: ${subcommand}. Run node wiki.mjs --help for usage.`, 2);
-        process.exit(2);
+        fail(`Unknown subcommand: ${subcommand}. Run node wiki.mjs --help for usage.`, 2);
       }
     }
   } catch (err) {
