@@ -9,7 +9,7 @@ output in `/lumi-check`.
 |----|------|----------|-------------|
 | L01 | Missing frontmatter field | error | Mostly — derives a type-valid value (`[]` for arrays, dates from a legacy field or file mtime, `id`/`type`/`title` from the file itself); leaves `number`/enum fields with no safe default standing |
 | L02 | Wrong frontmatter type | error | Mostly — wraps a bare string into an array, reconstructs `key_sources`/`related_concepts` from `graph/edges.jsonl` (falls back to `[]`); treats the literal value `TODO` as invalid on any declared field and recovers `id`/`type`/`title` from it the same way a missing field is recovered; cannot repair `number`/enum values or a `TODO` on any other string field |
-| L03 | Non-kebab slug | error | Yes — renames file and rewrites wikilinks |
+| L03 | Non-kebab slug | error | Yes — renames file, rewrites wikilinks, updates the page's own `id`; refused when the target name is taken |
 | L04 | Orphan page | warning | No — user decides whether to link or leave |
 | L05 | Broken wikilink | error | Only when unambiguous — rewrites the link when exactly one page's basename matches; ambiguous or zero matches are reported with candidates instead of guessed |
 | L06 | Missing reverse edge | error | Yes — writes the reverse edge |
@@ -23,6 +23,7 @@ output in `/lumi-check`.
 | L14 | `external_ids` value fails validation for its namespace | error | No — user must correct or remove the value |
 | L16 | `external_ids` value disagrees with the value derived from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` to reconcile |
 | L17 | Dangling edge endpoint (edge `from`/`to` does not resolve to an existing wiki file) | error | No — user must run `wiki.mjs remove-edge` or recreate the missing page |
+| L18 | Frontmatter `id` no longer names the file it lives in | warning | No — by design; user sets `id` to match the file or renames the file to match `id` |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 
@@ -49,6 +50,7 @@ Advisories to surface to the user:
 - L12: `raw_paths` missing, unsafe, or transient
 - L13: `external_ids` missing a derivable namespace
 - L16: `external_ids` disagrees with `urls[]`
+- L18: `id` no longer names the file it lives in
 
 ## Fix Behavior
 
@@ -87,7 +89,14 @@ Advisories to surface to the user:
   `--fix` pass. A folder name that isn't one of the wiki's own entity types
   is never accepted this way, so an unrelated identifier that happens to
   contain a slash (for example an arXiv id) is never mistaken for a match.
-- L03 renames the file to kebab-case and rewrites matching wikilinks.
+- L03 renames the file to kebab-case, rewrites matching wikilinks, and
+  updates the page's own `id` (and legacy `slug`) so it still names the file.
+  The rename is refused, and the finding left standing with an explanation,
+  when the kebab-case name is already taken by another page, when two flagged
+  files would kebab-case to the same name, or when the name is made entirely
+  of punctuation and would leave nothing behind. Renaming over an existing
+  page would destroy it, so the collision is surfaced for a human instead:
+  merge the two pages, or rename one by hand, then re-run `--fix`.
 - L05 rewrites a broken wikilink only when exactly one page's basename
   matches (e.g. `[[agent-taxonomy]]` → `[[concepts/agent-taxonomy]]`).
   Ambiguous (multiple candidates) or zero-match links are never guessed — the
@@ -96,17 +105,16 @@ Advisories to surface to the user:
 - L07 deduplicates symmetric edges.
 - L09 regenerates the `<!-- lumina:index --> ... <!-- /lumina:index -->` block.
 
-L04, L08, L10, L11, L12, L13, L14, L16, and L17 require manual correction —
-none of them are touched by `--fix`. So do the individual L01/L02/L05
-findings above that `--fix` could recognize but not safely resolve on its
-own (a `number`/enum field with no default, or an ambiguous/unresolvable
-wikilink) — they remain in the findings list with `fixable: false` after a
-`--fix` pass. If L06 remains after `--fix`, the target page may not exist;
-identify it and suggest `/lumi-ingest` or `/lumi-edit`. For L13 and L16, the
-fix path is `/lumi-migrate-legacy --backfill-ids`, not `lint.mjs --fix`. For
-L17, the fix path is `wiki.mjs remove-edge` (drop the stale edge) or
-recreating the missing page the edge still points at — never hand-edit
-`edges.jsonl`.
+L04, L08, L10, L11, L12, L13, L14, L16, L17, and L18 require manual correction
+— none of them are touched by `--fix`. So do the individual L01/L02/L05
+findings above that `--fix` could recognize but not safely resolve on its own
+(a `number`/enum field with no default, or an ambiguous/unresolvable wikilink)
+— they remain in the findings list with `fixable: false` after a `--fix` pass.
+If L06 remains after `--fix`, the target page may not exist; identify it and
+suggest `/lumi-ingest` or `/lumi-edit`. For L13 and L16, the fix path is
+`/lumi-migrate-legacy --backfill-ids`, not `lint.mjs --fix`. For L17, the fix
+path is `wiki.mjs remove-edge` (drop the stale edge) or recreating the missing
+page the edge still points at — never hand-edit `edges.jsonl`.
 
 ### `--suggest` — resolutions for what `--fix` could not resolve
 

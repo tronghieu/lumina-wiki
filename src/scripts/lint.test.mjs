@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17,
+  checkL13, checkL14, checkL16, checkL17, checkL18,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
   runLint,
@@ -2326,6 +2326,292 @@ describe('runLint L03 fix', () => {
     const goodPath = join(tmpDir, 'wiki', 'sources', 'mypaper.md');
     const goodContent = await readFile(goodPath, 'utf8');
     assert.ok(goodContent.length > 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRESSION: L03 slug-rename fixer data-loss / crash fixes
+// (planL03, occupiedByAnotherFile, fixL03, retargetIdAfterRename) + new L18
+// id-filename-mismatch check. Covers: destination-exists collision (a),
+// same-target collision between two flagged files + crash safety (b),
+// accented-basename transliteration via the shared slugify (c), empty-slug
+// refusal (d), frontmatter id retargeting incl. the legacy dir-qualified
+// shape (e), checkL18 itself (f), and --dry-run on a refused rename (g).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint L03 fix: destination-exists collision', () => {
+  test('rename is refused when the kebab target already exists; nothing is lost', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const preexistingContent = renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'PREEXISTING BODY MARKER.';
+      await writeFile(join(tmp, 'wiki', 'sources', 'foo-bar.md'), preexistingContent);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar Bad Case' })) + 'BAD CASE BODY MARKER.');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      // Both files must survive the run.
+      await access(join(tmp, 'wiki', 'sources', 'foo-bar.md'), fsConstants.F_OK);
+      await access(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'), fsConstants.F_OK);
+
+      // The pre-existing page must be byte-for-byte untouched — not silently
+      // overwritten by an unconditional rename() onto its destination.
+      const afterContent = await readFile(join(tmp, 'wiki', 'sources', 'foo-bar.md'), 'utf8');
+      assert.equal(afterContent, preexistingContent, 'the pre-existing page must not be overwritten by the blocked rename');
+
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/Foo_Bar.md');
+      assert.ok(l03, 'expected an L03 finding for Foo_Bar.md');
+      assert.ok(!l03.fix_applied, 'fix_applied must be falsy: the rename was refused, not performed');
+      assert.equal(l03.fixable, false, 'fixable must be corrected to false once applyFixes sees nothing was actually fixed');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: two findings collide on the same target slug', () => {
+  test('run completes without crashing; no content lost; an unrelated third file still gets renamed', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const markerOne = 'COLLISION BODY ONE MARKER.';
+      const markerTwo = 'COLLISION BODY TWO MARKER.';
+      // Two DIFFERENT basenames (differ by more than case: underscore vs.
+      // space) that both kebab-case to "foo-bar" — chosen so the pair is
+      // still two distinct files on a case-insensitive filesystem (macOS
+      // default), unlike a pure-case variant such as "Foo_Bar"/"foo_bar".
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar One' })) + markerOne);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo Bar.md'),
+        renderFm(validSourceFm({ id: 'Foo Bar', title: 'Foo Bar Two' })) + markerTwo);
+      // Unrelated third L03 finding in a different directory, colliding with
+      // nothing. This is what the ENOENT crash used to make unreachable: the
+      // old fixL03 re-read every file in a pre-rename snapshot with no
+      // try/catch, so as soon as ANY earlier finding in the same run had
+      // renamed a file away, the next finding's pass threw and aborted the
+      // whole run (exit 3, zero bytes on stdout) before this file's turn.
+      await writeFile(join(tmp, 'wiki', 'concepts', 'MyConcept.md'),
+        `---\nid: MyConcept\ntitle: My Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\nUNRELATED CONCEPT BODY.`);
+
+      // Must not throw/reject.
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      const readIfExists = async (p) => { try { return await readFile(p, 'utf8'); } catch { return null; } };
+      const winner = await readIfExists(join(tmp, 'wiki', 'sources', 'foo-bar.md'));
+      const loserA = await readIfExists(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'));
+      const loserB = await readIfExists(join(tmp, 'wiki', 'sources', 'Foo Bar.md'));
+
+      // Exactly one of the two colliding files was renamed to the shared
+      // target; the other was left exactly where it was. Which one wins is
+      // not guaranteed (finding order), so only the aggregate is checked.
+      assert.ok(winner, 'expected exactly one of the colliding files to have been renamed to foo-bar.md');
+      const survivors = [winner, loserA, loserB].filter(Boolean);
+      assert.equal(survivors.length, 2, 'both original files must still exist on disk in some form');
+
+      // Neither body was lost, regardless of which file won the rename.
+      const allBodies = survivors.join('\n');
+      assert.ok(allBodies.includes(markerOne), 'first colliding page body must survive');
+      assert.ok(allBodies.includes(markerTwo), 'second colliding page body must survive');
+
+      // The unrelated third file, in a different directory, still got
+      // renamed in this same run — proof the crash did not abort the loop.
+      await access(join(tmp, 'wiki', 'concepts', 'myconcept.md'), fsConstants.F_OK);
+      const conceptFinding = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'concepts/MyConcept.md');
+      assert.ok(conceptFinding, 'expected an L03 finding for MyConcept.md');
+      assert.ok(conceptFinding.fix_applied, 'the unrelated file must still be renamed even though two other findings collided');
+
+      // Exactly one of the two colliding findings actually got fixed.
+      const collisionFindings = result.findings.filter(f => f.id === 'L03-slug-style'
+        && (f.file === 'sources/Foo_Bar.md' || f.file === 'sources/Foo Bar.md'));
+      assert.equal(collisionFindings.length, 2, 'expected one L03 finding per colliding file');
+      assert.equal(collisionFindings.filter(f => f.fix_applied).length, 1, 'exactly one of the two colliding renames must succeed');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: accented basename transliteration', () => {
+  test('renames via the shared slugify (NFD decompose), and rewrites a bare wikilink elsewhere', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = renderFm(validSourceFm({ id: 'nha-nguyen-source', title: 'Nhà Nguyễn' }));
+      await writeFile(join(tmp, 'wiki', 'sources', 'Nhà-Nguyễn.md'), fm + 'Body about the Nguyen dynasty.');
+
+      const otherFm = renderFm(validSourceFm({ id: 'other-page', title: 'Other Page' }));
+      await writeFile(join(tmp, 'wiki', 'sources', 'other-page.md'),
+        otherFm + 'See [[Nhà-Nguyễn]] for background.');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      // Old filename gone.
+      try {
+        await access(join(tmp, 'wiki', 'sources', 'Nhà-Nguyễn.md'), fsConstants.F_OK);
+        assert.fail('accented bad-case file should have been renamed away');
+      } catch {
+        // expected
+      }
+      // Transliterated filename present — NOT the old "nh-nguyn" that a
+      // non-decomposing, ASCII-stripping kebab transform would have produced.
+      const renamedContent = await readFile(join(tmp, 'wiki', 'sources', 'nha-nguyen.md'), 'utf8');
+      assert.ok(renamedContent.length > 0);
+
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/Nhà-Nguyễn.md');
+      assert.ok(l03 && l03.fix_applied, 'expected the accented-file L03 finding to be fixed');
+
+      // The wikilink on the OTHER page must be rewritten to the same
+      // transliterated slug.
+      const otherContent = await readFile(join(tmp, 'wiki', 'sources', 'other-page.md'), 'utf8');
+      assert.ok(otherContent.includes('[[nha-nguyen]]'), `expected the wikilink rewritten to [[nha-nguyen]], got:\n${otherContent}`);
+      assert.ok(!otherContent.includes('[[Nhà-Nguyễn]]'), 'the old broken link text must not remain');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: empty-slug basename is refused', () => {
+  test('a basename that kebab-cases to the empty string is left alone', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = renderFm(validSourceFm({ id: '___', title: 'All Punctuation' }));
+      await writeFile(join(tmp, 'wiki', 'sources', '___.md'), fm + 'Body.');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      // The file must still exist under its original name.
+      const content = await readFile(join(tmp, 'wiki', 'sources', '___.md'), 'utf8');
+      assert.ok(content.includes('Body.'));
+
+      // Nothing was created at the degenerate ".md" destination the old
+      // code (rename to `newSlug + '.md'` with newSlug === '') used to produce.
+      try {
+        await access(join(tmp, 'wiki', 'sources', '.md'), fsConstants.F_OK);
+        assert.fail('must not have created a bare ".md" file');
+      } catch {
+        // expected
+      }
+
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/___.md');
+      assert.ok(l03, 'expected an L03 finding for ___.md');
+      assert.ok(!l03.fix_applied, 'fix_applied must be falsy');
+      assert.equal(l03.fixable, false, 'fixable must be corrected to false: there is no kebab-case form to rename to');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: frontmatter id is retargeted after rename', () => {
+  test('bare id matching the old basename is updated to the new one', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = renderFm(validSourceFm({ id: 'Bad_Case', title: 'Bad Case' }));
+      await writeFile(join(tmp, 'wiki', 'sources', 'Bad_Case.md'), fm + 'Body.');
+
+      await runLint(tmp, { fix: true, dryRun: false });
+
+      const content = await readFile(join(tmp, 'wiki', 'sources', 'bad-case.md'), 'utf8');
+      const parsed = parseFrontmatter(content);
+      assert.ok(parsed);
+      assert.equal(parsed.data.id, 'bad-case', `expected id retargeted to the new filename, got:\n${content}`);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('legacy dir-qualified id ("concepts/Foo_Bar") keeps its prefix and follows the rename', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = `---\nid: concepts/Foo_Bar\ntitle: Foo Bar Concept\ntype: concept\ncreated: 2026-01-01\nupdated: 2026-01-01\nkey_sources: []\nrelated_concepts: []\n---\n`;
+      await writeFile(join(tmp, 'wiki', 'concepts', 'Foo_Bar.md'), fm + 'Body.');
+
+      await runLint(tmp, { fix: true, dryRun: false });
+
+      const content = await readFile(join(tmp, 'wiki', 'concepts', 'foo-bar.md'), 'utf8');
+      const parsed = parseFrontmatter(content);
+      assert.ok(parsed);
+      assert.equal(parsed.data.id, 'concepts/foo-bar', `expected the legacy prefix preserved across the rename, got:\n${content}`);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('checkL18 id-filename-mismatch', () => {
+  test('flags a genuine mismatch', () => {
+    const result = checkL18('sources/foo-bar.md', { id: 'something-else' });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L18-id-filename-mismatch');
+    assert.equal(result[0].severity, 'warning');
+    assert.equal(result[0].fixable, false);
+    assert.ok(result[0].message.includes('something-else'));
+    assert.ok(result[0].message.includes('foo-bar'));
+  });
+
+  test('does not flag: bare basename on a flat dir', () => {
+    assert.equal(checkL18('sources/foo-bar.md', { id: 'foo-bar' }).length, 0);
+  });
+
+  test('does not flag: full wiki-relative path on a nested dir (readings/)', () => {
+    assert.equal(checkL18('readings/deep-work/01-focus.md', { id: 'readings/deep-work/01-focus' }).length, 0);
+  });
+
+  test('does not flag: "reflection-<name>" under reflections/', () => {
+    assert.equal(checkL18('reflections/my-note.md', { id: 'reflection-my-note' }).length, 0);
+  });
+
+  test('does not flag: legacy "concepts/<name>" shape on a flat dir', () => {
+    assert.equal(checkL18('concepts/ab-testing.md', { id: 'concepts/ab-testing' }).length, 0);
+  });
+
+  test('does not flag a file with no id contract: index.md, graph/, outputs/', () => {
+    assert.equal(checkL18('index.md', { id: 'anything-at-all' }).length, 0);
+    assert.equal(checkL18('log.md', { id: 'anything-at-all' }).length, 0);
+    assert.equal(checkL18('graph/notes.md', { id: 'anything-at-all' }).length, 0);
+    // outputs/ pages carry an id by /lumi-ask convention, but no schema
+    // declares one, so L18 has nothing to hold them to.
+    assert.equal(checkL18('outputs/answer.md', { id: 'anything-at-all' }).length, 0);
+  });
+
+  test('leaves a missing or TODO id to L01/L02 rather than reporting it twice', () => {
+    assert.equal(checkL18('sources/foo-bar.md', {}).length, 0);
+    assert.equal(checkL18('sources/foo-bar.md', { id: 'TODO' }).length, 0);
+    assert.equal(checkL18('sources/foo-bar.md', { id: '   ' }).length, 0);
+    assert.equal(checkL18('sources/foo-bar.md', { id: 42 }).length, 0);
+  });
+});
+
+describe('runLint L03 fix: --dry-run on a refused rename', () => {
+  test('writes nothing and does not set proposed_fix on the refused finding', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const preexistingContent = renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'PREEXISTING BODY MARKER.';
+      await writeFile(join(tmp, 'wiki', 'sources', 'foo-bar.md'), preexistingContent);
+      const badContent = renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar Bad Case' })) + 'BAD CASE BODY MARKER.';
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'), badContent);
+
+      const result = await runLint(tmp, { fix: true, dryRun: true });
+
+      const afterGood = await readFile(join(tmp, 'wiki', 'sources', 'foo-bar.md'), 'utf8');
+      const afterBad = await readFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'), 'utf8');
+      assert.equal(afterGood, preexistingContent, 'dry-run must not write to the pre-existing file');
+      assert.equal(afterBad, badContent, 'dry-run must not write to the blocked source file either');
+
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/Foo_Bar.md');
+      assert.ok(l03, 'expected an L03 finding for Foo_Bar.md');
+      assert.ok(!l03.proposed_fix, 'a refused rename must not preview a proposed_fix — there is nothing safe to preview');
+      assert.ok(!l03.fix_applied, 'dry-run must never set fix_applied');
+      assert.equal(l03.fixable, false, 'fixable must be corrected to false since dry-run resolved nothing for this finding');
+    } finally {
+      await removeTmp(tmp);
+    }
   });
 });
 

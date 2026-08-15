@@ -35,6 +35,7 @@ import {
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
+import { slugify } from './lib/slug.mjs';
 import {
   edgeTypeByName,
   skipReverseFor,
@@ -62,28 +63,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ---------------------------------------------------------------------------
 // 3. Utils
 // ---------------------------------------------------------------------------
-
-/**
- * Convert a title string to a kebab-case slug.
- * Lowercase, hyphenate, strip punctuation, collapse whitespace.
- * Pure function, no I/O.
- * @param {string} title
- * @returns {string}
- */
-function slugify(title) {
-  return title
-    .toLowerCase()
-    // Replace accented chars with ascii equivalents where possible
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    // Replace non-alphanumeric (except spaces and hyphens) with space
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    // Collapse any whitespace and hyphens to a single hyphen
-    .trim()
-    .replace(/[\s-]+/g, '-')
-    // Remove leading/trailing hyphens
-    .replace(/^-+|-+$/g, '');
-}
 
 /**
  * Parse YAML frontmatter from a markdown file string.

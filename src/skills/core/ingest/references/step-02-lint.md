@@ -38,10 +38,11 @@ wrapping a bare string into an array or rebuilding a `key_sources`/
 `related_concepts` list from the graph), L03 (kebab slugs), L05 (rewrites a
 broken wikilink only when exactly one page's basename matches), L06 (missing
 reverse edges), L07 (dedupe symmetric edges), and L09 (refresh index block).
-Everything else — plus any specific L01/L02/L05 finding `--fix` recognized
+Everything else — plus any specific L01/L02/L03/L05 finding `--fix` recognized
 but could not safely resolve on its own (typically a `number`/`enum` field
-with no safe default, or an ambiguous/unresolvable wikilink) — is left
-standing and reported only.
+with no safe default, an ambiguous/unresolvable wikilink, or a rename whose
+kebab-case name is already taken by another page) — is left standing and
+reported only.
 
 Now narrow the result to the pages *this ingest run* touched — the source
 page itself plus every page it links to (new or updated stubs) — so an
@@ -83,9 +84,10 @@ gate:
 **Case B — `errors_count > 0`:**
 - One or more findings on this entry's own pages survived `--fix` — typically
   a `number`/`enum` frontmatter field with no safe default (L01/L02), an
-  ambiguous wikilink `--fix` would not guess at (L05), a missing edge
-  confidence (L08), a foundation alias conflict (L10), or a dangling edge
-  (L17).
+  ambiguous wikilink `--fix` would not guess at (L05), a slug rename `--fix`
+  refused because the kebab-case name already belongs to another page (L03),
+  a missing edge confidence (L08), a foundation alias conflict (L10), or a
+  dangling edge (L17).
 - Do **not** write `ingest_status: linted`. This is the gate the incident
   above is about — an entry with a standing error on its own pages must never
   be marked clean.
