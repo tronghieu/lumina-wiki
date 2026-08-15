@@ -21,18 +21,19 @@
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto';
-import { open, readFile, rename, unlink, mkdir, access, readdir } from 'node:fs/promises';
+import { readFile, mkdir, access, readdir } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { dirname, join, resolve, relative, sep } from 'node:path';
 
 import {
   ENTITY_DIRS,
   EDGE_TYPES,
-  EXEMPTION_GLOBS,
   SCHEMA_VERSION,
   REQUIRED_FRONTMATTER,
 } from './schemas.mjs';
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
+import { isExempt } from './lib/globs.mjs';
 
 // ---------------------------------------------------------------------------
 // 2. Constants
@@ -53,32 +54,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ---------------------------------------------------------------------------
 // 3. Utils
 // ---------------------------------------------------------------------------
-
-/**
- * Write content to path atomically: write to <path>.tmp, fsync fd, rename.
- * @param {string} filePath - Destination path.
- * @param {string} content - String content to write (UTF-8).
- * @returns {Promise<void>}
- */
-async function atomicWrite(filePath, content) {
-  const tmpPath = filePath + '.tmp';
-  let fd;
-  try {
-    fd = await open(tmpPath, 'w');
-    await fd.writeFile(content, 'utf8');
-    await fd.datasync();
-    await fd.close();
-    fd = null;
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    if (fd) {
-      try { await fd.close(); } catch (_) { /* ignore */ }
-    }
-    // Best-effort cleanup of .tmp
-    await unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 
 /**
  * Convert a title string to a kebab-case slug.
@@ -474,46 +449,6 @@ function today() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-/**
- * Check whether a target slug/path matches any of the exemption globs.
- * Supported glob patterns: `**` anywhere, `*` (single segment).
- * @param {string} target
- * @returns {boolean}
- */
-function isExempt(target) {
-  for (const glob of EXEMPTION_GLOBS) {
-    if (matchGlob(glob, target)) return true;
-  }
-  return false;
-}
-
-/**
- * Simple glob matcher supporting `*` and `**`.
- * @param {string} pattern
- * @param {string} str
- * @returns {boolean}
- */
-function matchGlob(pattern, str) {
-  // Normalize separators
-  const p = pattern.replace(/\\/g, '/');
-  const s = str.replace(/\\/g, '/');
-
-  // Special pattern: *://* matches URLs
-  if (p === '*://*') {
-    return /^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(s);
-  }
-
-  // Convert glob to regex
-  const regexStr = p
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars
-    .replace(/\*\*/g, '{{DOUBLESTAR}}')
-    .replace(/\*/g, '[^/]*')
-    .replace(/{{DOUBLESTAR}}/g, '.*');
-
-  const re = new RegExp(`^${regexStr}$`);
-  return re.test(s);
 }
 
 /**

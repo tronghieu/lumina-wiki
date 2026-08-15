@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, unlink, open } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { atomicWrite } from './fsx.mjs';
 
 export function emptyDiscoveryState() {
   return { version: 1, items: {} };
@@ -38,23 +38,4 @@ export function hasSeen(itemState, dedupKey) {
   return Object.prototype.hasOwnProperty.call(itemState.seen ?? {}, dedupKey);
 }
 
-async function atomicWrite(filePath, content) {
-  await mkdir(dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp`;
-  let fd;
-  try {
-    fd = await open(tmpPath, 'w');
-    await fd.writeFile(content, 'utf8');
-    await fd.datasync();
-    await fd.close();
-    fd = null;
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    if (fd) {
-      try { await fd.close(); } catch (_) {}
-    }
-    await unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 

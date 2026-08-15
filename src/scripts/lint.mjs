@@ -44,23 +44,23 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { readFile, writeFile, rename, mkdir, readdir, stat, access, unlink } from 'node:fs/promises';
+import { readFile, rename, readdir, stat, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join, basename, dirname, relative, normalize, resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
 
 import {
   SCHEMA_VERSION,
   ENTITY_DIRS,
   EDGE_TYPES,
   REQUIRED_FRONTMATTER,
-  EXEMPTION_GLOBS,
 } from './schemas.mjs';
 import {
   EXTERNAL_ID_NAMESPACES,
   normalizeExternalId,
   parseUrlToExternalIds,
 } from './external-ids.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
+import { isExempt } from './lib/globs.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -849,25 +849,6 @@ function err(text) { return useColor() ? `\x1b[31m[ERR]\x1b[0m ${text}` : `[ERR]
 function info(text) { return useColor() ? `\x1b[36m[INFO]\x1b[0m ${text}` : `[INFO] ${text}`; }
 
 /**
- * Atomic write: write to a temp file, fsync via close, then rename into place.
- * @param {string} filePath  Absolute destination path.
- * @param {string} content   UTF-8 content to write.
- */
-async function atomicWrite(filePath, content) {
-  const dir = dirname(filePath);
-  await mkdir(dir, { recursive: true });
-  const tmp = join(dir, `.lint-tmp-${randomBytes(6).toString('hex')}`);
-  try {
-    await writeFile(tmp, content, { encoding: 'utf8', flag: 'w' });
-    await rename(tmp, filePath);
-  } catch (e) {
-    // Best-effort cleanup of tmp on failure.
-    await unlink(tmp).catch(() => {});
-    throw e;
-  }
-}
-
-/**
  * Recursively walk a directory, yielding absolute paths of all .md files.
  * @param {string} dir
  * @returns {Promise<string[]>}
@@ -1041,20 +1022,6 @@ async function parseEdgesJsonl(edgesPath) {
  * @param {string} target
  * @returns {boolean}
  */
-function isExempt(target) {
-  for (const glob of EXEMPTION_GLOBS) {
-    if (glob === '*://*') {
-      if (/^[a-z][a-z0-9+\-.]*:\/\//i.test(target)) return true;
-    } else if (glob.endsWith('/**')) {
-      const prefix = glob.slice(0, -3);
-      if (target === prefix || target.startsWith(prefix + '/')) return true;
-    } else if (target === glob) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Determine entity type dir for a wiki-relative file path.
  * e.g. "sources/lora.md" => "sources"

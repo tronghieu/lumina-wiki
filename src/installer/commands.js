@@ -14,7 +14,7 @@
  *   7. Print summary tree
  */
 
-import { readFile, writeFile, rename, unlink, rm, access, lstat, realpath, readlink } from 'node:fs/promises';
+import { readFile, writeFile, rename, unlink, rm, access, lstat, realpath, readlink, readdir } from 'node:fs/promises';
 import { join, resolve, relative, dirname, basename, isAbsolute } from 'node:path';
 import { constants as fsConstants } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -1479,10 +1479,19 @@ async function copyScripts(projectRoot) {
       // Scripts may not exist yet (P4+ work); skip gracefully
     }
   }));
-  // Ensure the lib subdir once, then parallelize the file copies.
+  // Ensure the lib subdir once, then parallelize the file copies. The list is
+  // read from the package instead of hardcoded: wiki.mjs and lint.mjs import
+  // shared helpers from lib/, so a lib file missing from the workspace breaks
+  // every skill at runtime — and the catch below would hide that at install
+  // time. Reading the directory keeps the two in step by construction.
   const libDir = join(destDir, 'lib');
   await ensureDir(libDir);
-  const libFiles = ['watchlist-config.mjs', 'discovery-state.mjs'];
+  let libFiles = [];
+  try {
+    libFiles = (await readdir(join(SCRIPTS_DIR, 'lib'))).filter(f => f.endsWith('.mjs'));
+  } catch (_) {
+    // No lib/ in this package snapshot; nothing to copy.
+  }
   await Promise.all(libFiles.map(async file => {
     try {
       await atomicCopyFile(join(SCRIPTS_DIR, 'lib', file), join(libDir, file));

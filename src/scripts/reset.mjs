@@ -7,9 +7,10 @@
  * Exit codes: 0 success/dry-run, 2 user error, 3 internal error
  */
 
-import { readdir, rm, stat, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, rm, stat, mkdir } from 'node:fs/promises';
 import { join, resolve, relative, sep, parse as parsePath } from 'node:path';
 import { existsSync } from 'node:fs';
+import { atomicWrite } from './lib/fsx.mjs';
 
 // --- Output helpers ---------------------------------------------------------
 
@@ -198,7 +199,7 @@ async function executeDelete(plan, root) {
 
   for (const r of plan.recreate) {
     await mkdir(resolve(r.path, '..'), { recursive: true });
-    await writeFile(r.path, r.content, 'utf8');
+    await atomicWrite(r.path, r.content);
   }
 
   return count;

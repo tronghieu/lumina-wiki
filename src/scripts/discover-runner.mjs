@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { access, mkdir, readdir, readFile, rename, unlink, open } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { access, readdir, readFile } from 'node:fs/promises';
+import { basename, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +14,7 @@ import {
   readDiscoveryState,
   writeDiscoveryState,
 } from './lib/discovery-state.mjs';
+import { atomicWrite } from './lib/fsx.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
@@ -359,25 +360,6 @@ async function writeCandidate(filePath, record) {
   await atomicWrite(filePath, `${JSON.stringify(record, null, 2)}\n`);
 }
 
-async function atomicWrite(filePath, content) {
-  await mkdir(dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp`;
-  let fd;
-  try {
-    fd = await open(tmpPath, 'w');
-    await fd.writeFile(content, 'utf8');
-    await fd.datasync();
-    await fd.close();
-    fd = null;
-    await rename(tmpPath, filePath);
-  } catch (err) {
-    if (fd) {
-      try { await fd.close(); } catch (_) {}
-    }
-    await unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 
 function printSummary(summary) {
   console.log([
