@@ -73,11 +73,29 @@ const LINK_SYNTAX = /** @type {const} */ (['obsidian']);
 /** Supported slug normalisation styles. */
 const SLUG_STYLE = /** @type {const} */ (['kebab-case']);
 
+/**
+ * Valid `confidence` values on a graph EDGE. Distinct from the page-level
+ * `confidence` frontmatter enum below, which also admits 'unverified'.
+ * wiki.mjs validates writes against this; lint.mjs's L08 reports on it.
+ */
+export const EDGE_CONFIDENCE = /** @type {const} */ (['high', 'medium', 'low']);
+
+/**
+ * Safe fallback values for enum fields that have one. wiki.mjs writes them in
+ * `migrate --add-defaults`; lint.mjs's fixL01 writes them for a missing key.
+ * The two used to keep private copies synced by hand.
+ */
+export const LEGACY_ENUM_DEFAULTS = {
+  sources:  { provenance: 'missing', confidence: 'unverified' },
+  concepts: { confidence: 'unverified' },
+};
+
 export const ENUMS = {
   IMPORTANCE,
   BIDI_MODES,
   LINK_SYNTAX,
   SLUG_STYLE,
+  EDGE_CONFIDENCE,
 };
 
 // ---------------------------------------------------------------------------

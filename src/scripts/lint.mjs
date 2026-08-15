@@ -52,6 +52,8 @@ import {
   SCHEMA_VERSION,
   ENTITY_DIRS,
   REQUIRED_FRONTMATTER,
+  EDGE_CONFIDENCE,
+  LEGACY_ENUM_DEFAULTS,
 } from './schemas.mjs';
 import {
   EXTERNAL_ID_NAMESPACES,
@@ -125,17 +127,6 @@ const LEGACY_RENAMED_FIELDS = {
   },
 };
 
-/**
- * Defaults for enum fields that have a known-safe fallback value.
- * Mirrors `LEGACY_DEFAULTS` in wiki.mjs (see wiki.mjs's `migrateLegacyDefaults`
- * for the canonical original) — duplicated here, not imported, so lint.mjs
- * stays decoupled from wiki.mjs. Keep the two in sync by hand if either
- * changes.
- */
-const LINT_LEGACY_DEFAULTS = {
-  sources: { provenance: 'missing', confidence: 'unverified' },
-  concepts: { confidence: 'unverified' },
-};
 
 /**
  * Entity dirs whose `id` is the FULL wiki-relative path (dir included),
@@ -296,13 +287,17 @@ async function deriveIsoDateValue(fm, absPath) {
 }
 
 /**
- * Quote a scalar string for frontmatter output only when required —
- * mirrors wiki.mjs's `quoteIfNeeded` (not imported; see LINT_LEGACY_DEFAULTS
- * comment for why the modules stay decoupled). Only used for top-level
- * scalar lines; block-list items are never quoted because lint.mjs's own
- * `parseFrontmatter` does not strip quotes from list items (see its
- * `listM` branch), so a quoted list item would round-trip as a literal
- * quoted string instead of the bare value.
+ * Quote a scalar string for frontmatter output only when required.
+ *
+ * Still separate from wiki.mjs's `quoteIfNeeded`, and not for decoupling —
+ * the two modules already share lib/. They genuinely serialise different
+ * dialects today: this one is only used for top-level scalar lines, and
+ * block-list items are never quoted because lint.mjs's own
+ * `parseFrontmatter` does not strip quotes from list items (see its `listM`
+ * branch), so a quoted list item would round-trip as a literal quoted string
+ * instead of the bare value. wiki.mjs's parser does strip them. Unifying the
+ * pair means unifying the two parsers first — a behaviour change for `--fix`,
+ * not a refactor. Note this copy handles `val === ''` and wiki.mjs's does not.
  * @param {string} val
  * @returns {string}
  */
@@ -1103,7 +1098,7 @@ function l02TypeFinding(wikiRelPath, field, fixable, expected, got) {
  * this must stay a pure, check-time decision):
  *   - array / object / iso-date: always derivable ([]/{}/mtime-or-legacy-date).
  *   - string: only `id`, `type`, `title` have a defined derivation rule.
- *   - enum: only if LINT_LEGACY_DEFAULTS has a safe default for this key.
+ *   - enum: only if LEGACY_ENUM_DEFAULTS has a safe default for this key.
  *   - number, and any other case: never — a wrong guess is worse than a
  *     loud "missing" finding.
  * @param {string} entityType
@@ -1119,7 +1114,7 @@ function isL01Fixable(entityType, field) {
     case 'string':
       return DERIVABLE_STRING_KEYS.has(field.key);
     case 'enum':
-      return Boolean(LINT_LEGACY_DEFAULTS[entityType] && field.key in LINT_LEGACY_DEFAULTS[entityType]);
+      return Boolean(LEGACY_ENUM_DEFAULTS[entityType] && field.key in LEGACY_ENUM_DEFAULTS[entityType]);
     case 'number':
     default:
       return false;
@@ -1446,8 +1441,7 @@ function checkL08(edges) {
     const edgeType = edgeTypeByName(edge.type);
     if (!edgeType || !edgeType.confidenceRequired) continue;
 
-    const validConfidence = ['high', 'medium', 'low'];
-    if (!edge.confidence || !validConfidence.includes(edge.confidence)) {
+    if (!edge.confidence || !EDGE_CONFIDENCE.includes(edge.confidence)) {
       findings.push(finding(
         'L08-edge-confidence-required', 'error', false,
         edge.from, null,
@@ -1790,7 +1784,7 @@ function checkL17(edges, knownSlugs) {
  *   - string `id` -> legacy `slug` if present, else derived from path
  *   - string `type` -> derived from the entity directory
  *   - string `title` -> first H1 in the body, else Title-Cased basename
- *   - enum -> only if LINT_LEGACY_DEFAULTS has a safe default
+ *   - enum -> only if LEGACY_ENUM_DEFAULTS has a safe default
  *   - number, and any other case -> NOT written; the finding stays unfixed
  *     (see isL01Fixable, which decided `finding.fixable` at check time —
  *     this fixer's per-key decision mirrors it exactly).
@@ -1832,7 +1826,7 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
         else if (key === 'title') value = deriveTitleFromContent(wikiRelPath, body);
         break;
       case 'enum': {
-        const defaults = LINT_LEGACY_DEFAULTS[entityType];
+        const defaults = LEGACY_ENUM_DEFAULTS[entityType];
         value = defaults ? defaults[key] : undefined;
         break;
       }

@@ -29,6 +29,8 @@ import {
   ENTITY_DIRS,
   SCHEMA_VERSION,
   REQUIRED_FRONTMATTER,
+  EDGE_CONFIDENCE,
+  LEGACY_ENUM_DEFAULTS,
 } from './schemas.mjs';
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
@@ -46,7 +48,7 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Minimum valid edge confidence values. */
-const CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
+const CONFIDENCE_VALUES = new Set(EDGE_CONFIDENCE);
 
 /** Regex for a single frontmatter line: `key: value` */
 const FM_LINE_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)/;
@@ -660,10 +662,6 @@ async function setMeta(projectRoot, slug, key, value) {
  * make legacy state explicit so verify/lint can flag what still needs review,
  * rather than silently asserting trust.
  */
-const LEGACY_DEFAULTS = {
-  sources:  { provenance: 'missing', confidence: 'unverified' },
-  concepts: { confidence: 'unverified' },
-};
 
 /**
  * Backfill missing frontmatter fields on legacy entities (sources/concepts).
@@ -680,7 +678,7 @@ async function migrateLegacyDefaults(projectRoot, dryRun) {
   let skipped = 0;
 
   for (const entity of entities) {
-    const defaults = LEGACY_DEFAULTS[entity.type];
+    const defaults = LEGACY_ENUM_DEFAULTS[entity.type];
     if (!defaults) { skipped++; continue; }
 
     const content = await readFile(entity.filePath, 'utf8');
