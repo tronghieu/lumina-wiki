@@ -16,7 +16,6 @@ import {
 } from './lib/discovery-state.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 const VALID_SCHEDULES = new Set(['manual', 'daily', 'weekly', 'monthly']);
 const VALID_SOURCES = new Set(['arxiv', 's2', 'openalex', 'rss']);
 

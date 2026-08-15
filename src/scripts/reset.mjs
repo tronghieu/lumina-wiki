@@ -13,7 +13,6 @@ import { existsSync } from 'node:fs';
 
 // --- Output helpers ---------------------------------------------------------
 
-const NO_COLOR = process.env.NO_COLOR !== undefined || !process.stdout.isTTY; // eslint-disable-line no-unused-vars
 
 /** @param {string} msg */
 function out(msg) { process.stdout.write(msg + '\n'); }

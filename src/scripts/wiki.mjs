@@ -20,12 +20,10 @@
 // 1. Imports + schemas import
 // ---------------------------------------------------------------------------
 
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { open, readFile, writeFile, rename, unlink, mkdir, access, stat, readdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { open, readFile, rename, unlink, mkdir, access, readdir } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
-import { dirname, join, resolve, relative, normalize, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createReadStream } from 'node:fs';
+import { dirname, join, resolve, relative, sep } from 'node:path';
 
 import {
   ENTITY_DIRS,
@@ -39,9 +37,6 @@ import { sanitizeExternalIdsObject } from './external-ids.mjs';
 // ---------------------------------------------------------------------------
 // 2. Constants
 // ---------------------------------------------------------------------------
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /** Minimum valid edge confidence values. */
 const CONFIDENCE_VALUES = new Set(['high', 'medium', 'low']);
@@ -221,16 +216,6 @@ function parseFrontmatter(content) {
         currentMapKey = null;
       }
       continue;
-    }
-
-    // Indented list item without matching pattern (fallback)
-    if (line.match(/^\s+-\s/) && currentListKey !== null) {
-      const rawFallback = line.replace(/^\s+-\s+/, '').trim();
-      if (rawFallback.startsWith('{') && rawFallback.endsWith('}')) {
-        frontmatter[currentListKey].push(_parseFlowMapping(rawFallback));
-      } else {
-        frontmatter[currentListKey].push(unquoteValue(rawFallback));
-      }
     }
   }
 
@@ -428,11 +413,9 @@ function quoteIfNeeded(val) {
  * Reassemble a markdown file from parsed frontmatter + body.
  * @param {Record<string,any>} fm
  * @param {string} body
- * @param {boolean} hasFrontmatter
  * @returns {string}
  */
-function assembleMd(fm, body, hasFrontmatter) {
-  if (!hasFrontmatter && Object.keys(fm).length === 0) return body;
+function assembleMd(fm, body) {
   const yamlBlock = stringifyFrontmatter(fm);
   return `---\n${yamlBlock}\n---\n${body}`;
 }
@@ -531,15 +514,6 @@ function matchGlob(pattern, str) {
 
   const re = new RegExp(`^${regexStr}$`);
   return re.test(s);
-}
-
-/**
- * Compute SHA-256 hash of a string.
- * @param {string} content
- * @returns {string} hex digest
- */
-function sha256(content) {
-  return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 /**
@@ -677,7 +651,7 @@ async function setMeta(projectRoot, slug, key, value) {
 
   const entityType = _entityTypeForFilePath(projectRoot, filePath);
   if (entityType) {
-    const fields = _getRequiredFrontmatterFields(entityType);
+    const fields = REQUIRED_FRONTMATTER[entityType] ?? null;
     const field = fields ? fields.find((f) => f.key === key) : null;
     // Clearing an OPTIONAL declared field stays allowed. The gate exists to stop
     // wrong-typed values, and `null` on a field the schema marks `required:
@@ -732,7 +706,7 @@ async function setMeta(projectRoot, slug, key, value) {
   } else {
     frontmatter[key] = value;
   }
-  const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
+  const newContent = assembleMd(frontmatter, body);
   await atomicWrite(filePath, newContent);
   return { filePath };
 }
@@ -782,7 +756,7 @@ async function migrateLegacyDefaults(projectRoot, dryRun) {
     if (Object.keys(added).length === 0) { skipped++; continue; }
 
     if (!dryRun) {
-      const newContent = assembleMd(frontmatter, body, hasFrontmatter || true);
+      const newContent = assembleMd(frontmatter, body);
       await atomicWrite(entity.filePath, newContent);
     }
     updated.push({ slug: entity.slug, type: entity.type, added });
@@ -1731,10 +1705,7 @@ function _checkFieldType(field, val) {
  * @returns {string[]}
  */
 function _validateFrontmatter(frontmatter, entityType) {
-  // Import REQUIRED_FRONTMATTER from the already-imported schemas module.
-  // Because schemas.mjs is pure data, this import is a no-op (already cached).
-  // We use a dynamic import workaround via a re-export alias loaded at startup.
-  const fields = _getRequiredFrontmatterFields(entityType);
+  const fields = REQUIRED_FRONTMATTER[entityType] ?? null;
   if (!fields) return [`Unknown entity type: ${entityType}`];
 
   const errors = [];
@@ -1791,24 +1762,6 @@ function _validateFindingsItems(findings) {
   return errors;
 }
 
-/**
- * Lookup required frontmatter fields for an entity type.
- * Merges _base fields with type-specific fields.
- * @param {string} entityType
- * @returns {import('./schemas.mjs').FrontmatterField[]|null}
- */
-function _getRequiredFrontmatterFields(entityType) {
-  // REQUIRED_FRONTMATTER is imported at module level from schemas.mjs.
-  // We access it through the module-scoped import binding.
-  const typeFields = _REQUIRED_FRONTMATTER[entityType];
-  if (!typeFields) return null;
-  return typeFields;
-}
-
-// Module-level alias to the imported REQUIRED_FRONTMATTER for use by
-// _getRequiredFrontmatterFields without a dynamic import inside the function.
-const _REQUIRED_FRONTMATTER = REQUIRED_FRONTMATTER;
-
 // ---------------------------------------------------------------------------
 // 10. Output helpers
 // ---------------------------------------------------------------------------
@@ -1829,14 +1782,6 @@ function emitJson(data) {
 function emitError(message, code) {
   process.stderr.write(JSON.stringify({ error: message, code }) + '\n');
   process.exitCode = code;
-}
-
-/**
- * Print info/status to stderr (non-JSON, non-blocking).
- * @param {string} message
- */
-function info(message) {
-  process.stderr.write(`[wiki] ${message}\n`);
 }
 
 // ---------------------------------------------------------------------------

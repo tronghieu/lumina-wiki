@@ -47,7 +47,6 @@
 import { readFile, writeFile, rename, mkdir, readdir, stat, access, unlink } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join, basename, dirname, relative, normalize, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
 import {
@@ -55,7 +54,6 @@ import {
   ENTITY_DIRS,
   EDGE_TYPES,
   REQUIRED_FRONTMATTER,
-  ENUMS,
   EXEMPTION_GLOBS,
 } from './schemas.mjs';
 import {
@@ -1821,9 +1819,8 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
   const { fmText, tail } = split;
 
   const fm = parsed.data;
-  const body = parsed ? parsed.body : '';
+  const body = parsed.body;
   const entityType = entityTypeForPath(wikiRelPath);
-  const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
 
   const additions = [];
   for (const f of l01findings) {
@@ -1897,7 +1894,7 @@ async function fixL02(absPath, wikiRelPath, content, l02findings, edges, knownSl
   if (!split || !parsed) return { newContent: content, preview: '', fixedKeys: [] };
 
   const fm = parsed.data;
-  const body = parsed ? parsed.body : '';
+  const body = parsed.body;
   const entityType = entityTypeForPath(wikiRelPath);
   const fieldDefs = (entityType && REQUIRED_FRONTMATTER[entityType]) || [];
   const slugs = knownSlugs || new Set();
@@ -2280,10 +2277,8 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL08(edges));
   allFindings.push(...checkL17(edges, knownSlugs));
 
-  if (indexContent !== undefined) {
-    const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
-    allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
-  }
+  const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
+  allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
 
   // L10: collect all foundation frontmatters in one pass, then check for alias conflicts.
   {
