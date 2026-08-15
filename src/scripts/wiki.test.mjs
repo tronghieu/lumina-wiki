@@ -10,7 +10,7 @@ import { mkdtemp, readFile, writeFile, mkdir, rm, access, open } from 'node:fs/p
 import { tmpdir, platform } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -1706,6 +1706,156 @@ describe('checkpoint ops', () => {
 
       const stateFile = join(tmp, '_lumina', '_state', 'skill-a-phaseA.json');
       await access(stateFile, fsConstants.F_OK);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: checkpointPath() must reject path separators in <skill> and
+  // <phase> so neither argument can escape _lumina/_state (fixes the arbitrary
+  // file write/read described in the checkpointPath() doc comment).
+  // -------------------------------------------------------------------------
+
+  test('checkpoint-write rejects a ".." skill and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-escape-${token}`;
+    // Mirrors the OLD, unvalidated construction: join(stateDir, `${skill}-${phase}.json`).
+    const outside = join(tmp, '_lumina', '_state', `${skill}-phase1.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ x: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', skill, 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a ".." phase and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const phase = `../../../lumina-wiki-escape-phase-${token}`;
+    const outside = join(tmp, '_lumina', '_state', `my-skill-${phase}.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ y: 2 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'my-skill', phase, cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-read rejects a ".." skill and does not leak an outside file\'s contents', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-secret-${token}`;
+    // Mirrors the OLD, unvalidated read location so this proves a real read
+    // primitive was closed, not just that the command errors for other reasons.
+    const outside = join(tmp, '_lumina', '_state', `${skill}-x.json`);
+    const secretValue = `exfiltrated-${token}`;
+    try {
+      initWorkspace(tmp);
+      await writeFile(outside, JSON.stringify({ SECRET: secretValue }), 'utf8');
+
+      const r = runWiki(['checkpoint-read', skill, 'x'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: stdout=${r.stdout} stderr=${r.stderr}`);
+      assert.ok(!r.stdout.includes(secretValue), 'stdout must not contain the outside file\'s secret value');
+      assert.ok(!r.stdout.includes('SECRET'), 'stdout must not contain the outside file\'s contents');
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a bare "/" in <skill> even without ".." traversal', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ z: 3 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'a/b', 'c', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write path-separator rejection has the {error, code:2} envelope shape', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ a: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', '../escaped', 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2);
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /may not contain a path separator/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a raw file basename with spaces, parens, and a dot in <phase>', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { resumed: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = 'Paper (2017).pdf';
+      const wr = runWiki(['checkpoint-write', 'ingest', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'ingest', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a timestamp <phase> like /lumi-verify passes', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { verified: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = '20260815T115922Z';
+      const wr = runWiki(['checkpoint-write', 'lumi-verify', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'lumi-verify', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
     } finally {
       await cleanTmp(tmp);
     }
