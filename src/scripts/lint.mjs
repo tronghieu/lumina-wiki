@@ -674,13 +674,18 @@ const ARRAY_FIELD_TARGET_DIR = {
  * @param {Set<string>} knownSlugs
  * @returns {Map<string,string[]>}
  */
+const _basenameIndexCache = new WeakMap();
+
 function buildBasenameIndex(knownSlugs) {
+  const cached = _basenameIndexCache.get(knownSlugs);
+  if (cached) return cached;
   const index = new Map();
   for (const slug of knownSlugs) {
     const base = basename(slug);
     if (!index.has(base)) index.set(base, []);
     index.get(base).push(slug);
   }
+  _basenameIndexCache.set(knownSlugs, index);
   return index;
 }
 
@@ -760,9 +765,10 @@ function reconstructArrayFromBody(field, selfSlug, body, knownSlugs) {
   const results = new Set();
   const lines = body.split('\n');
   const inFence = fencedCodeLines(lines);
+  const re = new RegExp(WIKILINK_RE.source, 'g');
   for (let li = 0; li < lines.length; li++) {
     if (inFence[li]) continue; // sample syntax in a code block is not a relationship.
-    const re = new RegExp(WIKILINK_RE.source, 'g');
+    re.lastIndex = 0;
     let m;
     while ((m = re.exec(lines[li])) !== null) {
       const resolved = resolveWikilinkTarget(m[1], knownSlugs, basenameIndex);
@@ -1314,12 +1320,13 @@ function checkL05(wikiRelPath, rawContent, knownSlugs) {
 
   const lines = rawContent.split('\n');
   const inFence = fencedCodeLines(lines);
+  const lineRe = new RegExp(WIKILINK_RE.source, 'g');
   for (let li = 0; li < lines.length; li++) {
     // A `[[...]]` inside a fenced code block is sample syntax, not a link.
     // Reporting it would also be unfixable-by-design: rewriting it corrupts
     // the very example the author wrote, so the finding could never clear.
     if (inFence[li]) continue;
-    const lineRe = new RegExp(WIKILINK_RE.source, 'g');
+    lineRe.lastIndex = 0;
     while ((match = lineRe.exec(lines[li])) !== null) {
       const slug = match[1].trim();
       if (!knownSlugs.has(slug)) {
@@ -2221,6 +2228,7 @@ async function runLint(projectRoot, opts) {
   // Build wikilink maps.
   const outboundMap = new Map(); // wikiRelPath -> Set<slug>
   const inboundSet = new Set();  // wikiRelPath values that have inbound links
+  const linkRe = new RegExp(WIKILINK_RE.source, 'g');
 
   for (const wikiRelPath of allWikiRel) {
     const abs = safejoin(wikiRoot, wikiRelPath);
@@ -2228,9 +2236,9 @@ async function runLint(projectRoot, opts) {
     const slugs = new Set();
     const lines = content.split('\n');
     for (const line of lines) {
-      const re = new RegExp(WIKILINK_RE.source, 'g');
+      linkRe.lastIndex = 0;
       let m;
-      while ((m = re.exec(line)) !== null) {
+      while ((m = linkRe.exec(line)) !== null) {
         const slug = m[1].trim();
         slugs.add(slug);
         // Mark as having inbound link if slug resolves to a known file.
