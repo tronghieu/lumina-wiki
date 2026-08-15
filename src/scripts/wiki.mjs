@@ -2220,8 +2220,9 @@ async function main(argv) {
           fail('resolve-alias requires <text>', 2);
         }
         const projectRoot = await requireProjectRoot();
-        const allEntities = await listEntities(projectRoot);
-        const foundations = allEntities.filter(e => e.type === 'foundations');
+        // Scoped scan: listEntities walks all 13 entity dirs without a prefix,
+        // and every result but foundations/ was discarded a line later.
+        const foundations = await listEntities(projectRoot, 'foundations');
 
         const needle = text.toLowerCase();
         const matches = [];

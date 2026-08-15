@@ -1634,16 +1634,25 @@ function checkL11(wikiRelPath, fm) {
  * @param {Record<string,unknown>} fm
  * @returns {Finding[]}
  */
-function checkL13(wikiRelPath, fm) {
-  const type = entityTypeForPath(wikiRelPath);
-  if (type !== 'sources') return [];
+/**
+ * Shared preamble for L13 and L16: both only apply to source pages with
+ * urls[], and both need the same two things — the declared external_ids
+ * mapping, and the non-url namespaces derivable from urls[] (deduped by
+ * namespace, first url wins). Parsing every url twice per page was the only
+ * difference between the two copies.
+ *
+ * @param {string} wikiRelPath
+ * @param {Record<string,any>} fm
+ * @returns {{ext: Record<string,any>, derived: Record<string,string>}|null}
+ *   null when the checks do not apply to this page.
+ */
+function deriveNamespacesFromUrls(wikiRelPath, fm) {
+  if (entityTypeForPath(wikiRelPath) !== 'sources') return null;
   const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
-  if (urls.length === 0) return [];
+  if (urls.length === 0) return null;
   const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
     ? fm.external_ids
     : {};
-
-  // Collect derived non-url namespaces across all urls; dedupe by namespace.
   const derived = {};
   for (const url of urls) {
     const ids = parseUrlToExternalIds(url);
@@ -1652,6 +1661,13 @@ function checkL13(wikiRelPath, fm) {
       if (!(ns in derived)) derived[ns] = ids[ns];
     }
   }
+  return { ext, derived };
+}
+
+function checkL13(wikiRelPath, fm) {
+  const ctx = deriveNamespacesFromUrls(wikiRelPath, fm);
+  if (!ctx) return [];
+  const { ext, derived } = ctx;
   const findings = [];
   for (const [ns, val] of Object.entries(derived)) {
     const cur = ext[ns];
@@ -1701,22 +1717,9 @@ function checkL14(wikiRelPath, fm) {
  * @returns {Finding[]}
  */
 function checkL16(wikiRelPath, fm) {
-  const type = entityTypeForPath(wikiRelPath);
-  if (type !== 'sources') return [];
-  const urls = Array.isArray(fm.urls) ? fm.urls.filter(u => typeof u === 'string') : [];
-  const ext = (fm.external_ids && typeof fm.external_ids === 'object' && !Array.isArray(fm.external_ids))
-    ? fm.external_ids
-    : {};
-  if (urls.length === 0) return [];
-
-  const derived = {};
-  for (const url of urls) {
-    const ids = parseUrlToExternalIds(url);
-    for (const ns of Object.keys(ids)) {
-      if (ns === 'url') continue;
-      if (!(ns in derived)) derived[ns] = ids[ns];
-    }
-  }
+  const ctx = deriveNamespacesFromUrls(wikiRelPath, fm);
+  if (!ctx) return [];
+  const { ext, derived } = ctx;
   const findings = [];
   for (const [ns, urlVal] of Object.entries(derived)) {
     const cur = ext[ns];
@@ -2301,6 +2304,32 @@ async function runLint(projectRoot, opts) {
 }
 
 /**
+ * Run a fixer that rewrites one whole file, and mark its findings.
+ *
+ * @param {object[]} findings   All findings for this run.
+ * @param {string} id           Finding id this fixer owns.
+ * @param {string} targetPath   File the fixer rewrites.
+ * @param {() => Promise<string>} readCurrent  Reads the file's current content.
+ *   A thunk, not a value: the read must not happen when there is nothing to
+ *   fix, and must happen after any earlier fixer wrote to the same file.
+ * @param {(current: string) => {newContent: string, preview: string}} runFixer
+ * @param {object} opts
+ */
+async function applyWholeFileFix(findings, id, targetPath, readCurrent, runFixer, opts) {
+  const hits = findings.filter(f => f.id === id);
+  if (hits.length === 0) return;
+  const current = await readCurrent();
+  const { newContent, preview } = runFixer(current);
+  if (newContent === current) return;
+  if (opts.dryRun) {
+    for (const f of hits) { f.proposed_fix = preview; }
+    return;
+  }
+  await atomicWrite(targetPath, newContent);
+  for (const f of hits) { f.fix_applied = true; }
+}
+
+/**
  * Apply fixes for fixable findings.
  * @param {Set<string>} knownSlugs  Wiki-relative slugs (no `.md`) of every
  *   known file — threaded into fixL02 for its tier-2 body-wikilink fallback.
@@ -2423,51 +2452,18 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     }
   }
 
-  // Fix L06.
-  const l06findings = findings.filter(f => f.id === 'L06-missing-reverse-edge');
-  if (l06findings.length > 0) {
-    let edgesContent = '';
-    try { edgesContent = await readFile(edgesPath, 'utf8'); } catch {}
-    const { newContent, preview } = fixL06(edgesPath, edgesContent, edges, edgeSet);
-    if (newContent !== edgesContent) {
-      if (opts.dryRun) {
-        for (const f of l06findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(edgesPath, newContent);
-        for (const f of l06findings) { f.fix_applied = true; }
-      }
-    }
-  }
-
-  // Fix L07.
-  const l07findings = findings.filter(f => f.id === 'L07-symmetric-edge-duplicate');
-  if (l07findings.length > 0) {
-    let edgesContent = '';
-    try { edgesContent = await readFile(edgesPath, 'utf8'); } catch {}
-    const { newContent, preview } = fixL07(edgesContent, edges);
-    if (newContent !== edgesContent) {
-      if (opts.dryRun) {
-        for (const f of l07findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(edgesPath, newContent);
-        for (const f of l07findings) { f.fix_applied = true; }
-      }
-    }
-  }
-
-  // Fix L09.
-  const l09findings = findings.filter(f => f.id === 'L09-index-stale');
-  if (l09findings.length > 0) {
-    const { newContent, preview } = fixL09(indexContent, entityFiles.filter(f => !isIndexExempt(f)));
-    if (newContent !== indexContent) {
-      if (opts.dryRun) {
-        for (const f of l09findings) { f.proposed_fix = preview; }
-      } else {
-        await atomicWrite(indexPath, newContent);
-        for (const f of l09findings) { f.fix_applied = true; }
-      }
-    }
-  }
+  // L06/L07/L09 each rewrite one whole file; the three blocks differed only in
+  // the finding id, the target, and the fixer call.
+  const readEdges = async () => {
+    try { return await readFile(edgesPath, 'utf8'); } catch { return ''; }
+  };
+  await applyWholeFileFix(findings, 'L06-missing-reverse-edge', edgesPath, readEdges,
+    current => fixL06(edgesPath, current, edges, edgeSet), opts);
+  // Deliberately re-reads: under --fix, L06 has already rewritten this file.
+  await applyWholeFileFix(findings, 'L07-symmetric-edge-duplicate', edgesPath, readEdges,
+    current => fixL07(current, edges), opts);
+  await applyWholeFileFix(findings, 'L09-index-stale', indexPath, async () => indexContent,
+    current => fixL09(current, entityFiles.filter(f => !isIndexExempt(f))), opts);
 
   // Truth pass. `fixable` is decided at check time from the finding's shape
   // alone, before any fixer has looked at the file, so it is a prediction. Some
