@@ -23,7 +23,7 @@ output in `/lumi-check`.
 | L14 | `external_ids` value fails validation for its namespace | error | No — user must correct or remove the value |
 | L16 | `external_ids` value disagrees with the value derived from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` to reconcile |
 | L17 | Dangling edge endpoint (edge `from`/`to` does not resolve to an existing wiki file) | error | No — user must run `wiki.mjs remove-edge` or recreate the missing page |
-| L18 | Frontmatter `id` no longer names the file it lives in | warning | No — by design; user sets `id` to match the file or renames the file to match `id` |
+| L18 | Frontmatter `id` no longer names the file it lives in | warning | No — by design; user sets `id` to match the file or renames the file to match `id`. The pre-v0.1 form `<own-entity-dir>/<slug>` (e.g. `concepts/ab-testing` on a page in `concepts/`) is tolerated and never rewritten; a prefix naming a *different* entity dir is not |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 

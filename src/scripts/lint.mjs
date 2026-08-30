@@ -1778,10 +1778,21 @@ function checkL18(wikiRelPath, fm) {
   // migration's own output: it carries strictly more information than the bare
   // id, never less, and `--fix` deliberately never rewrites it back. One real
   // 813-page wiki held 179 of them. Not a mismatch.
+  //
+  // The migration only ever prefixed a page with ITS OWN entity dir — it never
+  // produced `sources/foo` for a page that actually lives in `concepts/` — so
+  // the prefix must equal this page's own `entityType`, not merely be some
+  // other recognized dir name. And it only ever ran against flat entity types:
+  // a nested type's expected id is already the full wiki-relative path (or
+  // `reflection-<name>`), so any prefix in front of that is not the legacy
+  // shape at all, just a second, unrelated mismatch the exemption would
+  // otherwise hide.
+  const isFlatEntity = entityType !== 'reflections' && !NESTED_ID_ENTITY_DIRS.has(entityType);
   const slash = actual.indexOf('/');
-  if (slash > 0
+  if (isFlatEntity
+    && slash > 0
     && actual.slice(slash + 1) === expected
-    && Object.prototype.hasOwnProperty.call(ENTITY_DIRS, actual.slice(0, slash))) {
+    && actual.slice(0, slash) === entityType) {
     return [];
   }
 
@@ -2635,6 +2646,35 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     for (const p of l03renamed) {
       const i = entityFiles.indexOf(p.relPath);
       if (i !== -1) entityFiles[i] = p.newRelPath;
+    }
+
+    // L18 was checked against each page's pre-rename path and frontmatter, so
+    // a renamed page's finding (if any) is keyed to a file that no longer
+    // exists. Worse, the rename above — via retargetIdAfterRename — can have
+    // already resolved the very mismatch it reported (e.g. `Foo_Bar.md` with
+    // `id: foo-bar` renames to `foo-bar.md`, which now agrees). Left alone,
+    // that stale finding survives as a false unresolved warning even though
+    // this same `--fix` run already fixed it, and only an immediate second
+    // run would come back clean. Drop the stale finding and recheck the new
+    // path against the file's current (possibly retargeted) content so the
+    // report matches what is actually on disk after this run.
+    if (l03renamed.length > 0) {
+      const renamedRelPaths = new Set(l03renamed.map(p => p.relPath));
+      for (let i = findings.length - 1; i >= 0; i--) {
+        if (findings[i].id === 'L18-id-filename-mismatch' && renamedRelPaths.has(findings[i].file)) {
+          findings.splice(i, 1);
+        }
+      }
+      for (const p of l03renamed) {
+        let content;
+        try {
+          content = await readFile(safejoin(wikiRoot, p.newRelPath), 'utf8');
+        } catch {
+          continue; // vanished under us (concurrent edit) — nothing to recheck.
+        }
+        const parsed = parseFrontmatter(content);
+        findings.push(...checkL18(p.newRelPath, parsed ? parsed.data : {}));
+      }
     }
   }
 

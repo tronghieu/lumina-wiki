@@ -2570,6 +2570,26 @@ describe('checkL18 id-filename-mismatch', () => {
     assert.equal(checkL18('concepts/ab-testing.md', { id: 'concepts/ab-testing' }).length, 0);
   });
 
+  test('flags a legacy-shaped id whose prefix names a different entity dir than this page\'s own', () => {
+    // `concepts/foo.md` claiming `id: sources/foo` names the wrong page
+    // type. The legacy-shape exemption must require the prefix to equal
+    // THIS page's own entity dir, not merely be some other ENTITY_DIRS key.
+    const result = checkL18('concepts/foo.md', { id: 'sources/foo' });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L18-id-filename-mismatch');
+    assert.ok(result[0].message.includes('sources/foo'));
+  });
+
+  test('flags a nested-dir id carrying an extra recognized-but-wrong prefix', () => {
+    // The legacy `<entity-dir>/<slug>` shape only ever applied to FLAT
+    // entity types. A nested type's own id is already the full
+    // wiki-relative path, so a prefix in front of that is a second,
+    // unrelated mismatch, not the legacy migration's output.
+    const result = checkL18('readings/deep-work/01-focus.md', { id: 'sources/readings/deep-work/01-focus' });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L18-id-filename-mismatch');
+  });
+
   test('does not flag a file with no id contract: index.md, graph/, outputs/', () => {
     assert.equal(checkL18('index.md', { id: 'anything-at-all' }).length, 0);
     assert.equal(checkL18('log.md', { id: 'anything-at-all' }).length, 0);
@@ -2584,6 +2604,58 @@ describe('checkL18 id-filename-mismatch', () => {
     assert.equal(checkL18('sources/foo-bar.md', { id: 'TODO' }).length, 0);
     assert.equal(checkL18('sources/foo-bar.md', { id: '   ' }).length, 0);
     assert.equal(checkL18('sources/foo-bar.md', { id: 42 }).length, 0);
+  });
+});
+
+describe('runLint L03 fix: L18 is recomputed after a rename', () => {
+  test('a stale pre-rename L18 finding does not survive a rename that resolves it', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      // `id` already matches what the NEW (post-rename) filename will
+      // derive, but not the current, badly-cased one — so L18 fires here
+      // against the pre-rename path, and the L03 rename in this same --fix
+      // run resolves the very mismatch it reported.
+      const fm = renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' }));
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'), fm + 'Body.');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/Foo_Bar.md');
+      assert.ok(l03 && l03.fix_applied, 'expected the rename to have actually happened in this run');
+
+      const l18 = result.findings.filter(f => f.id === 'L18-id-filename-mismatch');
+      assert.equal(l18.length, 0,
+        `expected no L18 finding to survive a rename that already resolved it, got:\n${JSON.stringify(l18, null, 2)}`);
+
+      // An immediate second run must agree — it always did; the bug was
+      // only in what the FIRST run reported.
+      const result2 = await runLint(tmp, { fix: true, dryRun: false });
+      assert.equal(result2.findings.filter(f => f.id === 'L18-id-filename-mismatch').length, 0);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('a genuine mismatch surviving the rename is re-flagged against the new path, not the old one', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      // `id` matches neither the old nor the new basename — a real,
+      // unrelated mismatch that the rename does not touch.
+      const fm = renderFm(validSourceFm({ id: 'totally-different-id', title: 'Foo Bar' }));
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'), fm + 'Body.');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+
+      const l18 = result.findings.filter(f => f.id === 'L18-id-filename-mismatch');
+      assert.equal(l18.length, 1,
+        `expected exactly one surviving L18 finding, got:\n${JSON.stringify(l18, null, 2)}`);
+      assert.equal(l18[0].file, 'sources/foo-bar.md',
+        'the recomputed finding must point at the NEW (post-rename) path, not the stale pre-rename one');
+    } finally {
+      await removeTmp(tmp);
+    }
   });
 });
 
