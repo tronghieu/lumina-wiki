@@ -3057,6 +3057,36 @@ describe('L17 dangling-edge', () => {
     // Sanity: the helper the default path uses really does see both.
     assert.equal(buildBasenameIndex(knownSlugs).get('dup').length, 2);
   });
+
+  // Regression: a QUALIFIED endpoint (contains '/') must resolve by exact
+  // match only. Before this fix, resolveWikilinkTarget applied the
+  // unique-basename fallback to every unmatched endpoint regardless of
+  // whether it already named a directory, so deleting "sources/lora" while
+  // an unrelated "concepts/lora" still existed silently re-resolved the
+  // edge to "concepts/lora" and suppressed L17 — even though graph
+  // operations (add-edge/remove-edge/wiki.mjs) compare and preserve the
+  // qualified endpoint verbatim, so the edge genuinely dangles.
+  test('regression: qualified endpoint does not fall back to an unrelated same-basename file in another dir', () => {
+    const edges = [{ from: 'sources/other', to: 'sources/lora', type: 'uses_concept' }];
+    // "sources/lora" was deleted; "concepts/lora" happens to share a basename.
+    const knownSlugs = new Set(['sources/other', 'concepts/lora']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
+    assert.match(result[0].message, /sources\/lora/);
+    assert.match(result[0].message, /does not resolve to any wiki file/);
+  });
+
+  // Companion: the bare-slug fallback fixed by PR #41 must still work
+  // alongside the new qualified-endpoint guard above — one endpoint bare,
+  // one qualified-and-missing, in the same edge.
+  test('regression: bare endpoint still resolves via basename while a qualified sibling endpoint on the same edge correctly dangles', () => {
+    const edges = [{ from: 'src-a', to: 'sources/lora', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/src-a', 'concepts/lora']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.match(result[0].message, /sources\/lora/);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

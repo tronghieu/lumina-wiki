@@ -660,10 +660,20 @@ function buildBasenameIndex(knownSlugs) {
 /**
  * Resolve a raw `[[...]]` wikilink target (alias already stripped by
  * WIKILINK_RE's capture group) to a known wiki-relative slug: exact match
- * first, then — if the raw target isn't itself a known slug — the same
- * unique-basename heuristic fixL05 uses to repair a broken link with a
- * missing directory prefix. Returns null when neither resolves (unknown,
- * or ambiguous across 2+ candidates — no guessing).
+ * first, then — only when the raw target is a BARE basename (no `/`) and
+ * isn't itself a known slug — the same unique-basename heuristic fixL05 uses
+ * to repair a broken link with a missing directory prefix. Returns null when
+ * neither resolves (unknown, or ambiguous across 2+ candidates — no
+ * guessing).
+ *
+ * A qualified target (one that already contains a `/`, e.g. `sources/lora`)
+ * never falls through to the basename fallback, even when it isn't an exact
+ * match. That target names a specific directory — an explicit claim about
+ * which page is meant, the same reasoning checkL05 already applies to
+ * `explicitEntityDir` targets. Guessing by basename there would silently
+ * resolve it to an unrelated page in a different directory that happens to
+ * share a basename (e.g. `concepts/lora` after `sources/lora` is deleted),
+ * masking a real dangling reference instead of reporting it.
  * @param {string} raw
  * @param {Set<string>} knownSlugs
  * @param {Map<string,string[]>} basenameIndex
@@ -673,6 +683,7 @@ function resolveWikilinkTarget(raw, knownSlugs, basenameIndex) {
   let slug = raw.trim();
   if (slug.endsWith('.md')) slug = slug.slice(0, -3);
   if (knownSlugs.has(slug)) return slug;
+  if (slug.includes('/')) return null; // qualified: exact match only, no basename guessing.
   const candidates = basenameIndex.get(basename(slug)) || [];
   if (candidates.length === 1) return candidates[0];
   return null;
@@ -1712,10 +1723,15 @@ function checkL16(wikiRelPath, fm) {
  * about edge-pair symmetry and never check that either endpoint's file
  * actually exists.
  *
- * Resolution goes through resolveWikilinkTarget, the same helper L05 uses:
- * an endpoint is "internal" unless it contains '://' (an external URL, e.g. a
- * see_also_url target), and an internal endpoint resolves either by exact
- * match against knownSlugs or by unique basename. It used to test
+ * Resolution goes through resolveWikilinkTarget, the same helper L05's
+ * body-wikilink reconstruction uses: an endpoint is "internal" unless it
+ * contains '://' (an external URL, e.g. a see_also_url target). A BARE
+ * endpoint (no '/') resolves either by exact match against knownSlugs or by
+ * unique basename; a QUALIFIED endpoint (contains '/', e.g. "sources/lora")
+ * resolves by exact match only — it names a specific directory, an explicit
+ * claim about which page is meant, so a deleted or renamed qualified target
+ * is never silently re-resolved to an unrelated page elsewhere that happens
+ * to share a basename (e.g. "concepts/lora"). It used to test
  * `knownSlugs.has(target)` alone, which this comment already described as
  * mirroring L05 but did not: knownSlugs holds wiki-relative paths, so every
  * edge written with a bare slug — which `add-edge <from> <type> <to>` accepts
