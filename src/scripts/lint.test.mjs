@@ -26,6 +26,7 @@ import {
   checkL13, checkL14, checkL16, checkL17,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
+  buildBasenameIndex,
   runLint,
   reportSummary,
   reportHuman,
@@ -3002,6 +3003,89 @@ describe('L17 dangling-edge', () => {
     const result = checkL17(edges, knownSlugs);
     assert.equal(result.length, 1);
     assert.equal(result[0].id, 'L17-dangling-edge');
+  });
+
+  // Regression: knownSlugs holds wiki-relative paths (e.g. "sources/src-a"),
+  // but `wiki.mjs add-edge` accepts and stores a bare slug ("src-a") verbatim.
+  // checkL17 used to test knownSlugs.has(target) directly, so every edge
+  // written with a bare slug was reported dangling even though its file
+  // plainly existed. It must resolve through resolveWikilinkTarget's
+  // unique-basename fallback instead, same as L05.
+  test('regression: bare slug endpoints resolve via unique basename (false-positive dangling edge)', () => {
+    const edges = [{ from: 'src-a', to: 'src-b', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/src-a', 'sources/src-b']);
+    assert.equal(checkL17(edges, knownSlugs).length, 0);
+  });
+
+  test('bare slug with no matching file still flags (basename resolution does not mask a real dangling edge)', () => {
+    const edges = [{ from: 'src-a', to: 'nope', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/src-a', 'sources/src-b']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
+    assert.match(result[0].message, /nope/);
+    assert.match(result[0].message, /does not resolve to any wiki file/);
+  });
+
+  test('ambiguous bare slug (2+ files share a basename) is reported as ambiguous, not as missing', () => {
+    const edges = [{ from: 'sources/dup', to: 'dup', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/dup', 'concepts/dup']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.match(result[0].message, /is ambiguous/);
+    assert.ok(result[0].message.includes('sources/dup'), 'message should name sources/dup as a candidate');
+    assert.ok(result[0].message.includes('concepts/dup'), 'message should name concepts/dup as a candidate');
+    assert.doesNotMatch(result[0].message, /does not resolve to any wiki file/);
+  });
+
+  // Pins that the third parameter is actually consulted rather than rebuilt.
+  // Asserting a hand-built index agrees with the default one would not: the
+  // pre-fix 2-arg checkL17 silently ignores a third argument, so such a test
+  // passes on the broken version too. Instead give it an index that disagrees
+  // with the default and require the passed one to win.
+  test('explicit basenameIndex argument is the one consulted, not a rebuilt default', () => {
+    const edges = [{ from: 'sources/dup', to: 'dup', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/dup', 'concepts/dup']);
+
+    // Default index sees two candidates for "dup" and refuses to guess.
+    assert.equal(checkL17(edges, knownSlugs).length, 1);
+
+    // A caller-supplied index with a single candidate must resolve instead.
+    const narrowed = new Map([['dup', ['sources/dup']]]);
+    assert.equal(checkL17(edges, knownSlugs, narrowed).length, 0);
+
+    // Sanity: the helper the default path uses really does see both.
+    assert.equal(buildBasenameIndex(knownSlugs).get('dup').length, 2);
+  });
+
+  // Regression: a QUALIFIED endpoint (contains '/') must resolve by exact
+  // match only. Before this fix, resolveWikilinkTarget applied the
+  // unique-basename fallback to every unmatched endpoint regardless of
+  // whether it already named a directory, so deleting "sources/lora" while
+  // an unrelated "concepts/lora" still existed silently re-resolved the
+  // edge to "concepts/lora" and suppressed L17 — even though graph
+  // operations (add-edge/remove-edge/wiki.mjs) compare and preserve the
+  // qualified endpoint verbatim, so the edge genuinely dangles.
+  test('regression: qualified endpoint does not fall back to an unrelated same-basename file in another dir', () => {
+    const edges = [{ from: 'sources/other', to: 'sources/lora', type: 'uses_concept' }];
+    // "sources/lora" was deleted; "concepts/lora" happens to share a basename.
+    const knownSlugs = new Set(['sources/other', 'concepts/lora']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
+    assert.match(result[0].message, /sources\/lora/);
+    assert.match(result[0].message, /does not resolve to any wiki file/);
+  });
+
+  // Companion: the bare-slug fallback fixed by PR #41 must still work
+  // alongside the new qualified-endpoint guard above — one endpoint bare,
+  // one qualified-and-missing, in the same edge.
+  test('regression: bare endpoint still resolves via basename while a qualified sibling endpoint on the same edge correctly dangles', () => {
+    const edges = [{ from: 'src-a', to: 'sources/lora', type: 'related_to' }];
+    const knownSlugs = new Set(['sources/src-a', 'concepts/lora']);
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.match(result[0].message, /sources\/lora/);
   });
 });
 

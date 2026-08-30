@@ -660,10 +660,20 @@ function buildBasenameIndex(knownSlugs) {
 /**
  * Resolve a raw `[[...]]` wikilink target (alias already stripped by
  * WIKILINK_RE's capture group) to a known wiki-relative slug: exact match
- * first, then — if the raw target isn't itself a known slug — the same
- * unique-basename heuristic fixL05 uses to repair a broken link with a
- * missing directory prefix. Returns null when neither resolves (unknown,
- * or ambiguous across 2+ candidates — no guessing).
+ * first, then — only when the raw target is a BARE basename (no `/`) and
+ * isn't itself a known slug — the same unique-basename heuristic fixL05 uses
+ * to repair a broken link with a missing directory prefix. Returns null when
+ * neither resolves (unknown, or ambiguous across 2+ candidates — no
+ * guessing).
+ *
+ * A qualified target (one that already contains a `/`, e.g. `sources/lora`)
+ * never falls through to the basename fallback, even when it isn't an exact
+ * match. That target names a specific directory — an explicit claim about
+ * which page is meant, the same reasoning checkL05 already applies to
+ * `explicitEntityDir` targets. Guessing by basename there would silently
+ * resolve it to an unrelated page in a different directory that happens to
+ * share a basename (e.g. `concepts/lora` after `sources/lora` is deleted),
+ * masking a real dangling reference instead of reporting it.
  * @param {string} raw
  * @param {Set<string>} knownSlugs
  * @param {Map<string,string[]>} basenameIndex
@@ -673,6 +683,7 @@ function resolveWikilinkTarget(raw, knownSlugs, basenameIndex) {
   let slug = raw.trim();
   if (slug.endsWith('.md')) slug = slug.slice(0, -3);
   if (knownSlugs.has(slug)) return slug;
+  if (slug.includes('/')) return null; // qualified: exact match only, no basename guessing.
   const candidates = basenameIndex.get(basename(slug)) || [];
   if (candidates.length === 1) return candidates[0];
   return null;
@@ -1712,31 +1723,53 @@ function checkL16(wikiRelPath, fm) {
  * about edge-pair symmetry and never check that either endpoint's file
  * actually exists.
  *
- * Resolution mirrors L05 exactly: an endpoint is "internal" unless it
- * contains '://' (an external URL, e.g. a see_also_url target), and an
- * internal endpoint resolves iff it is a member of knownSlugs — the same
- * set L05 checks wikilinks against. No extra exemption is applied for
- * foundations/**, outputs/**, or reflections/**: those dirs hold real
- * entity files that land in knownSlugs like any other, so a genuine file
- * there resolves fine and a missing one is correctly flagged.
+ * Resolution goes through resolveWikilinkTarget, the same helper L05's
+ * body-wikilink reconstruction uses: an endpoint is "internal" unless it
+ * contains '://' (an external URL, e.g. a see_also_url target). A BARE
+ * endpoint (no '/') resolves either by exact match against knownSlugs or by
+ * unique basename; a QUALIFIED endpoint (contains '/', e.g. "sources/lora")
+ * resolves by exact match only — it names a specific directory, an explicit
+ * claim about which page is meant, so a deleted or renamed qualified target
+ * is never silently re-resolved to an unrelated page elsewhere that happens
+ * to share a basename (e.g. "concepts/lora"). It used to test
+ * `knownSlugs.has(target)` alone, which this comment already described as
+ * mirroring L05 but did not: knownSlugs holds wiki-relative paths, so every
+ * edge written with a bare slug — which `add-edge <from> <type> <to>` accepts
+ * and stores verbatim — was reported dangling even when its file plainly
+ * existed. Sharing the resolver makes one notion of "resolves" hold for
+ * wikilinks and edges alike; where it refuses to guess between two candidates,
+ * so does this check, and the message says which.
+ *
+ * No extra exemption is applied for foundations/**, outputs/**, or
+ * reflections/**: those dirs hold real entity files that land in knownSlugs
+ * like any other, so a genuine file there resolves fine and a missing one is
+ * correctly flagged.
  *
  * @param {Array<{from:string,to:string,type:string}>} edges
  * @param {Set<string>} knownSlugs  - Set of wiki-relative paths (without .md), same as passed to checkL05.
+ * @param {Map<string,string[]>} [basenameIndex]  - Shared basename index; built from knownSlugs when omitted.
  * @returns {Finding[]}
  */
-function checkL17(edges, knownSlugs) {
+function checkL17(edges, knownSlugs, basenameIndex = buildBasenameIndex(knownSlugs)) {
   const findings = [];
   for (const edge of edges) {
     for (const key of ['from', 'to']) {
       const target = edge[key];
       if (typeof target !== 'string' || target.includes('://')) continue; // external URL, not a slug
-      if (!knownSlugs.has(target)) {
-        findings.push(finding(
-          'L17-dangling-edge', 'error', false,
-          edge.from, null,
-          `Dangling edge endpoint: ${target} in edge ${edge.from} --${edge.type}--> ${edge.to} does not resolve to any wiki file`
-        ));
-      }
+      if (resolveWikilinkTarget(target, knownSlugs, basenameIndex)) continue;
+      // Unresolvable for one of two reasons that need different fixes: no such
+      // file at all, or a bare basename matching several files, which the
+      // resolver refuses to guess between. Saying "does not resolve to any
+      // wiki file" for the second would be plainly false to anyone looking.
+      const candidates = basenameIndex.get(basename(target.replace(/\.md$/, ''))) || [];
+      const reason = candidates.length > 1
+        ? `is ambiguous — matches ${candidates.join(', ')}`
+        : 'does not resolve to any wiki file';
+      findings.push(finding(
+        'L17-dangling-edge', 'error', false,
+        edge.from, null,
+        `Dangling edge endpoint: ${target} in edge ${edge.from} --${edge.type}--> ${edge.to} ${reason}`
+      ));
     }
   }
   return findings;
