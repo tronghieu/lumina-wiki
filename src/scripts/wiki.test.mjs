@@ -8,10 +8,10 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm, access, open } from 'node:fs/promises';
 import { tmpdir, platform } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { ENTITY_DIRS } from './schemas.mjs';
@@ -1842,6 +1842,234 @@ describe('checkpoint ops', () => {
     } finally {
       await cleanTmp(tmp);
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // Regression: checkpointPath() must reject path separators in <skill> and
+  // <phase> so neither argument can escape _lumina/_state (fixes the arbitrary
+  // file write/read described in the checkpointPath() doc comment).
+  // -------------------------------------------------------------------------
+
+  test('checkpoint-write rejects a ".." skill and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-escape-${token}`;
+    // Mirrors the OLD, unvalidated construction: join(stateDir, `${skill}-${phase}.json`).
+    const outside = join(tmp, '_lumina', '_state', `${skill}-phase1.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ x: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', skill, 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a ".." phase and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const phase = `../../../lumina-wiki-escape-phase-${token}`;
+    const outside = join(tmp, '_lumina', '_state', `my-skill-${phase}.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ y: 2 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'my-skill', phase, cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-read rejects a ".." skill and does not leak an outside file\'s contents', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-secret-${token}`;
+    // Mirrors the OLD, unvalidated read location so this proves a real read
+    // primitive was closed, not just that the command errors for other reasons.
+    const outside = join(tmp, '_lumina', '_state', `${skill}-x.json`);
+    const secretValue = `exfiltrated-${token}`;
+    try {
+      initWorkspace(tmp);
+      await writeFile(outside, JSON.stringify({ SECRET: secretValue }), 'utf8');
+
+      const r = runWiki(['checkpoint-read', skill, 'x'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: stdout=${r.stdout} stderr=${r.stderr}`);
+      assert.ok(!r.stdout.includes(secretValue), 'stdout must not contain the outside file\'s secret value');
+      assert.ok(!r.stdout.includes('SECRET'), 'stdout must not contain the outside file\'s contents');
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a bare "/" in <skill> even without ".." traversal', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ z: 3 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'a/b', 'c', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write path-separator rejection has the {error, code:2} envelope shape', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ a: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', '../escaped', 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2);
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /may not contain a path separator/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a raw file basename with spaces, parens, and a dot in <phase>', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { resumed: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = 'Paper (2017).pdf';
+      const wr = runWiki(['checkpoint-write', 'ingest', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'ingest', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a timestamp <phase> like /lumi-verify passes', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { verified: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = '20260815T115922Z';
+      const wr = runWiki(['checkpoint-write', 'lumi-verify', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'lumi-verify', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: pathSafe() containment check when projectRoot IS a filesystem
+// root (POSIX "/" or a Windows drive root like "C:\\"). checkpointPath()
+// (which backstops itself with pathSafe(), see its doc comment above) is
+// reached through requireProjectRoot() -> findProjectRoot(), which legally
+// returns such a root when `wiki/` lives directly under it -- e.g. a
+// container whose workspace is mounted at "/", or a project at a Windows
+// drive root. pathSafe() compared the resolved candidate against
+// `rootResolved + sep`, which doubles to "//" / "C:\\\\" when rootResolved
+// already ends in a separator (the one case resolve() leaves a trailing
+// separator in) -- a prefix no real resolved path ever has, so every
+// checkpoint path in a root-level workspace was rejected as unsafe.
+//
+// pathSafe() is a pure, I/O-free string function, not exported by wiki.mjs.
+// It also cannot safely be `import`ed here: wiki.mjs calls `main(process.argv)`
+// unconditionally at the bottom of the module with no `import.meta.url`
+// guard, so importing it would run its CLI against the test runner's argv
+// and exit the process. Instead, these tests extract pathSafe()'s exact
+// current source out of the file and evaluate it -- exercising the real
+// implementation, not a hand-copied duplicate that could silently drift out
+// of sync -- and run it against a chosen path-primitive set (native
+// `node:path` for the POSIX cases, `node:path`'s `win32` namespace for the
+// Windows cases, so both are exercised regardless of the host OS running
+// this suite).
+// ---------------------------------------------------------------------------
+
+describe('pathSafe() filesystem-root containment (regression)', () => {
+  /**
+   * Extract pathSafe()'s current function body from wiki.mjs and bind it to
+   * the given { resolve, join, sep } (the free variables it closes over).
+   */
+  function extractPathSafe({ resolve, join, sep }) {
+    const src = readFileSync(WIKI_MJS, 'utf8');
+    const match = src.match(/function pathSafe\(segment, projectRoot\) \{[\s\S]*?\n\}\n/);
+    assert.ok(match, 'pathSafe() source not found in wiki.mjs -- update this extraction if it moved/changed shape');
+    const factory = new Function('resolve', 'join', 'sep', `return ${match[0]}`);
+    return factory(resolve, join, sep);
+  }
+
+  test('POSIX: accepts an in-root checkpoint path when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/'), true);
+  });
+
+  test('POSIX: still rejects a ".." escape when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../etc/passwd', '/'), false);
+  });
+
+  test('POSIX: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../../etc/passwd', '/tmp/some-project'), false);
+  });
+
+  test('POSIX: still accepts an in-root path at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/tmp/some-project'), true);
+  });
+
+  test('Windows: accepts an in-root checkpoint path when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    const rel = win32.join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, 'C:\\'), true);
+  });
+
+  test('Windows: still rejects a ".." escape when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\Windows\\System32', 'C:\\'), false);
+  });
+
+  test('Windows: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\..\\Windows\\System32', 'C:\\Projects\\myapp'), false);
   });
 });
 
