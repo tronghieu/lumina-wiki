@@ -102,7 +102,7 @@
     "test:python": "node scripts/run-pytest.mjs",
     "test:e2e": "node src/installer/librarian-e2e.test.mjs",
     "test:all": "npm run test:installer && npm run test:scripts && npm run test:python && npm run test:e2e && npm run test:catalog",
-    "test:catalog": "node --test scripts/verify-lumi-help.test.mjs scripts/verify-doc-counts.test.mjs",
+    "test:catalog": "node --test scripts/verify-lumi-help.test.mjs scripts/verify-doc-counts.test.mjs scripts/release-verify.test.mjs",
     "test:fs": "node --test src/installer/fs.test.js",
     "test:manifest": "node --test src/installer/manifest.test.js",
     "test:template": "node --test src/installer/template-engine.test.js",
@@ -111,6 +111,7 @@
     "ci:cold-start": "node scripts/measure-cold-start.mjs",
     "ci:package": "node scripts/ci-package.mjs",
     "ci:agent-isolation": "node scripts/ci-agent-host-isolation.mjs",
+    "release:verify": "node scripts/release-verify.mjs",
     "pack:check": "npm run ci:package",
     "dev:install": "node bin/lumina.js install",
     "dev:sandbox": "node scripts/dev-sandbox.mjs"
