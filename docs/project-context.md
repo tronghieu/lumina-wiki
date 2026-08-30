@@ -292,7 +292,7 @@ Lint enforces:
 
 ### `src/scripts/lint.mjs`
 
-`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L17 (15 checks total; L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
+`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L18 (L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
 
 | Check | Description | Fixable |
 |---|---|---|
@@ -312,6 +312,7 @@ Lint enforces:
 | L14 | `external_ids` value fails `normalizeExternalId` (error) | no |
 | L16 | `external_ids[ns]` disagrees with `urls[]`-derived value (warning) | no |
 | L17 | Dangling edge — an edge's `from`/`to` internal slug does not resolve to any wiki file (error) | no |
+| L18 | Frontmatter `id` no longer names the file it lives in, per `deriveIdFromPath` (warning) | no |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 
