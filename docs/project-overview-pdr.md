@@ -105,7 +105,7 @@ Two layers:
 | Install time | < 60 s | ✓ |
 | Cold-start CLI | < 300 ms | ✓ |
 | Idempotent reinstall | `git diff` empty | ✓ |
-| Cross-platform (Node 20/22 × macOS/Linux/Windows) | 6-cell CI green | ✓ |
+| Cross-platform (Node 24 × macOS/Linux/Windows) | 3-cell CI green | ✓ |
 | Zero-tolerance path safety | No `..` / absolute traversal | ✓ |
 | User adoption | Open-source usage, GitHub stars | Growing |
 | Skill extensibility | 3+ custom-authored packs possible | ✓ (research/reading packs ship; more TBD) |

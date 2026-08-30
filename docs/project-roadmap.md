@@ -27,7 +27,7 @@ Focus: Stability, local capabilities, and v1.x feature expansion.
 | **Local text-document ingestion** (.docx, .rtf, .epub) | Planned | — |
 | **Vision/OCR ingestion** (.png, .jpg, scanned PDF) | Design pending | — |
 | **Paper ranking & influence** (citation counts, altmetrics) | Planned | [spec-paper-ranking.md](./planning-artifacts/specs/spec-paper-ranking.md) |
-| **CI/CD hardening** (Bun, Node 22 LTS) | Planned | — |
+| **CI/CD hardening** (advisory Bun smoke job; Node 24 matrix) | Shipped v1.x | — |
 | **Stability lock** (CLI contract published; --cwd deprecation; exit-4 cancellation) | Shipped v1.x | — |
 | **Schema parity** (cross-source ID handling) | In progress | — |
 
@@ -76,7 +76,7 @@ All locked:
 - ✅ **Install time:** < 60 s (baseline)
 - ✅ **Cold-start CLI:** < 300 ms (baseline)
 - ✅ **Idempotent reinstall:** `git diff` empty over watched paths
-- ✅ **Cross-platform:** Node 20/22 × {macOS, Linux, Windows}
+- ✅ **Cross-platform:** Node 24 × {macOS, Linux, Windows}
 - ✅ **Zero path safety issues:** `safePath()` enforced everywhere
 - ✅ **Skills installed correctly:** Symlink ladder works; fallback to copy on Windows
 - ✅ **Zero telemetry:** Only optional npm registry version check (2s timeout)
