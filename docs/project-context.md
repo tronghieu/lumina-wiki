@@ -44,7 +44,7 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 
 **Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
 
-**CI:** Node 20 × Node 22 × {Ubuntu, macOS, Windows} = 6 runners, `fail-fast: false`. Trigger: push to main + all PRs.
+**CI:** Node 24 × {Ubuntu, macOS, Windows} = 3 runners, `fail-fast: false`. Trigger: push to main + all PRs. `engines` still allows Node >= 20; CI no longer exercises it.
 
 ---
 

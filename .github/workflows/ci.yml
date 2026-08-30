@@ -16,13 +16,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Node 22 node:test runner has a structured-clone IPC bug
-        # (ERR_TEST_FAILURE / "Unable to deserialize cloned data due to invalid
-        # or unsupported version" in node:internal/test_runner/runner) that
-        # surfaces intermittently on every hosted runner (Windows, macOS, and
-        # ubuntu). Stay on Node 20 across all OSes until the upstream fix
-        # lands; revisit when Node 22.x patches the runner IPC.
-        node-version: [20]
+        # Node 20 reached end-of-life in April 2026, and actions targeting its
+        # runtime are deprecated on hosted runners, so the test matrix moved to
+        # 24. Node 22 was skipped rather than passed through: it carried a
+        # structured-clone IPC bug in the node:test runner (ERR_TEST_FAILURE /
+        # "Unable to deserialize cloned data due to invalid or unsupported
+        # version") that surfaced intermittently on every hosted OS and was why
+        # this matrix sat on a single version at all. Both suites were run on
+        # 24 locally before the switch with no sign of it.
+        #
+        # Deliberate gap: package.json still declares `engines: >=20.0.0`, so
+        # Node 20 and 22 remain supported but are no longer exercised here. An
+        # API available only in newer Node would break those users without
+        # failing CI. Narrow `engines` if that trade stops being worth it.
+        node-version: [24]
 
     steps:
       - name: Checkout
