@@ -35,6 +35,7 @@ import {
 import { sanitizeExternalIdsObject } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
+import { slugify } from './lib/slug.mjs';
 import {
   CITATION_EDGE_TYPES,
   edgeTypeByName,
@@ -75,28 +76,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // ---------------------------------------------------------------------------
 // 3. Utils
 // ---------------------------------------------------------------------------
-
-/**
- * Convert a title string to a kebab-case slug.
- * Lowercase, hyphenate, strip punctuation, collapse whitespace.
- * Pure function, no I/O.
- * @param {string} title
- * @returns {string}
- */
-function slugify(title) {
-  return title
-    .toLowerCase()
-    // Replace accented chars with ascii equivalents where possible
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    // Replace non-alphanumeric (except spaces and hyphens) with space
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    // Collapse any whitespace and hyphens to a single hyphen
-    .trim()
-    .replace(/[\s-]+/g, '-')
-    // Remove leading/trailing hyphens
-    .replace(/^-+|-+$/g, '');
-}
 
 /**
  * Parse YAML frontmatter from a markdown file string.
@@ -391,6 +370,11 @@ function stringifyFrontmatter(fm) {
 /**
  * Quote a string value if it contains special YAML characters or looks like
  * a scalar that would be misinterpreted (true/false/null/number).
+ *
+ * The empty string is quoted for the same reason: emitting a bare `key:` makes
+ * the value indistinguishable from a key with a block list under it, and
+ * parseFrontmatter reads it back as `[]` — so `set-meta <slug> title ''` would
+ * silently retype a string field as an array, and report ok while doing it.
  * @param {any} val
  * @returns {string}
  */
@@ -399,7 +383,7 @@ function quoteIfNeeded(val) {
   const special = ['true', 'false', 'null', '~'];
   if (special.includes(val.toLowerCase())) return `"${val}"`;
   if (!isNaN(Number(val)) && val.trim() !== '') return `"${val}"`;
-  if (val.includes(':') || val.includes('#') || val.startsWith('*') || val.includes('\n')) {
+  if (val === '' || val.includes(':') || val.includes('#') || val.startsWith('*') || val.includes('\n')) {
     return `"${val.replace(/"/g, '\\"')}"`;
   }
   return val;
@@ -456,7 +440,14 @@ function pathSafe(segment, projectRoot) {
   // Check resolved path stays inside projectRoot
   const resolved = resolve(join(projectRoot, segment));
   const rootResolved = resolve(projectRoot);
-  if (!resolved.startsWith(rootResolved + sep) && resolved !== rootResolved) return false;
+  // rootResolved already ends with `sep` when it IS a filesystem root (POSIX
+  // "/" or a Windows drive root like "C:\\") -- resolve() only leaves a
+  // trailing separator in that one case. Appending another `sep`
+  // unconditionally would double it ("//" / "C:\\\\"), a prefix no real
+  // resolved path ever has, so every path inside a root-level workspace was
+  // rejected as unsafe. Only add the separator when it isn't already there.
+  const rootWithSep = rootResolved.endsWith(sep) ? rootResolved : rootResolved + sep;
+  if (!resolved.startsWith(rootWithSep) && resolved !== rootResolved) return false;
   return true;
 }
 
@@ -1327,6 +1318,47 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve a checkpoint file's path, rejecting any skill/phase that would put it
+ * somewhere other than _lumina/_state.
+ *
+ * These two are identifiers, not paths, and were previously interpolated into a
+ * filename with no validation at all -- the only wiki.mjs arguments reaching a
+ * constructed path without even a `..` check. `phase` in particular carries the
+ * basename of a user's raw file (`checkpoint-read ingest <file-basename>`), so
+ * it is attacker-influenced and cannot be assumed clean. A separator in either
+ * value escaped the state dir, and the read side turned that into an arbitrary
+ * file read printed to stdout.
+ *
+ * Only separators are rejected. Characters that are merely awkward in a
+ * filename -- spaces, dots, parentheses -- stay legal, because real basenames
+ * contain them, they cannot traverse, and refusing them would break resuming an
+ * ingest of `Paper (2017).pdf`. The pathSafe call is a backstop on the composed
+ * path so the guarantee is asserted rather than only argued.
+ * @param {string} projectRoot
+ * @param {string} skill
+ * @param {string} phase
+ * @returns {string} absolute path to the checkpoint file
+ */
+function checkpointPath(projectRoot, skill, phase) {
+  for (const [label, value] of [['skill', skill], ['phase', phase]]) {
+    if (value.includes('/') || value.includes('\\') || value.includes('\0')) {
+      const err = new Error(
+        `Invalid checkpoint ${label}: ${JSON.stringify(value)} may not contain a path separator`,
+      );
+      err.code = 2;
+      throw err;
+    }
+  }
+  const rel = join('_lumina', '_state', `${skill}-${phase}.json`);
+  if (!pathSafe(rel, projectRoot)) {
+    const err = new Error(`Unsafe checkpoint path for skill ${JSON.stringify(skill)} phase ${JSON.stringify(phase)}`);
+    err.code = 2;
+    throw err;
+  }
+  return join(projectRoot, rel);
+}
+
+/**
  * Read a checkpoint file. Returns {} if missing.
  * @param {string} projectRoot
  * @param {string} skill
@@ -1334,8 +1366,7 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
  * @returns {Promise<object>}
  */
 async function checkpointRead(projectRoot, skill, phase) {
-  const stateDir = join(projectRoot, '_lumina', '_state');
-  const cpFile = join(stateDir, `${skill}-${phase}.json`);
+  const cpFile = checkpointPath(projectRoot, skill, phase);
   try {
     const content = await readFile(cpFile, 'utf8');
     return JSON.parse(content);
@@ -1353,9 +1384,8 @@ async function checkpointRead(projectRoot, skill, phase) {
  * @param {object} data
  */
 async function checkpointWrite(projectRoot, skill, phase, data) {
-  const stateDir = join(projectRoot, '_lumina', '_state');
-  await ensureDir(stateDir);
-  const cpFile = join(stateDir, `${skill}-${phase}.json`);
+  const cpFile = checkpointPath(projectRoot, skill, phase);
+  await ensureDir(join(projectRoot, '_lumina', '_state'));
   await atomicWrite(cpFile, JSON.stringify(data, null, 2) + '\n');
 }
 
@@ -1406,18 +1436,6 @@ async function appendLog(projectRoot, skill, details) {
 // ---------------------------------------------------------------------------
 
 /**
- * Core wiki directories to create (always).
- */
-const CORE_WIKI_DIRS = [
-  'wiki/sources',
-  'wiki/concepts',
-  'wiki/people',
-  'wiki/summary',
-  'wiki/outputs',
-  'wiki/graph',
-];
-
-/**
  * Installable (non-core) pack names, derived from ENTITY_DIRS so a new pack
  * added to schemas.mjs becomes selectable via `init --pack` without touching
  * this file.
@@ -1437,6 +1455,17 @@ function wikiDirsForPack(pack) {
     .filter(e => e.pack === pack)
     .map(e => `wiki/${e.dir}`.replace(/\/$/, ''));
 }
+
+/**
+ * Core wiki directories, created on every init. Derived from ENTITY_DIRS for
+ * the same reason INSTALLABLE_PACKS is: a hand-maintained copy drifts. This
+ * one had: it was missing `wiki/readings`. Commit e067795 added that dir to
+ * schemas.mjs and to the installer's own two lists but not to this array, which
+ * has not changed since e72fbaa — so `npx lumina-wiki install` created the dir
+ * and `wiki.mjs init` (i.e. `/lumi-init`) did not.
+ * @type {string[]}
+ */
+const CORE_WIKI_DIRS = wikiDirsForPack('core');
 
 /**
  * Initialize a workspace skeleton.
@@ -1697,10 +1726,12 @@ function fail(message, code) {
  * inside the project, and neither endpoint may contain `..`. Extracted from
  * three verbatim copies in the dispatch. Never returns on rejection.
  *
- * Note the citation and checkpoint subcommands deliberately still carry their
- * own, narrower checks — they run before requireProjectRoot(), so they have no
- * projectRoot to validate against, and widening them here would change which
- * error a user sees outside a project.
+ * Note the citation subcommands deliberately still carry their own, narrower
+ * checks: they run before requireProjectRoot(), so they have no projectRoot to
+ * validate against, and widening them here would change which error a user sees
+ * outside a project. That reasoning once named the checkpoint subcommands too,
+ * which was simply wrong -- they call requireProjectRoot() before doing any
+ * work, and they now validate in checkpointPath().
  * @param {string} fromSlug
  * @param {string} toSlug
  * @param {string} projectRoot

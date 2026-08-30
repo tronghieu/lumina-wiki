@@ -8,11 +8,13 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm, access, open } from 'node:fs/promises';
 import { tmpdir, platform } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+import { ENTITY_DIRS } from './schemas.mjs';
 
 // ---------------------------------------------------------------------------
 // Helper: run wiki.mjs as a child process
@@ -258,6 +260,44 @@ describe('init', () => {
       const json2 = parseJson(r2.stdout);
       assert.ok(json2.skipped.includes('wiki/reflections'));
       assert.ok(!json2.created.includes('wiki/reflections'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('creates wiki/readings on a plain init (no --pack)', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.created.includes('wiki/readings'));
+      await access(join(tmp, 'wiki/readings'), fsConstants.F_OK);
+
+      // Idempotency: second call reports the dir as skipped, not re-created.
+      const r2 = runWiki(['init'], { cwd: tmp });
+      assert.equal(r2.status, 0, `second init failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.ok(json2.skipped.includes('wiki/readings'));
+      assert.ok(!json2.created.includes('wiki/readings'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('created core dirs match ENTITY_DIRS pack:core entries', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      const expectedCoreDirs = Object.values(ENTITY_DIRS)
+        .filter((entry) => entry.pack === 'core')
+        .map((entry) => `wiki/${entry.dir}`.replace(/\/$/, ''));
+      assert.ok(expectedCoreDirs.length > 0, 'sanity: schema declares at least one core entity dir');
+      for (const dir of expectedCoreDirs) {
+        assert.ok(json.created.includes(dir), `expected ${dir} in created (from ENTITY_DIRS pack:core)`);
+      }
     } finally {
       await cleanTmp(tmp);
     }
@@ -586,6 +626,99 @@ related_concepts: []
 });
 
 // ---------------------------------------------------------------------------
+// Tests: set-meta empty-string frontmatter serialization
+//
+// quoteIfNeeded('') used to return a bare empty string, so `set-meta <slug>
+// <key> ''` wrote `key:` with nothing after the colon. parseFrontmatter reads
+// a bare `key:` line (no indented mapping following it) as the start of a
+// block list, so a string field silently came back as `[]` on the next read
+// — while set-meta itself still reported {"ok":true}. quoteIfNeeded('') now
+// emits `""`, which parseScalar round-trips back to an empty string.
+// ---------------------------------------------------------------------------
+
+describe('set-meta empty-string frontmatter serialization', () => {
+  test('set-meta <slug> title \'\' round-trips through read-meta as an empty string, not an array', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-title');
+
+      const set = runWiki(['set-meta', 'qm-empty-title', 'title', ''], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'qm-empty-title'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.strictEqual(fm.title, '');
+      assert.ok(!Array.isArray(fm.title), 'title must not have been retyped into an array');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta <slug> title \'\' writes a quoted empty scalar on disk', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-title-disk');
+      const filePath = join(tmp, 'wiki', 'sources', 'qm-empty-title-disk.md');
+
+      const set = runWiki(['set-meta', 'qm-empty-title-disk', 'title', ''], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const raw = await readFile(filePath, 'utf8');
+      assert.ok(
+        raw.split('\n').includes('title: ""'),
+        `expected a literal 'title: ""' line, got frontmatter:\n${raw}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta --json-value round-trips an empty string inside an array', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-tag');
+
+      const set = runWiki(
+        ['set-meta', 'qm-empty-tag', 'tags', '["a","","b"]', '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta --json-value failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'qm-empty-tag'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.tags, ['a', '', 'b']);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta does not over-quote a normal string value', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-plain-title');
+      const filePath = join(tmp, 'wiki', 'sources', 'qm-plain-title.md');
+
+      const set = runWiki(['set-meta', 'qm-plain-title', 'title', 'Plain Title'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const raw = await readFile(filePath, 'utf8');
+      assert.ok(
+        raw.split('\n').includes('title: Plain Title'),
+        `expected an unquoted 'title: Plain Title' line, got frontmatter:\n${raw}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: set-meta schema validation (write-path gate)
 //
 // setMeta rejects a value that violates the declared REQUIRED_FRONTMATTER
@@ -600,7 +733,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-iso-date');
+      await writeMinimalSource(tmp, 'sv-iso-date');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-iso-date.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -622,7 +755,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-todo');
+      await writeMinimalSource(tmp, 'sv-string-todo');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -649,7 +782,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-todo-json');
+      await writeMinimalSource(tmp, 'sv-string-todo-json');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo-json.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -674,7 +807,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-valid');
+      await writeMinimalSource(tmp, 'sv-string-valid');
 
       const r = runWiki(['set-meta', 'sources/sv-string-valid', 'title', 'A Real Title'], { cwd: tmp });
       assert.equal(r.status, 0, `set-meta failed: ${r.stderr}`);
@@ -692,7 +825,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-clear-optional');
+      await writeMinimalSource(tmp, 'sv-clear-optional');
 
       // 'confidence' is declared optional (required: false) for sources.
       const r = runWiki(['set-meta', 'sources/sv-clear-optional', 'confidence', 'null'], { cwd: tmp });
@@ -711,7 +844,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-number');
+      await writeMinimalSource(tmp, 'sv-number');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-number.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -733,7 +866,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-enum');
+      await writeMinimalSource(tmp, 'sv-enum');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-enum.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -755,7 +888,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-array');
+      await writeMinimalSource(tmp, 'sv-array');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-array.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -777,7 +910,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-valid');
+      await writeMinimalSource(tmp, 'sv-valid');
 
       const created = runWiki(['set-meta', 'sources/sv-valid', 'created', '2024-03-15'], { cwd: tmp });
       assert.equal(created.status, 0, `iso-date accept failed: ${created.stderr}`);
@@ -810,7 +943,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-freeform');
+      await writeMinimalSource(tmp, 'sv-freeform');
 
       const r = runWiki(['set-meta', 'sources/sv-freeform', 'tags', 'llm-inference'], { cwd: tmp });
       assert.equal(r.status, 0, `free-form key set-meta failed: ${r.stderr}`);
@@ -828,7 +961,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-external-ids');
+      await writeMinimalSource(tmp, 'sv-external-ids');
 
       const r = runWiki(
         [
@@ -1829,6 +1962,234 @@ describe('checkpoint ops', () => {
       await cleanTmp(tmp);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Regression: checkpointPath() must reject path separators in <skill> and
+  // <phase> so neither argument can escape _lumina/_state (fixes the arbitrary
+  // file write/read described in the checkpointPath() doc comment).
+  // -------------------------------------------------------------------------
+
+  test('checkpoint-write rejects a ".." skill and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-escape-${token}`;
+    // Mirrors the OLD, unvalidated construction: join(stateDir, `${skill}-${phase}.json`).
+    const outside = join(tmp, '_lumina', '_state', `${skill}-phase1.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ x: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', skill, 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a ".." phase and creates nothing outside the project', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const phase = `../../../lumina-wiki-escape-phase-${token}`;
+    const outside = join(tmp, '_lumina', '_state', `my-skill-${phase}.json`);
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ y: 2 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'my-skill', phase, cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+
+      try {
+        await access(outside, fsConstants.F_OK);
+        assert.fail('checkpoint file must not be created outside the project root');
+      } catch (err) {
+        assert.equal(err.code, 'ENOENT', 'file correctly absent outside the project');
+      }
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-read rejects a ".." skill and does not leak an outside file\'s contents', async () => {
+    const tmp = await makeTmp();
+    const token = randomUUID();
+    const skill = `../../../lumina-wiki-secret-${token}`;
+    // Mirrors the OLD, unvalidated read location so this proves a real read
+    // primitive was closed, not just that the command errors for other reasons.
+    const outside = join(tmp, '_lumina', '_state', `${skill}-x.json`);
+    const secretValue = `exfiltrated-${token}`;
+    try {
+      initWorkspace(tmp);
+      await writeFile(outside, JSON.stringify({ SECRET: secretValue }), 'utf8');
+
+      const r = runWiki(['checkpoint-read', skill, 'x'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: stdout=${r.stdout} stderr=${r.stderr}`);
+      assert.ok(!r.stdout.includes(secretValue), 'stdout must not contain the outside file\'s secret value');
+      assert.ok(!r.stdout.includes('SECRET'), 'stdout must not contain the outside file\'s contents');
+    } finally {
+      await rm(outside, { force: true }).catch(() => {});
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write rejects a bare "/" in <skill> even without ".." traversal', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ z: 3 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', 'a/b', 'c', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}: ${r.stderr}`);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint-write path-separator rejection has the {error, code:2} envelope shape', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      await writeFile(cpFile, JSON.stringify({ a: 1 }), 'utf8');
+
+      const r = runWiki(['checkpoint-write', '../escaped', 'phase1', cpFile], { cwd: tmp });
+      assert.equal(r.status, 2);
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /may not contain a path separator/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a raw file basename with spaces, parens, and a dot in <phase>', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { resumed: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = 'Paper (2017).pdf';
+      const wr = runWiki(['checkpoint-write', 'ingest', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'ingest', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('checkpoint round-trips a timestamp <phase> like /lumi-verify passes', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const cpFile = join(tmp, 'cp.json');
+      const data = { verified: true };
+      await writeFile(cpFile, JSON.stringify(data), 'utf8');
+
+      const phase = '20260815T115922Z';
+      const wr = runWiki(['checkpoint-write', 'lumi-verify', phase, cpFile], { cwd: tmp });
+      assert.equal(wr.status, 0, `checkpoint-write failed: ${wr.stderr}`);
+
+      const rr = runWiki(['checkpoint-read', 'lumi-verify', phase], { cwd: tmp });
+      assert.equal(rr.status, 0, `checkpoint-read failed: ${rr.stderr}`);
+      assert.deepEqual(parseJson(rr.stdout), data);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: pathSafe() containment check when projectRoot IS a filesystem
+// root (POSIX "/" or a Windows drive root like "C:\\"). checkpointPath()
+// (which backstops itself with pathSafe(), see its doc comment above) is
+// reached through requireProjectRoot() -> findProjectRoot(), which legally
+// returns such a root when `wiki/` lives directly under it -- e.g. a
+// container whose workspace is mounted at "/", or a project at a Windows
+// drive root. pathSafe() compared the resolved candidate against
+// `rootResolved + sep`, which doubles to "//" / "C:\\\\" when rootResolved
+// already ends in a separator (the one case resolve() leaves a trailing
+// separator in) -- a prefix no real resolved path ever has, so every
+// checkpoint path in a root-level workspace was rejected as unsafe.
+//
+// pathSafe() is a pure, I/O-free string function, not exported by wiki.mjs.
+// It also cannot safely be `import`ed here: wiki.mjs calls `main(process.argv)`
+// unconditionally at the bottom of the module with no `import.meta.url`
+// guard, so importing it would run its CLI against the test runner's argv
+// and exit the process. Instead, these tests extract pathSafe()'s exact
+// current source out of the file and evaluate it -- exercising the real
+// implementation, not a hand-copied duplicate that could silently drift out
+// of sync -- and run it against a chosen path-primitive set (native
+// `node:path` for the POSIX cases, `node:path`'s `win32` namespace for the
+// Windows cases, so both are exercised regardless of the host OS running
+// this suite).
+// ---------------------------------------------------------------------------
+
+describe('pathSafe() filesystem-root containment (regression)', () => {
+  /**
+   * Extract pathSafe()'s current function body from wiki.mjs and bind it to
+   * the given { resolve, join, sep } (the free variables it closes over).
+   */
+  function extractPathSafe({ resolve, join, sep }) {
+    const src = readFileSync(WIKI_MJS, 'utf8');
+    const match = src.match(/function pathSafe\(segment, projectRoot\) \{[\s\S]*?\n\}\n/);
+    assert.ok(match, 'pathSafe() source not found in wiki.mjs -- update this extraction if it moved/changed shape');
+    const factory = new Function('resolve', 'join', 'sep', `return ${match[0]}`);
+    return factory(resolve, join, sep);
+  }
+
+  test('POSIX: accepts an in-root checkpoint path when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/'), true);
+  });
+
+  test('POSIX: still rejects a ".." escape when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../etc/passwd', '/'), false);
+  });
+
+  test('POSIX: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../../etc/passwd', '/tmp/some-project'), false);
+  });
+
+  test('POSIX: still accepts an in-root path at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/tmp/some-project'), true);
+  });
+
+  test('Windows: accepts an in-root checkpoint path when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    const rel = win32.join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, 'C:\\'), true);
+  });
+
+  test('Windows: still rejects a ".." escape when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\Windows\\System32', 'C:\\'), false);
+  });
+
+  test('Windows: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\..\\Windows\\System32', 'C:\\Projects\\myapp'), false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2570,8 +2931,9 @@ describe('atomicWrite tmp cleanup on success', () => {
 // Tests: v0.9 verify schema — verify_status and findings fields
 // ---------------------------------------------------------------------------
 
-/** Helper: write a minimal valid source file to wiki/sources/<slug>.md */
-async function writeVerifySource(tmp, slug, extra = '') {
+/** Helper: write a minimal valid source file to wiki/sources/<slug>.md.
+ *  Shared by the verify-schema, set-meta and serialization suites. */
+async function writeMinimalSource(tmp, slug, extra = '') {
   const dir = join(tmp, 'wiki', 'sources');
   await mkdir(dir, { recursive: true });
   await writeFile(
@@ -2586,7 +2948,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-status-test');
+      await writeMinimalSource(tmp, 'vs-status-test');
 
       const set = runWiki(['set-meta', 'sources/vs-status-test', 'verify_status', 'passed'], { cwd: tmp });
       assert.equal(set.status, 0, `set-meta verify_status failed: ${set.stderr}`);
@@ -2604,7 +2966,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-findings-ok');
+      await writeMinimalSource(tmp, 'vs-findings-ok');
 
       const validFindings = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
@@ -2628,7 +2990,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-bad-evidence');
+      await writeMinimalSource(tmp, 'vs-bad-evidence');
       // Write malformed findings via set-meta (missing 'evidence' field)
       const malformed = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', action: 'Z' },
@@ -2650,7 +3012,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-bad-reviewer');
+      await writeMinimalSource(tmp, 'vs-bad-reviewer');
 
       const badFindings = JSON.stringify([
         { id: 1, reviewer: 'robot', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
@@ -2672,7 +3034,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-no-verify-fields');
+      await writeMinimalSource(tmp, 'vs-no-verify-fields');
 
       const vf = runWiki(['verify-frontmatter', 'sources/vs-no-verify-fields'], { cwd: tmp });
       assert.equal(vf.status, 0, `verify-frontmatter failed: ${vf.stderr}`);
@@ -2687,7 +3049,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-colon-in-value');
+      await writeMinimalSource(tmp, 'vs-colon-in-value');
 
       const original = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'URL https://x:8080', evidence: 'ratio 2:1', action: 'accept' },
@@ -2714,7 +3076,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-escaped-quote');
+      await writeMinimalSource(tmp, 'vs-escaped-quote');
 
       const original = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'He said \\"hi\\"', evidence: 'quoted evidence', action: 'accept' },
@@ -2741,7 +3103,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-numeric-id');
+      await writeMinimalSource(tmp, 'vs-numeric-id');
 
       const original = [
         { id: 42, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'some evidence', action: 'accept' },
@@ -2792,7 +3154,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-colon-evidence');
+      await writeMinimalSource(tmp, 'vs-colon-evidence');
 
       const findings = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'contains: colon', action: 'accept' },
@@ -2820,7 +3182,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'is-drafted');
+      await writeMinimalSource(tmp, 'is-drafted');
 
       const set = runWiki(['set-meta', 'sources/is-drafted', 'ingest_status', 'drafted'], { cwd: tmp });
       assert.equal(set.status, 0, `set-meta ingest_status failed: ${set.stderr}`);
@@ -2841,7 +3203,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'is-absent');
+      await writeMinimalSource(tmp, 'is-absent');
 
       const vf = runWiki(['verify-frontmatter', 'sources/is-absent'], { cwd: tmp });
       assert.equal(vf.status, 0, `verify-frontmatter failed without ingest_status: ${vf.stderr}`);
@@ -2881,7 +3243,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'flow-rt');
+      await writeMinimalSource(tmp, 'flow-rt');
       const findings = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'alpha, beta, gamma', evidence: 'page 3, table 2', action: 'revise claim' },
         { id: 2, reviewer: 'blind', class: 'dismiss', claim: '2024', evidence: 'true', action: 'null' },
@@ -2911,7 +3273,7 @@ describe('v0.9 ingest_status schema', () => {
       const stages = ['drafted', 'linted', 'verified', 'finalized'];
       for (const stage of stages) {
         const slug = `is-stage-${stage}`;
-        await writeVerifySource(tmp, slug);
+        await writeMinimalSource(tmp, slug);
         const set = runWiki(['set-meta', `sources/${slug}`, 'ingest_status', stage], { cwd: tmp });
         assert.equal(set.status, 0, `set-meta ${stage} failed: ${set.stderr}`);
         const read = runWiki(['read-meta', `sources/${slug}`], { cwd: tmp });
