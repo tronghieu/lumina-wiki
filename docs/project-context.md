@@ -292,7 +292,7 @@ Lint enforces:
 
 ### `src/scripts/lint.mjs`
 
-`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L18 (L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
+`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L19 (L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
 
 | Check | Description | Fixable |
 |---|---|---|
@@ -313,6 +313,7 @@ Lint enforces:
 | L16 | `external_ids[ns]` disagrees with `urls[]`-derived value (warning) | no |
 | L17 | Dangling edge — an edge's `from`/`to` internal slug does not resolve to any wiki file (error) | no |
 | L18 | Frontmatter `id` no longer names the file it lives in, per `deriveIdFromPath` (warning) | no |
+| L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` (error) | yes when both endpoints resolve (migrates the row into `graph/citations.jsonl`, deduping against citations already recorded there); a row with a dangling endpoint is reported and left in place |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 
@@ -492,7 +493,7 @@ Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 ID
 
 1. **`set-meta` scalar coercion:** without `--json-value`, `"3"` becomes `3` (number). Pass `--json-value` for strings that look numeric/boolean, or for arrays.
 2. **Symmetric edges sort endpoints:** `add-edge source-z same_problem_as source-a` stores `from: source-a, to: source-z`. Reading `source-z` returns the edge under `inbound`, not `outbound`.
-3. **`cites`/`cited_by` are split:** `add-citation` writes to `citations.jsonl`; `add-edge … cites …` writes to `edges.jsonl`. `read-citations` reads only the former; `read-edges` reads only the latter. Wrong command = silent empty result.
+3. **`cites`/`cited_by` are split:** they live in `citations.jsonl`, mutated only via `add-citation`/`remove-citation` — `add-edge`/`batch-edges` reject them outright (exit 2) and point you at `add-citation`. `read-citations` reads only `citations.jsonl`; `read-edges` reads only `edges.jsonl`, so reading the wrong one for a citation returns an empty result, not an error.
 4. **`batch-edges` is all-or-nothing:** one bad record fails the whole batch with no writes. Don't mix known-good and unknown edge types.
 5. **`findProjectRoot` walks up from cwd:** scripts must be invoked with cwd inside the workspace, not arbitrary directory.
 6. **`lint --fix L01` inserts `key: TODO`** — not real values. L02 violations follow on next run until you replace `TODO`.

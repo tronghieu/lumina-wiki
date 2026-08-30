@@ -24,6 +24,7 @@ output in `/lumi-check`.
 | L16 | `external_ids` value disagrees with the value derived from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` to reconcile |
 | L17 | Dangling edge endpoint (edge `from`/`to` does not resolve to an existing wiki file) | error | No — user must run `wiki.mjs remove-edge` or recreate the missing page |
 | L18 | Frontmatter `id` no longer names the file it lives in | warning | No — by design; user sets `id` to match the file or renames the file to match `id`. The pre-v0.1 form `<own-entity-dir>/<slug>` (e.g. `concepts/ab-testing` on a page in `concepts/`) is tolerated and never rewritten; a prefix naming a *different* entity dir is not |
+| L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` | error | Yes, when both endpoints name real wiki files — migrates the row into `graph/citations.jsonl` (always stored as the `cites` direction; a `cited_by` row's endpoints are swapped), deduping against citations already recorded there. A row with an endpoint that resolves to nothing is reported and left in place |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 
@@ -40,6 +41,7 @@ Errors that must be resolved before done:
 - L10: foundation alias conflicts
 - L14: invalid `external_ids` values
 - L17: dangling edge endpoints
+- L19: citation stored as a graph edge
 
 Advisories to surface to the user:
 
@@ -54,7 +56,7 @@ Advisories to surface to the user:
 
 ## Fix Behavior
 
-`lint.mjs --fix --json` can apply L01, L02, L03, L05, L06, L07, and L09.
+`lint.mjs --fix --json` can apply L01, L02, L03, L05, L06, L07, L09, and L19.
 
 - L01 derives a type-valid value for the missing field instead of a
   placeholder: `[]` for array fields, a date recovered from a legacy
@@ -104,6 +106,15 @@ Advisories to surface to the user:
 - L06 appends the missing reverse edge with the linter fixer.
 - L07 deduplicates symmetric edges.
 - L09 regenerates the `<!-- lumina:index --> ... <!-- /lumina:index -->` block.
+- L19 migrates each `cites`/`cited_by` row out of `edges.jsonl` into
+  `graph/citations.jsonl`, always storing it as the `cites` direction (a
+  `cited_by` row's endpoints are swapped on the way in), deduping against
+  citations already recorded there. L19 is the only `--fix` fixer that writes
+  to `citations.jsonl`.
+  A row is migrated only when both endpoints name real wiki files. One that
+  points at a missing page stays in `edges.jsonl` and is reported unfixable,
+  because L17 checks `edges.jsonl` and nothing checks `citations.jsonl` —
+  moving it would hide a dangling reference rather than repair it.
 
 L04, L08, L10, L11, L12, L13, L14, L16, L17, and L18 require manual correction
 — none of them are touched by `--fix`. So do the individual L01/L02/L05
