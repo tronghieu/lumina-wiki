@@ -159,18 +159,26 @@ users in `1.13.0-next.0`. Both commits now carry an annotated
 `archive/<version>` tag recording what happened; those deliberately sit
 outside the `v*` namespace so they never trigger a publish.
 
-Finish every release by confirming the channel actually moved:
+Finish every release by confirming the channel actually moved. Both checks
+have to query a remote — a tag that exists only on your laptop is the exact
+failure being guarded against, and `git tag --list` would report it as
+present:
 
 ```bash
 npm view lumina-wiki dist-tags
-git tag --list 'v*' --sort=-v:refname | head -3
+git ls-remote --tags origin 'v*' | grep -v '\^{}'
 ```
 
-If the version you just bumped is absent from both, nothing shipped. Do not
-re-tag an old release commit to catch up: `publish.yml` reads the version from
-that commit's `package.json`, so the job would pass its own check and push a
-months-old build — bugs included — straight to `latest`. Roll the missed
-content into the next version instead, which is what 1.13.0-next.0 did.
+The version you just bumped has to appear in **both**. Missing from
+`ls-remote` means the tag never reached GitHub, so `publish.yml` never ran.
+Present there but missing from `dist-tags` means the workflow ran and failed
+— read its log rather than re-tagging.
+
+Do not re-tag an old release commit to catch up: `publish.yml` reads the
+version from that commit's `package.json`, so the job would pass its own
+check and push a months-old build — bugs included — straight to `latest`.
+Roll the missed content into the next version instead, which is what
+1.13.0-next.0 did.
 
 ### Cutting a pre-release
 
