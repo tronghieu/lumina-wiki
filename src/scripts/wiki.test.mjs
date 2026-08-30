@@ -8,10 +8,10 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm, access, open } from 'node:fs/promises';
 import { tmpdir, platform } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep, win32 } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // ---------------------------------------------------------------------------
@@ -1859,6 +1859,84 @@ describe('checkpoint ops', () => {
     } finally {
       await cleanTmp(tmp);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: pathSafe() containment check when projectRoot IS a filesystem
+// root (POSIX "/" or a Windows drive root like "C:\\"). checkpointPath()
+// (which backstops itself with pathSafe(), see its doc comment above) is
+// reached through requireProjectRoot() -> findProjectRoot(), which legally
+// returns such a root when `wiki/` lives directly under it -- e.g. a
+// container whose workspace is mounted at "/", or a project at a Windows
+// drive root. pathSafe() compared the resolved candidate against
+// `rootResolved + sep`, which doubles to "//" / "C:\\\\" when rootResolved
+// already ends in a separator (the one case resolve() leaves a trailing
+// separator in) -- a prefix no real resolved path ever has, so every
+// checkpoint path in a root-level workspace was rejected as unsafe.
+//
+// pathSafe() is a pure, I/O-free string function, not exported by wiki.mjs.
+// It also cannot safely be `import`ed here: wiki.mjs calls `main(process.argv)`
+// unconditionally at the bottom of the module with no `import.meta.url`
+// guard, so importing it would run its CLI against the test runner's argv
+// and exit the process. Instead, these tests extract pathSafe()'s exact
+// current source out of the file and evaluate it -- exercising the real
+// implementation, not a hand-copied duplicate that could silently drift out
+// of sync -- and run it against a chosen path-primitive set (native
+// `node:path` for the POSIX cases, `node:path`'s `win32` namespace for the
+// Windows cases, so both are exercised regardless of the host OS running
+// this suite).
+// ---------------------------------------------------------------------------
+
+describe('pathSafe() filesystem-root containment (regression)', () => {
+  /**
+   * Extract pathSafe()'s current function body from wiki.mjs and bind it to
+   * the given { resolve, join, sep } (the free variables it closes over).
+   */
+  function extractPathSafe({ resolve, join, sep }) {
+    const src = readFileSync(WIKI_MJS, 'utf8');
+    const match = src.match(/function pathSafe\(segment, projectRoot\) \{[\s\S]*?\n\}\n/);
+    assert.ok(match, 'pathSafe() source not found in wiki.mjs -- update this extraction if it moved/changed shape');
+    const factory = new Function('resolve', 'join', 'sep', `return ${match[0]}`);
+    return factory(resolve, join, sep);
+  }
+
+  test('POSIX: accepts an in-root checkpoint path when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/'), true);
+  });
+
+  test('POSIX: still rejects a ".." escape when projectRoot is "/"', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../etc/passwd', '/'), false);
+  });
+
+  test('POSIX: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    assert.equal(pathSafe('../../etc/passwd', '/tmp/some-project'), false);
+  });
+
+  test('POSIX: still accepts an in-root path at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve, join, sep });
+    const rel = join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, '/tmp/some-project'), true);
+  });
+
+  test('Windows: accepts an in-root checkpoint path when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    const rel = win32.join('_lumina', '_state', 'lumi-ingest-phase1.json');
+    assert.equal(pathSafe(rel, 'C:\\'), true);
+  });
+
+  test('Windows: still rejects a ".." escape when projectRoot is a drive root ("C:\\\\")', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\Windows\\System32', 'C:\\'), false);
+  });
+
+  test('Windows: still rejects a ".." escape at a normal (non-root) projectRoot', () => {
+    const pathSafe = extractPathSafe({ resolve: win32.resolve, join: win32.join, sep: win32.sep });
+    assert.equal(pathSafe('..\\..\\Windows\\System32', 'C:\\Projects\\myapp'), false);
   });
 });
 

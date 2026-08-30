@@ -443,7 +443,14 @@ function pathSafe(segment, projectRoot) {
   // Check resolved path stays inside projectRoot
   const resolved = resolve(join(projectRoot, segment));
   const rootResolved = resolve(projectRoot);
-  if (!resolved.startsWith(rootResolved + sep) && resolved !== rootResolved) return false;
+  // rootResolved already ends with `sep` when it IS a filesystem root (POSIX
+  // "/" or a Windows drive root like "C:\\") -- resolve() only leaves a
+  // trailing separator in that one case. Appending another `sep`
+  // unconditionally would double it ("//" / "C:\\\\"), a prefix no real
+  // resolved path ever has, so every path inside a root-level workspace was
+  // rejected as unsafe. Only add the separator when it isn't already there.
+  const rootWithSep = rootResolved.endsWith(sep) ? rootResolved : rootResolved + sep;
+  if (!resolved.startsWith(rootWithSep) && resolved !== rootResolved) return false;
   return true;
 }
 
