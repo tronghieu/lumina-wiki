@@ -444,21 +444,30 @@ Body opens with: "Read `README.md` at the project root before this SKILL.md." th
 
 ## 7. CI & packaging
 
-**Matrix:** Node {20, 22} × {ubuntu, macos, windows} = 6 cells, `fail-fast: false`. Every cell runs all 8 steps; any failure blocks merge.
+**Matrix:** two jobs. `installability` (`Node ${{ matrix.node-version }} / ${{ matrix.os }}`) — Node 24 × {ubuntu, macos, windows} = 3 cells, `fail-fast: false`; any failure blocks merge. Not every cell runs every step — `ci:cold-start` is gated `if: runner.os == 'Linux'`. `bun-smoke` (`Bun smoke (ubuntu)`, ubuntu only) — `continue-on-error: true`, advisory, does not block merge.
 
-Steps (in order):
-1. `npm ci`
-2. `pip install pytest`
-3. `npm run test:installer` — `node --test src/installer/*.test.js`
-4. `npm run test:scripts` — `node --test src/scripts/*.test.mjs`
-5. `npm run test:python` — `pytest src/tools/tests -q`
-6. `node bin/lumina.js --version --no-update` — CLI smoke
-7. `npm run ci:idempotency`
-8. `npm run ci:package`
+Steps (`installability`, in order):
+1. Checkout — `actions/checkout@v7`
+2. Setup Node — `actions/setup-node@v7`, `cache: npm`
+3. Setup Python — `actions/setup-python@v7`, `python-version: "3.11"`
+4. `npm ci`
+5. `python -m pip install -r src/tools/requirements.txt`
+6. `npm run test:installer` — three chained stages: `test:installer:commands`, `test:installer:commands-agents`, then `node --test` over `bin/*.test.js` plus 11 named `src/installer/*.test.js` files
+7. `npm run test:scripts` — `node --test` over 11 named `src/scripts/*.test.mjs` files
+8. `npm run test:python` — `pytest src/tools/tests -q`
+9. `npm run test:catalog` — catalog + doc-count integrity
+10. `node bin/lumina.js --version --no-update` — CLI smoke
+11. `npm run ci:idempotency`
+12. `npm run ci:cold-start` — **Linux-only** (`if: runner.os == 'Linux'`)
+13. `npm run ci:package`
+14. `npm run ci:agent-isolation`
+15. `npm run test:e2e` — end-to-end (librarian mode)
+
+`bun-smoke` steps: checkout, `oven-sh/setup-bun@v2` (bun-version latest), `bun install`, `bun bin/lumina.js --version --no-update`, `bun run dev:sandbox -- --yes --packs core`.
 
 **Idempotency invariant (`scripts/ci-idempotency.mjs`):**
 
-Two scenarios: `core-default` and `full-pack` (core + research + reading × 6 IDE targets). For each:
+Five scenarios: `core-default`; `full-pack` (core + research + reading + learning × 6 IDE targets); `multilingual-en`, `multilingual-vi`, `multilingual-zh` (each `--lang <x> --packs core,research`). For each:
 1. `git init`, install once, commit baseline
 2. Install again with same args
 3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `.env.example`, `wiki`, `raw`
@@ -539,7 +548,7 @@ npm run ci:idempotency     # install twice → git diff over watched paths must 
 npm run ci:package         # npm pack --dry-run, validate files allowlist + postinstall ban
 ```
 
-These three commands are exactly what CI runs across Node {20, 22} × {ubuntu, macos, windows}. If they pass locally, CI will pass.
+These three commands are a subset of what CI runs across Node 24 × {ubuntu, macos, windows} (`installability` job) — see §7 for the full 15-step list, which also includes `test:catalog`, `ci:cold-start` (Linux-only), `ci:agent-isolation`, and `test:e2e`. Passing locally covers the core gates, not all of CI.
 
 ### Per-module quick tests
 
