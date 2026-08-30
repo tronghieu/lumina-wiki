@@ -138,19 +138,47 @@ The npm dist-tag is derived from the version itself — the workflow never takes
 
 | `package.json` version | git tag | npm dist-tag | GitHub Release |
 |---|---|---|---|
-| `1.12.0` | `v1.12.0` | `latest` | normal |
-| `1.12.0-next.0` | `v1.12.0-next.0` | `next` | pre-release |
-| `1.12.0-rc.1` | `v1.12.0-rc.1` | `rc` | pre-release |
+| `1.14.0` | `v1.14.0` | `latest` | normal |
+| `1.14.0-next.0` | `v1.14.0-next.0` | `next` | pre-release |
+| `1.14.0-rc.1` | `v1.14.0-rc.1` | `rc` | pre-release |
 
-A version with a pre-release identifier publishes to a channel of that name and **leaves `latest` untouched**, so nobody running `npx lumina-wiki install` is affected. Build metadata is not part of the channel (`1.12.0+build-next` is a stable release, not a `next` one). An identifier the workflow cannot read as a channel — empty, uppercase, purely numeric, literally `latest`, or one npm itself refuses because it parses as a version range (`x`, `v1`) — fails the job rather than guessing.
+A version with a pre-release identifier publishes to a channel of that name and **leaves `latest` untouched**, so nobody running `npx lumina-wiki install` is affected. Build metadata is not part of the channel (`1.14.0+build-next` is a stable release, not a `next` one). An identifier the workflow cannot read as a channel — empty, uppercase, purely numeric, literally `latest`, or one npm itself refuses because it parses as a version range (`x`, `v1`) — fails the job rather than guessing.
+
+### A bump is not a release
+
+Merging a `chore(release):` commit does nothing on its own. The tag is what
+publishes — `publish.yml` triggers on `push: tags: v*` and on nothing else. A
+bumped `package.json` and a written `CHANGELOG.md` entry sitting on `main`
+with no tag behind them read exactly like a shipped release and are not one.
+
+This has already happened twice. **1.11.0** (2026-07-27) and **1.12.0**
+(2026-08-12) were each bumped, documented and merged, and neither was ever
+tagged, so neither reached npm: `latest` sat on 1.10.1 for over a month while
+the repo read as though two releases had shipped. Their content first reached
+users in `1.13.0-next.0`. Both commits now carry an annotated
+`archive/<version>` tag recording what happened; those deliberately sit
+outside the `v*` namespace so they never trigger a publish.
+
+Finish every release by confirming the channel actually moved:
+
+```bash
+npm view lumina-wiki dist-tags
+git tag --list 'v*' --sort=-v:refname | head -3
+```
+
+If the version you just bumped is absent from both, nothing shipped. Do not
+re-tag an old release commit to catch up: `publish.yml` reads the version from
+that commit's `package.json`, so the job would pass its own check and push a
+months-old build — bugs included — straight to `latest`. Roll the missed
+content into the next version instead, which is what 1.13.0-next.0 did.
 
 ### Cutting a pre-release
 
 ```bash
-# 1.12.0-next.0, .next.1, … as many as the change needs
-npm version 1.12.0-next.0 --no-git-tag-version
-git commit -am "chore(release): 1.12.0-next.0"
-git tag v1.12.0-next.0
+# 1.14.0-next.0, .next.1, … as many as the change needs
+npm version 1.14.0-next.0 --no-git-tag-version
+git commit -am "chore(release): 1.14.0-next.0"
+git tag v1.14.0-next.0
 git push origin main --tags
 ```
 
@@ -160,11 +188,11 @@ Testers then run:
 npx lumina-wiki@next install
 ```
 
-When the change is ready, bump to the plain `1.12.0`, tag it, and the same workflow moves `latest`.
+When the change is ready, bump to the plain `1.14.0`, tag it, and the same workflow moves `latest`.
 
 ### What pre-release users see
 
-`checkForUpdate()` always queries the `latest` dist-tag, and `isNewerVersion()` follows semver precedence — a stable release outranks the pre-release that led to it. So someone on `1.12.0-next.0` is nudged to upgrade the moment `1.12.0` ships, but is not nagged while only pre-releases exist. They are *not* notified about a newer build within the same channel; re-running `npx lumina-wiki@next install` is the way to pick that up.
+`checkForUpdate()` always queries the `latest` dist-tag, and `isNewerVersion()` follows semver precedence — a stable release outranks the pre-release that led to it. So someone on `1.14.0-next.0` is nudged to upgrade the moment `1.14.0` ships, but is not nagged while only pre-releases exist. They are *not* notified about a newer build within the same channel; re-running `npx lumina-wiki@next install` is the way to pick that up.
 
 ### Before tagging anything
 

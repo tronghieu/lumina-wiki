@@ -1232,7 +1232,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 [Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.0-next.0...HEAD
 [1.13.0-next.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.13.0-next.0
-[1.12.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.12.0
+[1.12.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...archive/1.12.0
 [1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.2.0...v1.3.0
