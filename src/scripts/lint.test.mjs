@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17, checkL19,
+  checkL13, checkL14, checkL16, checkL17, checkL19, makeEndpointResolver,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
   runLint,
@@ -3252,8 +3252,7 @@ describe('L19 citation-in-edges', () => {
       { from: 'sources/a', to: 'sources/b', type: 'cites' },
       { from: 'sources/b', to: 'sources/a', type: 'cited_by' }, // "b is cited_by a" == "a cites b"
     ];
-    const knownSlugs = new Set(['sources/a', 'sources/b']);
-    const result = checkL19(edges, knownSlugs);
+    const result = checkL19(edges, makeEndpointResolver(new Set(['sources/a', 'sources/b'])));
     assert.equal(result.length, 2);
 
     const [citesFinding, citedByFinding] = result;
@@ -3272,21 +3271,33 @@ describe('L19 citation-in-edges', () => {
 
   test('returns [] for a normal (non-citation) edge', () => {
     const edges = [{ from: 'sources/a', to: 'sources/b', type: 'builds_on' }];
-    assert.equal(checkL19(edges, new Set(['sources/a', 'sources/b'])).length, 0);
+    assert.equal(checkL19(edges, makeEndpointResolver(new Set(['sources/a', 'sources/b']))).length, 0);
   });
 
   test('returns [] for an empty edge list', () => {
-    assert.equal(checkL19([], new Set()).length, 0);
+    assert.equal(checkL19([], makeEndpointResolver(new Set())).length, 0);
   });
 
   test('reports a citation row with an unresolved endpoint as UNFIXABLE rather than migrating it', () => {
     // Migrating this row would move a dangling reference out of edges.jsonl,
     // which L17 checks, into citations.jsonl, which nothing checks.
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
-    const result = checkL19(edges, new Set(['sources/a']));
+    const result = checkL19(edges, makeEndpointResolver(new Set(['sources/a'])));
     assert.equal(result.length, 1);
     assert.equal(result[0].fixable, false);
     assert.match(result[0].message, /cannot be moved/);
+  });
+
+  // The old add-edge stored endpoints verbatim, so a legacy citation row can
+  // hold a bare slug while knownSlugs holds the wiki-relative path. Testing
+  // the slug set directly would refuse to migrate exactly the rows L19 exists
+  // to clean up; it must resolve the way L17 does.
+  test('accepts a bare-slug citation row whose endpoints resolve by basename', () => {
+    const edges = [{ from: 'src-a', to: 'src-b', type: 'cites' }];
+    const resolves = makeEndpointResolver(new Set(['sources/src-a', 'sources/src-b']));
+    const result = checkL19(edges, resolves);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].fixable, true, 'a bare slug that names a real file must still be migratable');
   });
 
   test('checkL06 does NOT flag a cites row as missing its reverse — L19 owns citation rows, not L06', () => {

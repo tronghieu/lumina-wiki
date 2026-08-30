@@ -1743,12 +1743,29 @@ function checkL16(wikiRelPath, fm) {
  * @param {Set<string>} knownSlugs  - Set of wiki-relative paths (without .md), same as passed to checkL05.
  * @returns {Finding[]}
  */
-function citationEndpointsResolve(edge, knownSlugs) {
+function makeEndpointResolver(knownSlugs) {
+  const index = buildBasenameIndex(knownSlugs);
+  return (target) => resolveWikilinkTarget(target, knownSlugs, index) !== null;
+}
+
+/**
+ * Whether both endpoints of a citation row name a page that exists.
+ *
+ * Takes the resolver rather than the slug set so it answers "resolves" exactly
+ * the way L17 does. `add-edge` stored endpoints verbatim, so a legacy citation
+ * row can hold a bare slug (`src-a`) where knownSlugs holds `sources/src-a`;
+ * testing the set directly would refuse to migrate rows that do resolve, which
+ * is precisely the legacy shape L19 exists to clean up.
+ * @param {{from:string,to:string}} edge
+ * @param {(target: string) => boolean} resolves
+ * @returns {boolean}
+ */
+function citationEndpointsResolve(edge, resolves) {
   for (const key of ['from', 'to']) {
     const target = edge[key];
     if (typeof target !== 'string') return false;
     if (target.includes('://')) continue; // external URL, not a slug
-    if (!knownSlugs.has(target)) return false;
+    if (!resolves(target)) return false;
   }
   return true;
 }
@@ -1799,15 +1816,15 @@ function checkL17(edges, knownSlugs) {
  * than migrated. Moving it would launder a dangling reference out of the one
  * file that is checked and into the one that is not.
  * @param {Array<{from:string,type:string,to:string}>} edges
- * @param {Set<string>} knownSlugs
+ * @param {(target: string) => boolean} resolves  Same notion of "resolves" L17 uses.
  * @returns {Finding[]}
  */
-function checkL19(edges, knownSlugs) {
+function checkL19(edges, resolves) {
   const findings = [];
   for (const edge of edges) {
     if (!CITATION_EDGE_TYPES.has(edge.type)) continue;
     const [citing, cited] = edge.type === 'cites' ? [edge.from, edge.to] : [edge.to, edge.from];
-    if (!citationEndpointsResolve(edge, knownSlugs)) {
+    if (!citationEndpointsResolve(edge, resolves)) {
       findings.push(finding(
         'L19-citation-in-edges', 'error', false,
         edge.from, null,
@@ -2199,7 +2216,7 @@ function fixL07(edgesContent, edges) {
  * @param {string} citationsContent
  * @returns {{ newEdges: string, newCitations: string, preview: string, migrated: number }}
  */
-function fixL19(edgesContent, citationsContent, knownSlugs) {
+function fixL19(edgesContent, citationsContent, resolves) {
   const keptLines = [];
   const migrated = [];
   for (const line of edgesContent.split('\n')) {
@@ -2219,7 +2236,7 @@ function fixL19(edgesContent, citationsContent, knownSlugs) {
     // Same predicate checkL19 reports on. A row pointing at a file that does
     // not exist stays in edges.jsonl, where L17 still reports it; migrating it
     // would hide it in a file no check reads.
-    if (!citationEndpointsResolve(parsed, knownSlugs)) {
+    if (!citationEndpointsResolve(parsed, resolves)) {
       keptLines.push(line);
       continue;
     }
@@ -2399,7 +2416,7 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL07(edges, new Set(edgeSet)));
   allFindings.push(...checkL08(edges));
   allFindings.push(...checkL17(edges, knownSlugs));
-  allFindings.push(...checkL19(edges, knownSlugs));
+  allFindings.push(...checkL19(edges, makeEndpointResolver(knownSlugs)));
 
   const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
   allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
@@ -2599,7 +2616,8 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
         }
       };
       const result = fixL19(
-        await readOrEmpty(edgesPath), await readOrEmpty(citationsPath), knownSlugs);
+        await readOrEmpty(edgesPath), await readOrEmpty(citationsPath),
+        makeEndpointResolver(knownSlugs));
       if (result.migrated > 0) {
         if (opts.dryRun) {
           for (const f of l19hits) f.proposed_fix = result.preview;
@@ -2941,7 +2959,7 @@ export {
   reconstructArrayFromGraph,
   reconstructArrayFromBody,
   resolveWikilinkTarget,
-  buildBasenameIndex,
+  buildBasenameIndex, makeEndpointResolver,
   repairArrayValue,
   isLegacyTargetValid,
   isLegacyValueEquivalent,
