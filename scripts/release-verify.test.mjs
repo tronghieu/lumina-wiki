@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { deriveChannel } from './release-verify.mjs';
+import { deriveChannel, shouldRetry } from './release-verify.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -109,5 +109,43 @@ describe('publish.yml has not drifted from deriveChannel', () => {
   test('the workflow still triggers only on v* tags', () => {
     // The whole premise of release-verify is that nothing else publishes.
     assert.match(workflow, /on:\s*\n\s*push:\s*\n\s*tags:\s*\n\s*-\s*["']v\*["']/);
+  });
+});
+
+describe('shouldRetry', () => {
+  test('a verified release stops the loop', () => {
+    assert.equal(shouldRetry({ ok: true, blocked: null, blockedPermanent: false }), false);
+  });
+
+  test('a probe that can never run stops the loop', () => {
+    // Spending a 30s retry budget waiting for git to appear on PATH helps
+    // nobody, and the exit code says "could not check", not "not released".
+    assert.equal(
+      shouldRetry({ ok: false, blocked: 'git is not on PATH', blockedPermanent: true }),
+      false,
+    );
+  });
+
+  test('a registry or transport hiccup is retried', () => {
+    assert.equal(
+      shouldRetry({ ok: false, blocked: 'npm view failed: ECONNREFUSED', blockedPermanent: false }),
+      true,
+    );
+  });
+
+  test('a dist-tag that has not appeared yet is retried', () => {
+    // The ordinary case seconds after a publish: every probe ran, the answer
+    // is just not visible on the registry yet.
+    assert.equal(shouldRetry({ ok: false, blocked: null, blockedPermanent: false }), true);
+  });
+
+  test('a blocked attempt is never reported as ok', () => {
+    // The bug this guards: `ok` was left true when a probe was blocked, so the
+    // loop exited on its ok check before the retry logic could ever run.
+    assert.equal(
+      shouldRetry({ ok: true, blocked: 'npm view failed: ECONNREFUSED', blockedPermanent: false }),
+      false,
+      'if this ever passes a blocked-but-ok result, attempt() has regressed',
+    );
   });
 });

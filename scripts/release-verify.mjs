@@ -79,15 +79,34 @@ export function deriveChannel(version) {
 
 const isWindows = process.platform === 'win32';
 
-function run(command, args) {
-  const result = spawnSync(isWindows ? `${command}.cmd` : command, args, {
+/**
+ * A probe that could not run at all is reported as `unavailable`, and carries
+ * whether retrying could help. Retries exist for the seconds right after a
+ * publish, and a registry timeout or a 5xx is exactly what they are for --
+ * treating every unavailability as fatal would spend the retry budget on
+ * nothing. A missing executable, by contrast, will still be missing in 30s.
+ */
+function unavailable(message, { permanent = false } = {}) {
+  return { unavailable: message, permanent };
+}
+
+function npm(args) {
+  const result = spawnSync(isWindows ? 'npm.cmd' : 'npm', args, {
     cwd: repoRoot,
     encoding: 'utf8',
-    // A hung registry or SSH prompt should fail the check, not wedge CI.
-    timeout: 60_000,
+    // A hung registry should fail the check, not wedge CI.
+    timeout: 30_000,
+    // `npm` on Windows is a .cmd shim, which CreateProcess cannot execute
+    // directly -- it needs a shell. scripts/ci-package.mjs does the same.
+    // One consequence: a missing npm surfaces as a non-zero exit from the
+    // shell rather than ENOENT, so on Windows it is retried before failing.
+    shell: isWindows,
   });
   if (result.error?.code === 'ENOENT') {
-    return { unavailable: `${command} is not on PATH` };
+    return unavailable('npm is not on PATH', { permanent: true });
+  }
+  if (result.error) {
+    return unavailable(`npm ${args[0]} did not complete: ${result.error.code}`);
   }
   return {
     status: result.status,
@@ -96,7 +115,7 @@ function run(command, args) {
   };
 }
 
-// `git` is not a .cmd shim on Windows the way `npm` is.
+// `git` is a real executable on Windows, so unlike npm it needs no shell.
 function git(args) {
   const result = spawnSync('git', args, {
     cwd: repoRoot,
@@ -104,7 +123,10 @@ function git(args) {
     timeout: 60_000,
   });
   if (result.error?.code === 'ENOENT') {
-    return { unavailable: 'git is not on PATH' };
+    return unavailable('git is not on PATH', { permanent: true });
+  }
+  if (result.error) {
+    return unavailable(`git ${args[0]} did not complete: ${result.error.code}`);
   }
   return {
     status: result.status,
@@ -119,14 +141,26 @@ function remoteTagExists(version) {
   const result = git(['ls-remote', '--tags', 'origin', ref]);
   if (result.unavailable) return result;
   if (result.status !== 0) {
-    return { unavailable: `git ls-remote failed: ${result.stderr || 'unknown error'}` };
+    // Transport failures live here -- worth retrying.
+    return unavailable(`git ls-remote failed: ${result.stderr || 'unknown error'}`);
   }
   return { found: result.stdout.includes(ref) };
 }
 
 /** What does the registry hold for this package? */
 function npmView(pkg, field) {
-  const result = run('npm', ['view', pkg, field, '--json']);
+  // npm retries fetches twice by default with a five-minute timeout each. That
+  // would nest its backoff inside this script's own retry loop and let a single
+  // unreachable registry hold a CI job for many minutes. Fail the request fast
+  // and let the loop here be the only thing that retries.
+  const result = npm([
+    'view',
+    pkg,
+    field,
+    '--json',
+    '--fetch-retries=0',
+    '--fetch-timeout=15000',
+  ]);
   if (result.unavailable) return result;
   if (result.status !== 0) {
     // A version that does not exist yet is the expected "not released" answer,
@@ -134,13 +168,36 @@ function npmView(pkg, field) {
     if (/E404|not found|is not in this registry/i.test(result.stderr)) {
       return { missing: true };
     }
-    return { unavailable: `npm view failed: ${result.stderr.split('\n')[0] || 'unknown error'}` };
+    // 5xx, ETIMEDOUT, ECONNRESET, and a missing npm on Windows all land here.
+    return unavailable(`npm view failed: ${result.stderr.split('\n')[0] || 'unknown error'}`);
   }
   try {
     return { value: JSON.parse(result.stdout) };
   } catch {
-    return { unavailable: `npm view returned unparseable JSON for ${pkg} ${field}` };
+    return unavailable(`npm view returned unparseable JSON for ${pkg} ${field}`, {
+      permanent: true,
+    });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Retry policy
+// ---------------------------------------------------------------------------
+
+/**
+ * Is another attempt worth making?
+ *
+ * A verified release stops the loop, and so does a probe that can never
+ * succeed on this machine. Everything else -- a dist-tag that has not become
+ * visible yet, a registry 5xx, a git transport hiccup -- is what the retries
+ * exist for, since this runs seconds after a publish.
+ *
+ * @param {{ok: boolean, blocked: ?string, blockedPermanent: boolean}} result
+ */
+export function shouldRetry(result) {
+  if (result.ok) return false;
+  if (result.blocked && result.blockedPermanent) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -188,10 +245,17 @@ function attempt(name, version, channel) {
   const report = [];
   let ok = true;
   let blocked = null;
+  let blockedPermanent = false;
+
+  const note = (probe) => {
+    if (blocked) return;
+    blocked = probe.unavailable;
+    blockedPermanent = probe.permanent === true;
+  };
 
   const tag = remoteTagExists(version);
   if (tag.unavailable) {
-    blocked = tag.unavailable;
+    note(tag);
   } else if (tag.found) {
     report.push(line(PASS, `git tag v${version} on origin`));
   } else {
@@ -203,7 +267,7 @@ function attempt(name, version, channel) {
 
   const published = npmView(`${name}@${version}`, 'version');
   if (published.unavailable) {
-    blocked = blocked || published.unavailable;
+    note(published);
   } else if (published.missing) {
     ok = false;
     report.push(line(FAIL, `npm has ${name}@${version}`, 'version not published'));
@@ -213,7 +277,7 @@ function attempt(name, version, channel) {
 
   const tags = npmView(name, 'dist-tags');
   if (tags.unavailable) {
-    blocked = blocked || tags.unavailable;
+    note(tags);
   } else if (tags.missing) {
     ok = false;
     report.push(line(FAIL, `dist-tag ${channel}`, 'package has no dist-tags'));
@@ -229,7 +293,10 @@ function attempt(name, version, channel) {
     }
   }
 
-  return { ok, blocked, report };
+  // A blocked probe is not a pass. Leaving `ok` true here would let the retry
+  // loop exit on its `result.ok` check before ever reaching the retry logic,
+  // which is the whole reason the retries exist.
+  return { ok: ok && !blocked, blocked, blockedPermanent, report };
 }
 
 async function main() {
@@ -263,10 +330,13 @@ async function main() {
   let result;
   for (let attemptNo = 0; attemptNo <= opts.retries; attemptNo += 1) {
     result = attempt(name, version, channel);
-    if (result.blocked || result.ok) break;
+    if (!shouldRetry(result)) break;
     if (attemptNo < opts.retries) {
+      const why = result.blocked
+        ? `a probe could not run (${result.blocked})`
+        : 'not visible yet';
       process.stdout.write(
-        `  ...not visible yet, retrying in ${opts.delay}ms ` +
+        `  ...${why}, retrying in ${opts.delay}ms ` +
           `(${attemptNo + 1}/${opts.retries})\n`,
       );
       // eslint-disable-next-line no-await-in-loop
