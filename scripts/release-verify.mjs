@@ -11,7 +11,8 @@
  *
  * Every check queries a remote on purpose. A tag that exists only on the
  * machine running this script is the precise failure being guarded against,
- * and `git tag --list` would report it as present.
+ * and `git tag --list` would report it as present. For the same reason the
+ * registry is pinned rather than inherited from local npm config.
  *
  * Usage:
  *   node scripts/release-verify.mjs [--retries N] [--delay MS]
@@ -147,6 +148,18 @@ function remoteTagExists(version) {
   return { found: result.stdout.includes(ref) };
 }
 
+/**
+ * The registry publish.yml publishes to, pinned rather than inherited.
+ *
+ * `npm view` otherwise honours whatever `registry` is configured in ~/.npmrc or
+ * NPM_CONFIG_REGISTRY, which need not be where the release went. A stale mirror
+ * would fail a live release; worse, a private registry that happens to hold the
+ * same version and dist-tag would report a *failed* public publish as a
+ * success -- the exact false clean bill of health this script exists to
+ * prevent. Kept in step with `registry-url` in publish.yml.
+ */
+export const REGISTRY = 'https://registry.npmjs.org';
+
 /** What does the registry hold for this package? */
 function npmView(pkg, field) {
   // npm retries fetches twice by default with a five-minute timeout each. That
@@ -158,6 +171,7 @@ function npmView(pkg, field) {
     pkg,
     field,
     '--json',
+    `--registry=${REGISTRY}`,
     '--fetch-retries=0',
     '--fetch-timeout=15000',
   ]);

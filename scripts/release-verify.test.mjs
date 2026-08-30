@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { deriveChannel, shouldRetry } from './release-verify.mjs';
+import { deriveChannel, shouldRetry, REGISTRY } from './release-verify.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -109,6 +109,14 @@ describe('publish.yml has not drifted from deriveChannel', () => {
   test('the workflow still triggers only on v* tags', () => {
     // The whole premise of release-verify is that nothing else publishes.
     assert.match(workflow, /on:\s*\n\s*push:\s*\n\s*tags:\s*\n\s*-\s*["']v\*["']/);
+  });
+
+  test('the pinned registry is the one the workflow publishes to', () => {
+    // Verification must ask the registry the release actually went to. If these
+    // drift, a private mirror could report a failed public publish as a success.
+    const match = workflow.match(/registry-url:\s*["']([^"']+)["']/);
+    assert.ok(match, 'publish.yml no longer sets registry-url');
+    assert.equal(match[1].replace(/\/$/, ''), REGISTRY);
   });
 });
 
