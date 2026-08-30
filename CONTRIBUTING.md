@@ -211,7 +211,7 @@ explicitly so a follow-up can translate before release.
 
 Every PR runs:
 
-- **Node 20 / Node 22 × ubuntu / macOS / windows** (6 matrix cells)
+- **Node 24 × ubuntu / macOS / windows** (3 matrix cells)
 - **Bun smoke** (ubuntu) — Bun is not a supported runtime but divergences are
   caught early
 - **`npm run test:all`** — installer, scripts, Python

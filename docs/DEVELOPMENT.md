@@ -105,7 +105,7 @@ npm run ci:idempotency     # install twice → git diff must be empty
 npm run ci:package         # npm pack --dry-run, validate files allowlist + postinstall ban
 ```
 
-CI runs all three across Node {20, 22} × {ubuntu, macos, windows}. Failure on any cell blocks merge.
+CI runs all three on Node 24 × {ubuntu, macos, windows}. Failure on any cell blocks merge. `engines` still allows Node >= 20, which CI no longer exercises.
 
 ### What each gate catches
 
