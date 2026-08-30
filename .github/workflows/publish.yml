@@ -109,3 +109,30 @@ jobs:
             echo "No CHANGELOG entry for ${version}; falling back to generated notes."
             gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --generate-notes
           fi
+
+  verify:
+    name: Verify the release is live
+    needs: publish
+    runs-on: ubuntu-latest
+
+    # Deliberately a separate job from `publish`, not a final step inside it.
+    # `npm publish` is one-shot: a published version is immutable, so a rerun
+    # of the publish job fails at that step and never reaches verification.
+    # Isolated here, a transient registry hiccup can be rerun on its own --
+    # this job only reads.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Verify
+        # Re-derives the channel from package.json and asserts the tag reached
+        # origin, the version reached npm, and the dist-tag actually moved.
+        # Retries because a freshly published dist-tag can take a moment to
+        # become visible on the registry.
+        run: node scripts/release-verify.mjs --retries 6 --delay 5000

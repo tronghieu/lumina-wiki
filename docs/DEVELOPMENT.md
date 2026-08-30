@@ -159,20 +159,34 @@ users in `1.13.0-next.0`. Both commits now carry an annotated
 `archive/<version>` tag recording what happened; those deliberately sit
 outside the `v*` namespace so they never trigger a publish.
 
-Finish every release by confirming the channel actually moved. Both checks
-have to query a remote — a tag that exists only on your laptop is the exact
-failure being guarded against, and `git tag --list` would report it as
-present:
+Finish every release by confirming the channel actually moved:
+
+```bash
+npm run release:verify
+```
+
+It reads the version out of `package.json`, re-derives the dist-tag that
+version publishes to, and asserts three things: the `v<version>` tag reached
+`origin`, npm holds that version, and the dist-tag actually points at it. Exit
+0 means released; exit 1 prints which check failed and what to do about it.
+
+Every check queries a remote on purpose — a tag that exists only on your
+laptop is the exact failure being guarded against, and `git tag --list` would
+report it as present. By hand, the same two questions are:
 
 ```bash
 npm view lumina-wiki dist-tags
 git ls-remote --tags origin 'v*' | grep -v '\^{}'
 ```
 
-The version you just bumped has to appear in **both**. Missing from
-`ls-remote` means the tag never reached GitHub, so `publish.yml` never ran.
-Present there but missing from `dist-tags` means the workflow ran and failed
-— read its log rather than re-tagging.
+Missing from `ls-remote` means the tag never reached GitHub, so `publish.yml`
+never ran. Present there but missing from `dist-tags` means the workflow ran
+and failed — read its log rather than re-tagging.
+
+You should rarely need to run this by hand: `publish.yml` runs
+`release:verify` as its own last step, so a publish that does not take effect
+turns the workflow red instead of passing quietly, which is how 1.11.0 and
+1.12.0 went unnoticed.
 
 Do not re-tag an old release commit to catch up: `publish.yml` reads the
 version from that commit's `package.json`, so the job would pass its own
