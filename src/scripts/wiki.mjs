@@ -378,6 +378,11 @@ function stringifyFrontmatter(fm) {
 /**
  * Quote a string value if it contains special YAML characters or looks like
  * a scalar that would be misinterpreted (true/false/null/number).
+ *
+ * The empty string is quoted for the same reason: emitting a bare `key:` makes
+ * the value indistinguishable from a key with a block list under it, and
+ * parseFrontmatter reads it back as `[]` — so `set-meta <slug> title ''` would
+ * silently retype a string field as an array, and report ok while doing it.
  * @param {any} val
  * @returns {string}
  */
@@ -386,7 +391,7 @@ function quoteIfNeeded(val) {
   const special = ['true', 'false', 'null', '~'];
   if (special.includes(val.toLowerCase())) return `"${val}"`;
   if (!isNaN(Number(val)) && val.trim() !== '') return `"${val}"`;
-  if (val.includes(':') || val.includes('#') || val.startsWith('*') || val.includes('\n')) {
+  if (val === '' || val.includes(':') || val.includes('#') || val.startsWith('*') || val.includes('\n')) {
     return `"${val.replace(/"/g, '\\"')}"`;
   }
   return val;
@@ -1381,18 +1386,6 @@ async function appendLog(projectRoot, skill, details) {
 // ---------------------------------------------------------------------------
 
 /**
- * Core wiki directories to create (always).
- */
-const CORE_WIKI_DIRS = [
-  'wiki/sources',
-  'wiki/concepts',
-  'wiki/people',
-  'wiki/summary',
-  'wiki/outputs',
-  'wiki/graph',
-];
-
-/**
  * Installable (non-core) pack names, derived from ENTITY_DIRS so a new pack
  * added to schemas.mjs becomes selectable via `init --pack` without touching
  * this file.
@@ -1412,6 +1405,17 @@ function wikiDirsForPack(pack) {
     .filter(e => e.pack === pack)
     .map(e => `wiki/${e.dir}`.replace(/\/$/, ''));
 }
+
+/**
+ * Core wiki directories, created on every init. Derived from ENTITY_DIRS for
+ * the same reason INSTALLABLE_PACKS is: a hand-maintained copy drifts. This
+ * one had: it was missing `wiki/readings`. Commit e067795 added that dir to
+ * schemas.mjs and to the installer's own two lists but not to this array, which
+ * has not changed since e72fbaa — so `npx lumina-wiki install` created the dir
+ * and `wiki.mjs init` (i.e. `/lumi-init`) did not.
+ * @type {string[]}
+ */
+const CORE_WIKI_DIRS = wikiDirsForPack('core');
 
 /**
  * Initialize a workspace skeleton.

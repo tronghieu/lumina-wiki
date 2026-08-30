@@ -14,6 +14,8 @@ import { createHash } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { ENTITY_DIRS } from './schemas.mjs';
+
 // ---------------------------------------------------------------------------
 // Helper: run wiki.mjs as a child process
 // ---------------------------------------------------------------------------
@@ -258,6 +260,44 @@ describe('init', () => {
       const json2 = parseJson(r2.stdout);
       assert.ok(json2.skipped.includes('wiki/reflections'));
       assert.ok(!json2.created.includes('wiki/reflections'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('creates wiki/readings on a plain init (no --pack)', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.ok(json.created.includes('wiki/readings'));
+      await access(join(tmp, 'wiki/readings'), fsConstants.F_OK);
+
+      // Idempotency: second call reports the dir as skipped, not re-created.
+      const r2 = runWiki(['init'], { cwd: tmp });
+      assert.equal(r2.status, 0, `second init failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.ok(json2.skipped.includes('wiki/readings'));
+      assert.ok(!json2.created.includes('wiki/readings'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('created core dirs match ENTITY_DIRS pack:core entries', async () => {
+    const tmp = await makeTmp();
+    try {
+      const r = runWiki(['init'], { cwd: tmp });
+      assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      const expectedCoreDirs = Object.values(ENTITY_DIRS)
+        .filter((entry) => entry.pack === 'core')
+        .map((entry) => `wiki/${entry.dir}`.replace(/\/$/, ''));
+      assert.ok(expectedCoreDirs.length > 0, 'sanity: schema declares at least one core entity dir');
+      for (const dir of expectedCoreDirs) {
+        assert.ok(json.created.includes(dir), `expected ${dir} in created (from ENTITY_DIRS pack:core)`);
+      }
     } finally {
       await cleanTmp(tmp);
     }
@@ -586,6 +626,99 @@ related_concepts: []
 });
 
 // ---------------------------------------------------------------------------
+// Tests: set-meta empty-string frontmatter serialization
+//
+// quoteIfNeeded('') used to return a bare empty string, so `set-meta <slug>
+// <key> ''` wrote `key:` with nothing after the colon. parseFrontmatter reads
+// a bare `key:` line (no indented mapping following it) as the start of a
+// block list, so a string field silently came back as `[]` on the next read
+// — while set-meta itself still reported {"ok":true}. quoteIfNeeded('') now
+// emits `""`, which parseScalar round-trips back to an empty string.
+// ---------------------------------------------------------------------------
+
+describe('set-meta empty-string frontmatter serialization', () => {
+  test('set-meta <slug> title \'\' round-trips through read-meta as an empty string, not an array', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-title');
+
+      const set = runWiki(['set-meta', 'qm-empty-title', 'title', ''], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'qm-empty-title'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.strictEqual(fm.title, '');
+      assert.ok(!Array.isArray(fm.title), 'title must not have been retyped into an array');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta <slug> title \'\' writes a quoted empty scalar on disk', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-title-disk');
+      const filePath = join(tmp, 'wiki', 'sources', 'qm-empty-title-disk.md');
+
+      const set = runWiki(['set-meta', 'qm-empty-title-disk', 'title', ''], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const raw = await readFile(filePath, 'utf8');
+      assert.ok(
+        raw.split('\n').includes('title: ""'),
+        `expected a literal 'title: ""' line, got frontmatter:\n${raw}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta --json-value round-trips an empty string inside an array', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-empty-tag');
+
+      const set = runWiki(
+        ['set-meta', 'qm-empty-tag', 'tags', '["a","","b"]', '--json-value'],
+        { cwd: tmp },
+      );
+      assert.equal(set.status, 0, `set-meta --json-value failed: ${set.stderr}`);
+
+      const read = runWiki(['read-meta', 'qm-empty-tag'], { cwd: tmp });
+      assert.equal(read.status, 0, `read-meta failed: ${read.stderr}`);
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.tags, ['a', '', 'b']);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('set-meta does not over-quote a normal string value', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'qm-plain-title');
+      const filePath = join(tmp, 'wiki', 'sources', 'qm-plain-title.md');
+
+      const set = runWiki(['set-meta', 'qm-plain-title', 'title', 'Plain Title'], { cwd: tmp });
+      assert.equal(set.status, 0, `set-meta failed: ${set.stderr}`);
+
+      const raw = await readFile(filePath, 'utf8');
+      assert.ok(
+        raw.split('\n').includes('title: Plain Title'),
+        `expected an unquoted 'title: Plain Title' line, got frontmatter:\n${raw}`,
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: set-meta schema validation (write-path gate)
 //
 // setMeta rejects a value that violates the declared REQUIRED_FRONTMATTER
@@ -600,7 +733,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-iso-date');
+      await writeMinimalSource(tmp, 'sv-iso-date');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-iso-date.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -622,7 +755,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-todo');
+      await writeMinimalSource(tmp, 'sv-string-todo');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -649,7 +782,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-todo-json');
+      await writeMinimalSource(tmp, 'sv-string-todo-json');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-string-todo-json.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -674,7 +807,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-string-valid');
+      await writeMinimalSource(tmp, 'sv-string-valid');
 
       const r = runWiki(['set-meta', 'sources/sv-string-valid', 'title', 'A Real Title'], { cwd: tmp });
       assert.equal(r.status, 0, `set-meta failed: ${r.stderr}`);
@@ -692,7 +825,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-clear-optional');
+      await writeMinimalSource(tmp, 'sv-clear-optional');
 
       // 'confidence' is declared optional (required: false) for sources.
       const r = runWiki(['set-meta', 'sources/sv-clear-optional', 'confidence', 'null'], { cwd: tmp });
@@ -711,7 +844,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-number');
+      await writeMinimalSource(tmp, 'sv-number');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-number.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -733,7 +866,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-enum');
+      await writeMinimalSource(tmp, 'sv-enum');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-enum.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -755,7 +888,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-array');
+      await writeMinimalSource(tmp, 'sv-array');
       const filePath = join(tmp, 'wiki', 'sources', 'sv-array.md');
       const before = await readFile(filePath, 'utf8');
 
@@ -777,7 +910,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-valid');
+      await writeMinimalSource(tmp, 'sv-valid');
 
       const created = runWiki(['set-meta', 'sources/sv-valid', 'created', '2024-03-15'], { cwd: tmp });
       assert.equal(created.status, 0, `iso-date accept failed: ${created.stderr}`);
@@ -810,7 +943,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-freeform');
+      await writeMinimalSource(tmp, 'sv-freeform');
 
       const r = runWiki(['set-meta', 'sources/sv-freeform', 'tags', 'llm-inference'], { cwd: tmp });
       assert.equal(r.status, 0, `free-form key set-meta failed: ${r.stderr}`);
@@ -828,7 +961,7 @@ describe('set-meta schema validation', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'sv-external-ids');
+      await writeMinimalSource(tmp, 'sv-external-ids');
 
       const r = runWiki(
         [
@@ -2451,8 +2584,9 @@ describe('atomicWrite tmp cleanup on success', () => {
 // Tests: v0.9 verify schema — verify_status and findings fields
 // ---------------------------------------------------------------------------
 
-/** Helper: write a minimal valid source file to wiki/sources/<slug>.md */
-async function writeVerifySource(tmp, slug, extra = '') {
+/** Helper: write a minimal valid source file to wiki/sources/<slug>.md.
+ *  Shared by the verify-schema, set-meta and serialization suites. */
+async function writeMinimalSource(tmp, slug, extra = '') {
   const dir = join(tmp, 'wiki', 'sources');
   await mkdir(dir, { recursive: true });
   await writeFile(
@@ -2467,7 +2601,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-status-test');
+      await writeMinimalSource(tmp, 'vs-status-test');
 
       const set = runWiki(['set-meta', 'sources/vs-status-test', 'verify_status', 'passed'], { cwd: tmp });
       assert.equal(set.status, 0, `set-meta verify_status failed: ${set.stderr}`);
@@ -2485,7 +2619,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-findings-ok');
+      await writeMinimalSource(tmp, 'vs-findings-ok');
 
       const validFindings = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
@@ -2509,7 +2643,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-bad-evidence');
+      await writeMinimalSource(tmp, 'vs-bad-evidence');
       // Write malformed findings via set-meta (missing 'evidence' field)
       const malformed = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'X', action: 'Z' },
@@ -2531,7 +2665,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-bad-reviewer');
+      await writeMinimalSource(tmp, 'vs-bad-reviewer');
 
       const badFindings = JSON.stringify([
         { id: 1, reviewer: 'robot', class: 'patch', claim: 'X', evidence: 'Y', action: 'Z' },
@@ -2553,7 +2687,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-no-verify-fields');
+      await writeMinimalSource(tmp, 'vs-no-verify-fields');
 
       const vf = runWiki(['verify-frontmatter', 'sources/vs-no-verify-fields'], { cwd: tmp });
       assert.equal(vf.status, 0, `verify-frontmatter failed: ${vf.stderr}`);
@@ -2568,7 +2702,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-colon-in-value');
+      await writeMinimalSource(tmp, 'vs-colon-in-value');
 
       const original = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'URL https://x:8080', evidence: 'ratio 2:1', action: 'accept' },
@@ -2595,7 +2729,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-escaped-quote');
+      await writeMinimalSource(tmp, 'vs-escaped-quote');
 
       const original = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'He said \\"hi\\"', evidence: 'quoted evidence', action: 'accept' },
@@ -2622,7 +2756,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-numeric-id');
+      await writeMinimalSource(tmp, 'vs-numeric-id');
 
       const original = [
         { id: 42, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'some evidence', action: 'accept' },
@@ -2673,7 +2807,7 @@ describe('v0.9 verify_status and findings schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'vs-colon-evidence');
+      await writeMinimalSource(tmp, 'vs-colon-evidence');
 
       const findings = [
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'some claim', evidence: 'contains: colon', action: 'accept' },
@@ -2701,7 +2835,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'is-drafted');
+      await writeMinimalSource(tmp, 'is-drafted');
 
       const set = runWiki(['set-meta', 'sources/is-drafted', 'ingest_status', 'drafted'], { cwd: tmp });
       assert.equal(set.status, 0, `set-meta ingest_status failed: ${set.stderr}`);
@@ -2722,7 +2856,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'is-absent');
+      await writeMinimalSource(tmp, 'is-absent');
 
       const vf = runWiki(['verify-frontmatter', 'sources/is-absent'], { cwd: tmp });
       assert.equal(vf.status, 0, `verify-frontmatter failed without ingest_status: ${vf.stderr}`);
@@ -2762,7 +2896,7 @@ describe('v0.9 ingest_status schema', () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
-      await writeVerifySource(tmp, 'flow-rt');
+      await writeMinimalSource(tmp, 'flow-rt');
       const findings = JSON.stringify([
         { id: 1, reviewer: 'grounding', class: 'patch', claim: 'alpha, beta, gamma', evidence: 'page 3, table 2', action: 'revise claim' },
         { id: 2, reviewer: 'blind', class: 'dismiss', claim: '2024', evidence: 'true', action: 'null' },
@@ -2792,7 +2926,7 @@ describe('v0.9 ingest_status schema', () => {
       const stages = ['drafted', 'linted', 'verified', 'finalized'];
       for (const stage of stages) {
         const slug = `is-stage-${stage}`;
-        await writeVerifySource(tmp, slug);
+        await writeMinimalSource(tmp, slug);
         const set = runWiki(['set-meta', `sources/${slug}`, 'ingest_status', stage], { cwd: tmp });
         assert.equal(set.status, 0, `set-meta ${stage} failed: ${set.stderr}`);
         const read = runWiki(['read-meta', `sources/${slug}`], { cwd: tmp });
