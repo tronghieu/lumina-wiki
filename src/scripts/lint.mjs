@@ -974,6 +974,21 @@ async function parseEdgesJsonl(edgesPath) {
   } catch {
     return [];
   }
+  return parseEdgeLines(raw);
+}
+
+/**
+ * Parse edges.jsonl content already held in memory.
+ *
+ * Split out of parseEdgesJsonl so the fixers can re-derive the edge list from
+ * the file as it stands mid-run. The list parsed at check time goes stale the
+ * moment an earlier fixer writes: fixL19 takes citation rows out and fixL06
+ * appends reverse rows. A fixer working from the stale snapshot writes the
+ * pre-fix graph back out.
+ * @param {string} raw
+ * @returns {Array<{from:string,to:string,type:string,confidence?:string}>}
+ */
+function parseEdgeLines(raw) {
   const edges = [];
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
@@ -1728,10 +1743,25 @@ function checkL16(wikiRelPath, fm) {
  * @param {Set<string>} knownSlugs  - Set of wiki-relative paths (without .md), same as passed to checkL05.
  * @returns {Finding[]}
  */
+function citationEndpointsResolve(edge, knownSlugs) {
+  for (const key of ['from', 'to']) {
+    const target = edge[key];
+    if (typeof target !== 'string') return false;
+    if (target.includes('://')) continue; // external URL, not a slug
+    if (!knownSlugs.has(target)) return false;
+  }
+  return true;
+}
+
+/**
+ * L17: an edge endpoint that names no wiki file.
+ * @param {Array<{from:string,type:string,to:string}>} edges
+ * @param {Set<string>} knownSlugs
+ * @returns {Finding[]}
+ */
 function checkL17(edges, knownSlugs) {
   const findings = [];
   for (const edge of edges) {
-    if (CITATION_EDGE_TYPES.has(edge.type)) continue; // L19 owns these rows.
     for (const key of ['from', 'to']) {
       const target = edge[key];
       if (typeof target !== 'string' || target.includes('://')) continue; // external URL, not a slug
@@ -1758,17 +1788,33 @@ function checkL17(edges, knownSlugs) {
  * invisible: `read-citations` never saw it and no check looked for it.
  *
  * The write path is closed now; this finds and migrates what the old one left
- * behind. L06/L07/L08/L17 skip these rows deliberately — one owner per
- * problem, and L06 would otherwise "repair" a stray `cites` by adding the
- * matching `cited_by`, doubling the mess.
+ * behind. L06/L07/L08 skip these rows deliberately — one owner per problem,
+ * and L06 would otherwise "repair" a stray `cites` by adding the matching
+ * `cited_by`, doubling the mess. L17 does NOT skip them: where the row lives
+ * and whether its endpoints exist are two different problems, and suppressing
+ * the second one let a dangling citation be migrated into citations.jsonl,
+ * which no check reads.
+ *
+ * A row whose endpoints do not resolve is therefore reported unfixable rather
+ * than migrated. Moving it would launder a dangling reference out of the one
+ * file that is checked and into the one that is not.
  * @param {Array<{from:string,type:string,to:string}>} edges
+ * @param {Set<string>} knownSlugs
  * @returns {Finding[]}
  */
-function checkL19(edges) {
+function checkL19(edges, knownSlugs) {
   const findings = [];
   for (const edge of edges) {
     if (!CITATION_EDGE_TYPES.has(edge.type)) continue;
     const [citing, cited] = edge.type === 'cites' ? [edge.from, edge.to] : [edge.to, edge.from];
+    if (!citationEndpointsResolve(edge, knownSlugs)) {
+      findings.push(finding(
+        'L19-citation-in-edges', 'error', false,
+        edge.from, null,
+        `Citation stored as a graph edge: ${edge.from} --${edge.type}--> ${edge.to} cannot be moved to graph/citations.jsonl until both endpoints name real wiki files`
+      ));
+      continue;
+    }
     findings.push(finding(
       'L19-citation-in-edges', 'error', true,
       edge.from, null,
@@ -2153,7 +2199,7 @@ function fixL07(edgesContent, edges) {
  * @param {string} citationsContent
  * @returns {{ newEdges: string, newCitations: string, preview: string, migrated: number }}
  */
-function fixL19(edgesContent, citationsContent) {
+function fixL19(edgesContent, citationsContent, knownSlugs) {
   const keptLines = [];
   const migrated = [];
   for (const line of edgesContent.split('\n')) {
@@ -2167,6 +2213,13 @@ function fixL19(edgesContent, citationsContent) {
       continue;
     }
     if (!parsed || !CITATION_EDGE_TYPES.has(parsed.type)) {
+      keptLines.push(line);
+      continue;
+    }
+    // Same predicate checkL19 reports on. A row pointing at a file that does
+    // not exist stays in edges.jsonl, where L17 still reports it; migrating it
+    // would hide it in a file no check reads.
+    if (!citationEndpointsResolve(parsed, knownSlugs)) {
       keptLines.push(line);
       continue;
     }
@@ -2346,7 +2399,7 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL07(edges, new Set(edgeSet)));
   allFindings.push(...checkL08(edges));
   allFindings.push(...checkL17(edges, knownSlugs));
-  allFindings.push(...checkL19(edges));
+  allFindings.push(...checkL19(edges, knownSlugs));
 
   const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
   allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
@@ -2532,10 +2585,21 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     const l19hits = findings.filter(f => f.id === 'L19-citation-in-edges');
     if (l19hits.length > 0) {
       const citationsPath = safejoin(wikiRoot, 'graph', 'citations.jsonl');
+      // Only a missing file means "nothing recorded yet". Any other read
+      // failure (EACCES, EIO) must not be mistaken for an empty file: this
+      // repair rewrites citations.jsonl wholesale, so treating an unreadable
+      // one as empty replaces every citation the wiki already had with just
+      // the rows migrated on this run.
       const readOrEmpty = async (p) => {
-        try { return await readFile(p, 'utf8'); } catch { return ''; }
+        try {
+          return await readFile(p, 'utf8');
+        } catch (err) {
+          if (err && err.code === 'ENOENT') return '';
+          throw err;
+        }
       };
-      const result = fixL19(await readOrEmpty(edgesPath), await readOrEmpty(citationsPath));
+      const result = fixL19(
+        await readOrEmpty(edgesPath), await readOrEmpty(citationsPath), knownSlugs);
       if (result.migrated > 0) {
         if (opts.dryRun) {
           for (const f of l19hits) f.proposed_fix = result.preview;
@@ -2554,13 +2618,27 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
   // L06/L07/L09 each rewrite one whole file; the three blocks differed only in
   // the finding id, the target, and the fixer call.
   const readEdges = async () => {
-    try { return await readFile(edgesPath, 'utf8'); } catch { return ''; }
+    try {
+      return await readFile(edgesPath, 'utf8');
+    } catch (err) {
+      if (err && err.code === 'ENOENT') return ''; // no graph yet; not a failure.
+      throw err;
+    }
   };
+  // Both re-derive the edge list from the content they are handed rather than
+  // from the snapshot parsed at check time. By now that snapshot is stale:
+  // fixL19 has removed citation rows and fixL06 appends reverse rows fixL07
+  // must see. fixL07 rebuilds the whole file, so feeding it the snapshot
+  // silently reverted fixL19's migration and dropped fixL06's additions in the
+  // same write.
   await applyWholeFileFix(findings, 'L06-missing-reverse-edge', edgesPath, readEdges,
-    current => fixL06(edgesPath, current, edges, edgeSet), opts);
-  // Deliberately re-reads: under --fix, L06 has already rewritten this file.
+    current => {
+      const currentEdges = parseEdgeLines(current);
+      const currentSet = new Set(currentEdges.map(e => `${e.from}|${e.type}|${e.to}`));
+      return fixL06(edgesPath, current, currentEdges, currentSet);
+    }, opts);
   await applyWholeFileFix(findings, 'L07-symmetric-edge-duplicate', edgesPath, readEdges,
-    current => fixL07(current, edges), opts);
+    current => fixL07(current, parseEdgeLines(current)), opts);
   await applyWholeFileFix(findings, 'L09-index-stale', indexPath, async () => indexContent,
     current => fixL09(current, entityFiles.filter(f => !isIndexExempt(f))), opts);
 

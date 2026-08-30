@@ -8,7 +8,7 @@
 
 import { test, describe, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile, readFile, access } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, readFile, access, chmod } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -1737,6 +1737,19 @@ describe('runLint L19 fix idempotency', () => {
 
   const JUNK_LINE = 'not valid json {{{';
 
+  /**
+   * Write the source pages an edge row names. L19 refuses to migrate a
+   * citation whose endpoints resolve to nothing, so a fixture that exercises
+   * the migration path has to contain the pages -- otherwise the test is
+   * measuring the refusal branch instead.
+   */
+  async function writeSources(root, slugs) {
+    for (const slug of slugs) {
+      const fm = renderFm(validSourceFm({ id: slug, title: slug }));
+      await writeFile(join(root, 'wiki', 'sources', `${slug}.md`), `---\n${fm}\n---\n\n# ${slug}\n`);
+    }
+  }
+
   test('fix migrates cites/cited_by rows to citations.jsonl, dedupes against migrated + pre-existing rows, preserves the real edge pair and the unparseable line; second run is clean', async () => {
     const edgesLines = [
       { from: 'sources/p', type: 'cites', to: 'sources/q' },
@@ -1747,6 +1760,7 @@ describe('runLint L19 fix idempotency', () => {
     ];
     const edgesContent = edgesLines.map(e => JSON.stringify(e)).join('\n') + '\n' + JUNK_LINE + '\n';
     await makeWiki(tmpDir, { edgesContent });
+    await writeSources(tmpDir, ['p', 'q', 'm', 'n', 'c', 'd']);
 
     const citationsFile = join(tmpDir, 'wiki', 'graph', 'citations.jsonl');
     await writeFile(citationsFile, JSON.stringify({ from: 'sources/m', type: 'cites', to: 'sources/n' }) + '\n');
@@ -1781,11 +1795,126 @@ describe('runLint L19 fix idempotency', () => {
     assert.equal(l19Again.length, 0, 'L19 violations should be gone after fix');
   });
 
+  // Regression: the fixers used to run off the edge list parsed at CHECK time.
+  // By the time L06/L07 run, fixL19 has already taken the citation rows out of
+  // edges.jsonl -- and fixL07 rebuilds that file wholesale. Fed the stale
+  // snapshot it wrote the pre-migration graph back out, reverting fixL19 while
+  // its findings stayed marked fix_applied, and discarding the reverse edge
+  // fixL06 had just added in the same run. Convergence took three passes, and
+  // the second pass re-created a `cited_by` row -- the exact corruption the
+  // add-edge guard exists to prevent.
+  test('one --fix pass migrates the citation AND keeps the L06 reverse edge, with L07 running in the same pass', async () => {
+    const tmp3 = await makeTmp();
+    try {
+      const edgesContent = [
+        { from: 'sources/a', type: 'cites', to: 'sources/b' },        // L19
+        { from: 'sources/c', type: 'builds_on', to: 'sources/d' },    // L06: reverse missing
+        { from: 'sources/c', type: 'related_to', to: 'sources/d' },   // L07: symmetric pair
+        { from: 'sources/d', type: 'related_to', to: 'sources/c' },
+      ].map(e => JSON.stringify(e)).join('\n') + '\n';
+      await makeWiki(tmp3, { edgesContent });
+      await writeSources(tmp3, ['a', 'b', 'c', 'd']);
+
+      const r = await runLint(tmp3, { fix: true, dryRun: false });
+      assert.ok(r.findings.some(f => f.id === 'L19-citation-in-edges' && f.fix_applied), 'L19 must report fixed');
+
+      const edgesAfter = (await readFile(join(tmp3, 'wiki', 'graph', 'edges.jsonl'), 'utf8'))
+        .split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+
+      assert.ok(edgesAfter.every(e => e.type !== 'cites' && e.type !== 'cited_by'),
+        `no citation row may survive in edges.jsonl, got: ${JSON.stringify(edgesAfter)}`);
+      assert.ok(edgesAfter.some(e => e.from === 'sources/d' && e.type === 'built_upon_by' && e.to === 'sources/c'),
+        `fixL06's reverse edge must survive fixL07's rewrite, got: ${JSON.stringify(edgesAfter)}`);
+      assert.equal(edgesAfter.filter(e => e.type === 'related_to').length, 1, 'L07 must still dedupe the symmetric pair');
+
+      const citationsAfter = (await readFile(join(tmp3, 'wiki', 'graph', 'citations.jsonl'), 'utf8'))
+        .split('\n').filter(l => l.trim()).map(l => JSON.parse(l));
+      assert.equal(citationsAfter.length, 1);
+      assert.equal(citationsAfter[0].from, 'sources/a');
+      assert.equal(citationsAfter[0].to, 'sources/b');
+
+      // And it must be settled in one pass, not merely converge eventually.
+      const r2 = await runLint(tmp3, { fix: false, dryRun: false });
+      assert.equal(r2.findings.filter(f => ['L19-citation-in-edges', 'L06-missing-reverse-edge', 'L07-symmetric-edge-duplicate'].includes(f.id)).length, 0,
+        'a single --fix pass must leave no L19/L06/L07 work behind');
+    } finally { await removeTmp(tmp3); }
+  });
+
+  // Regression: the repair rewrites citations.jsonl wholesale, and its reader
+  // swallowed EVERY error, so an unreadable file read as "empty" and every
+  // citation the wiki already had was replaced by just this run's migrations.
+  // Only ENOENT may mean "nothing recorded yet".
+  //
+  // The file must be UNREADABLE BUT REPLACEABLE for this to bite: atomicWrite
+  // renames over it and needs only the parent directory, so the destructive
+  // write still lands. Substituting a directory for the file does not test the
+  // fix -- the write fails too, and the run aborts either way.
+  test('an unreadable citations.jsonl aborts the repair instead of wiping the citations it could not read', {
+    skip: process.platform === 'win32'
+      ? 'chmod does not remove read access on Windows'
+      : (typeof process.getuid === 'function' && process.getuid() === 0
+        ? 'running as root bypasses file permissions'
+        : false),
+  }, async () => {
+    const tmp4 = await makeTmp();
+    const citationsFile = join(tmp4, 'wiki', 'graph', 'citations.jsonl');
+    try {
+      const edgesContent = JSON.stringify({ from: 'sources/a', type: 'cites', to: 'sources/b' }) + '\n';
+      await makeWiki(tmp4, { edgesContent });
+      await writeSources(tmp4, ['a', 'b', 'x', 'y']);
+
+      const preExisting = JSON.stringify({ from: 'sources/x', type: 'cites', to: 'sources/y' }) + '\n';
+      await writeFile(citationsFile, preExisting);
+      await chmod(citationsFile, 0o000);
+
+      await assert.rejects(
+        () => runLint(tmp4, { fix: true, dryRun: false }),
+        (err) => err && err.code !== 'ENOENT',
+        'an unreadable citations.jsonl must surface, not be mistaken for an empty one'
+      );
+
+      await chmod(citationsFile, 0o644);
+      assert.equal(await readFile(citationsFile, 'utf8'), preExisting,
+        'a citation the repair could not read must not be destroyed by it');
+    } finally {
+      try { await chmod(citationsFile, 0o644); } catch {}
+      await removeTmp(tmp4);
+    }
+  });
+
+  // Regression: L17 used to skip citation rows entirely, so a citation whose
+  // endpoint named no file drew no finding at all -- and L19 then moved it into
+  // citations.jsonl, which no check reads. The dangling reference disappeared
+  // from the only file that was being checked.
+  test('a citation row with an unresolved endpoint is left in edges.jsonl, not laundered into citations.jsonl', async () => {
+    const tmp5 = await makeTmp();
+    try {
+      const edgesContent = JSON.stringify({ from: 'sources/a', type: 'cites', to: 'sources/ghost' }) + '\n';
+      await makeWiki(tmp5, { edgesContent });
+      await writeSources(tmp5, ['a']);
+
+      const r = await runLint(tmp5, { fix: true, dryRun: false });
+      assert.ok(r.findings.some(f => f.id === 'L17-dangling-edge'), 'L17 must still report the unresolved endpoint');
+      const l19 = r.findings.filter(f => f.id === 'L19-citation-in-edges');
+      assert.equal(l19.length, 1);
+      assert.equal(l19[0].fixable, false, 'an unmigratable citation must not be advertised as fixable');
+      assert.ok(!l19[0].fix_applied, 'and must not be reported as fixed');
+
+      const edgesAfter = await readFile(join(tmp5, 'wiki', 'graph', 'edges.jsonl'), 'utf8');
+      assert.equal(edgesAfter, edgesContent, 'the row stays where a check can still see it');
+
+      let citations = '';
+      try { citations = await readFile(join(tmp5, 'wiki', 'graph', 'citations.jsonl'), 'utf8'); } catch {}
+      assert.equal(citations.trim(), '', 'nothing may be migrated into citations.jsonl');
+    } finally { await removeTmp(tmp5); }
+  });
+
   test('--dry-run sets proposed_fix on the L19 findings and writes to neither edges.jsonl nor citations.jsonl', async () => {
     const tmp2 = await makeTmp();
     try {
       const edgesContent = JSON.stringify({ from: 'sources/p', type: 'cites', to: 'sources/q' }) + '\n';
       await makeWiki(tmp2, { edgesContent });
+      await writeSources(tmp2, ['p', 'q']);
 
       const edgesFile = join(tmp2, 'wiki', 'graph', 'edges.jsonl');
       const citationsFile = join(tmp2, 'wiki', 'graph', 'citations.jsonl');
@@ -3093,12 +3222,22 @@ describe('L17 dangling-edge', () => {
     assert.equal(result[0].id, 'L17-dangling-edge');
   });
 
-  // Regression (group-4 citation edges fix): L19 now owns cites/cited_by rows,
-  // so L06/L07/L08/L17 must skip them even when they would otherwise look
-  // like a real violation to that check.
-  test('does NOT flag a cites row whose "to" endpoint is unresolved — L19 owns citation rows, not L17', () => {
+  // Regression: L19 owns WHERE a citation row lives, but not whether its
+  // endpoints exist — two different problems. An earlier revision had L17 skip
+  // citation rows entirely, which let fixL19 migrate a dangling citation into
+  // citations.jsonl, a file no check reads. L17 must keep reporting it.
+  test('DOES flag a cites row whose "to" endpoint is unresolved — L19 owns the row, L17 owns the endpoint', () => {
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
     const knownSlugs = new Set(['sources/a']); // sources/ghost deliberately absent
+    const result = checkL17(edges, knownSlugs);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L17-dangling-edge');
+    assert.match(result[0].message, /sources\/ghost/);
+  });
+
+  test('does not flag a citation row whose endpoints both resolve', () => {
+    const edges = [{ from: 'sources/a', to: 'sources/b', type: 'cites' }];
+    const knownSlugs = new Set(['sources/a', 'sources/b']);
     assert.equal(checkL17(edges, knownSlugs).length, 0);
   });
 });
@@ -3113,7 +3252,8 @@ describe('L19 citation-in-edges', () => {
       { from: 'sources/a', to: 'sources/b', type: 'cites' },
       { from: 'sources/b', to: 'sources/a', type: 'cited_by' }, // "b is cited_by a" == "a cites b"
     ];
-    const result = checkL19(edges);
+    const knownSlugs = new Set(['sources/a', 'sources/b']);
+    const result = checkL19(edges, knownSlugs);
     assert.equal(result.length, 2);
 
     const [citesFinding, citedByFinding] = result;
@@ -3132,11 +3272,21 @@ describe('L19 citation-in-edges', () => {
 
   test('returns [] for a normal (non-citation) edge', () => {
     const edges = [{ from: 'sources/a', to: 'sources/b', type: 'builds_on' }];
-    assert.equal(checkL19(edges).length, 0);
+    assert.equal(checkL19(edges, new Set(['sources/a', 'sources/b'])).length, 0);
   });
 
   test('returns [] for an empty edge list', () => {
-    assert.equal(checkL19([]).length, 0);
+    assert.equal(checkL19([], new Set()).length, 0);
+  });
+
+  test('reports a citation row with an unresolved endpoint as UNFIXABLE rather than migrating it', () => {
+    // Migrating this row would move a dangling reference out of edges.jsonl,
+    // which L17 checks, into citations.jsonl, which nothing checks.
+    const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
+    const result = checkL19(edges, new Set(['sources/a']));
+    assert.equal(result.length, 1);
+    assert.equal(result[0].fixable, false);
+    assert.match(result[0].message, /cannot be moved/);
   });
 
   test('checkL06 does NOT flag a cites row as missing its reverse — L19 owns citation rows, not L06', () => {

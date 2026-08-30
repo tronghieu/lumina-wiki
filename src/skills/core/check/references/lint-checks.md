@@ -23,7 +23,7 @@ output in `/lumi-check`.
 | L14 | `external_ids` value fails validation for its namespace | error | No — user must correct or remove the value |
 | L16 | `external_ids` value disagrees with the value derived from `urls[]` | warning | No — run `/lumi-migrate-legacy --backfill-ids` to reconcile |
 | L17 | Dangling edge endpoint (edge `from`/`to` does not resolve to an existing wiki file) | error | No — user must run `wiki.mjs remove-edge` or recreate the missing page |
-| L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` | error | Yes — migrates the row into `graph/citations.jsonl` (always stored as the `cites` direction; a `cited_by` row's endpoints are swapped), deduping against citations already recorded there |
+| L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` | error | Yes, when both endpoints name real wiki files — migrates the row into `graph/citations.jsonl` (always stored as the `cites` direction; a `cited_by` row's endpoints are swapped), deduping against citations already recorded there. A row with an endpoint that resolves to nothing is reported and left in place |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 
@@ -102,6 +102,10 @@ Advisories to surface to the user:
   `cited_by` row's endpoints are swapped on the way in), deduping against
   citations already recorded there. L19 is the only `--fix` fixer that writes
   to `citations.jsonl`.
+  A row is migrated only when both endpoints name real wiki files. One that
+  points at a missing page stays in `edges.jsonl` and is reported unfixable,
+  because L17 checks `edges.jsonl` and nothing checks `citations.jsonl` —
+  moving it would hide a dangling reference rather than repair it.
 
 L04, L08, L10, L11, L12, L13, L14, L16, and L17 require manual correction —
 none of them are touched by `--fix`. So do the individual L01/L02/L05
