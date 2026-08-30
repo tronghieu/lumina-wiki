@@ -5,6 +5,192 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.13.0-next.0] - 2026-08-30
+
+> Preview build, published to the `next` dist-tag. `latest` is untouched.
+>
+> This is also the first npm artifact to carry 1.11.0 and 1.12.0: both were
+> bumped and documented but never tagged, so neither reached npm. The last
+> published version is still 1.10.1, so `npx lumina-wiki@next install`
+> delivers those two releases as well as everything listed below.
+
+### Added
+
+- Lint check L18: warns when a page's frontmatter `id` no longer names the
+  file it lives in. This is the only way to find a wiki damaged by the L03
+  rename bug fixed below — a page whose `id` had drifted from its filename
+  gave no other visible symptom. Never auto-repaired: resolving it means
+  deciding whether to fix the `id` or rename the file, which only a person
+  can judge. The pre-v0.1 legacy `id` form (`<own-entity-dir>/<slug>`) is
+  still tolerated and left alone, but only when the prefix matches the
+  page's own entity type — `id: sources/foo` on a page in `concepts/` names
+  the wrong page type and is reported.
+- Lint check L19: flags a citation that was written into
+  `wiki/graph/edges.jsonl` as a `cites`/`cited_by` row instead of
+  `wiki/graph/citations.jsonl` — the corruption the `add-edge` bug fixed
+  below could produce. `lint.mjs --fix` now migrates each affected row into
+  `citations.jsonl`, always storing it as the `cites` direction (a
+  `cited_by` row has its endpoints swapped on the way in) and deduping
+  against citations already recorded there. Endpoints are resolved the same
+  way checks L05 and L17 resolve them, so a legacy bare-slug citation
+  (`src-a` rather than `sources/src-a`) migrates correctly. A row whose
+  endpoint no longer names a real wiki file is left in `edges.jsonl` and
+  reported unfixable rather than silently moved somewhere nothing checks.
+
+### Fixed
+
+- `/lumi-init` (`wiki.mjs init`) was silently skipping `wiki/readings/` when
+  scaffolding a fresh workspace, even though `npx lumina-wiki install`
+  always created it and the reading-notes ingest path writes into it — the
+  hardcoded directory list backing `init` had drifted out of sync with the
+  schema. Fresh workspaces created via `/lumi-init` now get all seven core
+  directories.
+- `wiki.mjs set-meta <slug> <key> ''` silently turned a string field into an
+  empty list instead of setting it to an empty string: writing an empty
+  value produced a bare `key:` line, which the frontmatter reader treats as
+  the start of a list, so the very next read came back as `[]` while the
+  command still reported success. Setting a field to `''` now round-trips
+  as an actual empty string.
+- `/lumi-check` (lint check L17) flagged every edge written with a bare
+  slug (e.g. `add-edge src-a related_to src-b`) as a dangling reference,
+  even when the target page existed, because L17 compared endpoints against
+  a set of full wiki-relative paths without resolving bare slugs first —
+  any hand-written or bare-slug edge failed lint on an otherwise-healthy
+  wiki. L17 now resolves endpoints the same way broken-wikilink check L05
+  does, and an ambiguous bare slug is reported with the candidates it
+  matches instead of being reported as matching nothing. That resolution is
+  restricted to bare endpoints: an endpoint that already names a directory
+  (`sources/lora`) must match exactly, so a deleted page is no longer
+  silently resolved to an unrelated file that happens to share its basename
+  (`concepts/lora`). Wikis that were lint-clean only because of that
+  fallback will see new L17 findings after upgrading — those edges were
+  always dangling.
+- `wiki.mjs checkpoint-read` and `checkpoint-write` interpolated their
+  `<skill>` and `<phase>` arguments straight into a filename with no
+  validation, so a value containing `/` or `\` in either argument escaped
+  `_lumina/_state` entirely: `checkpoint-write '../../../ESCAPED' phase1
+  file.json` wrote three directories above the project root, and
+  `checkpoint-read '../../../OUTSIDE' x` printed the contents of an
+  arbitrary JSON file to the caller. `<phase>` is not a hypothetical risk —
+  the ingest skill passes it the basename of whatever file the user dropped
+  into `raw/`. Both commands now reject a `skill`/`phase` value containing
+  `/`, `\`, or a NUL byte with exit code 2; ordinary basenames (spaces,
+  dots, parentheses — e.g. `Paper (2017).pdf`) are unaffected, and a
+  project mounted at a filesystem root (POSIX `/`, or a Windows drive root)
+  is handled correctly rather than having every checkpoint path rejected.
+- `/lumi-check` (`lint.mjs --fix`) could silently destroy a page while
+  repairing a non-kebab-case filename (check L03): if two pages' basenames
+  kebab-cased to the same slug, renaming the second one overwrote the
+  first with no warning — exit 0, `fix_applied: true`, the first page's
+  contents gone. `--fix` now refuses the rename when the destination name
+  is already taken and leaves the finding standing with an explanation for
+  a person to resolve — merge the two pages, or rename one by hand.
+- `/lumi-check` (`lint.mjs --fix`) also aborted the entire run partway
+  through when more than one non-kebab-case filename needed repair in the
+  same pass: the file list was captured before any rename happened, so
+  once the first rename moved a file, the next finding's pass tried to
+  re-read the now-missing old path and threw — exit 3, no JSON on stdout,
+  and every later finding left unrepaired with no indication why. All L03
+  renames in a run are now planned and applied together in a single pass.
+- The L03 rename fixer built its new filename with a kebab-case transform
+  that stripped non-ASCII characters instead of decomposing them, so a
+  page named e.g. `Nhà-Nguyễn.md` was renamed to `nh-nguyn.md` — not the
+  name `wiki.mjs slug` would ever produce for that title, and not
+  reversible. The fixer now shares the exact slug logic `wiki.mjs slug`
+  uses, verified unchanged over 20,000 sample inputs.
+- Two more L03 edge cases: a basename made entirely of punctuation (e.g.
+  `___.md`) kebab-cased to an empty string and was renamed to `.md`,
+  removing the page from the wiki outright; and a page's own `id` field
+  was never updated after a rename, so its frontmatter kept naming a file
+  that no longer existed — invisibly, since L03 stops firing once the
+  filename itself is kebab-case. An all-punctuation basename now refuses
+  the rename instead of erasing the page, and the fixer updates `id` (and
+  any legacy `slug`) to match the new filename.
+- If a file `--fix` was renaming for L03 turned out not to be writable,
+  the resulting error used to escape and abort the entire lint run,
+  discarding every other finding's results. The error is now caught per
+  file and reported against that specific finding instead.
+- `/lumi-check` (`lint.mjs --fix`) rebuilt `wiki/index.md` (check L09) from
+  a file listing captured before any L03 renames in the same run, so a
+  single `--fix` pass could leave the index pointing at filenames the
+  renames had just changed. L09 now renders from the post-rename file
+  list.
+- `wiki.mjs add-edge` and `batch-edges` accepted the citation edge types
+  `cites`/`cited_by` and wrote them into `wiki/graph/edges.jsonl` as
+  ordinary graph edges — `remove-edge` and `replace-edge` had refused these
+  types since they were written, but the guard was never added to the
+  commands that create edges. The rows were unrecoverable through any
+  supported command (`remove-edge` refuses the type; `remove-citation`
+  only reads `citations.jsonl` and reports `{"removed":0}`) and invisible
+  to `read-citations`, which never looks at `edges.jsonl` — so a citation
+  recorded this way silently vanished from the citation graph while
+  corrupting the edge graph, with no lint check ever looking for it.
+  `docs/project-context.md` had documented this as intended design; that
+  has been corrected. `add-edge` and `batch-edges` now reject citation
+  types the same way `remove-edge`/`replace-edge` already did. No shipped
+  skill ever called `add-edge` with a citation type, so no working
+  workflow is affected.
+- Lint checks L06, L07, and L08 now treat `cites`/`cited_by` rows in
+  `edges.jsonl` as belonging to the citation graph, not the edge graph, so
+  they no longer try to auto-repair them as ordinary edges — which would
+  otherwise recreate the exact `cited_by` corruption the `add-edge` guard
+  above exists to prevent. L17 still checks citation rows, since a citation
+  pointing at a deleted page needs to be caught before L19 migrates it into
+  `citations.jsonl`, a file no other check reads. L06 and L07 also re-derive
+  their edge list from the content actually being written in a `--fix`
+  pass, so a single pass converges instead of reverting the L19 migration
+  it had just applied.
+- The `citations.jsonl` reader treated any read error as "file empty"
+  rather than only a missing file. Because `--fix` rewrites that file
+  wholesale, a `citations.jsonl` that was merely unreadable — not absent —
+  had every citation it already held replaced with just the rows written in
+  that run. Only a missing file is now treated as "nothing recorded yet."
+- `lint.mjs`'s own copy of `atomicWrite` was missing the `fd.datasync()`
+  call this project's durability guarantee depends on, despite a docstring
+  claiming it already happened — so every `lint.mjs --fix` write skipped
+  the fsync every other write path uses. Consolidating the duplicated
+  helper definitions into one shared implementation closed this gap;
+  `--fix` output is otherwise unchanged.
+- `lint.mjs --suggest` truncated the list of valid values it printed for
+  an enum field instead of showing all of them, and `fetchSource('rss')`
+  crashed via `spawnSync(undefined)` instead of raising a clear error when
+  no RSS fetcher was configured.
+
+### CI
+
+- Bumped `actions/checkout` (v4 to v7), `actions/setup-node` (v4 to v7),
+  and `actions/setup-python` (v5 to v7), which GitHub now force-runs on the
+  deprecated Node 20 Actions runtime otherwise.
+- Moved the test matrix from Node 20 to Node 24 across Ubuntu, macOS, and
+  Windows. Node 22 stays excluded (an upstream `node:test`
+  structured-clone IPC bug). `engines.node` in `package.json` stays
+  `>=20.0.0` so existing installs on older Node are not locked out, which
+  means Node 20 to 23 are declared-supported but no longer covered by CI
+  (tracked in issue #57).
+- Corrected several CI-process references in `docs/project-context.md`,
+  `docs/project-overview-pdr.md`, and `docs/project-roadmap.md` that had
+  gone stale after the Node 24 move — including a step count, Python
+  version, and idempotency-scenario count that no longer matched `ci.yml`.
+
+### Migration
+
+- If your workspace was created with `/lumi-init` (rather than
+  `npx lumina-wiki install`) before this release, it may be missing
+  `wiki/readings/`. Re-run `/lumi-init` (idempotent) or create the
+  directory by hand before using the reading-notes pack.
+- If your wiki has any `cites`/`cited_by` rows in `wiki/graph/edges.jsonl`
+  from before this release, run `node _lumina/scripts/lint.mjs --fix` (or
+  `/lumi-check`) to migrate them into `citations.jsonl` automatically.
+- If your wiki relied on lint check L17 staying quiet about a
+  directory-qualified edge whose target page was deleted but shared a
+  basename with an unrelated file elsewhere, expect a new L17 finding for
+  it after upgrading — it was always dangling.
+- `wiki.mjs add-edge`/`batch-edges` now reject `cites`/`cited_by`, and
+  `checkpoint-read`/`checkpoint-write` now reject `skill`/`phase` values
+  containing `/`, `\`, or NUL. Both previously succeeded. Any automation of
+  your own that relied on either will now exit non-zero instead of
+  corrupting the graph or escaping the project root.
+
 ## [1.12.0] - 2026-08-12
 
 > This release also carries everything prepared for 1.11.0 on 2026-07-27:
@@ -1044,7 +1230,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.0-next.0...HEAD
+[1.13.0-next.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.13.0-next.0
 [1.12.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.12.0
 [1.5.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.3.0...v1.4.0
