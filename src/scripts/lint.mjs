@@ -13,7 +13,7 @@
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * Summary output schema (--summary flag):
- * {"errors":N,"warnings":N,"by_check":{"L01":n,...,"L11":n},"fixable":N}
+ * {"errors":N,"warnings":N,"by_check":{"L01":n,...,"L20":n},"fixable":N}
  * Single-line JSON. Exit code follows default lint rules.
  * Compatible with --json --summary (--summary takes precedence over verbose shape).
  * ─────────────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ const isIndexExempt = (f) => INDEX_EXEMPT_PREFIXES.some(p => f.startsWith(p));
 /** All check IDs in run order.
  *  L15 is intentionally absent — collision check was deferred as premature
  *  for typical wiki size. Adding L15 later is the natural next slot. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17', 'L18', 'L19'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17', 'L18', 'L19', 'L20'];
 
 /**
  * Legacy frontmatter fields that have been renamed across versions.
@@ -403,6 +403,42 @@ function replaceFrontmatterKeyLines(fmText, key, newLines) {
 }
 
 /**
+ * Count declarations of a top-level frontmatter key. Duplicate YAML keys are
+ * ambiguous: the lightweight parser retains only the final value, so a fixer
+ * must not infer that it can safely replace any of the declarations.
+ * @param {string} fmText
+ * @param {string} key
+ * @returns {number}
+ */
+function countTopLevelFrontmatterKeys(fmText, key) {
+  return fmText.split('\n').filter(line => {
+    const match = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:/);
+    return match && match[1] === key;
+  }).length;
+}
+
+/**
+ * Replace exactly one valueless top-level key without consuming its indented
+ * lines. In particular, YAML comments immediately after the key belong to the
+ * user's document and must survive an L01 repair unchanged.
+ * @param {string} fmText
+ * @param {string} key
+ * @param {string} newLine
+ * @returns {string}
+ */
+function replaceSingleValuelessFrontmatterKeyLine(fmText, key, newLine) {
+  const lines = fmText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*$/);
+    if (match && match[1] === key) {
+      lines[i] = newLine;
+      break;
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
  * Delete an existing top-level frontmatter key's line(s) — its own line plus
  * any indented continuation it owns (a block list or block mapping) —
  * entirely, leaving no blank line behind. This is the one place in
@@ -707,11 +743,15 @@ function fencedCodeLines(lines) {
   const inFence = new Array(lines.length).fill(false);
   let open = null;
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^\s*(`{3,}|~{3,})/);
     if (open === null) {
+      const m = lines[i].match(/^ {0,3}(`{3,}|~{3,})/);
       if (m) { open = m[1]; inFence[i] = true; }
     } else {
       inFence[i] = true;
+      // CommonMark permits only spaces or tabs after a closing fence. Text
+      // after its run belongs to the code block, including a would-be fence
+      // such as ```not-a-close or ~~~text.
+      const m = lines[i].match(/^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/);
       if (m && m[1][0] === open[0] && m[1].length >= open.length) open = null;
     }
   }
@@ -983,8 +1023,9 @@ async function parseEdgesJsonl(edgesPath) {
   let raw;
   try {
     raw = await readFile(edgesPath, 'utf8');
-  } catch {
-    return [];
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return [];
+    throw err;
   }
   return parseEdgeLines(raw);
 }
@@ -1136,7 +1177,7 @@ function checkL01(wikiRelPath, fm) {
       findings.push(finding(
         'L01-frontmatter-required', 'error', isL01Fixable(type, field),
         wikiRelPath, null,
-        `Missing required frontmatter key: "${field.key}" (type: ${field.type})`,
+        `Missing required field: "${field.key}" (type: ${field.type})`,
         { key: field.key, fieldType: field.type },
       ));
     }
@@ -1243,7 +1284,7 @@ function checkL02(wikiRelPath, fm) {
       const targetValid = targetPresent && Boolean(targetFieldDef) && isLegacyTargetValid(targetFieldDef.type, targetVal);
       const removable = targetValid && isLegacyValueEquivalent(targetFieldDef.type, fm[oldKey], targetVal);
       findings.push(finding('L02-frontmatter-types', 'warning', removable, wikiRelPath, null,
-        `Legacy frontmatter field "${oldKey}" was renamed to "${info.newKey}" in ${info.since}. Run /lumi-migrate-legacy to upgrade.`,
+        `Older field "${oldKey}" is now called "${info.newKey}". Run /lumi-migrate-legacy to update it.`,
         { legacyOldKey: oldKey, legacyNewKey: info.newKey }));
     }
   }
@@ -1620,7 +1661,7 @@ function checkL11(wikiRelPath, fm) {
     return [finding(
       'L11-confidence-missing', 'warning', false,
       wikiRelPath, null,
-      `Missing optional-but-recommended frontmatter field "confidence" (sources and concepts); expected one of: high, medium, low, unverified`
+      `Missing recommended field "confidence" (sources and concepts); choose one of: high, medium, low, unverified`
     )];
   }
   return [];
@@ -1878,7 +1919,7 @@ function checkL18(wikiRelPath, fm) {
   return [finding(
     'L18-id-filename-mismatch', 'warning', false,
     wikiRelPath, null,
-    `Frontmatter id "${actual}" does not name this file; the path derives "${expected}"`
+    `Page id "${actual}" does not match this file's location, which gives "${expected}"`
   )];
 }
 
@@ -1898,11 +1939,11 @@ function checkL18(wikiRelPath, fm) {
  * `cited_by`, doubling the mess. L17 does NOT skip them: where the row lives
  * and whether its endpoints exist are two different problems, and suppressing
  * the second one let a dangling citation be migrated into citations.jsonl,
- * which no check reads.
+ * where L20 now reports it.
  *
  * A row whose endpoints do not resolve is therefore reported unfixable rather
  * than migrated. Moving it would launder a dangling reference out of the one
- * file that is checked and into the one that is not.
+ * file that is checked and into citations.jsonl, where L20 reports it.
  * @param {Array<{from:string,type:string,to:string}>} edges
  * @param {(target: string) => boolean} resolves  Same notion of "resolves" L17 uses.
  * @returns {Finding[]}
@@ -1924,6 +1965,33 @@ function checkL19(edges, resolves) {
       'L19-citation-in-edges', 'error', true,
       edge.from, null,
       `Citation stored as a graph edge: ${edge.from} --${edge.type}--> ${edge.to} belongs in graph/citations.jsonl as ${citing} cites ${cited}`
+    ));
+  }
+  return findings;
+}
+
+/**
+ * L20: Citation endpoint (from or to) does not resolve to a known wiki page.
+ *
+ * Citations live apart from graph edges, so L17 cannot see them. Use the same
+ * resolver as L17/L19: unique bare slugs resolve, qualified paths must match
+ * exactly, and external URLs are not treated as missing local pages.
+ * @param {Array<{from:string,to:string}>} citations
+ * @param {(target: string) => boolean} resolves
+ * @returns {Finding[]}
+ */
+function checkL20(citations, resolves) {
+  const findings = [];
+  for (const citation of citations) {
+    if (citationEndpointsResolve(citation, resolves)) continue;
+    const unresolved = ['from', 'to'].filter(key => {
+      const target = citation[key];
+      return typeof target !== 'string' || (!target.includes('://') && !resolves(target));
+    });
+    findings.push(finding(
+      'L20-dangling-citation', 'error', false,
+      'graph/citations.jsonl', null,
+      `Citation ${citation.from} cites ${citation.to} points to an unavailable page: ${unresolved.map(key => String(citation[key])).join(', ')}`,
     ));
   }
   return findings;
@@ -1964,11 +2032,13 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
   const entityType = entityTypeForPath(wikiRelPath);
 
   const additions = [];
+  const replacements = [];
+  const seenKeys = new Set();
   for (const f of l01findings) {
     if (f.id !== 'L01-frontmatter-required') continue;
     const key = f.key;
     const fieldType = f.fieldType;
-    if (!key || !fieldType) continue;
+    if (!key || !fieldType || seenKeys.has(key)) continue;
     if (!isL01Fixable(entityType, { key, type: fieldType })) continue;
 
     let value;
@@ -1989,16 +2059,32 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
     }
     if (value === undefined) continue;
     if (!roundTripsAsFrontmatter(key, value)) continue; // unrepresentable — leave the field missing.
-    additions.push({ key, value });
+    seenKeys.add(key);
+    if (Object.prototype.hasOwnProperty.call(fm, key)) {
+      // `parseFrontmatter` retains only the final duplicate key. Replacing
+      // every declaration here could overwrite an earlier valid value, so
+      // leave the ambiguity entirely for a human to resolve.
+      if (countTopLevelFrontmatterKeys(fmText, key) !== 1) continue;
+      replacements.push({ key, value });
+    } else {
+      additions.push({ key, value });
+    }
   }
 
-  if (additions.length === 0) return { newContent: content, preview: '', fixedKeys: [] };
+  if (additions.length === 0 && replacements.length === 0) return { newContent: content, preview: '', fixedKeys: [] };
 
   const addLines = additions.map(({ key, value }) => renderYamlLine(key, value)).join('\n');
-  const newFm = fmText.trimEnd() + '\n' + addLines;
+  let newFm = fmText;
+  for (const { key, value } of replacements) {
+    newFm = replaceSingleValuelessFrontmatterKeyLine(newFm, key, renderYamlLine(key, value));
+  }
+  if (addLines) newFm = newFm.trimEnd() + '\n' + addLines;
   const newContent = `---\n${newFm}\n${tail}`;
-  const preview = additions.map(({ key, value }) => `+ ${renderYamlLine(key, value)}`).join('\n');
-  return { newContent, preview, fixedKeys: additions.map(a => a.key) };
+  const preview = [
+    ...replacements.map(({ key, value }) => `~ ${renderYamlLine(key, value)}`),
+    ...additions.map(({ key, value }) => `+ ${renderYamlLine(key, value)}`),
+  ].join('\n');
+  return { newContent, preview, fixedKeys: [...replacements, ...additions].map(a => a.key) };
 }
 
 /**
@@ -2234,8 +2320,14 @@ async function fixL03(plans, allMdFiles, opts) {
     if (!bySlug.has(p.oldSlug)) bySlug.set(p.oldSlug, { newSlug: p.newSlug, plans: [] });
     bySlug.get(p.oldSlug).plans.push(p);
   }
+  const byQualifiedSlug = new Map();
+  for (const p of plans) {
+    const oldSlug = p.relPath.replace(/\.md$/, '');
+    const newSlug = p.newRelPath.replace(/\.md$/, '');
+    byQualifiedSlug.set(oldSlug, { newSlug, plan: p });
+  }
   const planByAbsOld = new Map(plans.map(p => [p.absOld, p]));
-  const rewrittenBy = new Map(plans.map(p => [p.finding, []])); // finding -> abs paths it changes
+  const rewrittenBy = new Map(plans.map(p => [p.finding, new Set()])); // finding -> changed abs paths
 
   const renamed = [];
   if (!opts.dryRun) {
@@ -2249,6 +2341,7 @@ async function fixL03(plans, allMdFiles, opts) {
         // exit 3 with nothing on stdout, stranding the wiki half-repaired.
         p.finding.renameBlocked = `Could not rename to "${p.newSlug}.md": ${err.message}`;
         planByAbsOld.delete(p.absOld);
+        byQualifiedSlug.delete(p.relPath.replace(/\.md$/, ''));
         for (const entry of bySlug.values()) {
           entry.plans = entry.plans.filter(q => q !== p);
         }
@@ -2272,15 +2365,32 @@ async function fixL03(plans, allMdFiles, opts) {
       continue; // vanished under us (concurrent edit) — nothing to repair here.
     }
 
-    let updated = content;
-    for (const [oldSlug, entry] of bySlug) {
-      if (!updated.includes(`[[${oldSlug}]]`) && !updated.includes(`[[${oldSlug}|`)) continue;
-      updated = updated.replace(
-        new RegExp(`\\[\\[${escapeRegex(oldSlug)}(\\|[^\\]]*)?\\]\\]`, 'g'),
-        (_, alias) => `[[${entry.newSlug}${alias || ''}]]`,
-      );
-      for (const p of entry.plans) rewrittenBy.get(p.finding).push(current);
+    const lines = content.split('\n');
+    const inFence = fencedCodeLines(lines);
+    for (let i = 0; i < lines.length; i++) {
+      if (inFence[i]) continue;
+      lines[i] = lines[i].replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (whole, rawTarget, alias = '') => {
+        // Keep author formatting verbatim: both `[[ sources/Foo_Bar.md ]]`
+        // and its alias are valid link spellings. The extension is only a
+        // target spelling, so use it for lookup but retain it in the output.
+        const padding = rawTarget.match(/^(\s*)(.*?)(\s*)$/);
+        const leading = padding[1];
+        const target = padding[2];
+        const trailing = padding[3];
+        const hasMarkdownExtension = target.endsWith('.md');
+        const canonicalTarget = hasMarkdownExtension ? target.slice(0, -3) : target;
+        const entry = byQualifiedSlug.get(canonicalTarget)
+          || (!canonicalTarget.includes('/') ? bySlug.get(canonicalTarget) : null);
+        if (!entry) return whole;
+
+        const replacement = `${leading}${entry.newSlug}${hasMarkdownExtension ? '.md' : ''}${trailing}`;
+        if (replacement === rawTarget) return whole;
+        const affectedPlans = entry.plans || [entry.plan];
+        for (const p of affectedPlans) rewrittenBy.get(p.finding).add(current);
+        return `[[${replacement}${alias}]]`;
+      });
     }
+    let updated = lines.join('\n');
     if (moved) updated = retargetIdAfterRename(updated, moved);
 
     if (updated !== content && !opts.dryRun) await atomicWrite(current, updated);
@@ -2290,7 +2400,7 @@ async function fixL03(plans, allMdFiles, opts) {
     if (opts.dryRun) {
       p.finding.proposed_fix = [
         `rename: ${p.absOld} -> ${p.absNew}`,
-        ...rewrittenBy.get(p.finding).map(abs => `rewrite wikilinks in: ${abs}`),
+        ...Array.from(rewrittenBy.get(p.finding), abs => `rewrite wikilinks in: ${abs}`),
       ].join('\n');
     } else {
       p.finding.fix_applied = true;
@@ -2504,7 +2614,7 @@ function fixL19(edgesContent, citationsContent, resolves) {
     }
     // Same predicate checkL19 reports on. A row pointing at a file that does
     // not exist stays in edges.jsonl, where L17 still reports it; migrating it
-    // would hide it in a file no check reads.
+    // would hide it in a file L20 reports separately.
     if (!citationEndpointsResolve(parsed, resolves)) {
       keptLines.push(line);
       continue;
@@ -2598,6 +2708,7 @@ function fixL09(indexContent, entityFiles) {
 async function runLint(projectRoot, opts) {
   const wikiRoot = safejoin(projectRoot, 'wiki');
   const edgesPath = safejoin(wikiRoot, 'graph', 'edges.jsonl');
+  const citationsPath = safejoin(wikiRoot, 'graph', 'citations.jsonl');
   const indexPath = safejoin(wikiRoot, 'index.md');
 
   // Collect all .md files under wiki/.
@@ -2655,6 +2766,7 @@ async function runLint(projectRoot, opts) {
 
   // Parse edges.jsonl.
   const edges = await parseEdgesJsonl(edgesPath);
+  const citations = await parseEdgesJsonl(citationsPath);
   const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
 
   // Parse index.md.
@@ -2687,6 +2799,7 @@ async function runLint(projectRoot, opts) {
   allFindings.push(...checkL08(edges));
   allFindings.push(...checkL17(edges, knownSlugs));
   allFindings.push(...checkL19(edges, makeEndpointResolver(knownSlugs)));
+  allFindings.push(...checkL20(citations, makeEndpointResolver(knownSlugs)));
 
   const indexEntityFiles = entityFiles.filter(f => !isIndexExempt(f));
   allFindings.push(...checkL09(indexPath, indexContent, indexEntityFiles));
@@ -2864,6 +2977,24 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     // path against the file's current (possibly retargeted) content so the
     // report matches what is actually on disk after this run.
     if (l03renamed.length > 0) {
+      // Renames change the set L17/L19/L20 resolve against. L20 ran before
+      // L03, so an otherwise-valid citation can now point at the old path.
+      // Refresh its findings from the on-disk state, rather than adding a
+      // second, stale copy. This is intentionally real-run only: dry-run has
+      // not renamed anything, so it must report the state that still exists.
+      // The basename index is cached by Set identity, so replacement (not
+      // mutation) is required to prevent a resolver from retaining old paths.
+      knownSlugs = new Set(knownSlugs);
+      for (const p of l03renamed) {
+        knownSlugs.delete(p.relPath.replace(/\.md$/, ''));
+        knownSlugs.add(p.newRelPath.replace(/\.md$/, ''));
+      }
+      for (let i = findings.length - 1; i >= 0; i--) {
+        if (findings[i].id === 'L20-dangling-citation') findings.splice(i, 1);
+      }
+      const currentCitations = await parseEdgesJsonl(safejoin(wikiRoot, 'graph', 'citations.jsonl'));
+      findings.push(...checkL20(currentCitations, makeEndpointResolver(knownSlugs)));
+
       const renamedRelPaths = new Set(l03renamed.map(p => p.relPath));
       for (let i = findings.length - 1; i >= 0; i--) {
         if (findings[i].id === 'L18-id-filename-mismatch' && renamedRelPaths.has(findings[i].file)) {
@@ -3243,7 +3374,7 @@ export {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19,
+  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20,
   fixL01, fixL02, planL03, fixL03, fixL05, fixL06, fixL07, fixL09, fixL19,
   runLint,
   reportSummary,

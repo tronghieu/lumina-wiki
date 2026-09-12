@@ -1,6 +1,6 @@
 /**
  * @file lint.test.mjs
- * Tests for src/scripts/lint.mjs — covers all 10 checks, fix idempotency, --json schema,
+ * Tests for src/scripts/lint.mjs — covers all checks, fix idempotency, --json schema,
  * --fix --dry-run no-write guarantee, and NO_COLOR output.
  *
  * Run: node --test src/scripts/lint.test.mjs
@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, makeEndpointResolver,
+  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20, makeEndpointResolver,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
   buildBasenameIndex,
@@ -327,7 +327,7 @@ describe('L02 frontmatter-types', () => {
   test('legacy renamed field: url (string) on source -> warning pointing at urls', () => {
     const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234' };
     const result = checkL02('sources/test.md', fm);
-    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "url"'));
+    const legacy = result.find(f => f.message.includes('Older field "url"'));
     assert.ok(legacy, 'expected a legacy-field warning');
     assert.equal(legacy.severity, 'warning');
     assert.ok(legacy.message.includes('"urls"'));
@@ -337,13 +337,13 @@ describe('L02 frontmatter-types', () => {
   test('legacy renamed field: no warning when url absent', () => {
     const fm = validSourceFm();
     const result = checkL02('sources/test.md', fm);
-    assert.ok(!result.some(f => f.message.includes('Legacy frontmatter field')));
+    assert.ok(!result.some(f => f.message.includes('Older field')));
   });
 
   test('legacy renamed field: "slug" -> "id" warns across any entity type', () => {
     const fm = { ...validSourceFm(), slug: 'legacy-name' };
     const result = checkL02('sources/test.md', fm);
-    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    const legacy = result.find(f => f.message.includes('Older field "slug"'));
     assert.ok(legacy, 'expected a legacy-field warning for slug');
     assert.equal(legacy.severity, 'warning');
     assert.ok(legacy.message.includes('"id"'));
@@ -357,7 +357,7 @@ describe('L02 frontmatter-types', () => {
       date_added: '2020-01-01',
     };
     const result = checkL02('concepts/my-concept.md', fm);
-    const legacy = result.find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    const legacy = result.find(f => f.message.includes('Older field "date_added"'));
     assert.ok(legacy, 'expected a legacy-field warning for date_added on a non-source type');
     assert.ok(legacy.message.includes('"created"'));
   });
@@ -399,14 +399,14 @@ describe('L02 frontmatter-types', () => {
 
   test('legacy "slug" -> "id": equivalent values -> fixable (removable)', () => {
     const fm = { ...validSourceFm(), slug: 'test-source' }; // id already "test-source"
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "slug"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, true, 'slug equals id verbatim — safe to remove');
   });
 
   test('legacy "slug" -> "id": disagreeing values -> not fixable (real conflict)', () => {
     const fm = { ...validSourceFm(), slug: 'totally-different-slug' };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "slug"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "slug"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, false, 'slug disagrees with id — must not be marked removable');
   });
@@ -414,42 +414,42 @@ describe('L02 frontmatter-types', () => {
   test('legacy "date_added" -> "created": target absent -> not fixable', () => {
     const fm = { ...validSourceFm(), date_added: '2020-01-01' };
     delete fm.created;
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "date_added"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, false, 'created is absent — date_added is the only copy, must not be removed');
   });
 
   test('legacy "date_added" -> "created": target present but invalid -> not fixable', () => {
     const fm = { ...validSourceFm(), created: 'not-a-date', date_added: '2020-01-01' };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "date_added"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, false, 'created fails ISO-date validity — must not be removed');
   });
 
   test('legacy "date_added" -> "created": equal valid dates -> fixable', () => {
     const fm = { ...validSourceFm(), created: '2020-01-01', date_added: '2020-01-01' };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "date_added"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, true);
   });
 
   test('legacy "url" -> "urls": urls array already contains the url string -> fixable', () => {
     const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234', urls: ['https://arxiv.org/abs/1234'] };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "url"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, true, 'urls[] already contains the legacy url verbatim');
   });
 
   test('legacy "url" -> "urls": urls array present but missing the url string -> not fixable (disagree)', () => {
     const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234', urls: ['https://example.com/other'] };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "url"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, false, 'urls[] does not carry the legacy value — real conflict');
   });
 
   test('legacy "url" -> "urls": urls absent -> not fixable', () => {
     const fm = { ...validSourceFm(), url: 'https://arxiv.org/abs/1234' };
-    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Legacy frontmatter field "url"'));
+    const legacy = checkL02('sources/test.md', fm).find(f => f.message.includes('Older field "url"'));
     assert.ok(legacy);
     assert.equal(legacy.fixable, false, 'urls is absent — url is the only copy');
   });
@@ -874,7 +874,7 @@ describe('L09 index-stale', () => {
 
 describe('fixL01', () => {
   function fakeL01(key, type) {
-    return [{ id: 'L01-frontmatter-required', key, fieldType: type, message: `Missing required frontmatter key: "${key}" (type: ${type})` }];
+    return [{ id: 'L01-frontmatter-required', key, fieldType: type, message: `Missing required field: "${key}" (type: ${type})` }];
   }
 
   function todayYmd() {
@@ -899,6 +899,77 @@ describe('fixL01', () => {
     const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\nbody`;
     const { newContent } = await fixL01('/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('authors', 'array'));
     assert.ok(newContent.includes('authors: []'));
+  });
+
+  test('valueless required key is replaced in place without creating a duplicate key', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors:\n---\nbody`;
+    const { newContent, fixedKeys } = await fixL01(
+      '/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('authors', 'array'),
+    );
+    assert.equal((newContent.match(/^authors:/gm) || []).length, 1, newContent);
+    assert.match(newContent, /^authors: \[\]$/m);
+    assert.deepEqual(fixedKeys, ['authors']);
+  });
+
+  test('preserves indented YAML comments after a valueless key', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors:\n  # Add credited authors when known.\n---\nbody`;
+    const { newContent, fixedKeys } = await fixL01(
+      '/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('authors', 'array'),
+    );
+    assert.match(newContent, /^authors: \[\]$/m);
+    assert.match(newContent, /^  # Add credited authors when known\.$/m);
+    assert.deepEqual(fixedKeys, ['authors']);
+  });
+
+  test('does not repair a duplicated key with a valid value and a valueless value', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = validSourceFm();
+      delete fm.authors;
+      const duplicatedAuthors = renderFm(fm).replace(
+        '\n---\n', '\nauthors: [Author A]\nauthors:\n---\n',
+      );
+      const sourcePath = join(tmp, 'wiki', 'sources', 'test-source.md');
+      await writeFile(sourcePath, duplicatedAuthors + 'Body.');
+
+      const first = await runLint(tmp, { fix: true, dryRun: false });
+      const finding = first.findings.find(f => f.id === 'L01-frontmatter-required' && f.key === 'authors');
+      assert.ok(finding, 'the valueless duplicate must remain an L01 finding');
+      assert.equal(finding.fix_applied, false);
+      assert.equal(finding.proposed_fix, undefined);
+      assert.equal(await readFile(sourcePath, 'utf8'), duplicatedAuthors + 'Body.');
+
+      const dryRun = await runLint(tmp, { fix: false, dryRun: true });
+      const dryRunFinding = dryRun.findings.find(f => f.id === 'L01-frontmatter-required' && f.key === 'authors');
+      assert.ok(dryRunFinding);
+      assert.equal(dryRunFinding.fix_applied, false);
+      assert.equal(dryRunFinding.proposed_fix, undefined);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('runLint fixes a valueless required key once and the next run has no L01 finding for it', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = validSourceFm();
+      delete fm.authors;
+      const valuelessAuthors = renderFm(fm).replace(/\n---\n$/, '\nauthors:\n---\n');
+      await writeFile(join(tmp, 'wiki', 'sources', 'test-source.md'), valuelessAuthors + 'Body.');
+
+      const first = await runLint(tmp, { fix: true, dryRun: false });
+      assert.ok(first.findings.some(f => f.id === 'L01-frontmatter-required' && f.key === 'authors' && f.fix_applied));
+      const repaired = await readFile(join(tmp, 'wiki', 'sources', 'test-source.md'), 'utf8');
+      assert.equal((repaired.match(/^authors:/gm) || []).length, 1, repaired);
+      assert.match(repaired, /^authors: \[\]$/m);
+
+      const second = await runLint(tmp, { fix: false, dryRun: false });
+      assert.ok(!second.findings.some(f => f.id === 'L01-frontmatter-required' && f.key === 'authors'));
+    } finally {
+      await removeTmp(tmp);
+    }
   });
 
   test('object field missing -> {}', async () => {
@@ -1870,7 +1941,7 @@ describe('runLint L19 fix idempotency', () => {
 
       await assert.rejects(
         () => runLint(tmp4, { fix: true, dryRun: false }),
-        (err) => err && err.code !== 'ENOENT',
+        (err) => err && err.code && err.code !== 'ENOENT',
         'an unreadable citations.jsonl must surface, not be mistaken for an empty one'
       );
 
@@ -1885,8 +1956,8 @@ describe('runLint L19 fix idempotency', () => {
 
   // Regression: L17 used to skip citation rows entirely, so a citation whose
   // endpoint named no file drew no finding at all -- and L19 then moved it into
-  // citations.jsonl, which no check reads. The dangling reference disappeared
-  // from the only file that was being checked.
+  // citations.jsonl, which L20 now checks. The dangling reference disappeared
+  // from the wrong check's view.
   test('a citation row with an unresolved endpoint is left in edges.jsonl, not laundered into citations.jsonl', async () => {
     const tmp5 = await makeTmp();
     try {
@@ -2050,7 +2121,7 @@ describe('runLint legacy-field removal fix idempotency', () => {
     const after = await readFile(sourcePath, 'utf8');
     assert.equal(before, after, 'dry-run must not write to disk');
 
-    const legacy = result.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+    const legacy = result.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Older field "slug"'));
     assert.ok(legacy, 'expected the legacy slug finding');
     assert.equal(legacy.fixable, true);
     assert.equal(legacy.fix_applied, false, 'dry-run must never set fix_applied');
@@ -2073,10 +2144,10 @@ describe('runLint legacy-field removal fix idempotency', () => {
       const r1 = await runLint(tmp2, { fix: true, dryRun: false });
       const fileFindings1 = r1.findings.filter(f => f.file === 'sources/test-source.md');
 
-      const slugFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+      const slugFinding = fileFindings1.find(f => f.message.includes('Older field "slug"'));
       assert.ok(slugFinding.fix_applied, 'expected "slug" to be removed (equivalent to id)');
 
-      const dateFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "date_added"'));
+      const dateFinding = fileFindings1.find(f => f.message.includes('Older field "date_added"'));
       assert.ok(dateFinding, 'expected the date_added finding to still be reported');
       assert.equal(dateFinding.fixable, false, 'created and date_added disagree — must not be marked fixable');
       assert.equal(dateFinding.fix_applied, false, 'a real conflict must never be auto-resolved');
@@ -2096,9 +2167,9 @@ describe('runLint legacy-field removal fix idempotency', () => {
       assert.equal(before2, after2, 'second --fix run must write nothing');
       const fixedOnSecondRun = r2.findings.filter(f => f.file === 'sources/test-source.md' && f.fix_applied);
       assert.equal(fixedOnSecondRun.length, 0, 'second run must apply zero fixes');
-      const slugAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+      const slugAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Older field "slug"'));
       assert.ok(!slugAgain, 'slug warning must be fully gone after removal');
-      const dateAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Legacy frontmatter field "date_added"'));
+      const dateAgain = r2.findings.find(f => f.file === 'sources/test-source.md' && f.message.includes('Older field "date_added"'));
       assert.ok(dateAgain, 'date_added conflict must still be reported (correctly unresolved)');
     } finally {
       await removeTmp(tmp2);
@@ -2132,7 +2203,7 @@ describe('runLint TODO sentinel fix idempotency', () => {
       assert.equal(idFinding.fix_applied, false, 'dry-run must never set fix_applied');
       assert.ok(idFinding.proposed_fix && idFinding.proposed_fix.includes('my-real-source'), 'proposed_fix must show the derived id');
 
-      const slugFinding = result.findings.find(f => f.file === 'sources/my-real-source.md' && f.message.includes('Legacy frontmatter field "slug"'));
+      const slugFinding = result.findings.find(f => f.file === 'sources/my-real-source.md' && f.message.includes('Older field "slug"'));
       assert.ok(slugFinding, 'expected the legacy slug finding');
       assert.ok(slugFinding.proposed_fix, 'dry-run must also preview the slug removal, since effectiveValue sees the derived id');
     } finally {
@@ -2161,7 +2232,7 @@ describe('runLint TODO sentinel fix idempotency', () => {
       const fileFindings1 = r1.findings.filter(f => f.file === 'sources/my-real-source.md');
       const idFinding = fileFindings1.find(f => f.message.includes('placeholder "TODO"'));
       assert.ok(idFinding.fix_applied);
-      const slugFinding = fileFindings1.find(f => f.message.includes('Legacy frontmatter field "slug"'));
+      const slugFinding = fileFindings1.find(f => f.message.includes('Older field "slug"'));
       assert.ok(slugFinding.fix_applied, 'slug removal must be recorded as applied in the same pass');
 
       // Second run: fully idempotent — zero further changes, and the
@@ -2174,7 +2245,7 @@ describe('runLint TODO sentinel fix idempotency', () => {
       const after2 = await readFile(sourcePath, 'utf8');
       assert.equal(before2, after2, 'second --fix run must write nothing');
       const remaining = r2.findings.filter(f => f.file === 'sources/my-real-source.md'
-        && (f.message.includes('placeholder "TODO"') || f.message.includes('Legacy frontmatter field')));
+        && (f.message.includes('placeholder "TODO"') || f.message.includes('Older field')));
       assert.equal(remaining.length, 0, 'no id/slug findings should remain for this file after the chain resolves');
     } finally {
       await removeTmp(tmpDir);
@@ -2295,6 +2366,64 @@ describe('runLint L17 dangling-edge', () => {
     const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
     const l17 = findings.filter(f => f.id === 'L17-dangling-edge');
     assert.equal(l17.length, 0, `expected no L17 findings for URL endpoint, got: ${JSON.stringify(l17)}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTEGRATION: graph reads and citation endpoint validation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runLint graph read and citation integrity', () => {
+  test('missing edges.jsonl is treated as an empty graph', async () => {
+    const tmp = await makeTmp();
+    try {
+      const missing = join(tmp, 'missing-edges.jsonl');
+      assert.deepEqual(await parseEdgesJsonl(missing), []);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('a non-ENOENT edges read failure exits the CLI with 3 on every platform', async () => {
+    const tmp = await makeTmp();
+    const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+    try {
+      await makeWiki(tmp);
+      await rm(edgesFile);
+      // A directory reliably makes readFile fail without relying on POSIX
+      // permission semantics or the current user identity.
+      await mkdir(edgesFile);
+      await assert.rejects(
+        () => runLint(tmp, { fix: false, dryRun: false }),
+        err => err && err.code && err.code !== 'ENOENT',
+      );
+      const { spawnSync } = await import('node:child_process');
+      const { fileURLToPath } = await import('node:url');
+      const lintScript = fileURLToPath(new URL('./lint.mjs', import.meta.url));
+      const cli = spawnSync(process.execPath, [lintScript, tmp], { encoding: 'utf8' });
+      assert.equal(cli.status, 3, `expected CLI exit 3, got stderr:\n${cli.stderr}`);
+    } finally { await removeTmp(tmp); }
+  });
+
+  test('dangling citation is an L20 error and --fix leaves citations unchanged', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const source = renderFm(validSourceFm({ id: 'a', title: 'A' })) + 'Body.';
+      await writeFile(join(tmp, 'wiki', 'sources', 'a.md'), source);
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const citations = JSON.stringify({ from: 'sources/a', type: 'cites', to: 'sources/ghost' }) + '\n';
+      await writeFile(citationsFile, citations);
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+      const l20 = result.findings.filter(f => f.id === 'L20-dangling-citation');
+      assert.equal(l20.length, 1);
+      assert.equal(l20[0].fixable, false);
+      assert.equal(l20[0].fix_applied, false);
+      assert.equal(await readFile(citationsFile, 'utf8'), citations);
+    } finally {
+      await removeTmp(tmp);
+    }
   });
 });
 
@@ -2691,6 +2820,63 @@ describe('runLint L03 fix: accented basename transliteration', () => {
   });
 });
 
+describe('runLint L03 fix: qualified links and fenced examples', () => {
+  test('rewrites qualified .md targets with padding, preserves aliases, and leaves valid or unterminated fenced links byte-identical', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(
+        join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar' })) + 'Body.',
+      );
+      const validBacktickFence = '```md\n[[Foo_Bar|example]]\n[[ sources/Foo_Bar.md | qualified example ]]\n``` \t';
+      const validTildeFence = '~~~md\n[[Foo_Bar.md|tilde example]]\n[[ sources/Foo_Bar | padded tilde example ]]\n~~~~\t';
+      const unterminatedFence = '```md\n[[Foo_Bar|unterminated example]]\n```not-a-close\n[[ sources/Foo_Bar.md | still fenced ]]';
+      await writeFile(
+        join(tmp, 'wiki', 'sources', 'other-page.md'),
+        renderFm(validSourceFm({ id: 'other-page', title: 'Other Page' }))
+          + `See [[Foo_Bar|bare link]], [[sources/Foo_Bar.md|qualified link]], and [[ sources/Foo_Bar.md | padded qualified link ]].\n\n${validBacktickFence}\n\n${validTildeFence}\n\n${unterminatedFence}\n`,
+      );
+
+      await runLint(tmp, { fix: true, dryRun: false });
+      const other = await readFile(join(tmp, 'wiki', 'sources', 'other-page.md'), 'utf8');
+      assert.ok(other.includes('[[foo-bar|bare link]]'), other);
+      assert.ok(other.includes('[[sources/foo-bar.md|qualified link]]'), other);
+      assert.ok(other.includes('[[ sources/foo-bar.md | padded qualified link ]]'), other);
+      assert.ok(other.includes(validBacktickFence), other);
+      assert.ok(other.includes(validTildeFence), other);
+      assert.ok(other.includes(unterminatedFence), other);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('dry-run preview names each rewritten page once even when it has several matching links', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(
+        join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar' })) + 'Body.',
+      );
+      await writeFile(
+        join(tmp, 'wiki', 'sources', 'other-page.md'),
+        renderFm(validSourceFm({ id: 'other-page', title: 'Other Page' }))
+          + 'See [[Foo_Bar]], [[Foo_Bar|again]], [[sources/Foo_Bar|qualified]], and [[ sources/Foo_Bar.md | padded qualified ]].',
+      );
+
+      const result = await runLint(tmp, { fix: false, dryRun: true });
+      const l03 = result.findings.find(f => f.id === 'L03-slug-style' && f.file === 'sources/Foo_Bar.md');
+      assert.ok(l03?.proposed_fix);
+      const rewriteLines = l03.proposed_fix.split('\n').filter(line => line.startsWith('rewrite wikilinks in:'));
+      assert.equal(rewriteLines.length, 1, l03.proposed_fix);
+      assert.match(rewriteLines[0], /other-page\.md$/);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
 describe('runLint L03 fix: empty-slug basename is refused', () => {
   test('a basename that kebab-cases to the empty string is left alone', async () => {
     const tmp = await makeTmp();
@@ -2872,6 +3058,67 @@ describe('runLint L03 fix: L18 is recomputed after a rename', () => {
         `expected exactly one surviving L18 finding, got:\n${JSON.stringify(l18, null, 2)}`);
       assert.equal(l18[0].file, 'sources/foo-bar.md',
         'the recomputed finding must point at the NEW (post-rename) path, not the stale pre-rename one');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: L20 is recomputed after a rename', () => {
+  test('reports exactly one dangling citation created by the rename without changing it', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.');
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const citation = JSON.stringify({ from: 'Foo_Bar', type: 'cites', to: 'https://example.com/paper' }) + '\n';
+      await writeFile(citationsFile, citation);
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+      const l20 = result.findings.filter(f => f.id === 'L20-dangling-citation');
+      assert.equal(l20.length, 1, `expected one refreshed L20 finding, got:\n${JSON.stringify(l20, null, 2)}`);
+      assert.match(l20[0].message, /Foo_Bar/);
+      assert.equal(l20[0].fixable, false);
+      assert.equal(l20[0].fix_applied, false);
+      assert.equal(await readFile(citationsFile, 'utf8'), citation,
+        'L03 must not rewrite citations while refreshing L20');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('removes a stale L20 finding when the rename makes its citation resolve', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.');
+      await writeFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'),
+        JSON.stringify({ from: 'sources/foo-bar', type: 'cites', to: 'https://example.com/paper' }) + '\n');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+      assert.equal(result.findings.filter(f => f.id === 'L20-dangling-citation').length, 0,
+        'the post-rename L20 refresh must replace, not retain, stale findings');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('dry-run does not report the citation as dangling before the rename exists', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const original = renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.';
+      const page = join(tmp, 'wiki', 'sources', 'Foo_Bar.md');
+      await writeFile(page, original);
+      await writeFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'),
+        JSON.stringify({ from: 'Foo_Bar', type: 'cites', to: 'https://example.com/paper' }) + '\n');
+
+      const result = await runLint(tmp, { fix: true, dryRun: true });
+      assert.equal(result.findings.filter(f => f.id === 'L20-dangling-citation').length, 0,
+        'dry-run must describe the current files, not the projected rename');
+      assert.equal(await readFile(page, 'utf8'), original, 'dry-run must not rename the page');
     } finally {
       await removeTmp(tmp);
     }
@@ -3667,7 +3914,7 @@ describe('L17 dangling-edge', () => {
   // Regression: L19 owns WHERE a citation row lives, but not whether its
   // endpoints exist — two different problems. An earlier revision had L17 skip
   // citation rows entirely, which let fixL19 migrate a dangling citation into
-  // citations.jsonl, a file no check reads. L17 must keep reporting it.
+  // citations.jsonl, where L20 reports it. L17 must keep reporting it.
   test('DOES flag a cites row whose "to" endpoint is unresolved — L19 owns the row, L17 owns the endpoint', () => {
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
     const knownSlugs = new Set(['sources/a']); // sources/ghost deliberately absent
@@ -3722,7 +3969,7 @@ describe('L19 citation-in-edges', () => {
 
   test('reports a citation row with an unresolved endpoint as UNFIXABLE rather than migrating it', () => {
     // Migrating this row would move a dangling reference out of edges.jsonl,
-    // which L17 checks, into citations.jsonl, which nothing checks.
+    // which L17 checks, into citations.jsonl, which L20 checks.
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
     const result = checkL19(edges, makeEndpointResolver(new Set(['sources/a'])));
     assert.equal(result.length, 1);
@@ -3749,6 +3996,52 @@ describe('L19 citation-in-edges', () => {
     const edges = [{ from: 'sources/a', to: 'sources/b', type: 'cites' }];
     const edgeSet = new Set(edges.map(e => `${e.from}|${e.type}|${e.to}`));
     assert.equal(checkL06(edges, edgeSet).length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L20: dangling citations
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L20 dangling-citation', () => {
+  test('clean: qualified and unique bare-slug citation endpoints resolve', () => {
+    const citations = [
+      { from: 'sources/a', type: 'cites', to: 'b' },
+    ];
+    const resolves = makeEndpointResolver(new Set(['sources/a', 'sources/b']));
+    assert.deepEqual(checkL20(citations, resolves), []);
+  });
+
+  test('reports an unfixable error when either endpoint is unavailable', () => {
+    const citations = [{ from: 'sources/a', type: 'cites', to: 'sources/ghost' }];
+    const result = checkL20(citations, makeEndpointResolver(new Set(['sources/a'])));
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L20-dangling-citation');
+    assert.equal(result[0].severity, 'error');
+    assert.equal(result[0].fixable, false);
+    assert.equal(result[0].file, 'graph/citations.jsonl');
+    assert.match(result[0].message, /sources\/ghost/);
+  });
+
+  test('external URL endpoints retain L17/L19 resolution semantics', () => {
+    const citations = [{ from: 'sources/a', type: 'cites', to: 'https://example.com/paper' }];
+    assert.deepEqual(checkL20(citations, makeEndpointResolver(new Set(['sources/a']))), []);
+  });
+});
+
+describe('lint user-facing wording', () => {
+  test('visible field messages do not expose banned implementation vocabulary', () => {
+    const messages = [
+      ...checkL01('sources/a.md', {}),
+      ...checkL02('sources/a.md', { ...validSourceFm(), slug: 'a' }),
+      ...checkL11('sources/a.md', validSourceFm()),
+      ...checkL18('sources/a.md', { id: 'different-page' }),
+    ].map(f => f.message);
+    assert.ok(messages.length >= 4);
+    for (const message of messages) {
+      assert.doesNotMatch(message, /frontmatter/i, message);
+      assert.doesNotMatch(message, /schema/i, message);
+    }
   });
 });
 

@@ -3,7 +3,7 @@ name: lumi-check
 description: >
   Run lint.mjs --json, summarize findings by severity, offer to apply --fix for
   auto-fixable checks (L01/L02/L03/L05/L06/L07/L09/L19), self-check re-run to confirm 0
-  errors, and surface advisory warnings for user attention.
+  errors, and surface remaining errors and advisory warnings.
   Use this whenever the user asks to "check the wiki", "run lint", "verify the
   graph", "are there broken links?", "what's wrong with the wiki?", "health
   check", or "are there missing reverse links?". Also fires for: weekly review
@@ -100,7 +100,7 @@ node _lumina/scripts/lint.mjs --fix --json
 The `--fix` pass:
 - Applies the supported auto-fixes listed in `references/lint-checks.md`
   (L01, L02, L03, L05, L06, L07, L09, L19)
-- Leaves every other check (L04, L08, L10, L11, L12, L13, L14, L16, L17, L18)
+- Leaves every other check (L04, L08, L10, L11, L12, L13, L14, L16, L17, L18, L20)
   for manual correction
 - Within a fixable check, some individual findings still can't be repaired
   safely (e.g. an L01 on a `number`/`enum` field with no safe default, or an
@@ -145,6 +145,9 @@ If errors remain, do not report done. Address each remaining error specifically:
 - If L17 (dangling edge) persists, the edge still points at a slug with no
   wiki file. Run `wiki.mjs remove-edge <from> <type> <to>` to drop it, or
   recreate the missing page if the relationship should still hold.
+- If L20 (dangling citation) persists, run
+  `wiki.mjs remove-citation <from> <to>` to remove it, or restore the missing
+  page. Do not hand-edit `citations.jsonl`.
 
 Repeat until `summary.errors === 0`. Do not loop more than 3 times — if errors
 persist, surface them to the user as needing manual attention (point them at

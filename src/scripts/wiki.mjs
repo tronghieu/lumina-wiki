@@ -64,6 +64,10 @@ function citationEdgeMessage(direction) {
     : 'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; use `remove-citation <citing> <cited>` (for a cited_by relation, the citing source is the <cited> argument).';
 }
 
+function citationReplaceEdgeMessage() {
+  return 'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges. Use add-citation / remove-citation to manage citations.';
+}
+
 /** Regex for a single frontmatter line: `key: value` */
 const FM_LINE_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)/;
 
@@ -1164,6 +1168,11 @@ async function collectRemovalAdvisories(projectRoot, fromSlug, toSlug) {
  * @returns {Promise<object>}
  */
 async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
+  if (CITATION_EDGE_TYPES.has(edgeType)) {
+    const err = new Error(citationEdgeMessage('remove'));
+    err.code = 2;
+    throw err;
+  }
   const typeDef = edgeTypeByName(edgeType);
   if (!typeDef) {
     const err = new Error(`Unknown edge type: ${edgeType}`);
@@ -1225,6 +1234,11 @@ async function removeEdge(projectRoot, fromSlug, edgeType, toSlug, opts = {}) {
  * @returns {Promise<object>}
  */
 async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts = {}) {
+  if (CITATION_EDGE_TYPES.has(oldType) || CITATION_EDGE_TYPES.has(newType)) {
+    const err = new Error(citationReplaceEdgeMessage());
+    err.code = 2;
+    throw err;
+  }
   const oldTypeDef = edgeTypeByName(oldType);
   if (!oldTypeDef) {
     const err = new Error(`Unknown edge type: ${oldType}`);
@@ -2063,10 +2077,7 @@ async function main(argv) {
         }
 
         if (CITATION_EDGE_TYPES.has(oldType) || CITATION_EDGE_TYPES.has(newType)) {
-          emitError(
-            'Citations live in wiki/graph/citations.jsonl, not edges.jsonl; replace-edge cannot retype cites/cited_by edges. Use add-citation / remove-citation to manage citations.',
-            2,
-          );
+          emitError(citationReplaceEdgeMessage(), 2);
           process.exit(2);
         }
 
@@ -2350,4 +2361,8 @@ async function main(argv) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-main(process.argv);
+if (process.argv[1] && (process.argv[1].endsWith('wiki.mjs') || process.argv[1].endsWith('wiki'))) {
+  main(process.argv);
+}
+
+export { removeEdge, replaceEdge };

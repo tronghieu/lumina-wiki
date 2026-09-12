@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Lint now fails visibly when `wiki/graph/edges.jsonl` cannot be read instead
+  of treating the graph as empty (#54). It also reports dangling citation
+  endpoints in `wiki/graph/citations.jsonl` as L20 errors and never rewrites
+  those citations automatically (#53).
+- `lint --fix` now replaces a required YAML key with no value in place rather
+  than appending a duplicate key (#46), and its L03 rename repair updates
+  qualified wikilinks while leaving fenced examples unchanged (#45).
+- Citation types are rejected inside `removeEdge` and `replaceEdge`, keeping
+  their helper APIs aligned with CLI validation (#47). Lint messages now use
+  plain field wording rather than internal implementation vocabulary (#55).
+- Development Python setup now uses a virtual environment and the repository's
+  requirements file (#51).
+
 ## [1.13.0] - 2026-09-12
 
 ### Added

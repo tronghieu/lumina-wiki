@@ -15,6 +15,7 @@ import { constants as fsConstants, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { ENTITY_DIRS } from './schemas.mjs';
+import { removeEdge, replaceEdge } from './wiki.mjs';
 
 // ---------------------------------------------------------------------------
 // Helper: run wiki.mjs as a child process
@@ -54,6 +55,26 @@ function runWiki(args, opts = {}) {
 function parseJson(output) {
   return JSON.parse(output.trim());
 }
+
+// ---------------------------------------------------------------------------
+// Helper guards: these protect future callers as well as CLI dispatch.
+// ---------------------------------------------------------------------------
+
+describe('citation edge helper guards', () => {
+  test('removeEdge rejects a citation before attempting graph I/O', async () => {
+    await assert.rejects(
+      () => removeEdge('/definitely-not-a-wiki', 'src-a', 'cites', 'src-b'),
+      err => err && err.code === 2 && /remove-citation/.test(err.message),
+    );
+  });
+
+  test('replaceEdge rejects citation types before attempting graph I/O', async () => {
+    await assert.rejects(
+      () => replaceEdge('/definitely-not-a-wiki', 'src-a', 'uses_concept', 'src-b', 'cited_by'),
+      err => err && err.code === 2 && /replace-edge cannot retype/.test(err.message),
+    );
+  });
+});
 
 /**
  * Compute SHA-256 hash of a file's content.
