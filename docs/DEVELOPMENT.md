@@ -259,6 +259,6 @@ npm run test:all && npm run ci:idempotency && npm run ci:package
 - **Forgetting `git init` in the sandbox** — idempotency tests need git to compute diffs. The `dev:sandbox` script does this for you.
 - **Running `lumina-wiki install` inside the repo itself** — the installer will scaffold a wiki workspace on top of the source code. Always use a sandbox dir.
 - **Stale `npm link`** — if `lumina-wiki` global command points at an old clone, `npm unlink -g lumina-wiki` and re-link from the current repo.
-- **macOS `pip install pytest` failures under `npm run test:python`** — install pytest globally once: `pip3 install pytest pypdf requests`.
+- **Python test setup** — use an isolated environment: `python3 -m venv .venv`, then `source .venv/bin/activate` and `python -m pip install -r src/tools/requirements.txt`. Run `npm run test:python` from that environment.
 - **Editing `wiki.mjs` and forgetting `schemas.mjs`** — `schemas.mjs` is the single source of truth. Update it first, then `wiki.mjs` and `lint.mjs` consume the change.
 - **`--packs core` is not what selects "core only"** — `core` is always force-inserted; `--packs research` means "core + research". You cannot exclude `core`.
