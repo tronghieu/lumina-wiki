@@ -911,6 +911,45 @@ describe('fixL01', () => {
     assert.deepEqual(fixedKeys, ['authors']);
   });
 
+  test('preserves indented YAML comments after a valueless key', async () => {
+    const content = `---\nid: x\ntitle: X\ntype: source\ncreated: 2026-01-01\nupdated: 2026-01-01\nauthors:\n  # Add credited authors when known.\n---\nbody`;
+    const { newContent, fixedKeys } = await fixL01(
+      '/tmp/fake/sources/test.md', 'sources/test.md', content, fakeL01('authors', 'array'),
+    );
+    assert.match(newContent, /^authors: \[\]$/m);
+    assert.match(newContent, /^  # Add credited authors when known\.$/m);
+    assert.deepEqual(fixedKeys, ['authors']);
+  });
+
+  test('does not repair a duplicated key with a valid value and a valueless value', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const fm = validSourceFm();
+      delete fm.authors;
+      const duplicatedAuthors = renderFm(fm).replace(
+        '\n---\n', '\nauthors: [Author A]\nauthors:\n---\n',
+      );
+      const sourcePath = join(tmp, 'wiki', 'sources', 'test-source.md');
+      await writeFile(sourcePath, duplicatedAuthors + 'Body.');
+
+      const first = await runLint(tmp, { fix: true, dryRun: false });
+      const finding = first.findings.find(f => f.id === 'L01-frontmatter-required' && f.key === 'authors');
+      assert.ok(finding, 'the valueless duplicate must remain an L01 finding');
+      assert.equal(finding.fix_applied, false);
+      assert.equal(finding.proposed_fix, undefined);
+      assert.equal(await readFile(sourcePath, 'utf8'), duplicatedAuthors + 'Body.');
+
+      const dryRun = await runLint(tmp, { fix: false, dryRun: true });
+      const dryRunFinding = dryRun.findings.find(f => f.id === 'L01-frontmatter-required' && f.key === 'authors');
+      assert.ok(dryRunFinding);
+      assert.equal(dryRunFinding.fix_applied, false);
+      assert.equal(dryRunFinding.proposed_fix, undefined);
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
   test('runLint fixes a valueless required key once and the next run has no L01 finding for it', async () => {
     const tmp = await makeTmp();
     try {
@@ -1902,7 +1941,7 @@ describe('runLint L19 fix idempotency', () => {
 
       await assert.rejects(
         () => runLint(tmp4, { fix: true, dryRun: false }),
-        (err) => err && err.code !== 'ENOENT',
+        (err) => err && err.code && err.code !== 'ENOENT',
         'an unreadable citations.jsonl must surface, not be mistaken for an empty one'
       );
 
@@ -1917,8 +1956,8 @@ describe('runLint L19 fix idempotency', () => {
 
   // Regression: L17 used to skip citation rows entirely, so a citation whose
   // endpoint named no file drew no finding at all -- and L19 then moved it into
-  // citations.jsonl, which no check reads. The dangling reference disappeared
-  // from the only file that was being checked.
+  // citations.jsonl, which L20 now checks. The dangling reference disappeared
+  // from the wrong check's view.
   test('a citation row with an unresolved endpoint is left in edges.jsonl, not laundered into citations.jsonl', async () => {
     const tmp5 = await makeTmp();
     try {
@@ -2345,31 +2384,25 @@ describe('runLint graph read and citation integrity', () => {
     }
   });
 
-  test('unreadable edges.jsonl aborts lint instead of reporting an empty graph', {
-    skip: process.platform === 'win32'
-      ? 'chmod does not remove read access on Windows'
-      : (typeof process.getuid === 'function' && process.getuid() === 0
-        ? 'running as root bypasses file permissions'
-        : false),
-  }, async () => {
+  test('a non-ENOENT edges read failure exits the CLI with 3 on every platform', async () => {
     const tmp = await makeTmp();
     const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
     try {
       await makeWiki(tmp);
-      await chmod(edgesFile, 0o000);
+      await rm(edgesFile);
+      // A directory reliably makes readFile fail without relying on POSIX
+      // permission semantics or the current user identity.
+      await mkdir(edgesFile);
       await assert.rejects(
         () => runLint(tmp, { fix: false, dryRun: false }),
-        err => err && err.code !== 'ENOENT',
+        err => err && err.code && err.code !== 'ENOENT',
       );
       const { spawnSync } = await import('node:child_process');
       const { fileURLToPath } = await import('node:url');
       const lintScript = fileURLToPath(new URL('./lint.mjs', import.meta.url));
       const cli = spawnSync(process.execPath, [lintScript, tmp], { encoding: 'utf8' });
       assert.equal(cli.status, 3, `expected CLI exit 3, got stderr:\n${cli.stderr}`);
-    } finally {
-      try { await chmod(edgesFile, 0o644); } catch {}
-      await removeTmp(tmp);
-    }
+    } finally { await removeTmp(tmp); }
   });
 
   test('dangling citation is an L20 error and --fix leaves citations unchanged', async () => {
@@ -2788,7 +2821,7 @@ describe('runLint L03 fix: accented basename transliteration', () => {
 });
 
 describe('runLint L03 fix: qualified links and fenced examples', () => {
-  test('rewrites bare and qualified real links, preserves aliases, and leaves fenced examples byte-identical', async () => {
+  test('rewrites qualified .md targets with padding, preserves aliases, and leaves valid or unterminated fenced links byte-identical', async () => {
     const tmp = await makeTmp();
     try {
       await makeWiki(tmp);
@@ -2796,18 +2829,23 @@ describe('runLint L03 fix: qualified links and fenced examples', () => {
         join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
         renderFm(validSourceFm({ id: 'Foo_Bar', title: 'Foo Bar' })) + 'Body.',
       );
-      const fencedExample = '```md\n[[Foo_Bar|example]]\n[[sources/Foo_Bar|qualified example]]\n```';
+      const validBacktickFence = '```md\n[[Foo_Bar|example]]\n[[ sources/Foo_Bar.md | qualified example ]]\n``` \t';
+      const validTildeFence = '~~~md\n[[Foo_Bar.md|tilde example]]\n[[ sources/Foo_Bar | padded tilde example ]]\n~~~~\t';
+      const unterminatedFence = '```md\n[[Foo_Bar|unterminated example]]\n```not-a-close\n[[ sources/Foo_Bar.md | still fenced ]]';
       await writeFile(
         join(tmp, 'wiki', 'sources', 'other-page.md'),
         renderFm(validSourceFm({ id: 'other-page', title: 'Other Page' }))
-          + `See [[Foo_Bar|bare link]] and [[sources/Foo_Bar|qualified link]].\n\n${fencedExample}\n`,
+          + `See [[Foo_Bar|bare link]], [[sources/Foo_Bar.md|qualified link]], and [[ sources/Foo_Bar.md | padded qualified link ]].\n\n${validBacktickFence}\n\n${validTildeFence}\n\n${unterminatedFence}\n`,
       );
 
       await runLint(tmp, { fix: true, dryRun: false });
       const other = await readFile(join(tmp, 'wiki', 'sources', 'other-page.md'), 'utf8');
       assert.ok(other.includes('[[foo-bar|bare link]]'), other);
-      assert.ok(other.includes('[[sources/foo-bar|qualified link]]'), other);
-      assert.ok(other.includes(fencedExample), other);
+      assert.ok(other.includes('[[sources/foo-bar.md|qualified link]]'), other);
+      assert.ok(other.includes('[[ sources/foo-bar.md | padded qualified link ]]'), other);
+      assert.ok(other.includes(validBacktickFence), other);
+      assert.ok(other.includes(validTildeFence), other);
+      assert.ok(other.includes(unterminatedFence), other);
     } finally {
       await removeTmp(tmp);
     }
@@ -2824,7 +2862,7 @@ describe('runLint L03 fix: qualified links and fenced examples', () => {
       await writeFile(
         join(tmp, 'wiki', 'sources', 'other-page.md'),
         renderFm(validSourceFm({ id: 'other-page', title: 'Other Page' }))
-          + 'See [[Foo_Bar]], [[Foo_Bar|again]], and [[sources/Foo_Bar|qualified]].',
+          + 'See [[Foo_Bar]], [[Foo_Bar|again]], [[sources/Foo_Bar|qualified]], and [[ sources/Foo_Bar.md | padded qualified ]].',
       );
 
       const result = await runLint(tmp, { fix: false, dryRun: true });
@@ -3020,6 +3058,67 @@ describe('runLint L03 fix: L18 is recomputed after a rename', () => {
         `expected exactly one surviving L18 finding, got:\n${JSON.stringify(l18, null, 2)}`);
       assert.equal(l18[0].file, 'sources/foo-bar.md',
         'the recomputed finding must point at the NEW (post-rename) path, not the stale pre-rename one');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+});
+
+describe('runLint L03 fix: L20 is recomputed after a rename', () => {
+  test('reports exactly one dangling citation created by the rename without changing it', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.');
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const citation = JSON.stringify({ from: 'Foo_Bar', type: 'cites', to: 'https://example.com/paper' }) + '\n';
+      await writeFile(citationsFile, citation);
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+      const l20 = result.findings.filter(f => f.id === 'L20-dangling-citation');
+      assert.equal(l20.length, 1, `expected one refreshed L20 finding, got:\n${JSON.stringify(l20, null, 2)}`);
+      assert.match(l20[0].message, /Foo_Bar/);
+      assert.equal(l20[0].fixable, false);
+      assert.equal(l20[0].fix_applied, false);
+      assert.equal(await readFile(citationsFile, 'utf8'), citation,
+        'L03 must not rewrite citations while refreshing L20');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('removes a stale L20 finding when the rename makes its citation resolve', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      await writeFile(join(tmp, 'wiki', 'sources', 'Foo_Bar.md'),
+        renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.');
+      await writeFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'),
+        JSON.stringify({ from: 'sources/foo-bar', type: 'cites', to: 'https://example.com/paper' }) + '\n');
+
+      const result = await runLint(tmp, { fix: true, dryRun: false });
+      assert.equal(result.findings.filter(f => f.id === 'L20-dangling-citation').length, 0,
+        'the post-rename L20 refresh must replace, not retain, stale findings');
+    } finally {
+      await removeTmp(tmp);
+    }
+  });
+
+  test('dry-run does not report the citation as dangling before the rename exists', async () => {
+    const tmp = await makeTmp();
+    try {
+      await makeWiki(tmp);
+      const original = renderFm(validSourceFm({ id: 'foo-bar', title: 'Foo Bar' })) + 'Body.';
+      const page = join(tmp, 'wiki', 'sources', 'Foo_Bar.md');
+      await writeFile(page, original);
+      await writeFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'),
+        JSON.stringify({ from: 'Foo_Bar', type: 'cites', to: 'https://example.com/paper' }) + '\n');
+
+      const result = await runLint(tmp, { fix: true, dryRun: true });
+      assert.equal(result.findings.filter(f => f.id === 'L20-dangling-citation').length, 0,
+        'dry-run must describe the current files, not the projected rename');
+      assert.equal(await readFile(page, 'utf8'), original, 'dry-run must not rename the page');
     } finally {
       await removeTmp(tmp);
     }
@@ -3815,7 +3914,7 @@ describe('L17 dangling-edge', () => {
   // Regression: L19 owns WHERE a citation row lives, but not whether its
   // endpoints exist — two different problems. An earlier revision had L17 skip
   // citation rows entirely, which let fixL19 migrate a dangling citation into
-  // citations.jsonl, a file no check reads. L17 must keep reporting it.
+  // citations.jsonl, where L20 reports it. L17 must keep reporting it.
   test('DOES flag a cites row whose "to" endpoint is unresolved — L19 owns the row, L17 owns the endpoint', () => {
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
     const knownSlugs = new Set(['sources/a']); // sources/ghost deliberately absent
@@ -3870,7 +3969,7 @@ describe('L19 citation-in-edges', () => {
 
   test('reports a citation row with an unresolved endpoint as UNFIXABLE rather than migrating it', () => {
     // Migrating this row would move a dangling reference out of edges.jsonl,
-    // which L17 checks, into citations.jsonl, which nothing checks.
+    // which L17 checks, into citations.jsonl, which L20 checks.
     const edges = [{ from: 'sources/a', to: 'sources/ghost', type: 'cites' }];
     const result = checkL19(edges, makeEndpointResolver(new Set(['sources/a'])));
     assert.equal(result.length, 1);

@@ -403,6 +403,42 @@ function replaceFrontmatterKeyLines(fmText, key, newLines) {
 }
 
 /**
+ * Count declarations of a top-level frontmatter key. Duplicate YAML keys are
+ * ambiguous: the lightweight parser retains only the final value, so a fixer
+ * must not infer that it can safely replace any of the declarations.
+ * @param {string} fmText
+ * @param {string} key
+ * @returns {number}
+ */
+function countTopLevelFrontmatterKeys(fmText, key) {
+  return fmText.split('\n').filter(line => {
+    const match = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:/);
+    return match && match[1] === key;
+  }).length;
+}
+
+/**
+ * Replace exactly one valueless top-level key without consuming its indented
+ * lines. In particular, YAML comments immediately after the key belong to the
+ * user's document and must survive an L01 repair unchanged.
+ * @param {string} fmText
+ * @param {string} key
+ * @param {string} newLine
+ * @returns {string}
+ */
+function replaceSingleValuelessFrontmatterKeyLine(fmText, key, newLine) {
+  const lines = fmText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*$/);
+    if (match && match[1] === key) {
+      lines[i] = newLine;
+      break;
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
  * Delete an existing top-level frontmatter key's line(s) — its own line plus
  * any indented continuation it owns (a block list or block mapping) —
  * entirely, leaving no blank line behind. This is the one place in
@@ -707,11 +743,15 @@ function fencedCodeLines(lines) {
   const inFence = new Array(lines.length).fill(false);
   let open = null;
   for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^\s*(`{3,}|~{3,})/);
     if (open === null) {
+      const m = lines[i].match(/^ {0,3}(`{3,}|~{3,})/);
       if (m) { open = m[1]; inFence[i] = true; }
     } else {
       inFence[i] = true;
+      // CommonMark permits only spaces or tabs after a closing fence. Text
+      // after its run belongs to the code block, including a would-be fence
+      // such as ```not-a-close or ~~~text.
+      const m = lines[i].match(/^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/);
       if (m && m[1][0] === open[0] && m[1].length >= open.length) open = null;
     }
   }
@@ -1899,11 +1939,11 @@ function checkL18(wikiRelPath, fm) {
  * `cited_by`, doubling the mess. L17 does NOT skip them: where the row lives
  * and whether its endpoints exist are two different problems, and suppressing
  * the second one let a dangling citation be migrated into citations.jsonl,
- * which no check reads.
+ * where L20 now reports it.
  *
  * A row whose endpoints do not resolve is therefore reported unfixable rather
  * than migrated. Moving it would launder a dangling reference out of the one
- * file that is checked and into the one that is not.
+ * file that is checked and into citations.jsonl, where L20 reports it.
  * @param {Array<{from:string,type:string,to:string}>} edges
  * @param {(target: string) => boolean} resolves  Same notion of "resolves" L17 uses.
  * @returns {Finding[]}
@@ -2020,8 +2060,15 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
     if (value === undefined) continue;
     if (!roundTripsAsFrontmatter(key, value)) continue; // unrepresentable — leave the field missing.
     seenKeys.add(key);
-    if (Object.prototype.hasOwnProperty.call(fm, key)) replacements.push({ key, value });
-    else additions.push({ key, value });
+    if (Object.prototype.hasOwnProperty.call(fm, key)) {
+      // `parseFrontmatter` retains only the final duplicate key. Replacing
+      // every declaration here could overwrite an earlier valid value, so
+      // leave the ambiguity entirely for a human to resolve.
+      if (countTopLevelFrontmatterKeys(fmText, key) !== 1) continue;
+      replacements.push({ key, value });
+    } else {
+      additions.push({ key, value });
+    }
   }
 
   if (additions.length === 0 && replacements.length === 0) return { newContent: content, preview: '', fixedKeys: [] };
@@ -2029,7 +2076,7 @@ async function fixL01(absPath, wikiRelPath, content, l01findings) {
   const addLines = additions.map(({ key, value }) => renderYamlLine(key, value)).join('\n');
   let newFm = fmText;
   for (const { key, value } of replacements) {
-    newFm = replaceFrontmatterKeyLines(newFm, key, renderYamlLine(key, value));
+    newFm = replaceSingleValuelessFrontmatterKeyLine(newFm, key, renderYamlLine(key, value));
   }
   if (addLines) newFm = newFm.trimEnd() + '\n' + addLines;
   const newContent = `---\n${newFm}\n${tail}`;
@@ -2322,24 +2369,26 @@ async function fixL03(plans, allMdFiles, opts) {
     const inFence = fencedCodeLines(lines);
     for (let i = 0; i < lines.length; i++) {
       if (inFence[i]) continue;
-      let line = lines[i];
-      for (const [oldSlug, entry] of bySlug) {
-        if (!line.includes(`[[${oldSlug}]]`) && !line.includes(`[[${oldSlug}|`)) continue;
-        line = line.replace(
-          new RegExp(`\\[\\[${escapeRegex(oldSlug)}(\\|[^\\]]*)?\\]\\]`, 'g'),
-          (_, alias) => `[[${entry.newSlug}${alias || ''}]]`,
-        );
-        for (const p of entry.plans) rewrittenBy.get(p.finding).add(current);
-      }
-      for (const [oldSlug, entry] of byQualifiedSlug) {
-        if (!line.includes(`[[${oldSlug}]]`) && !line.includes(`[[${oldSlug}|`)) continue;
-        line = line.replace(
-          new RegExp(`\\[\\[${escapeRegex(oldSlug)}(\\|[^\\]]*)?\\]\\]`, 'g'),
-          (_, alias) => `[[${entry.newSlug}${alias || ''}]]`,
-        );
-        rewrittenBy.get(entry.plan.finding).add(current);
-      }
-      lines[i] = line;
+      lines[i] = lines[i].replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (whole, rawTarget, alias = '') => {
+        // Keep author formatting verbatim: both `[[ sources/Foo_Bar.md ]]`
+        // and its alias are valid link spellings. The extension is only a
+        // target spelling, so use it for lookup but retain it in the output.
+        const padding = rawTarget.match(/^(\s*)(.*?)(\s*)$/);
+        const leading = padding[1];
+        const target = padding[2];
+        const trailing = padding[3];
+        const hasMarkdownExtension = target.endsWith('.md');
+        const canonicalTarget = hasMarkdownExtension ? target.slice(0, -3) : target;
+        const entry = byQualifiedSlug.get(canonicalTarget)
+          || (!canonicalTarget.includes('/') ? bySlug.get(canonicalTarget) : null);
+        if (!entry) return whole;
+
+        const replacement = `${leading}${entry.newSlug}${hasMarkdownExtension ? '.md' : ''}${trailing}`;
+        if (replacement === rawTarget) return whole;
+        const affectedPlans = entry.plans || [entry.plan];
+        for (const p of affectedPlans) rewrittenBy.get(p.finding).add(current);
+        return `[[${replacement}${alias}]]`;
+      });
     }
     let updated = lines.join('\n');
     if (moved) updated = retargetIdAfterRename(updated, moved);
@@ -2565,7 +2614,7 @@ function fixL19(edgesContent, citationsContent, resolves) {
     }
     // Same predicate checkL19 reports on. A row pointing at a file that does
     // not exist stays in edges.jsonl, where L17 still reports it; migrating it
-    // would hide it in a file no check reads.
+    // would hide it in a file L20 reports separately.
     if (!citationEndpointsResolve(parsed, resolves)) {
       keptLines.push(line);
       continue;
@@ -2928,6 +2977,24 @@ async function applyFixes(findings, wikiRoot, edgesPath, indexPath, indexContent
     // path against the file's current (possibly retargeted) content so the
     // report matches what is actually on disk after this run.
     if (l03renamed.length > 0) {
+      // Renames change the set L17/L19/L20 resolve against. L20 ran before
+      // L03, so an otherwise-valid citation can now point at the old path.
+      // Refresh its findings from the on-disk state, rather than adding a
+      // second, stale copy. This is intentionally real-run only: dry-run has
+      // not renamed anything, so it must report the state that still exists.
+      // The basename index is cached by Set identity, so replacement (not
+      // mutation) is required to prevent a resolver from retaining old paths.
+      knownSlugs = new Set(knownSlugs);
+      for (const p of l03renamed) {
+        knownSlugs.delete(p.relPath.replace(/\.md$/, ''));
+        knownSlugs.add(p.newRelPath.replace(/\.md$/, ''));
+      }
+      for (let i = findings.length - 1; i >= 0; i--) {
+        if (findings[i].id === 'L20-dangling-citation') findings.splice(i, 1);
+      }
+      const currentCitations = await parseEdgesJsonl(safejoin(wikiRoot, 'graph', 'citations.jsonl'));
+      findings.push(...checkL20(currentCitations, makeEndpointResolver(knownSlugs)));
+
       const renamedRelPaths = new Set(l03renamed.map(p => p.relPath));
       for (let i = findings.length - 1; i >= 0; i--) {
         if (findings[i].id === 'L18-id-filename-mismatch' && renamedRelPaths.has(findings[i].file)) {

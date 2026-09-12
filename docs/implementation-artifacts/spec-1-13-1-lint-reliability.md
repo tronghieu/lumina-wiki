@@ -63,6 +63,16 @@ context:
 - Given `npm run test:all`, `npm run ci:idempotency`, and `npm run ci:package`, when run from the source repository using approved workflows, then all gates pass.
 - Given ordinary graph edges and valid wiki content, when lint and graph mutation commands run, then existing results, reverse-edge behavior, dry-run behavior, and output contracts remain unchanged.
 
+### Review Findings
+
+- [x] [Review][Patch] Refuse ambiguous L01 replacement when a key occurs more than once [src/scripts/lint.mjs:2032]
+- [x] [Review][Patch] Revalidate citations after L03 renames change the known page set [src/scripts/lint.mjs:2753]
+- [x] [Review][Patch] Rewrite qualified L03 targets that use the accepted `.md` spelling [src/scripts/lint.mjs:2335]
+- [x] [Review][Patch] Keep links inside CommonMark fences whose fence-like lines are not valid closers [src/scripts/lint.mjs:2322]
+- [x] [Review][Patch] Preserve indented YAML comments when replacing a valueless key [src/scripts/lint.mjs:2032]
+- [x] [Review][Patch] Document L20 in the installed `/lumi-check` reference and remediation flow [src/skills/core/check/references/lint-checks.md:27]
+- [x] [Review][Patch] Cover unreadable graph failures on Windows without skipping the regression [src/scripts/lint.test.mjs:2349]
+
 ## Spec Change Log
 
 ## Design Notes
