@@ -12,7 +12,7 @@ Lumina-Wiki tạo cho trợ lý AI của bạn một không gian làm việc lâ
 
 <p align="center">
   <img alt="Giấy phép" src="https://img.shields.io/badge/License-MIT-blue.svg">
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D24-blue.svg">
 </p>
 
 <p align="center">

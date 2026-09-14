@@ -18,7 +18,7 @@ Lumina-Wiki is the source repo for an npm CLI scaffolder, not a generated wiki w
 
 ## Coding Style & Naming Conventions
 
-Use Node >=20, ESM modules, and no transpilation. Keep command imports lazy to preserve cold start. Do not add native modules, `postinstall`, Jest, Vitest, or dev dependencies. Use `atomicWrite` for writes and `safePath` for user path fragments. Skills install as flat canonical IDs, for example `lumi-init` and `lumi-research-discover`.
+Use Node >=24, ESM modules, and no transpilation. Keep command imports lazy to preserve cold start. Do not add native modules, `postinstall`, Jest, Vitest, or dev dependencies. Use `atomicWrite` for writes and `safePath` for user path fragments. Skills install as flat canonical IDs, for example `lumi-init` and `lumi-research-discover`.
 
 ## Agent-Specific Instructions
 

@@ -12,7 +12,7 @@ Lumina-Wiki 为你的 AI 助手提供一个长期用于学习和研究的工作�
 
 <p align="center">
   <img alt="许可证" src="https://img.shields.io/badge/License-MIT-blue.svg">
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D24-blue.svg">
 </p>
 
 <p align="center">

@@ -14,7 +14,7 @@ documentation](https://hermes-agent.nousresearch.com/docs/).
 
 - OpenClaw or Hermes can already receive your messages and run commands in its
   own environment.
-- Node.js 20 or later is available in that same environment. Check with:
+- Node.js 24 or later is available in that same environment. Check with:
 
   ```bash
   node --version

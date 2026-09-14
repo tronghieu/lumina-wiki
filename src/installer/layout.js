@@ -1,8 +1,8 @@
 /**
  * @module installer/layout
  * @description Canonical, pack-aware description of a conforming Lumina
- * workspace — pure data derived from what `commands.js`'s install flow
- * actually writes (see CORE_WIKI_DIRS / RESEARCH_WIKI_DIRS / etc. there).
+ * workspace — pure data. `commands.js` imports `baseDirs`/`packDirs` from
+ * here for its install flow, so this file is the single source of truth.
  *
  * This is the single definition consumed by install, `wikis doctor`, and
  * doctor's repair step (AD-5). No I/O at import time; `checkLayout` is the
@@ -18,10 +18,10 @@ import { access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 
 // ---------------------------------------------------------------------------
-// Directories always present after a core install (mirrors commands.js:
-// CORE_WIKI_DIRS, CORE_RAW_DIRS, LUMINA_DIRS). '.agents/skills' is NOT here
-// — it's a full-profile-only directory (see fullProfileDirs below); a
-// minimal-profile install has no per-project skill copies at all.
+// Directories always present after a core install; commands.js imports this
+// directly for its scaffold step. '.agents/skills' is NOT here — it's a
+// full-profile-only directory (see fullProfileDirs below); a minimal-profile
+// install has no per-project skill copies at all.
 // ---------------------------------------------------------------------------
 
 export const baseDirs = [
@@ -41,9 +41,9 @@ export const baseDirs = [
 export const fullProfileDirs = ['.agents/skills'];
 
 // ---------------------------------------------------------------------------
-// Extra directories created only when a given pack is selected (mirrors
-// RESEARCH_WIKI_DIRS/RESEARCH_RAW_DIRS, READING_WIKI_DIRS, LEARNING_WIKI_DIRS).
-// `core` has no entry here — its dirs are always in baseDirs.
+// Extra directories created only when a given pack is selected; commands.js
+// imports this directly for its scaffold step. `core` has no entry here —
+// its dirs are always in baseDirs.
 // ---------------------------------------------------------------------------
 
 export const packDirs = {

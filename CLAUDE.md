@@ -16,7 +16,7 @@ Lumina-Wiki is an **npm-published, multi-IDE wiki scaffolder**. `npx lumina-wiki
 
 Two layers in this repo:
 
-- **Installer** — `bin/lumina.js` + `src/installer/*.js` (Node ESM ≥20). Idempotent, cross-platform, atomic file writes, symlink fallback ladder.
+- **Installer** — `bin/lumina.js` + `src/installer/*.js` (Node ESM ≥24). Idempotent, cross-platform, atomic file writes, symlink fallback ladder.
 - **Workspace payload** — `src/scripts/*.mjs` (Node wiki engine), `src/tools/*.py` (Python research-pack tools, opt-in), `src/skills/**/*.md` (markdown agent prompts), `src/templates/**/*` (rendered into the user's project on install).
 
 ## Common commands

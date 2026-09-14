@@ -12,7 +12,7 @@ Lumina-Wiki gives your AI assistant a lasting workspace for study and research. 
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg">
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D20-blue.svg">
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-%3E%3D24-blue.svg">
 </p>
 
 <p align="center">

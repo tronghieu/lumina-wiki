@@ -25,10 +25,7 @@ jobs:
         # this matrix sat on a single version at all. Both suites were run on
         # 24 locally before the switch with no sign of it.
         #
-        # Deliberate gap: package.json still declares `engines: >=20.0.0`, so
-        # Node 20 and 22 remain supported but are no longer exercised here. An
-        # API available only in newer Node would break those users without
-        # failing CI. Narrow `engines` if that trade stops being worth it.
+        # package.json declares `engines: >=24.0.0`, matching this matrix.
         node-version: [24]
 
     steps:
