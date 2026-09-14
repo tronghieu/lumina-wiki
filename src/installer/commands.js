@@ -59,6 +59,7 @@ import {
 import { VALID_LOCALES, loadLocale } from './locales.js';
 import { checkForUpdate } from './update-check.js';
 import { readAgentsManifest, writeAgentsManifest } from './agents-manifest.js';
+import { baseDirs, fullProfileDirs, packDirs } from './layout.js';
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -106,29 +107,9 @@ async function getColorFns() {
 }
 
 // ---------------------------------------------------------------------------
-// Directory scaffold spec
+// Directory scaffold spec — baseDirs/packDirs live in layout.js (single
+// source of truth, shared with `wikis doctor`).
 // ---------------------------------------------------------------------------
-
-/** Directories always created (core pack) */
-const CORE_WIKI_DIRS = [
-  'wiki/sources', 'wiki/concepts', 'wiki/people', 'wiki/summary',
-  'wiki/outputs', 'wiki/graph', 'wiki/readings',
-];
-
-const RESEARCH_WIKI_DIRS = ['wiki/foundations', 'wiki/topics'];
-const READING_WIKI_DIRS  = ['wiki/chapters', 'wiki/characters', 'wiki/themes', 'wiki/plot'];
-const LEARNING_WIKI_DIRS = ['wiki/reflections'];
-
-const CORE_RAW_DIRS = ['raw/sources', 'raw/notes', 'raw/assets', 'raw/tmp', 'raw/download'];
-const RESEARCH_RAW_DIRS = ['raw/discovered'];
-
-const LUMINA_DIRS = [
-  '_lumina/config',
-  '_lumina/schema',
-  '_lumina/scripts',
-  '_lumina/tools',
-  '_lumina/_state',
-];
 
 const VALID_PACKS = new Set(['core', 'research', 'reading', 'learning']);
 const VALID_IDE_TARGETS = new Set(['claude_code', 'codex', 'cursor', 'gemini_cli', 'qwen', 'iflow', 'generic']);
@@ -373,22 +354,18 @@ export async function installCommand(opts = {}) {
   }
 
   // 3. Scaffold directories
-  const dirsToCreate = [
-    ...CORE_WIKI_DIRS,
-    ...CORE_RAW_DIRS,
-    ...LUMINA_DIRS,
-  ];
+  const dirsToCreate = [...baseDirs];
   if (profile === 'full') {
-    dirsToCreate.push('.agents/skills');
+    dirsToCreate.push(...fullProfileDirs);
   }
   if (hasResearch) {
-    dirsToCreate.push(...RESEARCH_WIKI_DIRS, ...RESEARCH_RAW_DIRS);
+    dirsToCreate.push(...packDirs.research);
   }
   if (hasReading) {
-    dirsToCreate.push(...READING_WIKI_DIRS);
+    dirsToCreate.push(...packDirs.reading);
   }
   if (hasLearning) {
-    dirsToCreate.push(...LEARNING_WIKI_DIRS);
+    dirsToCreate.push(...packDirs.learning);
   }
 
   for (const dir of dirsToCreate) {
