@@ -30,7 +30,7 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 ## 2. Technology stack & versions
 
 **Runtime:**
-- Node ≥20 (ESM-only, no transpile, no native modules)
+- Node ≥24 (ESM-only, no transpile, no native modules)
 - Python 3.9+ (soft dependency for all installs — `extract_pdf.py` needs `pip install pypdf`; research pack adds further tools and deps)
 
 **Direct JS deps (license-audited MIT/ISC/Apache-2.0):**
@@ -44,7 +44,7 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 
 **Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
 
-**CI:** Node 24 × {Ubuntu, macOS, Windows} = 3 runners, `fail-fast: false`. Trigger: push to main + all PRs. `engines` still allows Node >= 20; CI no longer exercises it.
+**CI:** Node 24 × {Ubuntu, macOS, Windows} = 3 runners, `fail-fast: false`. Trigger: push to main + all PRs. `engines` requires Node >=24, matching the CI matrix.
 
 ---
 

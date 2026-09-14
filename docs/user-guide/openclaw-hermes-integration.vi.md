@@ -14,7 +14,7 @@ wiki mới mà không cần tự mở thư mục đó.
 
 - OpenClaw hoặc Hermes đã nhận được tin nhắn và có thể chạy lệnh trong chính
   môi trường của agent.
-- Môi trường đó có Node.js 20 trở lên. Kiểm tra bằng:
+- Môi trường đó có Node.js 24 trở lên. Kiểm tra bằng:
 
   ```bash
   node --version

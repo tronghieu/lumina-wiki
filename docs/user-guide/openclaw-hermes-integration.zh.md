@@ -7,7 +7,7 @@
 ## 开始前
 
 - OpenClaw 或 Hermes 已能接收你的消息，并能在 Agent 自己的环境中运行命令。
-- 该环境已安装 Node.js 20 或更高版本。请运行：
+- 该环境已安装 Node.js 24 或更高版本。请运行：
 
   ```bash
   node --version

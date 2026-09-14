@@ -23,7 +23,7 @@ session. If you are a human, skim them once and keep them open.
 
 Lumina-Wiki is **two layers in one repo**:
 
-- **Installer** — `bin/lumina.js` + `src/installer/*.js` (Node ESM ≥20). Idempotent,
+- **Installer** — `bin/lumina.js` + `src/installer/*.js` (Node ESM ≥24). Idempotent,
   cross-platform, atomic, symlink-with-fallback. This is what `npx lumina-wiki
   install` runs.
 - **Workspace payload** — `src/scripts/*.mjs` (Node wiki engine), `src/tools/*.py`
