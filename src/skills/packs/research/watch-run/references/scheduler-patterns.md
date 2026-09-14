@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - run: npm install -g lumina-wiki
       - run: lumina discover run --schedule weekly --json
 ```
