@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Lumina-Wiki now requires Node.js 24 or later, the only version CI tests
+  (#57). Node 20 is end-of-life. On Node 20 or 22, npm prints an
+  `EBADENGINE` warning and installs anyway, but those versions are no longer
+  supported.
+- Removed the `wiki.slug_style` and `wiki.graph.edge_types_core` keys from
+  `_lumina/config/lumina.config.yaml`. Nothing read them, so editing them had
+  no effect. The next install or upgrade drops them from existing configs
+  (#49).
+- The installer and `wikis doctor` now read the workspace directory list from
+  one place, so they cannot drift apart (#48).
+
 ## [1.13.1] - 2026-09-14
 
 ### Fixed
