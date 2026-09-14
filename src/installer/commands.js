@@ -1104,7 +1104,6 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
     },
     wiki: {
       link_syntax:  'obsidian',
-      slug_style:   'kebab-case',
       log_prefix:   '## [{{date}}] {{skill}} | {{details}}',
       bidirectional_links: {
         mode: 'exempt-only',
@@ -1112,7 +1111,6 @@ async function renderAndWriteConfig(projectRoot, templateVars, answers) {
       },
       graph: {
         enabled: true,
-        edge_types_core: ['related_to', 'builds_on', 'contradicts', 'cites', 'mentions', 'part_of'],
       },
     },
     lint: {
