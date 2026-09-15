@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-09-15
+
 ### Changed
 
 - Lumina-Wiki now requires Node.js 24 or later, the only version CI tests
@@ -1253,7 +1255,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.1...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.2...HEAD
+[1.13.2]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.13.0
 [1.12.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...archive/1.12.0
