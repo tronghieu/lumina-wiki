@@ -161,6 +161,8 @@ If Step 4.5 captured a correction cause:
 node _lumina/scripts/wiki.mjs log edit "corrected <slug> | cause:<misread|source-error|update> | <what changed>"
 ```
 
+`to`/`from` values from `read-edges` are canonical paths (e.g. `topics/<name>`) — pass them to `wiki.mjs` unchanged; never prepend `topics/` to one.
+
 If the edited page is `sources/<slug>`, also check whether it belongs to any
 topic, and if so append a `correction` timeline entry to each:
 
@@ -168,10 +170,10 @@ topic, and if so append a `correction` timeline entry to each:
 node _lumina/scripts/wiki.mjs read-edges sources/<slug> --type included_in_topic
 ```
 
-For each topic slug `<t>` returned:
+For each `to` value `<t>` returned:
 
 ```bash
-node _lumina/scripts/wiki.mjs timeline-add topics/<t> --kind correction --source sources/<slug> --text "<what changed, in English>"
+node _lumina/scripts/wiki.mjs timeline-add <t> --kind correction --source sources/<slug> --text "<what changed, in English>"
 ```
 
 If the edited page is `concepts/<slug>`, also check whether it is covered by
@@ -182,10 +184,10 @@ any topic, and if so append a `correction` timeline entry to each (no
 node _lumina/scripts/wiki.mjs read-edges concepts/<slug> --type covered_by_topic --direction outbound
 ```
 
-For each topic slug `<t>` in the `to` field:
+For each `to` value `<t>`:
 
 ```bash
-node _lumina/scripts/wiki.mjs timeline-add topics/<t> --kind correction --text "Corrected [[concepts/<slug>]]: <what changed, in English>"
+node _lumina/scripts/wiki.mjs timeline-add <t> --kind correction --text "Corrected [[concepts/<slug>]]: <what changed, in English>"
 ```
 
 Otherwise (no correction cause captured — a non-factual edit):

@@ -30,10 +30,10 @@ node _lumina/scripts/wiki.mjs resolve-pending-citations sources/<slug>
 
 Read `resolved` from stdout — one entry per older page that cited this work before it was ingested. Count the entries as `<R>` for the Phase 9 log line and the Phase 10 report.
 
-**Topic timeline.** Only when the checkpoint's `topics` array is present and non-empty (research pack; otherwise skip the rest of this phase). For each `{slug, via}` entry:
+**Topic timeline.** Only when the checkpoint's `topics` array is present and non-empty (research pack; otherwise skip the rest of this phase). For each `{path, via}` entry, `path` and the checkpoint's own `slug` field (written in step-01-draft.md Phase 2) are already canonical (`topics/<name>`, `sources/<slug>`) — pass both unchanged, never prepend `topics/` or `sources/` to them:
 
 ```bash
-node _lumina/scripts/wiki.mjs timeline-add topics/<slug> --kind ingest --source sources/<new-slug> --text "<one sentence, in English, stating this source's main claim as it bears on the topic>"
+node _lumina/scripts/wiki.mjs timeline-add <path> --kind ingest --source <slug> --text "<one sentence, in English, stating this source's main claim as it bears on the topic>"
 ```
 
 The `--text` is always English regardless of the configured document language — one sentence, no trailing period needed. If the sentence begins with `--`, pass it as `--text="<text>"` so it is not read as another flag. Never edit an existing timeline line. Count the topics touched as `<T>` for the Phase 9 log line and the Phase 10 report.
@@ -79,7 +79,7 @@ Tell the user:
 6. Log entry written
 7. Optional next step in plain language: run `/lumi-check` later to check wiki health, or `/lumi-verify --external <slug>` if the user wants a deeper outside-source comparison.
 8. If Phase 8.7 resolved any pending citations: how many earlier pages now link to this one, in plain language (e.g. "2 earlier pages that cited this work now link to it").
-9. If Phase 8.7 updated any topic timelines: which topics grew, and that running `/lumi-research-topic <topic>` refresh will fold this new source into that topic's summary.
+9. If Phase 8.7 updated any topic timelines: which topics grew, and that running `/lumi-research-topic <name>` refresh will fold this new source into that topic's summary — `<name>` is the topic's `path` with the `topics/` prefix stripped for display, not the canonical value itself.
 
 ## Definition of Done
 

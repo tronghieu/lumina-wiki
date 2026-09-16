@@ -235,10 +235,10 @@ For every concept this source was linked to in Phase 5, find which topics alread
 node _lumina/scripts/wiki.mjs read-edges concepts/<concept> --type covered_by_topic --direction outbound
 ```
 
-Take the `to` slug of each outbound edge returned. Across all linked concepts, collect the distinct topic slugs, and for each one, which concept(s) led to it. Merge into the checkpoint:
+`to` is a canonical path (e.g. `topics/<name>`) — store it, and every other value read from `read-edges`, `key_sources`, or this checkpoint, unchanged everywhere downstream; never prepend `topics/`, `sources/`, or `concepts/` to a value that already has it. Across all linked concepts, collect the distinct topic paths from `to`, and for each one, which concept(s) led to it. Merge into the checkpoint:
 
 ```json
-{"topics": [{"slug": "<topic-slug>", "via": ["<concept-slug>", "..."]}]}
+{"topics": [{"path": "topics/<name>", "via": ["concepts/<concept-slug>", "..."]}]}
 ```
 
 Write checkpoint: `phase: "topics"`.
@@ -251,7 +251,7 @@ Present a draft summary to the user:
 - Edges added
 - Citations added
 - Index updated: yes/no
-- Topics touched: `<topic-title> (via <concept>, <concept>)`, one entry per topic from Phase 7.5 — or `Topics touched: none` if the list is empty or the phase was skipped. Mention in one sentence that accepting the draft also confirms this source's membership in the topics listed.
+- Topics touched: `<topic-title> (via <concept>, <concept>)`, one entry per topic from Phase 7.5 — read the title via `read-meta <path>` on each entry's `path`; if that fails, show the name after `topics/` instead. Or `Topics touched: none` if the list is empty or the phase was skipped. Mention in one sentence that accepting the draft also confirms this source's membership in the topics listed.
 - A 3–5 line excerpt of `## Summary` and `## Key Claims` so the user can sanity-check the draft
 
 Use the user's configured communication language. Explain "provenance", "edges", "citations", and "index" in plain language, or hide the labels and show the outcome instead.

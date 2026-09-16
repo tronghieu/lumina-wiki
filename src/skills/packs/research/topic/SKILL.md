@@ -190,6 +190,13 @@ node _lumina/scripts/lint.mjs --json
 
 Reached from step 2's `[r] refresh` choice. Steps 3-5 above do not apply here.
 
+Candidate values from `key_sources`, from `read-edges` `to`/`from`, or from the
+checkpoint are canonical paths (e.g. `sources/<slug>`, `concepts/<slug>`) —
+pass them to `wiki.mjs` unchanged; never prepend `sources/`, `concepts/`, or
+`topics/` to one. `topics/<slug>` for this topic's own page is the exception:
+`<slug>` there is the bare name this topic was created with in step 1, not a
+value read back from an edge.
+
 1. Read the topic page. Read the timeline zone (between
    `<!-- lumina:timeline -->` and `<!-- /lumina:timeline -->`) and list, to the
    user, the entries dated after `compiled_at` — or every entry, if
@@ -203,10 +210,11 @@ node _lumina/scripts/wiki.mjs read-edges topics/<slug> --type includes_source
 ```
 
    Present the combined, de-duplicated list to the user. The user confirms
-   each source or drops it. For every dropped source:
+   each source or drops it. For every dropped source (its candidate value
+   `<dropped>` is already canonical — pass it unchanged):
 
 ```bash
-node _lumina/scripts/wiki.mjs remove-edge topics/<slug> includes_source sources/<dropped-slug>
+node _lumina/scripts/wiki.mjs remove-edge topics/<slug> includes_source <dropped>
 ```
 
 3. Rewrite the compiled zone (`## Description`, `## Key sources`, `## Key
@@ -232,15 +240,17 @@ node _lumina/scripts/wiki.mjs set-meta topics/<slug> compiled_at YYYY-MM-DD
 ```
 
    For each confirmed source not already linked (newly added to `key_sources`
-   this refresh), add the edge — same command as the new-page path (step 5
-   above):
+   this refresh), add the edge — its candidate value `<source>` is already
+   canonical, pass it unchanged:
 
 ```bash
-node _lumina/scripts/wiki.mjs add-edge topics/<slug> includes_source sources/<source-slug>
+node _lumina/scripts/wiki.mjs add-edge topics/<slug> includes_source <source>
 ```
 
-   For each concept newly named in `## Key concepts` (from step 3), add the
-   edge — same command as the new-page path (step 5 above):
+   For each concept newly named in `## Key concepts` (from step 3) — a bare
+   name you are naming for the first time here, not a candidate read back
+   from an edge — add the edge using its canonical `concepts/<name>` path,
+   same command as the new-page path (step 5 above):
 
 ```bash
 node _lumina/scripts/wiki.mjs add-edge topics/<slug> covers_concept concepts/<concept-slug>
@@ -253,12 +263,13 @@ node _lumina/scripts/wiki.mjs add-edge topics/<slug> covers_concept concepts/<co
 node _lumina/scripts/wiki.mjs read-edges topics/<slug> --type covers_concept --direction outbound
 ```
 
-   For every concept in the result that is no longer named in the rewritten
-   `## Key concepts`, remove the edge — the reverse `covered_by_topic` edge is
+   For every `to` value `<concept>` in the result that is no longer named in
+   the rewritten `## Key concepts`, remove the edge — pass `<concept>`
+   unchanged (it is already canonical); the reverse `covered_by_topic` edge is
    removed in the same operation:
 
 ```bash
-node _lumina/scripts/wiki.mjs remove-edge topics/<slug> covers_concept concepts/<concept-slug>
+node _lumina/scripts/wiki.mjs remove-edge topics/<slug> covers_concept <concept>
 ```
 
    Dropped sources were already unlinked in step 2 above via `remove-edge`;
@@ -267,11 +278,13 @@ node _lumina/scripts/wiki.mjs remove-edge topics/<slug> covers_concept concepts/
 5. **Tension pass.** Read the `## Key claims` section of each confirmed key
    source. Propose at most five pairs where one source's claim conflicts with
    another's, each with a one-line reason. Present all proposed pairs to the
-   user before writing anything. For each pair the user confirms:
+   user before writing anything. `<a>` and `<b>` below are the confirmed
+   `key_sources` values, already canonical (`sources/<name>`); pass them
+   unchanged. For each pair the user confirms:
 
 ```bash
-node _lumina/scripts/wiki.mjs add-edge sources/<a-slug> challenges sources/<b-slug>
-node _lumina/scripts/wiki.mjs timeline-add topics/<slug> --kind note --text "Marked [[sources/<a-slug>]] challenges [[sources/<b-slug>]]: <one-line reason>"
+node _lumina/scripts/wiki.mjs add-edge <a> challenges <b>
+node _lumina/scripts/wiki.mjs timeline-add topics/<slug> --kind note --text "Marked [[<a>]] challenges [[<b>]]: <one-line reason>"
 ```
 
    If the text begins with `--`, pass it as `--text="<text>"` so it is not

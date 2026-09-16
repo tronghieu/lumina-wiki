@@ -4092,6 +4092,60 @@ describe('add-citation-by-id', () => {
       await cleanTmp(tmp);
     }
   });
+
+  test('drains a stale DOI-form pending entry once the same work resolves via the bare arxiv id', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'crosswalk-drain-paper');
+      // Queued before the target existed, in arxiv-DOI form.
+      const r1 = runWiki(
+        ['add-citation-by-id', 'sources/crosswalk-drain-paper', 'doi', '10.48550/arxiv.1706.03762'],
+        { cwd: tmp },
+      );
+      assert.deepEqual(parseJson(r1.stdout), { resolved: false, pending: true, added: true });
+
+      await writeMinimalSource(tmp, 'crosswalk-drain-target', 'external_ids:\n  arxiv: "1706.03762"\n');
+      // Retried with the equivalent bare arxiv id.
+      const r2 = runWiki(
+        ['add-citation-by-id', 'sources/crosswalk-drain-paper', 'arxiv', '1706.03762'],
+        { cwd: tmp },
+      );
+      assert.equal(r2.status, 0, r2.stderr);
+      assert.deepEqual(parseJson(r2.stdout), { resolved: true, to: 'sources/crosswalk-drain-target', added: true });
+
+      const fm = parseJson(runWiki(['read-meta', 'sources/crosswalk-drain-paper'], { cwd: tmp }).stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations ?? [], []);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('dedupes pending citations across the doi<->arxiv crosswalk, added:false on the equivalent form', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'crosswalk-dup-paper');
+
+      const r1 = runWiki(
+        ['add-citation-by-id', 'sources/crosswalk-dup-paper', 'doi', '10.48550/arxiv.1706.03762'],
+        { cwd: tmp },
+      );
+      assert.deepEqual(parseJson(r1.stdout), { resolved: false, pending: true, added: true });
+
+      const r2 = runWiki(
+        ['add-citation-by-id', 'sources/crosswalk-dup-paper', 'arxiv', '1706.03762'],
+        { cwd: tmp },
+      );
+      assert.equal(r2.status, 0, r2.stderr);
+      assert.deepEqual(parseJson(r2.stdout), { resolved: false, pending: true, added: false });
+
+      const fm = parseJson(runWiki(['read-meta', 'sources/crosswalk-dup-paper'], { cwd: tmp }).stdout).frontmatter;
+      assert.equal(fm.pending_citations.length, 1, 'only one pending entry across equivalent forms');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

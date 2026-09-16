@@ -1569,6 +1569,22 @@ function externalIdKeys(idsObject) {
 }
 
 /**
+ * True if two `externalIdKeys()` sets share at least one key — the
+ * crosswalk-aware equivalent of an exact ns+value match (e.g. a DOI-form
+ * arXiv id and its bare arXiv id expand to the same key).
+ *
+ * @param {Set<string>} a
+ * @param {Set<string>} b
+ * @returns {boolean}
+ */
+function keysIntersect(a, b) {
+  for (const key of a) {
+    if (b.has(key)) return true;
+  }
+  return false;
+}
+
+/**
  * `add-citation-by-id`: resolve a citation target by external id. Scans all
  * source pages' `external_ids[ns]` (normalized on both sides) for a unique
  * match. A unique match becomes a real `cites` citation via `addCitation`.
@@ -1608,12 +1624,10 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
   const { frontmatter, body } = parseFrontmatter(content);
 
   const selfKeys = externalIdKeys(frontmatter.external_ids);
-  for (const key of queryKeys) {
-    if (selfKeys.has(key)) {
-      const err = new Error('A page cannot cite itself');
-      err.code = 2;
-      throw err;
-    }
+  if (keysIntersect(selfKeys, queryKeys)) {
+    const err = new Error('A page cannot cite itself');
+    err.code = 2;
+    throw err;
   }
 
   const allSources = await listEntities(projectRoot, 'sources');
@@ -1623,11 +1637,8 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
     const entityContent = await readFile(entity.filePath, 'utf8');
     const { frontmatter: entityFm } = parseFrontmatter(entityContent);
     const candidateKeys = externalIdKeys(entityFm.external_ids);
-    for (const key of queryKeys) {
-      if (candidateKeys.has(key)) {
-        matches.push(entity.path);
-        break;
-      }
+    if (keysIntersect(candidateKeys, queryKeys)) {
+      matches.push(entity.path);
     }
   }
 
@@ -1642,7 +1653,7 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
     // A pending entry for this id may linger from an earlier call made before
     // the target existed; drain it here so nothing waits for a resolve pass.
     const pending = Array.isArray(frontmatter.pending_citations) ? frontmatter.pending_citations : [];
-    const keep = pending.filter((p) => !(p && p.ns === ns && p.value === value));
+    const keep = pending.filter((p) => !(p && keysIntersect(externalIdKeys({ [p.ns]: p.value }), queryKeys)));
     if (keep.length !== pending.length) {
       frontmatter.pending_citations = keep;
       frontmatter.updated = today();
@@ -1653,7 +1664,7 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
 
   // No match — record as a pending citation on `from`.
   const pending = Array.isArray(frontmatter.pending_citations) ? frontmatter.pending_citations : [];
-  const alreadyPending = pending.some((p) => p && p.ns === ns && p.value === value);
+  const alreadyPending = pending.some((p) => p && keysIntersect(externalIdKeys({ [p.ns]: p.value }), queryKeys));
   if (alreadyPending) {
     return { resolved: false, pending: true, added: false };
   }
@@ -1708,10 +1719,7 @@ async function resolvePendingCitations(projectRoot, newArg, dryRun) {
       const validShape = p && typeof p.ns === 'string' && typeof p.value === 'string';
       const norm = validShape ? normalizeExternalId(p.ns, p.value) : { valid: false };
       const pendingKeys = validShape ? externalIdKeys({ [p.ns]: p.value }) : new Set();
-      let matched = false;
-      for (const key of pendingKeys) {
-        if (targetKeys.has(key)) { matched = true; break; }
-      }
+      const matched = keysIntersect(pendingKeys, targetKeys);
       if (matched) {
         matchedHere.push({ from: entity.path, to: newEntity.slug, ns: p.ns, value: norm.valid ? norm.id : p.value });
       } else {
