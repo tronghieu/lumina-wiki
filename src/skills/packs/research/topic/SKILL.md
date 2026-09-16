@@ -221,7 +221,7 @@ node _lumina/scripts/wiki.mjs remove-edge topics/<slug> includes_source sources/
    `key_sources` to the full confirmed list:
 
 ```bash
-node _lumina/scripts/wiki.mjs set-meta topics/<slug> key_sources '["<slug>", "..."]' --json-value
+node _lumina/scripts/wiki.mjs set-meta topics/<slug> key_sources '["sources/<slug>", "..."]' --json-value
 ```
 
    Set `updated` and `compiled_at` to today:
@@ -246,7 +246,23 @@ node _lumina/scripts/wiki.mjs add-edge topics/<slug> includes_source sources/<so
 node _lumina/scripts/wiki.mjs add-edge topics/<slug> covers_concept concepts/<concept-slug>
 ```
 
-   Dropped sources were already unlinked in step 2 above via `remove-edge`.
+   Read the topic's current concept edges and diff against the rewritten
+   `## Key concepts` section:
+
+```bash
+node _lumina/scripts/wiki.mjs read-edges topics/<slug> --type covers_concept --direction outbound
+```
+
+   For every concept in the result that is no longer named in the rewritten
+   `## Key concepts`, remove the edge — the reverse `covered_by_topic` edge is
+   removed in the same operation:
+
+```bash
+node _lumina/scripts/wiki.mjs remove-edge topics/<slug> covers_concept concepts/<concept-slug>
+```
+
+   Dropped sources were already unlinked in step 2 above via `remove-edge`;
+   dropped concepts are unlinked the same way, just above.
 
 5. **Tension pass.** Read the `## Key claims` section of each confirmed key
    source. Propose at most five pairs where one source's claim conflicts with
@@ -316,5 +332,6 @@ Then continue with steps 7 and 8 above (lint, suggest `/lumi-check`).
   logged in `wiki/log.md` with the actual decision taken.
 - On a refresh: `compiled_at` is today's date, the timeline zone and any
   `<!-- user-edited -->` block are byte-identical to before the refresh, every
-  dropped source's `includes_source` edge is removed, and every confirmed
-  `challenges` pair has both the edge and its `note` timeline entry.
+  dropped source's `includes_source` edge is removed, every dropped concept's
+  `covers_concept` edge is removed, and every confirmed `challenges` pair has
+  both the edge and its `note` timeline entry.

@@ -4027,6 +4027,51 @@ describe('add-citation-by-id', () => {
     }
   });
 
+  test('resolves via doi<->arxiv crosswalk: citing by arxiv-DOI matches a target stored as bare arxiv id', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'citer-arxiv-doi');
+      await writeMinimalSource(tmp, 'target-bare-arxiv', 'external_ids:\n  arxiv: "1706.03762"\n');
+
+      const r = runWiki(['add-citation-by-id', 'sources/citer-arxiv-doi', 'doi', '10.48550/arxiv.1706.03762'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      assert.deepEqual(parseJson(r.stdout), { resolved: true, to: 'sources/target-bare-arxiv', added: true });
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('resolves via doi<->arxiv crosswalk: citing by bare arxiv id matches a target stored as arxiv-DOI', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'citer-bare-arxiv');
+      await writeMinimalSource(tmp, 'target-arxiv-doi', 'external_ids:\n  doi: 10.48550/arxiv.1706.03762\n');
+
+      const r = runWiki(['add-citation-by-id', 'sources/citer-bare-arxiv', 'arxiv', '1706.03762'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      assert.deepEqual(parseJson(r.stdout), { resolved: true, to: 'sources/target-arxiv-doi', added: true });
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('non-arxiv DOI does not match an unrelated bare arxiv id', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'citer-plain-doi');
+      await writeMinimalSource(tmp, 'unrelated-arxiv-target', 'external_ids:\n  arxiv: "1706.03762"\n');
+
+      const r = runWiki(['add-citation-by-id', 'sources/citer-plain-doi', 'doi', '10.1000/plain'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      assert.deepEqual(parseJson(r.stdout), { resolved: false, pending: true, added: true });
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('self-citation: from cites its own external id, exit 2, no write', async () => {
     const tmp = await makeTmp();
     try {
@@ -4141,6 +4186,27 @@ describe('resolve-pending-citations', () => {
       assert.equal(await hashFile(oldFile), oldHashBefore, 'old paper unchanged by dry-run');
       assert.equal(await hashFile(newFile), newHashBefore, 'new paper unchanged by dry-run');
       assert.equal(await hashFile(citationsFile), citationsHashBefore, 'citations.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('drains a pending arxiv-DOI entry via crosswalk when the new page only carries the bare arxiv id', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'old-crosswalk-paper');
+      runWiki(['add-citation-by-id', 'sources/old-crosswalk-paper', 'doi', '10.48550/arxiv.2401.00001'], { cwd: tmp });
+      await writeMinimalSource(tmp, 'new-crosswalk-paper', 'external_ids:\n  arxiv: "2401.00001"\n');
+
+      const r = runWiki(['resolve-pending-citations', 'sources/new-crosswalk-paper'], { cwd: tmp });
+      assert.equal(r.status, 0, `resolve-pending-citations failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json.resolved[0], { from: 'sources/old-crosswalk-paper', to: 'sources/new-crosswalk-paper', ns: 'doi', value: '10.48550/arxiv.2401.00001' });
+
+      const read = runWiki(['read-meta', 'sources/old-crosswalk-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations, [], 'pending entry drained via crosswalk');
     } finally {
       await cleanTmp(tmp);
     }

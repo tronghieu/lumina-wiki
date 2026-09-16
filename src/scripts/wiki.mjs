@@ -36,7 +36,7 @@ import {
   TIMELINE_KINDS,
   EXTERNAL_ID_NAMESPACES,
 } from './schemas.mjs';
-import { sanitizeExternalIdsObject, normalizeExternalId } from './external-ids.mjs';
+import { sanitizeExternalIdsObject, normalizeExternalId, expandExternalIds } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
 import { slugify } from './lib/slug.mjs';
@@ -1548,6 +1548,27 @@ async function timelineAdd(projectRoot, topicArg, opts) {
 }
 
 /**
+ * Expand an external_ids-shaped object through the doi<->arxiv crosswalk and
+ * return the resulting `ns:normalizedValue` keys as a Set, so a citation
+ * given as one form (e.g. an arXiv DOI) matches a source stored in the other
+ * form (e.g. a bare arxiv id), and vice versa.
+ *
+ * @param {object|null|undefined} idsObject
+ * @returns {Set<string>}
+ */
+function externalIdKeys(idsObject) {
+  const expanded = expandExternalIds(idsObject);
+  const keys = new Set();
+  for (const ns of EXTERNAL_ID_NAMESPACES) {
+    const raw = expanded[ns];
+    if (typeof raw !== 'string' || !raw) continue;
+    const norm = normalizeExternalId(ns, raw);
+    if (norm.valid) keys.add(`${ns}:${norm.id}`);
+  }
+  return keys;
+}
+
+/**
  * `add-citation-by-id`: resolve a citation target by external id. Scans all
  * source pages' `external_ids[ns]` (normalized on both sides) for a unique
  * match. A unique match becomes a real `cites` citation via `addCitation`.
@@ -1581,20 +1602,17 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
     throw err;
   }
   const value = norm.id;
+  const queryKeys = externalIdKeys({ [ns]: value });
 
   const content = await readFile(from.filePath, 'utf8');
   const { frontmatter, body } = parseFrontmatter(content);
 
-  const selfExtIds = frontmatter.external_ids;
-  if (selfExtIds && typeof selfExtIds === 'object') {
-    const selfRaw = selfExtIds[ns];
-    if (typeof selfRaw === 'string' && selfRaw) {
-      const selfNorm = normalizeExternalId(ns, selfRaw);
-      if (selfNorm.valid && selfNorm.id === value) {
-        const err = new Error('A page cannot cite itself');
-        err.code = 2;
-        throw err;
-      }
+  const selfKeys = externalIdKeys(frontmatter.external_ids);
+  for (const key of queryKeys) {
+    if (selfKeys.has(key)) {
+      const err = new Error('A page cannot cite itself');
+      err.code = 2;
+      throw err;
     }
   }
 
@@ -1604,13 +1622,12 @@ async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
     if (entity.path === from.slug) continue;
     const entityContent = await readFile(entity.filePath, 'utf8');
     const { frontmatter: entityFm } = parseFrontmatter(entityContent);
-    const extIds = entityFm.external_ids;
-    if (!extIds || typeof extIds !== 'object') continue;
-    const candidateRaw = extIds[ns];
-    if (typeof candidateRaw !== 'string' || !candidateRaw) continue;
-    const candidateNorm = normalizeExternalId(ns, candidateRaw);
-    if (candidateNorm.valid && candidateNorm.id === value) {
-      matches.push(entity.path);
+    const candidateKeys = externalIdKeys(entityFm.external_ids);
+    for (const key of queryKeys) {
+      if (candidateKeys.has(key)) {
+        matches.push(entity.path);
+        break;
+      }
     }
   }
 
@@ -1670,16 +1687,7 @@ async function resolvePendingCitations(projectRoot, newArg, dryRun) {
   const newContent = await readFile(newEntity.filePath, 'utf8');
   const { frontmatter: newFm } = parseFrontmatter(newContent);
 
-  const targetKeys = new Set();
-  const newIds = newFm.external_ids;
-  if (newIds && typeof newIds === 'object') {
-    for (const ns of EXTERNAL_ID_NAMESPACES) {
-      const raw = newIds[ns];
-      if (typeof raw !== 'string' || !raw) continue;
-      const norm = normalizeExternalId(ns, raw);
-      if (norm.valid) targetKeys.add(`${ns}:${norm.id}`);
-    }
-  }
+  const targetKeys = externalIdKeys(newFm.external_ids);
 
   const allSources = await listEntities(projectRoot, 'sources');
   const resolved = [];
@@ -1699,9 +1707,13 @@ async function resolvePendingCitations(projectRoot, newArg, dryRun) {
     for (const p of pending) {
       const validShape = p && typeof p.ns === 'string' && typeof p.value === 'string';
       const norm = validShape ? normalizeExternalId(p.ns, p.value) : { valid: false };
-      const key = norm.valid ? `${p.ns}:${norm.id}` : null;
-      if (key && targetKeys.has(key)) {
-        matchedHere.push({ from: entity.path, to: newEntity.slug, ns: p.ns, value: norm.id });
+      const pendingKeys = validShape ? externalIdKeys({ [p.ns]: p.value }) : new Set();
+      let matched = false;
+      for (const key of pendingKeys) {
+        if (targetKeys.has(key)) { matched = true; break; }
+      }
+      if (matched) {
+        matchedHere.push({ from: entity.path, to: newEntity.slug, ns: p.ns, value: norm.valid ? norm.id : p.value });
       } else {
         keep.push(p);
       }

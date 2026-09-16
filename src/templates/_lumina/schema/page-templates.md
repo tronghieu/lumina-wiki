@@ -22,10 +22,9 @@ importance: 3        # 1=niche  2=useful  3=field-standard  4=influential  5=sem
 provenance: missing  # replayable | partial | missing
 confidence: high     # high | medium | low | unverified
 tags: []             # free-form; not schema-validated
-pending_citations:   # optional; omit until a cited-but-not-yet-ingested work is recorded.
-  # Array of {ns, value, title?}. Written by `wiki.mjs add-citation-by-id`;
-  # drained automatically into a real citation when the cited work is ingested.
-  - {ns: doi, value: "10.x/y", title: "Cited paper title"}
+pending_citations: []  # entries are {ns, value, title?}, e.g. {ns: doi, value: "10.1145/...", title: "Cited paper title"}.
+  # Written by `wiki.mjs add-citation-by-id`; drained automatically into a
+  # real citation when the cited work is ingested.
 ranking:             # optional; written by /lumi-research-rank. Omit until the paper is ranked.
   # Flat map of scalars (one level only, like external_ids). Only include keys you have.
   influential_citations: 42   # Semantic Scholar influentialCitationCount
