@@ -31,8 +31,12 @@ import {
   REQUIRED_FRONTMATTER,
   EDGE_CONFIDENCE,
   LEGACY_ENUM_DEFAULTS,
+  TIMELINE_MARKER_OPEN,
+  TIMELINE_MARKER_CLOSE,
+  TIMELINE_KINDS,
+  EXTERNAL_ID_NAMESPACES,
 } from './schemas.mjs';
-import { sanitizeExternalIdsObject } from './external-ids.mjs';
+import { sanitizeExternalIdsObject, normalizeExternalId } from './external-ids.mjs';
 import { atomicWrite } from './lib/fsx.mjs';
 import { isExempt } from './lib/globs.mjs';
 import { slugify } from './lib/slug.mjs';
@@ -468,6 +472,21 @@ function today() {
 }
 
 /**
+ * Check a YYYY-MM-DD string is a real calendar date (not just shape-matching
+ * DATE_RE). Rejects e.g. 2026-13-01 or 2026-02-30, which `new Date(str)`
+ * would silently roll over into a different date.
+ * @param {string} s
+ * @returns {boolean}
+ */
+function isValidIsoDate(s) {
+  if (!DATE_RE.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (m < 1 || m > 12) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+/**
  * Ensure directory exists (mkdir -p).
  * @param {string} dir
  */
@@ -769,6 +788,56 @@ async function listEntities(projectRoot, prefix = null) {
     }
   }
   return results;
+}
+
+/**
+ * Resolve `slugArg` to an entity file, requiring it live under the
+ * `expectedType`'s ENTITY_DIRS directory (e.g. 'topics', 'sources'). Accepts
+ * both a bare slug and one already qualified with the directory prefix, same
+ * as `findEntityFile`. Exit-2 class error when not found or of the wrong type.
+ *
+ * A bare (untyped) slugArg tries `expectedType`'s directory first, so e.g.
+ * `timeline-add foo` still finds `topics/foo.md` even when `concepts/foo.md`
+ * also exists — `findEntityFile`'s ENTITY_DIRS scan order would otherwise
+ * return the concepts hit first and this function would then reject it as
+ * the wrong type. Only when no file exists at that direct path does it fall
+ * back to the generic (first-hit) lookup.
+ *
+ * @param {string} projectRoot
+ * @param {string} slugArg
+ * @param {string} expectedType - key in ENTITY_DIRS
+ * @param {string} label - noun for the error message (e.g. 'Topic', 'Source')
+ * @returns {Promise<{filePath: string, slug: string}>} slug is the full
+ *   wiki-relative slug (e.g. "topics/foo"), regardless of how slugArg was spelled.
+ */
+async function requireEntityInDir(projectRoot, slugArg, expectedType, label) {
+  let filePath = null;
+  if (!isTypedEntitySlug(slugArg)) {
+    const candidate = join(projectRoot, 'wiki', ENTITY_DIRS[expectedType].dir, `${slugArg}.md`);
+    try {
+      await access(candidate, fsConstants.F_OK);
+      filePath = candidate;
+    } catch (_) {
+      // not there under expectedType — fall through to the generic lookup
+    }
+  }
+  if (!filePath) {
+    filePath = await findEntityFile(projectRoot, slugArg);
+  }
+  if (!filePath) {
+    const err = new Error(`${label} not found: ${slugArg}`);
+    err.code = 2;
+    throw err;
+  }
+  const entityType = _entityTypeForFilePath(projectRoot, filePath);
+  if (entityType !== expectedType) {
+    const err = new Error(`${label} must be a page under wiki/${ENTITY_DIRS[expectedType].dir}: ${slugArg}`);
+    err.code = 2;
+    throw err;
+  }
+  const wikiDir = join(projectRoot, 'wiki');
+  const slug = stripMdSuffix(toPosixPath(relative(wikiDir, filePath)));
+  return { filePath, slug };
 }
 
 // ---------------------------------------------------------------------------
@@ -1328,6 +1397,334 @@ async function replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, opts
 }
 
 // ---------------------------------------------------------------------------
+// 5b. Topic timeline + retro-linked citation ops
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether `line` already appears verbatim as one full line inside
+ * `zoneContent` (the markdown between the timeline markers, exclusive).
+ * A trailing `\r` is stripped from each zone line before comparing, so a
+ * CRLF page still matches a freshly built (LF-only) `line`.
+ * @param {string} zoneContent
+ * @param {string} line
+ * @returns {boolean}
+ */
+function timelineZoneHasLine(zoneContent, line) {
+  return zoneContent.split('\n').some((l) => l.replace(/\r$/, '') === line);
+}
+
+/**
+ * Escape a string for embedding as a literal (non-metacharacter) fragment in
+ * a `RegExp` source.
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Check whether the timeline zone already has an `ingest` entry citing
+ * `sourceSlug`, regardless of date or text. Used instead of an exact-line
+ * match so a resumed ingest on a later day doesn't append a second row for
+ * a source already ingested into this topic.
+ * @param {string} zoneContent
+ * @param {string} sourceSlug
+ * @returns {boolean}
+ */
+function timelineZoneHasIngestSource(zoneContent, sourceSlug) {
+  const re = new RegExp(`^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* \\| ingest \\| \\[\\[${escapeRegExp(sourceSlug)}\\]\\]`);
+  return zoneContent.split('\n').some((l) => re.test(l));
+}
+
+/**
+ * Append a fresh `## Timeline` section (heading + open/close markers + the
+ * first entry) to the end of a page body. Normalizes trailing whitespace so
+ * exactly one blank line separates existing body content from the heading.
+ * @param {string} body
+ * @param {string} line
+ * @returns {string}
+ */
+function appendTimelineSection(body, line) {
+  const base = body.replace(/\s+$/, '');
+  const prefix = base.length > 0 ? `${base}\n\n` : '';
+  return `${prefix}## Timeline\n\n${TIMELINE_MARKER_OPEN}\n${line}\n${TIMELINE_MARKER_CLOSE}\n`;
+}
+
+/**
+ * Insert one entry into a topic page's timeline zone, never touching any
+ * existing line. Three cases per the topic-timeline spec:
+ *   - no open marker: create the `## Timeline` section at EOF.
+ *   - open marker, no close marker: zone runs to EOF; append the line there
+ *     and add the close marker.
+ *   - both markers: insert the line immediately before the close marker.
+ * In every case, if `isDuplicate(zoneContent)` says the entry is already
+ * there, nothing changes.
+ * @param {string} body
+ * @param {string} line
+ * @param {(zoneContent: string) => boolean} [isDuplicate] - Defaults to an
+ *   exact-line match against `line` via `timelineZoneHasLine`.
+ * @returns {{ body: string, added: boolean }}
+ */
+function insertTimelineEntry(body, line, isDuplicate = (zoneContent) => timelineZoneHasLine(zoneContent, line)) {
+  const openIdx = body.indexOf(TIMELINE_MARKER_OPEN);
+  if (openIdx === -1) {
+    return { body: appendTimelineSection(body, line), added: true };
+  }
+
+  const zoneStart = openIdx + TIMELINE_MARKER_OPEN.length;
+  const closeIdx = body.indexOf(TIMELINE_MARKER_CLOSE, zoneStart);
+
+  if (closeIdx === -1) {
+    const zoneContent = body.slice(zoneStart);
+    if (isDuplicate(zoneContent)) return { body, added: false };
+    const base = body.endsWith('\n') ? body : `${body}\n`;
+    return { body: `${base}${line}\n${TIMELINE_MARKER_CLOSE}\n`, added: true };
+  }
+
+  const zoneContent = body.slice(zoneStart, closeIdx);
+  if (isDuplicate(zoneContent)) return { body, added: false };
+  const before = body.slice(0, closeIdx);
+  const after = body.slice(closeIdx);
+  const beforeNormalized = before.endsWith('\n') ? before : `${before}\n`;
+  return { body: `${beforeNormalized}${line}\n${after}`, added: true };
+}
+
+/**
+ * `timeline-add`: append one dated entry to a topic page's append-only
+ * timeline zone, optionally ensuring an `includes_source` edge (+ reverse)
+ * to a source page. Idempotent, with two duplicate rules:
+ *   - `kind === 'ingest'` with `--source`: a duplicate is ANY existing zone
+ *     line already recording an `ingest` entry for that same source,
+ *     regardless of date or text — a resumed ingest on a later day must not
+ *     append a second row for a source already ingested into this topic.
+ *   - `correction` and `note` (and `ingest` without `--source`): a duplicate
+ *     is an exact-line match, as before.
+ * The edge is still ensured even when the line is a duplicate, so repeated
+ * calls converge.
+ *
+ * @param {string} projectRoot
+ * @param {string} topicArg
+ * @param {{ text: string, kind: string, date: string, source: string|null }} opts
+ * @returns {Promise<object>}
+ */
+async function timelineAdd(projectRoot, topicArg, opts) {
+  const topic = await requireEntityInDir(projectRoot, topicArg, 'topics', 'Topic');
+
+  let sourceInfo = null;
+  if (opts.source) {
+    sourceInfo = await requireEntityInDir(projectRoot, opts.source, 'sources', 'Source');
+  }
+
+  const line = sourceInfo
+    ? `- **${opts.date}** | ${opts.kind} | [[${sourceInfo.slug}]] — ${opts.text}`
+    : `- **${opts.date}** | ${opts.kind} | ${opts.text}`;
+
+  const isIngestRerun = opts.kind === 'ingest' && Boolean(sourceInfo);
+  const isDuplicate = isIngestRerun
+    ? (zoneContent) => timelineZoneHasIngestSource(zoneContent, sourceInfo.slug)
+    : undefined;
+
+  const content = await readFile(topic.filePath, 'utf8');
+  const { frontmatter, body } = parseFrontmatter(content);
+  const { body: newBody, added } = insertTimelineEntry(body, line, isDuplicate);
+
+  let edge = 'none';
+  if (sourceInfo) {
+    const result = await addEdge(projectRoot, topic.slug, 'includes_source', sourceInfo.slug, {});
+    edge = result.added ? 'added' : 'exists';
+  }
+
+  if (!added) {
+    const reason = isIngestRerun ? 'ingest entry for this source already exists' : 'entry already exists';
+    return { added: false, topic: topic.slug, line, edge, reason };
+  }
+
+  frontmatter.updated = today();
+  const newContent = assembleMd(frontmatter, newBody);
+  await atomicWrite(topic.filePath, newContent);
+
+  return { added: true, topic: topic.slug, line, edge };
+}
+
+/**
+ * `add-citation-by-id`: resolve a citation target by external id. Scans all
+ * source pages' `external_ids[ns]` (normalized on both sides) for a unique
+ * match. A unique match becomes a real `cites` citation via `addCitation`.
+ * No match queues `{ns, value, title?}` on `from`'s `pending_citations`,
+ * deduped on ns+value, drained later by `resolve-pending-citations`.
+ *
+ * Self-citation guard: the scan below skips `from` itself, so if `from`'s
+ * own `external_ids[ns]` normalizes to the same `value`, it would otherwise
+ * never match anything and sit pending forever. Checked up front instead —
+ * exit 2, no write.
+ *
+ * @param {string} projectRoot
+ * @param {string} fromArg
+ * @param {string} ns
+ * @param {string} rawValue
+ * @param {string|undefined} title
+ * @returns {Promise<object>}
+ */
+async function addCitationById(projectRoot, fromArg, ns, rawValue, title) {
+  const from = await requireEntityInDir(projectRoot, fromArg, 'sources', 'Source');
+
+  if (!EXTERNAL_ID_NAMESPACES.includes(ns)) {
+    const err = new Error(`Unknown external-id namespace: ${ns}. Must be one of: ${EXTERNAL_ID_NAMESPACES.join(', ')}`);
+    err.code = 2;
+    throw err;
+  }
+  const norm = normalizeExternalId(ns, rawValue);
+  if (!norm.valid) {
+    const err = new Error(`Invalid ${ns} id: ${rawValue}`);
+    err.code = 2;
+    throw err;
+  }
+  const value = norm.id;
+
+  const content = await readFile(from.filePath, 'utf8');
+  const { frontmatter, body } = parseFrontmatter(content);
+
+  const selfExtIds = frontmatter.external_ids;
+  if (selfExtIds && typeof selfExtIds === 'object') {
+    const selfRaw = selfExtIds[ns];
+    if (typeof selfRaw === 'string' && selfRaw) {
+      const selfNorm = normalizeExternalId(ns, selfRaw);
+      if (selfNorm.valid && selfNorm.id === value) {
+        const err = new Error('A page cannot cite itself');
+        err.code = 2;
+        throw err;
+      }
+    }
+  }
+
+  const allSources = await listEntities(projectRoot, 'sources');
+  const matches = [];
+  for (const entity of allSources) {
+    if (entity.path === from.slug) continue;
+    const entityContent = await readFile(entity.filePath, 'utf8');
+    const { frontmatter: entityFm } = parseFrontmatter(entityContent);
+    const extIds = entityFm.external_ids;
+    if (!extIds || typeof extIds !== 'object') continue;
+    const candidateRaw = extIds[ns];
+    if (typeof candidateRaw !== 'string' || !candidateRaw) continue;
+    const candidateNorm = normalizeExternalId(ns, candidateRaw);
+    if (candidateNorm.valid && candidateNorm.id === value) {
+      matches.push(entity.path);
+    }
+  }
+
+  if (matches.length > 1) {
+    const err = new Error(`Ambiguous target for ${ns}:${value} — candidates: ${matches.join(', ')}`);
+    err.code = 2;
+    throw err;
+  }
+
+  if (matches.length === 1) {
+    const result = await addCitation(projectRoot, from.slug, matches[0]);
+    // A pending entry for this id may linger from an earlier call made before
+    // the target existed; drain it here so nothing waits for a resolve pass.
+    const pending = Array.isArray(frontmatter.pending_citations) ? frontmatter.pending_citations : [];
+    const keep = pending.filter((p) => !(p && p.ns === ns && p.value === value));
+    if (keep.length !== pending.length) {
+      frontmatter.pending_citations = keep;
+      frontmatter.updated = today();
+      await atomicWrite(from.filePath, assembleMd(frontmatter, body));
+    }
+    return { resolved: true, to: matches[0], added: result.added };
+  }
+
+  // No match — record as a pending citation on `from`.
+  const pending = Array.isArray(frontmatter.pending_citations) ? frontmatter.pending_citations : [];
+  const alreadyPending = pending.some((p) => p && p.ns === ns && p.value === value);
+  if (alreadyPending) {
+    return { resolved: false, pending: true, added: false };
+  }
+
+  const entry = { ns, value };
+  if (typeof title === 'string' && title.trim() !== '') {
+    entry.title = title;
+  }
+  frontmatter.pending_citations = [...pending, entry];
+  frontmatter.updated = today();
+  const newContent = assembleMd(frontmatter, body);
+  await atomicWrite(from.filePath, newContent);
+
+  return { resolved: false, pending: true, added: true };
+}
+
+/**
+ * `resolve-pending-citations`: drain every other source page's
+ * `pending_citations` entries that match one of `newArg`'s `external_ids`
+ * (normalized comparison). For each match: add the real citation, drop the
+ * pending entry, and bump that page's `updated` — unless `dryRun`, which
+ * only reports what would happen and writes nothing.
+ *
+ * @param {string} projectRoot
+ * @param {string} newArg
+ * @param {boolean} dryRun
+ * @returns {Promise<{ resolved: object[], scanned: number, dryRun: boolean }>}
+ */
+async function resolvePendingCitations(projectRoot, newArg, dryRun) {
+  const newEntity = await requireEntityInDir(projectRoot, newArg, 'sources', 'Source');
+  const newContent = await readFile(newEntity.filePath, 'utf8');
+  const { frontmatter: newFm } = parseFrontmatter(newContent);
+
+  const targetKeys = new Set();
+  const newIds = newFm.external_ids;
+  if (newIds && typeof newIds === 'object') {
+    for (const ns of EXTERNAL_ID_NAMESPACES) {
+      const raw = newIds[ns];
+      if (typeof raw !== 'string' || !raw) continue;
+      const norm = normalizeExternalId(ns, raw);
+      if (norm.valid) targetKeys.add(`${ns}:${norm.id}`);
+    }
+  }
+
+  const allSources = await listEntities(projectRoot, 'sources');
+  const resolved = [];
+  let scanned = 0;
+
+  for (const entity of allSources) {
+    if (entity.path === newEntity.slug) continue;
+    scanned++;
+
+    const content = await readFile(entity.filePath, 'utf8');
+    const { frontmatter, body } = parseFrontmatter(content);
+    const pending = Array.isArray(frontmatter.pending_citations) ? frontmatter.pending_citations : [];
+    if (pending.length === 0) continue;
+
+    const keep = [];
+    const matchedHere = [];
+    for (const p of pending) {
+      const validShape = p && typeof p.ns === 'string' && typeof p.value === 'string';
+      const norm = validShape ? normalizeExternalId(p.ns, p.value) : { valid: false };
+      const key = norm.valid ? `${p.ns}:${norm.id}` : null;
+      if (key && targetKeys.has(key)) {
+        matchedHere.push({ from: entity.path, to: newEntity.slug, ns: p.ns, value: norm.id });
+      } else {
+        keep.push(p);
+      }
+    }
+
+    if (matchedHere.length === 0) continue;
+    resolved.push(...matchedHere);
+
+    if (!dryRun) {
+      for (const m of matchedHere) {
+        await addCitation(projectRoot, m.from, m.to);
+      }
+      frontmatter.pending_citations = keep;
+      frontmatter.updated = today();
+      const rewritten = assembleMd(frontmatter, body);
+      await atomicWrite(entity.filePath, rewritten);
+    }
+  }
+
+  return { resolved, scanned, dryRun };
+}
+
+// ---------------------------------------------------------------------------
 // 6. Checkpoint ops
 // ---------------------------------------------------------------------------
 
@@ -1617,7 +2014,7 @@ function _checkFieldType(field, val) {
       }
       break;
     case 'iso-date':
-      if (typeof val !== 'string' || !DATE_RE.test(val)) {
+      if (typeof val !== 'string' || !isValidIsoDate(val)) {
         return `"${field.key}" must be an ISO date (YYYY-MM-DD), got ${JSON.stringify(val)}`;
       }
       break;
@@ -1768,6 +2165,12 @@ function requireSafeEdgeSlugs(fromSlug, toSlug, projectRoot) {
 
 /**
  * Parse argv flags into an options object.
+ *
+ * Supports `--key=value` (split on the first `=`; everything after it is the
+ * value verbatim, even if it starts with `--`) alongside the space-separated
+ * `--key value` form. Space-separated values still can't start with `--`
+ * (that's read as the next flag) — use `--key=value` when the value itself
+ * begins with dashes.
  * @param {string[]} args - raw argv slice after subcommand
  * @returns {{ flags: Record<string, string|boolean>, positional: string[] }}
  */
@@ -1778,6 +2181,12 @@ function parseArgs(args) {
   while (i < args.length) {
     const arg = args[i];
     if (arg.startsWith('--')) {
+      const eqIdx = arg.indexOf('=');
+      if (eqIdx !== -1) {
+        flags[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+        i++;
+        continue;
+      }
       const key = arg.slice(2);
       const next = args[i + 1];
       if (next && !next.startsWith('--')) {
@@ -1847,11 +2256,15 @@ async function main(argv) {
       '  set-meta <slug> <key> <value> [--json-value]  Set frontmatter key',
       '  add-edge <from> <type> <to> [--confidence high|medium|low]',
       '  add-citation <from> <to>        Append cites edge to citations.jsonl',
+      '  add-citation-by-id <from> <ns> <value> [--title "<title>"]  Resolve citation by external id, or queue pending',
       '  remove-citation <from> <to> [--dry-run]  Remove cites edge from citations.jsonl',
+      '  resolve-pending-citations <new-source-slug> [--dry-run]  Drain pending citations matching a new source',
       '  batch-edges <json-file>         Apply array of edges from JSON file',
       '  dedup-edges                     Deduplicate edges.jsonl',
       '  remove-edge <from> <type> <to> [--dry-run]',
       '  replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]',
+      '  timeline-add <topic-slug> --text "<text>" [--source <source-slug>] [--kind ingest|correction|note] [--date YYYY-MM-DD]',
+      '    (use --text=<text> when the text itself begins with --)',
       '  list-entities [path-prefix] [--type <type>]  List entity slugs as JSON',
       '  resolve-alias <text>            Map free-text query to a foundations/* slug',
       '  read-edges <slug>|--from <slug> [--type <type>] [--direction outbound|inbound|both]',
@@ -2020,6 +2433,48 @@ async function main(argv) {
       }
 
       // -----------------------------------------------------------------------
+      case 'add-citation-by-id': {
+        const fromArg = positional[0];
+        const ns = positional[1];
+        const value = positional[2];
+
+        if (!fromArg || !ns || value === undefined) {
+          fail('add-citation-by-id requires <from-source-slug> <ns> <value>', 2);
+        }
+        if (fromArg.includes('..')) {
+          fail('Slug may not contain ..', 2);
+        }
+
+        // One frontmatter value is one flow-mapping scalar: collapse embedded
+        // newlines/whitespace runs the same way timeline-add normalizes --text,
+        // so a stray newline in --title cannot corrupt the YAML.
+        const rawTitle = typeof flags.title === 'string' ? flags.title.replace(/\s+/g, ' ').trim() : '';
+        const title = rawTitle ? rawTitle : undefined;
+
+        const projectRoot = await requireProjectRoot();
+        const result = await addCitationById(projectRoot, fromArg, ns, value, title);
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'resolve-pending-citations': {
+        const newArg = positional[0];
+        if (!newArg) {
+          fail('resolve-pending-citations requires <new-source-slug>', 2);
+        }
+        if (newArg.includes('..')) {
+          fail('Slug may not contain ..', 2);
+        }
+
+        const dryRun = Boolean(flags['dry-run']);
+        const projectRoot = await requireProjectRoot();
+        const result = await resolvePendingCitations(projectRoot, newArg, dryRun);
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
       case 'batch-edges': {
         const jsonFile = positional[0];
         if (!jsonFile) {
@@ -2091,6 +2546,47 @@ async function main(argv) {
         const dryRun = Boolean(flags['dry-run']);
 
         const result = await replaceEdge(projectRoot, fromSlug, oldType, toSlug, newType, { confidence, dryRun });
+        emitJson(result);
+        break;
+      }
+
+      // -----------------------------------------------------------------------
+      case 'timeline-add': {
+        const topicArg = positional[0];
+        if (!topicArg) {
+          fail('timeline-add requires <topic-slug>', 2);
+        }
+        if (topicArg.includes('..')) {
+          fail('Slug may not contain ..', 2);
+        }
+
+        // One entry is one line: collapse any embedded newlines/runs of
+        // whitespace so the zone stays line-addressable and idempotent.
+        const text = typeof flags.text === 'string' ? flags.text.replace(/\s+/g, ' ').trim() : '';
+        if (!text) {
+          fail('timeline-add requires --text "<text>"', 2);
+        }
+        if (text.includes('<!--')) {
+          fail('timeline-add --text may not contain an HTML comment marker', 2);
+        }
+
+        const kind = typeof flags.kind === 'string' ? flags.kind : 'note';
+        if (!TIMELINE_KINDS.includes(kind)) {
+          fail(`Invalid --kind: ${kind}. Must be one of: ${TIMELINE_KINDS.join(', ')}`, 2);
+        }
+
+        const date = typeof flags.date === 'string' ? flags.date : today();
+        if (!isValidIsoDate(date)) {
+          fail(`Invalid --date: ${date}. Must be a real calendar date (YYYY-MM-DD)`, 2);
+        }
+
+        const source = typeof flags.source === 'string' ? flags.source : null;
+        if (source && source.includes('..')) {
+          fail('Slug may not contain ..', 2);
+        }
+
+        const projectRoot = await requireProjectRoot();
+        const result = await timelineAdd(projectRoot, topicArg, { text, kind, date, source });
         emitJson(result);
         break;
       }

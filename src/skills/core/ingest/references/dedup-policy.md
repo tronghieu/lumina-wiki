@@ -104,9 +104,11 @@ Use `wiki.mjs add-edge` once for the forward relationship. It is idempotent and
 automatically writes the reverse edge unless the edge is terminal, exempt, or
 symmetric. Do not add reverse edges manually.
 
-Use `wiki.mjs add-citation` only for cited source pages that already exist in
-`wiki/sources/`. For cited works not yet ingested, record them in
-`## Open Questions` rather than creating placeholder source pages.
+Use `wiki.mjs add-citation` only for cited source pages whose slug you already
+know. For a cited work not yet ingested, use `wiki.mjs add-citation-by-id`
+when it carries an identifier (DOI/arXiv/S2/OpenAlex/URL) — it records the
+citation as pending and links it automatically once that work is ingested;
+never create placeholder source pages.
 
 ## Idempotency Target
 

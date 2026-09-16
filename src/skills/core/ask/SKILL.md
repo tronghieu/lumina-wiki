@@ -67,6 +67,29 @@ before reading.
 Use the Read tool. Do not shell out for these — they are markdown files you can
 read directly.
 
+### Step 2.5 — Check topics first (research pack)
+
+If `wiki/topics/` exists:
+
+```bash
+node _lumina/scripts/wiki.mjs list-entities --type topics
+```
+
+Pick the topics whose title or key concepts plausibly match the question. For
+each, read its compiled zone — everything above `<!-- lumina:timeline -->`
+(Description, Key sources, Key concepts, Open questions) — before expanding
+to individual source pages. Cite a topic as `[[topics/<slug>]]`.
+
+Read the timeline zone (between `<!-- lumina:timeline -->` and
+`<!-- /lumina:timeline -->`) only when the question is about what changed or
+when something arrived — not for a plain content question.
+
+Compare the topic's `compiled_at` (from `read-meta topics/<slug>`) against the
+newest timeline entry date. If the timeline has an entry newer than
+`compiled_at` (or `compiled_at` is absent and the timeline is non-empty), say
+so in the answer in plain language — for example: "newer material has arrived
+that the topic summary does not yet reflect."
+
 ### Step 3 — Build the relevant subgraph
 
 Use `list-entities` to find candidate pages:

@@ -108,6 +108,24 @@ itself. To correct a wrong relation type instead of removing it outright, use
 cross-references in a generic, type-agnostic section, a type-only correction
 needs no page edit at all. Never hand-edit `wiki/graph/edges.jsonl` directly.
 
+### Step 4.5 — Correction cause (factual edits only)
+
+If the edit you just applied changed a factual claim on a `sources/*` or
+`concepts/*` page — not a typo, formatting, or wording-only change — ask
+exactly one question in the user's language, with exactly three options,
+before continuing:
+
+```
+Why was this changed?
+  [1] misread       — the page did not match what the source says
+  [2] source-error  — the source itself was wrong or has been superseded
+  [3] update        — new information, not a correction
+```
+
+Record the chosen value (`misread` | `source-error` | `update`) — Step 7 logs
+it. Skip this step entirely for non-factual edits (typos, formatting, link
+fixes, frontmatter-only changes).
+
 ### Step 6 — Lint and fix
 
 Run the linter with fix enabled:
@@ -136,6 +154,41 @@ Warnings are advisory, but errors block completion until fixed or surfaced as
 manual follow-up.
 
 ### Step 7 — Log the operation
+
+If Step 4.5 captured a correction cause:
+
+```bash
+node _lumina/scripts/wiki.mjs log edit "corrected <slug> | cause:<misread|source-error|update> | <what changed>"
+```
+
+If the edited page is `sources/<slug>`, also check whether it belongs to any
+topic, and if so append a `correction` timeline entry to each:
+
+```bash
+node _lumina/scripts/wiki.mjs read-edges sources/<slug> --type included_in_topic
+```
+
+For each topic slug `<t>` returned:
+
+```bash
+node _lumina/scripts/wiki.mjs timeline-add topics/<t> --kind correction --source sources/<slug> --text "<what changed, in English>"
+```
+
+If the edited page is `concepts/<slug>`, also check whether it is covered by
+any topic, and if so append a `correction` timeline entry to each (no
+`--source`; that flag is for sources only):
+
+```bash
+node _lumina/scripts/wiki.mjs read-edges concepts/<slug> --type covered_by_topic --direction outbound
+```
+
+For each topic slug `<t>` in the `to` field:
+
+```bash
+node _lumina/scripts/wiki.mjs timeline-add topics/<t> --kind correction --text "Corrected [[concepts/<slug>]]: <what changed, in English>"
+```
+
+Otherwise (no correction cause captured — a non-factual edit):
 
 ```bash
 node _lumina/scripts/wiki.mjs log edit "Updated <slug>: <brief description>"
@@ -202,6 +255,10 @@ as a template and confirm before continuing. Never silently expand scope.
   each before proceeding.
 - If a page does not exist, do not create it — use `/lumi-ingest` instead.
 - If you are unsure about scope, ask rather than expanding silently.
+- Never rewrite or delete an existing line in a topic page's timeline zone
+  (`<!-- lumina:timeline -->` … `<!-- /lumina:timeline -->`) — only append via
+  `wiki.mjs timeline-add`. The `correction` entry it writes is the only place
+  a retraction is recorded; it never replaces the original line.
 
 ## Definition of Done
 

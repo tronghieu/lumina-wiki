@@ -73,8 +73,8 @@ No `devDependencies`. Tests use built-in `node --test` (`node:test` + `node:asse
 
 Two write paths into the workspace, both `atomicWrite`-discipline:
 
-- **`wiki.mjs`** — only allowed path for graph/frontmatter mutation. Skills invoke via `Bash` + JSON, never `import`. JSON to stdout for reads, JSON status for mutations, `{"error":"…","code":2|3}` to stderr.
-- **`lint.mjs`** — `--fix` for L01/L03/L06/L07/L09 (kebab slugs, missing reverse edges, dedupe symmetric, refresh `<!-- lumina:index -->` block). 9 checks total.
+- **`wiki.mjs`** — only allowed path for graph/frontmatter mutation, including `timeline-add`, `add-citation-by-id`, and `resolve-pending-citations`. Skills invoke via `Bash` + JSON, never `import`. JSON to stdout for reads, JSON status for mutations, `{"error":"…","code":2|3}` to stderr.
+- **`lint.mjs`** — `--fix` for L01/L03/L06/L07/L09 (kebab slugs, missing reverse edges, dedupe symmetric, refresh `<!-- lumina:index -->` block). checks L01–L22 (L15 unassigned).
 
 `reset.mjs` is the only deletion path; `--scope all` includes `wiki + state` but **never `raw/`**.
 
@@ -85,6 +85,7 @@ Two write paths into the workspace, both `atomicWrite`-discipline:
 - **Bidirectional links mandatory**: every forward link writes its reverse in the same operation. Exempt-only mode: `foundations/**`, `outputs/**`, `*://*` are the only forward-without-reverse exceptions.
 - **`log.md` append-only**, **`index.md`** updated on every ingest.
 - Sections marked `<!-- user-edited -->` are preserved on upgrade — append, don't overwrite.
+- Topic pages are two-zone: the compiled zone is rewritten only on `/lumi-research-topic` refresh; the timeline zone is append-only, written only via `wiki.mjs timeline-add`.
 
 ### Skills — authoritative source is `_lumina/schema/lumi-help.csv` (rendered by the installer, read by `/lumi-help skills` at runtime); `src/skills/**/SKILL.md` is what it's derived from. The list below is for orientation only — do not cite a count from it anywhere; see `docs/project-context.md` §6 for detail.
 

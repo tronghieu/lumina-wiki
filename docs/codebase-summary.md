@@ -25,7 +25,7 @@ lumina-wiki/
 │   │   └── *.test.js             # Unit + integration tests (node --test)
 │   ├── scripts/                  # Wiki engine & tools (Node, ESM)
 │   │   ├── wiki.mjs              # Graph mutation, frontmatter validation
-│   │   ├── lint.mjs              # Schema linter (9 checks: L01–L09)
+│   │   ├── lint.mjs              # Schema linter (checks L01–L22, L15 unassigned)
 │   │   ├── reset.mjs             # Scoped destructive reset (--scope all)
 │   │   ├── schemas.mjs           # Single source of truth (entities, edges, frontmatter)
 │   │   ├── discover-runner.mjs   # Scheduled discovery scheduler
@@ -98,7 +98,7 @@ lumina-wiki/
 |--------|-----|---------|
 | `src/installer/commands.js` | 1090 | Core 18-step install/upgrade flow |
 | `src/scripts/wiki.mjs` | 800+ | Graph mutation, page creation, frontmatter handling |
-| `src/scripts/lint.mjs` | 400+ | Schema validation (9 checks) |
+| `src/scripts/lint.mjs` | 400+ | Schema validation (checks L01–L22) |
 | `src/installer/fs.js` | 300+ | Atomic writes, symlink ladder, safePath() |
 | `src/scripts/schemas.mjs` | 250+ | Single source of truth (entities, edges, exemptions) |
 | `src/installer/manifest.js` | 250+ | Manifest versioning & state file I/O |
@@ -129,7 +129,7 @@ Changes to `schemas.mjs` propagate to:
 | Path | Tool | Operation |
 |------|------|-----------|
 | `wiki/`, `graph/`, `log.md` | `wiki.mjs` | Only allowed mutation path; always atomic. Skills invoke via Bash + JSON. |
-| `wiki/`, `graph/`, `log.md` (repair) | `lint.mjs --fix` | Lints (9 checks), repairs L01–L07 issues atomically. |
+| `wiki/`, `graph/`, `log.md` (repair) | `lint.mjs --fix` | Lints (checks L01–L22), repairs the fixable ones atomically. |
 | `wiki/`, `_lumina/` (destructive) | `reset.mjs` | Scoped deletion; respects `--scope` flag. |
 | All installer outputs | `fs.js:atomicWrite()` | Temp + fsync + rename; manifest written last. |
 | All Python writes | `os.replace()` | Temp file + fsync + atomic rename. |

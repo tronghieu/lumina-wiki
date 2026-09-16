@@ -22,6 +22,10 @@ importance: 3        # 1=niche  2=useful  3=field-standard  4=influential  5=sem
 provenance: missing  # replayable | partial | missing
 confidence: high     # high | medium | low | unverified
 tags: []             # free-form; not schema-validated
+pending_citations:   # optional; omit until a cited-but-not-yet-ingested work is recorded.
+  # Array of {ns, value, title?}. Written by `wiki.mjs add-citation-by-id`;
+  # drained automatically into a real citation when the cited work is ingested.
+  - {ns: doi, value: "10.x/y", title: "Cited paper title"}
 ranking:             # optional; written by /lumi-research-rank. Omit until the paper is ranked.
   # Flat map of scalars (one level only, like external_ids). Only include keys you have.
   influential_citations: 42   # Semantic Scholar influentialCitationCount
@@ -178,6 +182,7 @@ type: topic
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 key_sources: []          # wikilink slugs of sources included in this topic
+compiled_at: YYYY-MM-DD  # date the compiled zone below was last rewritten by a /lumi-research-topic refresh
 tags: []                 # free-form; not schema-validated
 ---
 ```
@@ -187,6 +192,25 @@ tags: []                 # free-form; not schema-validated
 - `## Key sources`
 - `## Key concepts`
 - `## Open questions`
+- `## Timeline` — the managed region below the compiled zone, bounded by
+  `<!-- lumina:timeline -->` and `<!-- /lumina:timeline -->`. Entries are one
+  line each, English, appended in arrival order:
+  `- **YYYY-MM-DD** | ingest|correction|note | [[sources/<slug>]] — text`.
+
+The page has two zones with different write rules:
+
+| Zone | Sections | Rule |
+|---|---|---|
+| Compiled | Description, Key sources, Key concepts, Open questions | Rewritten wholesale on `/lumi-research-topic` refresh |
+| Timeline | Timeline (marker region) | Append-only — written only by `wiki.mjs timeline-add`, never edited or reordered |
+
+```markdown
+## Timeline
+
+<!-- lumina:timeline -->
+- **2026-09-16** | ingest | [[sources/attention-is-all-you-need]] — Self-attention replaces recurrence
+<!-- /lumina:timeline -->
+```
 
 ---
 

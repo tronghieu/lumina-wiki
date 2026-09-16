@@ -23,7 +23,7 @@ import {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20, makeEndpointResolver,
+  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20, checkL21, checkL22, makeEndpointResolver,
   fixL01, fixL02, fixL05, fixL06, fixL07, fixL09,
   reconstructArrayFromBody,
   buildBasenameIndex,
@@ -4026,6 +4026,349 @@ describe('L20 dangling-citation', () => {
   test('external URL endpoints retain L17/L19 resolution semantics', () => {
     const citations = [{ from: 'sources/a', type: 'cites', to: 'https://example.com/paper' }];
     assert.deepEqual(checkL20(citations, makeEndpointResolver(new Set(['sources/a']))), []);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L21: topic-timeline-stale
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L21 topic-timeline-stale', () => {
+  test('stale: entry newer than compiled_at produces 1 warning', () => {
+    const fm = { compiled_at: '2026-09-10' };
+    const content = [
+      '# My Topic',
+      '',
+      '## Timeline',
+      '',
+      '<!-- lumina:timeline -->',
+      '- **2026-09-15** | ingest | New finding arrived',
+      '<!-- /lumina:timeline -->',
+      '',
+    ].join('\n');
+
+    const result = checkL21('topics/my-topic.md', fm, content);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L21-topic-timeline-stale');
+    assert.equal(result[0].severity, 'warning');
+    assert.equal(result[0].fixable, false);
+    assert.equal(result[0].file, 'topics/my-topic.md');
+    assert.equal(result[0].line, 6, 'line must point at the stale entry (1-based)');
+    assert.equal(
+      result[0].message,
+      'topic summary is behind its timeline: 1 new entry since 2026-09-10; refresh it with /lumi-research-topic my-topic',
+    );
+  });
+
+  test('clean: newest entry equal to compiled_at (same-day) is not stale', () => {
+    const fm = { compiled_at: '2026-09-15' };
+    const content = [
+      '## Timeline',
+      '',
+      '<!-- lumina:timeline -->',
+      '- **2026-09-10** | ingest | Older finding',
+      '- **2026-09-15** | ingest | Same-day finding',
+      '<!-- /lumina:timeline -->',
+    ].join('\n');
+
+    const result = checkL21('topics/my-topic.md', fm, content);
+    assert.equal(result.length, 0, 'same-day entries must not count as stale');
+  });
+
+  test('stale: compiled_at absent and timeline non-empty counts every entry', () => {
+    const content = [
+      '<!-- lumina:timeline -->',
+      '- **2026-09-01** | ingest | First finding',
+      '- **2026-09-02** | ingest | Second finding',
+      '<!-- /lumina:timeline -->',
+    ].join('\n');
+
+    const result = checkL21('topics/my-topic.md', {}, content);
+    assert.equal(result.length, 1);
+    assert.equal(
+      result[0].message,
+      'topic summary is behind its timeline: 2 new entries since never; refresh it with /lumi-research-topic my-topic',
+    );
+  });
+
+  test('clean: markers present but zone is empty', () => {
+    const content = [
+      '<!-- lumina:timeline -->',
+      '<!-- /lumina:timeline -->',
+    ].join('\n');
+    const result = checkL21('topics/my-topic.md', { compiled_at: '2026-09-10' }, content);
+    assert.equal(result.length, 0);
+  });
+
+  test('clean: no markers at all', () => {
+    const content = '# My Topic\n\nJust prose, no timeline section.\n';
+    const result = checkL21('topics/my-topic.md', { compiled_at: '2026-09-10' }, content);
+    assert.equal(result.length, 0);
+  });
+
+  test('ignored: a non-topic page carrying the same markers is skipped', () => {
+    const content = [
+      '<!-- lumina:timeline -->',
+      '- **2026-09-15** | ingest | New finding arrived',
+      '<!-- /lumina:timeline -->',
+    ].join('\n');
+    const result = checkL21('sources/my-source.md', {}, content);
+    assert.equal(result.length, 0, 'L21 must only apply to topics/ pages');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHECK L22: pending-citations
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('L22 pending-citations', () => {
+  test('fires with a title present: rendered as the title, not ns:value', () => {
+    const fm = { pending_citations: [{ ns: 'doi', value: '10.1000/xyz', title: 'Some Title' }] };
+    const result = checkL22('sources/my-source.md', fm);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, 'L22-pending-citations');
+    assert.equal(result[0].severity, 'info');
+    assert.equal(result[0].fixable, false);
+    assert.equal(result[0].file, 'sources/my-source.md');
+    assert.equal(result[0].line, null);
+    assert.equal(
+      result[0].message,
+      '1 citation(s) wait for works not yet in the wiki: Some Title; ingest those works or leave this as is',
+    );
+  });
+
+  test('fires without a title: rendered as ns:value', () => {
+    const fm = { pending_citations: [{ ns: 'doi', value: '10.1000/xyz' }] };
+    const result = checkL22('sources/my-source.md', fm);
+    assert.equal(
+      result[0].message,
+      '1 citation(s) wait for works not yet in the wiki: doi:10.1000/xyz; ingest those works or leave this as is',
+    );
+  });
+
+  test('more than 3 entries: shows the first 3 and an ellipsis, N counts all of them', () => {
+    const fm = {
+      pending_citations: [
+        { ns: 'doi', value: 'a' },
+        { ns: 'doi', value: 'b' },
+        { ns: 'doi', value: 'c' },
+        { ns: 'doi', value: 'd' },
+      ],
+    };
+    const result = checkL22('sources/my-source.md', fm);
+    assert.equal(result.length, 1);
+    assert.equal(
+      result[0].message,
+      '4 citation(s) wait for works not yet in the wiki: doi:a, doi:b, doi:c, ...; ingest those works or leave this as is',
+    );
+  });
+
+  test('a malformed entry counts toward N but renders as "malformed"', () => {
+    const fm = { pending_citations: [{ ns: 'doi', value: '10.1000/xyz' }, 'not-an-object', { value: 'missing-ns' }] };
+    const result = checkL22('sources/my-source.md', fm);
+    assert.equal(result.length, 1);
+    assert.equal(
+      result[0].message,
+      '3 citation(s) wait for works not yet in the wiki: doi:10.1000/xyz, malformed, malformed; ingest those works or leave this as is',
+    );
+  });
+
+  test('clean: absent pending_citations', () => {
+    assert.deepEqual(checkL22('sources/my-source.md', {}), []);
+  });
+
+  test('clean: empty pending_citations array', () => {
+    assert.deepEqual(checkL22('sources/my-source.md', { pending_citations: [] }), []);
+  });
+
+  test('ignored: a non-source page carrying pending_citations is skipped', () => {
+    const fm = { pending_citations: [{ ns: 'doi', value: '10.1000/xyz' }] };
+    assert.deepEqual(checkL22('concepts/my-concept.md', fm), []);
+  });
+});
+
+describe('runLint L21 end-to-end', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  function topicContent({ compiledAtLine = 'compiled_at: 2026-09-10\n' } = {}) {
+    return (
+      '---\n' +
+      'id: my-topic\n' +
+      'title: My Topic\n' +
+      'type: topic\n' +
+      'created: 2026-09-01\n' +
+      'updated: 2026-09-10\n' +
+      'key_sources: []\n' +
+      compiledAtLine +
+      '---\n' +
+      '\n' +
+      '# My Topic\n' +
+      '\n' +
+      'Compiled summary text.\n' +
+      '\n' +
+      '## Timeline\n' +
+      '\n' +
+      '<!-- lumina:timeline -->\n' +
+      '- **2026-09-15** | ingest | New finding arrived\n' +
+      '<!-- /lumina:timeline -->\n'
+    );
+  }
+
+  test('L21 appears in findings with fixable:false and increments summary.warnings only', async () => {
+    await makeWiki(tmpDir);
+    await mkdir(join(tmpDir, 'wiki', 'topics'), { recursive: true });
+    await writeFile(join(tmpDir, 'wiki', 'topics', 'my-topic.md'), topicContent());
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+
+    const l21 = findings.filter(f => f.id === 'L21-topic-timeline-stale');
+    assert.equal(l21.length, 1, 'exactly one L21 finding for the stale topic');
+    assert.equal(l21[0].severity, 'warning');
+    assert.equal(l21[0].fixable, false);
+    assert.equal(l21[0].file, 'topics/my-topic.md');
+
+    const errors = findings.filter(f => f.severity === 'error');
+    assert.equal(errors.length, 0, `no error-severity findings expected, got: ${JSON.stringify(errors)}`);
+
+    // JSON round-trip: L21 survives reportJson's field-stripping unchanged.
+    const serialized = JSON.parse(JSON.stringify(l21));
+    assert.equal(serialized[0].fixable, false);
+  });
+});
+
+describe('runLint L21 --fix leaves the topic file untouched', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('--fix does not modify the stale topic file (nothing to fix)', async () => {
+    await makeWiki(tmpDir);
+    await mkdir(join(tmpDir, 'wiki', 'topics'), { recursive: true });
+    const topicPath = join(tmpDir, 'wiki', 'topics', 'my-topic.md');
+    const original = [
+      '---\n',
+      'id: my-topic\n',
+      'title: My Topic\n',
+      'type: topic\n',
+      'created: 2026-09-01\n',
+      'updated: 2026-09-10\n',
+      'key_sources: []\n',
+      '---\n',
+      '\n',
+      '# My Topic\n',
+      '\n',
+      'Compiled summary text.\n',
+      '\n',
+      '## Timeline\n',
+      '\n',
+      '<!-- lumina:timeline -->\n',
+      '- **2026-09-15** | ingest | New finding arrived\n',
+      '<!-- /lumina:timeline -->\n',
+    ].join('');
+    await writeFile(topicPath, original);
+
+    const { findings } = await runLint(tmpDir, { fix: true, dryRun: false });
+    assert.ok(findings.some(f => f.id === 'L21-topic-timeline-stale'), 'L21 must still fire');
+
+    const after = await readFile(topicPath, 'utf8');
+    assert.equal(after, original, '--fix must leave the topic file byte-identical (L21 is not fixable)');
+  });
+});
+
+/**
+ * A single, fully valid `sources` page with two `pending_citations` entries
+ * (one with a title, one without), written in the exact flow-mapping shape
+ * wiki.mjs's stringifyFrontmatter emits — `- {ns: ..., value: ..., title: ...}`
+ * — so these end-to-end tests exercise the real on-disk format, not just the
+ * checkL22 unit's plain JS objects. Every other field is chosen to be clean
+ * under every other check (confidence set, id matches filename, listed in
+ * index.md) so L22 is the only finding.
+ */
+function sourceWithPendingCitations() {
+  return [
+    '---',
+    'id: test-source',
+    'title: Test Source',
+    'type: source',
+    'created: 2026-01-01',
+    'updated: 2026-01-01',
+    'authors:',
+    '  - Author A',
+    'year: 2026',
+    'importance: 3',
+    'provenance: replayable',
+    'confidence: high',
+    'pending_citations:',
+    '  - {ns: doi, value: 10.1000/xyz, title: "Some Title"}',
+    '  - {ns: arxiv, value: 1706.03762}',
+    '---',
+    '',
+    '# Test Source',
+    '',
+  ].join('\n');
+}
+
+describe('runLint L22 end-to-end', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('a clean source with pending_citations produces exactly 1 info finding, 0 errors/warnings, exit 0', async () => {
+    await makeWiki(tmpDir, {
+      indexContent: `# Index\n\n${INDEX_MARKER_OPEN}\n- [[sources/test-source]]\n${INDEX_MARKER_CLOSE}\n`,
+    });
+    await writeFile(join(tmpDir, 'wiki', 'sources', 'test-source.md'), sourceWithPendingCitations());
+
+    const { findings } = await runLint(tmpDir, { fix: false, dryRun: false });
+    const l22 = findings.filter(f => f.id === 'L22-pending-citations');
+    assert.equal(l22.length, 1);
+    assert.equal(l22[0].severity, 'info');
+    assert.equal(l22[0].fixable, false);
+    assert.equal(l22[0].file, 'sources/test-source.md');
+    assert.equal(
+      l22[0].message,
+      '2 citation(s) wait for works not yet in the wiki: Some Title, arxiv:1706.03762; ingest those works or leave this as is',
+    );
+    assert.deepEqual(
+      findings.filter(f => f.severity !== 'info'), [],
+      `expected no error/warning findings, got: ${JSON.stringify(findings)}`,
+    );
+
+    // Exit-code contract lives in main() (CLI-only), not in the runLint()
+    // library function, so it can only be verified by spawning the real CLI
+    // — same approach the "stdout is not truncated" and "exits 3" tests above
+    // use. --json's summary.info is reportJson's per-severity count.
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const lintScript = fileURLToPath(new URL('./lint.mjs', import.meta.url));
+    const cli = spawnSync(process.execPath, [lintScript, tmpDir, '--json'], { encoding: 'utf8' });
+    assert.equal(cli.status, 0, `expected CLI exit 0 (info never blocks lint), got stderr:\n${cli.stderr}`);
+    const parsed = JSON.parse(cli.stdout);
+    assert.equal(parsed.summary.info, 1);
+    assert.equal(parsed.summary.errors, 0);
+  });
+});
+
+describe('runLint L22 --fix leaves the file byte-identical', () => {
+  let tmpDir;
+  before(async () => { tmpDir = await makeTmp(); });
+  after(async () => { await removeTmp(tmpDir); });
+
+  test('--fix does not modify a source file with pending_citations (not fixable)', async () => {
+    await makeWiki(tmpDir, {
+      indexContent: `# Index\n\n${INDEX_MARKER_OPEN}\n- [[test-source]]\n${INDEX_MARKER_CLOSE}\n`,
+    });
+    const sourcePath = join(tmpDir, 'wiki', 'sources', 'test-source.md');
+    const original = sourceWithPendingCitations();
+    await writeFile(sourcePath, original);
+
+    const { findings } = await runLint(tmpDir, { fix: true, dryRun: false });
+    assert.ok(findings.some(f => f.id === 'L22-pending-citations'), 'L22 must still fire');
+
+    const after = await readFile(sourcePath, 'utf8');
+    assert.equal(after, original, '--fix must leave the file byte-identical (L22 is not fixable)');
   });
 });
 

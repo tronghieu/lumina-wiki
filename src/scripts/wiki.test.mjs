@@ -772,6 +772,30 @@ describe('set-meta schema validation', () => {
     }
   });
 
+  test('rejects a shape-valid but non-existent calendar date for an iso-date field: exit 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'sv-compiled-at');
+      const filePath = join(tmp, 'wiki', 'topics', 'sv-compiled-at.md');
+      const before = await readFile(filePath, 'utf8');
+
+      // 2026-02-30 matches the iso-date shape but is not a real day — the
+      // same rule timeline-add's --date already enforces via isValidIsoDate.
+      const r = runWiki(['set-meta', 'topics/sv-compiled-at', 'compiled_at', '2026-02-30'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stderr: ${r.stderr}`);
+
+      const errJson = parseJson(r.stderr);
+      assert.equal(errJson.code, 2);
+      assert.match(errJson.error, /"compiled_at" must be an ISO date \(YYYY-MM-DD\), got "2026-02-30"/);
+
+      const after = await readFile(filePath, 'utf8');
+      assert.equal(after, before, 'file on disk must be byte-unchanged after a rejected set-meta');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
   test('rejects TODO for a declared string field: exit 2, structured stderr, file unchanged', async () => {
     const tmp = await makeTmp();
     try {
@@ -3301,6 +3325,845 @@ describe('v0.9 ingest_status schema', () => {
         const json = parseJson(read.stdout);
         assert.equal(json.frontmatter.ingest_status, stage, `round-trip mismatch for ${stage}`);
       }
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: topic-timeline — timeline-add, add-citation-by-id, resolve-pending-citations
+// ---------------------------------------------------------------------------
+
+/** Helper: write a minimal valid topic file to wiki/topics/<slug>.md. */
+async function writeMinimalTopic(tmp, slug, extra = '') {
+  const dir = join(tmp, 'wiki', 'topics');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, `${slug}.md`),
+    `---\nid: ${slug}\ntitle: Test Topic\ntype: topic\ncreated: 2024-01-01\nupdated: 2024-01-01\nkey_sources: []\n${extra}---\n\nTopic body.\n`,
+    'utf8',
+  );
+}
+
+describe('timeline-add', () => {
+  test('collapses embedded newlines in --text into one line', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'multi-line');
+      const r = runWiki(
+        ['timeline-add', 'topics/multi-line', '--text', 'first  half\nsecond half', '--date', '2026-03-03'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(parseJson(r.stdout).line, '- **2026-03-03** | note | first half second half');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects --text that carries a comment marker (exit 2, no write)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'marker-topic');
+      const before = await readFile(join(tmp, 'wiki', 'topics', 'marker-topic.md'), 'utf8');
+      const r = runWiki(['timeline-add', 'topics/marker-topic', '--text', 'oops <!-- /lumina:timeline -->'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      const after = await readFile(join(tmp, 'wiki', 'topics', 'marker-topic.md'), 'utf8');
+      assert.equal(after, before);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('first entry creates the Timeline section with markers', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'my-topic');
+
+      const r = runWiki(
+        ['timeline-add', 'topics/my-topic', '--text', 'Self-attention replaces recurrence', '--kind', 'ingest'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.added, true);
+      assert.equal(json.topic, 'topics/my-topic');
+      assert.equal(json.edge, 'none');
+      assert.match(json.line, /^- \*\*\d{4}-\d{2}-\d{2}\*\* \| ingest \| Self-attention replaces recurrence$/);
+
+      const content = await readFile(join(tmp, 'wiki', 'topics', 'my-topic.md'), 'utf8');
+      assert.ok(content.includes(json.line), 'line written into the file');
+      // Exactly one blank line separates body content from the heading.
+      assert.match(content, /Topic body\.\n\n## Timeline\n\n<!-- lumina:timeline -->\n/);
+      assert.ok(content.trimEnd().endsWith('<!-- /lumina:timeline -->'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('idempotent: identical line already inside markers -> no write, added:false', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'idem-topic');
+      const args = ['timeline-add', 'topics/idem-topic', '--text', 'Same text', '--kind', 'note', '--date', '2026-01-01'];
+
+      const r1 = runWiki(args, { cwd: tmp });
+      assert.equal(r1.status, 0, `first timeline-add failed: ${r1.stderr}`);
+      const hash1 = await hashFile(join(tmp, 'wiki', 'topics', 'idem-topic.md'));
+
+      const r2 = runWiki(args, { cwd: tmp });
+      assert.equal(r2.status, 0, `second timeline-add failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.added, false);
+      assert.equal(json2.reason, 'entry already exists');
+      assert.equal(json2.edge, 'none');
+
+      const hash2 = await hashFile(join(tmp, 'wiki', 'topics', 'idem-topic.md'));
+      assert.equal(hash1, hash2, 'file unchanged on duplicate timeline-add');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--source adds a bare-slug wikilink and the includes_source edge + reverse', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'topic-src');
+      await writeMinimalSource(tmp, 'attention-is-all-you-need');
+
+      const r = runWiki(
+        [
+          'timeline-add', 'topics/topic-src',
+          '--text', 'Self-attention replaces recurrence',
+          '--kind', 'ingest',
+          '--source', 'sources/attention-is-all-you-need',
+          '--date', '2026-02-02',
+        ],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.edge, 'added');
+      assert.equal(
+        json.line,
+        '- **2026-02-02** | ingest | [[sources/attention-is-all-you-need]] — Self-attention replaces recurrence',
+      );
+
+      const edges = (await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8'))
+        .trim().split('\n').map((l) => JSON.parse(l));
+      const fwd = edges.find((e) => e.from === 'topics/topic-src' && e.type === 'includes_source' && e.to === 'sources/attention-is-all-you-need');
+      const rev = edges.find((e) => e.from === 'sources/attention-is-all-you-need' && e.type === 'included_in_topic' && e.to === 'topics/topic-src');
+      assert.ok(fwd, 'forward includes_source edge present');
+      assert.ok(rev, 'reverse included_in_topic edge present');
+
+      // Re-run with the same args: line already present (dedup), edge already present (convergent).
+      const r2 = runWiki(
+        [
+          'timeline-add', 'topics/topic-src',
+          '--text', 'Self-attention replaces recurrence',
+          '--kind', 'ingest',
+          '--source', 'sources/attention-is-all-you-need',
+          '--date', '2026-02-02',
+        ],
+        { cwd: tmp },
+      );
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.added, false);
+      assert.equal(json2.edge, 'exists');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects an invalid --kind, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'bad-kind-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'bad-kind-topic.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['timeline-add', 'topics/bad-kind-topic', '--text', 'x', '--kind', 'bogus'], { cwd: tmp });
+      assert.equal(r.status, 2);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on invalid --kind');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects an invalid calendar date (shape-valid but not real), no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'bad-date-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'bad-date-topic.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r1 = runWiki(['timeline-add', 'topics/bad-date-topic', '--text', 'x', '--date', '2026-13-01'], { cwd: tmp });
+      assert.equal(r1.status, 2, 'month 13 rejected');
+
+      const r2 = runWiki(['timeline-add', 'topics/bad-date-topic', '--text', 'x', '--date', '2026-02-30'], { cwd: tmp });
+      assert.equal(r2.status, 2, 'Feb 30 rejected');
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on invalid --date');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('missing topic (slug not under topics/) exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r1 = runWiki(['timeline-add', 'topics/does-not-exist', '--text', 'x'], { cwd: tmp });
+      assert.equal(r1.status, 2);
+
+      // Resolves to a real file, but of the wrong entity type.
+      await writeMinimalSource(tmp, 'not-a-topic');
+      const r2 = runWiki(['timeline-add', 'sources/not-a-topic', '--text', 'x'], { cwd: tmp });
+      assert.equal(r2.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('missing --source exits 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'topic-missing-source');
+      const filePath = join(tmp, 'wiki', 'topics', 'topic-missing-source.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(
+        ['timeline-add', 'topics/topic-missing-source', '--text', 'x', '--source', 'sources/does-not-exist'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 2);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write when --source does not resolve');
+      const edgesFile = join(tmp, 'wiki', 'graph', 'edges.jsonl');
+      assert.equal(await hashFile(edgesFile), null, 'no edge written when --source does not resolve');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('path traversal in topic slug exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r1 = runWiki(['timeline-add', '..', '--text', 'x'], { cwd: tmp });
+      assert.equal(r1.status, 2);
+      const r2 = runWiki(['timeline-add', 'topics/../../etc/passwd', '--text', 'x'], { cwd: tmp });
+      assert.equal(r2.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('path traversal in --source exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'topic-traversal-source');
+      const r = runWiki(
+        ['timeline-add', 'topics/topic-traversal-source', '--text', 'x', '--source', '..'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('region created once then reused; existing entries preserved byte-for-byte', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'multi-entry');
+      const filePath = join(tmp, 'wiki', 'topics', 'multi-entry.md');
+
+      const r1 = runWiki(
+        ['timeline-add', 'topics/multi-entry', '--text', 'First entry', '--kind', 'ingest', '--date', '2026-01-01'],
+        { cwd: tmp },
+      );
+      assert.equal(r1.status, 0, `first timeline-add failed: ${r1.stderr}`);
+      const contentAfterFirst = await readFile(filePath, 'utf8');
+      assert.equal((contentAfterFirst.match(/<!-- lumina:timeline -->/g) || []).length, 1);
+      assert.equal((contentAfterFirst.match(/<!-- \/lumina:timeline -->/g) || []).length, 1);
+
+      const r2 = runWiki(
+        ['timeline-add', 'topics/multi-entry', '--text', 'Second entry', '--kind', 'note', '--date', '2026-01-02'],
+        { cwd: tmp },
+      );
+      assert.equal(r2.status, 0, `second timeline-add failed: ${r2.stderr}`);
+      const contentAfterSecond = await readFile(filePath, 'utf8');
+
+      // Region reused, not duplicated.
+      assert.equal((contentAfterSecond.match(/<!-- lumina:timeline -->/g) || []).length, 1);
+      assert.equal((contentAfterSecond.match(/<!-- \/lumina:timeline -->/g) || []).length, 1);
+
+      assert.ok(contentAfterSecond.includes('- **2026-01-01** | ingest | First entry'));
+      assert.ok(contentAfterSecond.includes('- **2026-01-02** | note | Second entry'));
+
+      const idxFirst = contentAfterSecond.indexOf('First entry');
+      const idxSecond = contentAfterSecond.indexOf('Second entry');
+      const idxClose = contentAfterSecond.indexOf('<!-- /lumina:timeline -->');
+      assert.ok(idxFirst > -1 && idxSecond > idxFirst, 'first entry precedes second');
+      assert.ok(idxSecond < idxClose, 'second entry inserted before the close marker');
+
+      // Everything up to the close marker of the first write is preserved byte-for-byte
+      // in the second write (only the close marker's position moves).
+      const cutPoint = contentAfterFirst.indexOf('<!-- /lumina:timeline -->');
+      assert.equal(
+        contentAfterSecond.slice(0, cutPoint),
+        contentAfterFirst.slice(0, cutPoint),
+        'existing content preserved byte-for-byte',
+      );
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('sets updated to today, leaves compiled_at untouched', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'compiled-topic', 'compiled_at: 2020-05-05\n');
+
+      const r = runWiki(['timeline-add', 'topics/compiled-topic', '--text', 'x'], { cwd: tmp });
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+
+      const read = runWiki(['read-meta', 'topics/compiled-topic'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.match(fm.updated, /^\d{4}-\d{2}-\d{2}$/);
+      assert.notEqual(fm.updated, '2024-01-01', 'updated bumped from its seeded value');
+      assert.equal(fm.compiled_at, '2020-05-05', 'compiled_at left untouched');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('default --kind is note and default --date is today', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'default-topic');
+      const r = runWiki(['timeline-add', 'topics/default-topic', '--text', 'plain note'], { cwd: tmp });
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.match(json.line, /^- \*\*\d{4}-\d{2}-\d{2}\*\* \| note \| plain note$/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects missing --text, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'no-text-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'no-text-topic.md');
+      const hashBefore = await hashFile(filePath);
+      const r = runWiki(['timeline-add', 'topics/no-text-topic'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.equal(await hashFile(filePath), hashBefore);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('CRLF page: an already-present entry compares equal despite the trailing \\r, added:false, file unchanged', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const dir = join(tmp, 'wiki', 'topics');
+      await mkdir(dir, { recursive: true });
+      const filePath = join(dir, 'crlf-topic.md');
+      const lf = '---\nid: crlf-topic\ntitle: Test Topic\ntype: topic\ncreated: 2024-01-01\nupdated: 2024-01-01\nkey_sources: []\n---\n\nTopic body.\n\n## Timeline\n\n<!-- lumina:timeline -->\n- **2026-04-04** | note | Existing entry\n<!-- /lumina:timeline -->\n';
+      await writeFile(filePath, lf.replace(/\n/g, '\r\n'), 'utf8');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(
+        ['timeline-add', 'topics/crlf-topic', '--text', 'Existing entry', '--kind', 'note', '--date', '2026-04-04'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.added, false, 'the CRLF-suffixed existing line must still count as a match');
+      assert.equal(json.reason, 'entry already exists');
+      assert.equal(await hashFile(filePath), hashBefore, 'CRLF file left byte-unchanged');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('bare slug prefers the expected type: concepts/foo and topics/foo both exist, timeline-add foo writes topics/foo.md', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const conceptsDir = join(tmp, 'wiki', 'concepts');
+      await mkdir(conceptsDir, { recursive: true });
+      await writeFile(
+        join(conceptsDir, 'foo.md'),
+        '---\nid: concepts/foo\ntitle: Foo Concept\ntype: concept\ncreated: 2024-01-01\nupdated: 2024-01-01\nkey_sources: []\nrelated_concepts: []\n---\n',
+        'utf8',
+      );
+      await writeMinimalTopic(tmp, 'foo');
+
+      const r = runWiki(['timeline-add', 'foo', '--text', 'bare slug resolves to the topic'], { cwd: tmp });
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.topic, 'topics/foo');
+
+      const topicContent = await readFile(join(tmp, 'wiki', 'topics', 'foo.md'), 'utf8');
+      assert.ok(topicContent.includes(json.line), 'entry written into topics/foo.md');
+      const conceptContent = await readFile(join(conceptsDir, 'foo.md'), 'utf8');
+      assert.ok(!conceptContent.includes('lumina:timeline'), 'concepts/foo.md left untouched');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('ingest re-run: a later date/different text for the same source is a no-op; note entries still append', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'ingest-rerun-topic');
+      await writeMinimalSource(tmp, 'ingest-rerun-source');
+      const filePath = join(tmp, 'wiki', 'topics', 'ingest-rerun-topic.md');
+
+      const r1 = runWiki(
+        [
+          'timeline-add', 'topics/ingest-rerun-topic',
+          '--text', 'First claim', '--kind', 'ingest',
+          '--source', 'sources/ingest-rerun-source', '--date', '2026-01-01',
+        ],
+        { cwd: tmp },
+      );
+      assert.equal(r1.status, 0, `first timeline-add failed: ${r1.stderr}`);
+      assert.equal(parseJson(r1.stdout).added, true);
+
+      // Resumed on a later day with different text: same source, same kind — no-op.
+      const r2 = runWiki(
+        [
+          'timeline-add', 'topics/ingest-rerun-topic',
+          '--text', 'Second claim, reworded', '--kind', 'ingest',
+          '--source', 'sources/ingest-rerun-source', '--date', '2026-01-02',
+        ],
+        { cwd: tmp },
+      );
+      assert.equal(r2.status, 0, `second timeline-add failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.added, false);
+      assert.equal(json2.reason, 'ingest entry for this source already exists');
+
+      const contentAfterIngest = await readFile(filePath, 'utf8');
+      const ingestLines = contentAfterIngest.split('\n').filter((l) => l.includes('[[sources/ingest-rerun-source]]'));
+      assert.equal(ingestLines.length, 1, 'no second ingest line for the same source');
+
+      // A `note` entry for the same source with different text is not covered by the
+      // ingest-only dedupe rule and still appends (exact-line rule finds no match).
+      const r3 = runWiki(
+        [
+          'timeline-add', 'topics/ingest-rerun-topic',
+          '--text', 'A follow-up note', '--kind', 'note',
+          '--source', 'sources/ingest-rerun-source', '--date', '2026-01-03',
+        ],
+        { cwd: tmp },
+      );
+      assert.equal(r3.status, 0, `note timeline-add failed: ${r3.stderr}`);
+      assert.equal(parseJson(r3.stdout).added, true, 'note entry appends despite sharing the source');
+
+      const contentAfterNote = await readFile(filePath, 'utf8');
+      const sourceLines = contentAfterNote.split('\n').filter((l) => l.includes('[[sources/ingest-rerun-source]]'));
+      assert.equal(sourceLines.length, 2, 'ingest line plus the new note line');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--text=<value> accepts text that itself begins with --', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'dashes-topic');
+
+      const r = runWiki(
+        ['timeline-add', 'topics/dashes-topic', '--text=--starts-with-dashes', '--date', '2026-05-05'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `timeline-add failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.line, '- **2026-05-05** | note | --starts-with-dashes');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: add-citation-by-id
+// ---------------------------------------------------------------------------
+
+describe('add-citation-by-id', () => {
+  test('drains a stale pending entry when the citation resolves directly', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'early-paper');
+      // Cited before the target existed: recorded as pending.
+      const r1 = runWiki(['add-citation-by-id', 'sources/early-paper', 'doi', '10.4000/late'], { cwd: tmp });
+      assert.deepEqual(parseJson(r1.stdout), { resolved: false, pending: true, added: true });
+
+      // Target arrives; a second call resolves and must clear the stale entry.
+      await writeMinimalSource(tmp, 'late-paper', 'external_ids:\n  doi: 10.4000/late\n');
+      const r2 = runWiki(['add-citation-by-id', 'sources/early-paper', 'doi', '10.4000/late'], { cwd: tmp });
+      assert.equal(r2.status, 0, r2.stderr);
+      assert.deepEqual(parseJson(r2.stdout), { resolved: true, to: 'sources/late-paper', added: true });
+
+      const fm = parseJson(runWiki(['read-meta', 'sources/early-paper'], { cwd: tmp }).stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations ?? [], []);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('resolves a unique match by external id and writes a real citation', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'citing-paper');
+      await writeMinimalSource(tmp, 'target-paper', 'external_ids:\n  doi: 10.1000/xyz\n');
+
+      const r = runWiki(['add-citation-by-id', 'sources/citing-paper', 'doi', '10.1000/xyz'], { cwd: tmp });
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json, { resolved: true, to: 'sources/target-paper', added: true });
+
+      const citations = (await readFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'), 'utf8'))
+        .trim().split('\n').map((l) => JSON.parse(l));
+      assert.equal(citations.length, 1);
+      assert.equal(citations[0].from, 'sources/citing-paper');
+      assert.equal(citations[0].to, 'sources/target-paper');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('records a pending citation with title when no source matches', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'lonely-paper');
+
+      const r = runWiki(
+        ['add-citation-by-id', 'sources/lonely-paper', 'doi', '10.2000/abc', '--title', 'Some Cited Work'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json, { resolved: false, pending: true, added: true });
+
+      const read = runWiki(['read-meta', 'sources/lonely-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations, [{ ns: 'doi', value: '10.2000/abc', title: 'Some Cited Work' }]);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('omits title when not given or empty', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'no-title-paper');
+      runWiki(['add-citation-by-id', 'sources/no-title-paper', 'doi', '10.2500/one'], { cwd: tmp });
+      runWiki(['add-citation-by-id', 'sources/no-title-paper', 'doi', '10.2500/two', '--title', ''], { cwd: tmp });
+
+      const read = runWiki(['read-meta', 'sources/no-title-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      for (const entry of fm.pending_citations) {
+        assert.ok(!('title' in entry), `expected no title field on ${JSON.stringify(entry)}`);
+      }
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('dedupes pending citations on ns+normalized-value, added:false on repeat', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'dup-paper');
+
+      const r1 = runWiki(['add-citation-by-id', 'sources/dup-paper', 'doi', '10.3000/one'], { cwd: tmp });
+      assert.deepEqual(parseJson(r1.stdout), { resolved: false, pending: true, added: true });
+
+      // Same id via a different raw spelling that normalizes identically.
+      const r2 = runWiki(['add-citation-by-id', 'sources/dup-paper', 'doi', 'https://doi.org/10.3000/one'], { cwd: tmp });
+      assert.equal(r2.status, 0, `second add-citation-by-id failed: ${r2.stderr}`);
+      assert.deepEqual(parseJson(r2.stdout), { resolved: false, pending: true, added: false });
+
+      const read = runWiki(['read-meta', 'sources/dup-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.equal(fm.pending_citations.length, 1, 'no duplicate pending entry');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects an unknown namespace, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'ns-paper');
+      const filePath = join(tmp, 'wiki', 'sources', 'ns-paper.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['add-citation-by-id', 'sources/ns-paper', 'bogus-ns', 'whatever'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on unknown namespace');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('rejects an invalid id for the namespace, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'bad-id-paper');
+      const filePath = join(tmp, 'wiki', 'sources', 'bad-id-paper.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['add-citation-by-id', 'sources/bad-id-paper', 'doi', 'not-a-doi'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on invalid id');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('ambiguous target exits 2, no citation written', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'citer');
+      await writeMinimalSource(tmp, 'dup-target-a', 'external_ids:\n  doi: 10.4000/dup\n');
+      await writeMinimalSource(tmp, 'dup-target-b', 'external_ids:\n  doi: 10.4000/dup\n');
+
+      const r = runWiki(['add-citation-by-id', 'sources/citer', 'doi', '10.4000/dup'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected ambiguous exit 2, got ${r.status}; stdout: ${r.stdout}`);
+      const errJson = parseJson(r.stderr);
+      assert.match(errJson.error, /[Aa]mbiguous/);
+
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      assert.equal(await hashFile(citationsFile), null, 'no citation written on ambiguous match');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('from-slug not resolvable to sources/ exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'not-a-source');
+      const r1 = runWiki(['add-citation-by-id', 'topics/not-a-source', 'doi', '10.5000/x'], { cwd: tmp });
+      assert.equal(r1.status, 2);
+
+      const r2 = runWiki(['add-citation-by-id', 'sources/does-not-exist', 'doi', '10.5000/x'], { cwd: tmp });
+      assert.equal(r2.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('path traversal in from-slug exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['add-citation-by-id', '..', 'doi', '10.1000/x'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('embedded newline in --title is collapsed to one line and round-trips via read-meta', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'title-newline-paper');
+
+      const r = runWiki(
+        ['add-citation-by-id', 'sources/title-newline-paper', 'doi', '10.9000/newline', '--title', 'Line one\nLine two'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 0, `add-citation-by-id failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json, { resolved: false, pending: true, added: true });
+
+      const filePath = join(tmp, 'wiki', 'sources', 'title-newline-paper.md');
+      const raw = await readFile(filePath, 'utf8');
+      // Frontmatter is YAML; the pending_citations entry must render as one
+      // flow-mapping line, not a raw embedded newline that would corrupt it.
+      assert.ok(!raw.includes('Line one\nLine two'), 'raw newline must not survive into the frontmatter');
+
+      const read = runWiki(['read-meta', 'sources/title-newline-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations, [{ ns: 'doi', value: '10.9000/newline', title: 'Line one Line two' }]);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('self-citation: from cites its own external id, exit 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'self-cite-paper', 'external_ids:\n  doi: 10.5555/self\n');
+      const filePath = join(tmp, 'wiki', 'sources', 'self-cite-paper.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['add-citation-by-id', 'sources/self-cite-paper', 'doi', '10.5555/self'], { cwd: tmp });
+      assert.equal(r.status, 2, `expected exit 2, got ${r.status}; stdout: ${r.stdout}`);
+      const errJson = parseJson(r.stderr);
+      assert.match(errJson.error, /cannot cite itself/);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on self-citation');
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      assert.equal(await hashFile(citationsFile), null, 'no citation written on self-citation');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: resolve-pending-citations
+// ---------------------------------------------------------------------------
+
+describe('resolve-pending-citations', () => {
+  test('drains a matching pending citation into a real one', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'old-paper');
+      runWiki(['add-citation-by-id', 'sources/old-paper', 'doi', '10.6000/new'], { cwd: tmp });
+      await writeMinimalSource(tmp, 'new-paper', 'external_ids:\n  doi: 10.6000/new\n');
+
+      const r = runWiki(['resolve-pending-citations', 'sources/new-paper'], { cwd: tmp });
+      assert.equal(r.status, 0, `resolve-pending-citations failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, false);
+      assert.equal(json.resolved.length, 1);
+      assert.deepEqual(json.resolved[0], { from: 'sources/old-paper', to: 'sources/new-paper', ns: 'doi', value: '10.6000/new' });
+      assert.equal(json.scanned, 1, 'scanned only the one other source page');
+
+      const citations = (await readFile(join(tmp, 'wiki', 'graph', 'citations.jsonl'), 'utf8'))
+        .trim().split('\n').map((l) => JSON.parse(l));
+      assert.ok(citations.some((c) => c.from === 'sources/old-paper' && c.to === 'sources/new-paper'));
+
+      const read = runWiki(['read-meta', 'sources/old-paper'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations, [], 'pending entry drained');
+      assert.match(fm.updated, /^\d{4}-\d{2}-\d{2}$/);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('no match leaves resolved empty', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'unrelated-paper');
+      await writeMinimalSource(tmp, 'fresh-paper', 'external_ids:\n  doi: 10.7000/fresh\n');
+
+      const r = runWiki(['resolve-pending-citations', 'sources/fresh-paper'], { cwd: tmp });
+      assert.equal(r.status, 0, `resolve-pending-citations failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json.resolved, []);
+      assert.equal(json.scanned, 1);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('empty external_ids on the new source yields resolved: []', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'other-paper');
+      await writeMinimalSource(tmp, 'bare-new-paper');
+
+      const r = runWiki(['resolve-pending-citations', 'sources/bare-new-paper'], { cwd: tmp });
+      assert.equal(r.status, 0, `resolve-pending-citations failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.deepEqual(json.resolved, []);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('--dry-run reports matches but writes nothing (byte-identical files)', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'dry-old-paper');
+      runWiki(['add-citation-by-id', 'sources/dry-old-paper', 'doi', '10.8000/dry'], { cwd: tmp });
+      await writeMinimalSource(tmp, 'dry-new-paper', 'external_ids:\n  doi: 10.8000/dry\n');
+
+      const oldFile = join(tmp, 'wiki', 'sources', 'dry-old-paper.md');
+      const newFile = join(tmp, 'wiki', 'sources', 'dry-new-paper.md');
+      const citationsFile = join(tmp, 'wiki', 'graph', 'citations.jsonl');
+      const oldHashBefore = await hashFile(oldFile);
+      const newHashBefore = await hashFile(newFile);
+      const citationsHashBefore = await hashFile(citationsFile);
+
+      const r = runWiki(['resolve-pending-citations', 'sources/dry-new-paper', '--dry-run'], { cwd: tmp });
+      assert.equal(r.status, 0, `resolve-pending-citations --dry-run failed: ${r.stderr}`);
+      const json = parseJson(r.stdout);
+      assert.equal(json.dryRun, true);
+      assert.equal(json.resolved.length, 1);
+      assert.deepEqual(json.resolved[0], { from: 'sources/dry-old-paper', to: 'sources/dry-new-paper', ns: 'doi', value: '10.8000/dry' });
+
+      assert.equal(await hashFile(oldFile), oldHashBefore, 'old paper unchanged by dry-run');
+      assert.equal(await hashFile(newFile), newHashBefore, 'new paper unchanged by dry-run');
+      assert.equal(await hashFile(citationsFile), citationsHashBefore, 'citations.jsonl unchanged by dry-run');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('new-source-slug not resolvable to sources/ exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'not-a-source-2');
+      const r = runWiki(['resolve-pending-citations', 'topics/not-a-source-2'], { cwd: tmp });
+      assert.equal(r.status, 2);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('path traversal in new-source-slug exits 2', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      const r = runWiki(['resolve-pending-citations', '..'], { cwd: tmp });
+      assert.equal(r.status, 2);
     } finally {
       await cleanTmp(tmp);
     }
