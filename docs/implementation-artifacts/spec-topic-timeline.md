@@ -30,7 +30,7 @@ context:
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|---------------|----------------------------|----------------|
 | First timeline entry | Topic page has no timeline markers | Append `## Timeline` heading plus open/close markers at end of body, entry inside; `updated` set to today; `compiled_at` untouched | — |
-| Repeat entry | Identical line already inside the markers (`correction`/`note`); or, for `ingest` with `--source`, ANY existing line already recording an ingest entry for that source, regardless of date/text | No write; `{added:false, reason:'entry already exists'}` (or `'ingest entry for this source already exists'` for the ingest+source case) exit 0 | — |
+| Repeat entry | Identical line already inside the markers (`correction`/`note`); or, for `ingest` with `--source`, ANY existing line already recording an ingest entry for that source, regardless of date/text | No write; graph not touched either; `{added:false, edge:'skipped', reason:'entry already exists'}` (or `'ingest entry for this source already exists'` for the ingest+source case) exit 0 | — |
 | Entry with source | `--source sources/<s>` given | Line carries `[[sources/<s>]]`; `includes_source` edge topic→source and its reverse written via existing add-edge path (no-op if present) | Source file missing → exit 2 |
 | Bad kind / date | `--kind foo` or `--date 2026-13-01` | No write | Exit 2 with message |
 | Missing topic | Slug not under `topics/` | No write | Exit 2 |
@@ -79,7 +79,7 @@ Entries are appended in arrival order (newest last), inserted immediately before
 <!-- /lumina:timeline -->
 ```
 
-`timeline-add` output: `{"added":true|false,"topic":"topics/<slug>","line":"…","edge":"added"|"exists"|"none"}`.
+`timeline-add` output: `{"added":true|false,"topic":"topics/<slug>","line":"…","edge":"added"|"exists"|"skipped"|"none"}`.
 `add-citation-by-id` output: `{"resolved":true,"to":"sources/<slug>"}` or `{"resolved":false,"pending":true,"added":true|false}`.
 `resolve-pending-citations` output: `{"resolved":[{"from","to","ns","value"}],"scanned":N,"dryRun":bool}`.
 

@@ -1500,8 +1500,11 @@ function insertTimelineEntry(body, line, isDuplicate = (zoneContent) => timeline
  *     append a second row for a source already ingested into this topic.
  *   - `correction` and `note` (and `ingest` without `--source`): a duplicate
  *     is an exact-line match, as before.
- * The edge is still ensured even when the line is a duplicate, so repeated
- * calls converge.
+ * The duplicate check runs before any graph or file mutation: a duplicate
+ * line means the graph is left untouched too, so a topic refresh that
+ * deliberately dropped the `includes_source` edge (while the historical
+ * timeline row stays) is not resurrected by replaying the original
+ * `timeline-add ... --source` call.
  *
  * @param {string} projectRoot
  * @param {string} topicArg
@@ -1529,15 +1532,15 @@ async function timelineAdd(projectRoot, topicArg, opts) {
   const { frontmatter, body } = parseFrontmatter(content);
   const { body: newBody, added } = insertTimelineEntry(body, line, isDuplicate);
 
+  if (!added) {
+    const reason = isIngestRerun ? 'ingest entry for this source already exists' : 'entry already exists';
+    return { added: false, topic: topic.slug, line, edge: 'skipped', reason };
+  }
+
   let edge = 'none';
   if (sourceInfo) {
     const result = await addEdge(projectRoot, topic.slug, 'includes_source', sourceInfo.slug, {});
     edge = result.added ? 'added' : 'exists';
-  }
-
-  if (!added) {
-    const reason = isIngestRerun ? 'ingest entry for this source already exists' : 'entry already exists';
-    return { added: false, topic: topic.slug, line, edge, reason };
   }
 
   frontmatter.updated = today();
@@ -2225,6 +2228,25 @@ function parseArgs(args) {
 }
 
 /**
+ * Read an optional string flag out of `parseArgs()`'s `flags`, exiting 2 if
+ * the flag was given with no value. `--key` with nothing after it (or
+ * followed by another `--flag`) parses as boolean `true`, not a string —
+ * left unchecked, callers used to treat that the same as the flag being
+ * absent entirely (falling back to a default instead of erroring on the
+ * user's typo). A flag not given at all still returns `undefined`.
+ * @param {object} flags
+ * @param {string} key
+ * @returns {string|undefined}
+ */
+function requireFlagValue(flags, key) {
+  if (!Object.prototype.hasOwnProperty.call(flags, key)) return undefined;
+  if (typeof flags[key] !== 'string') {
+    fail(`--${key} requires a value`, 2);
+  }
+  return flags[key];
+}
+
+/**
  * Require project root, exit 2 if not found.
  * @param {string} [startDir]
  * @returns {Promise<string>}
@@ -2468,7 +2490,7 @@ async function main(argv) {
         // One frontmatter value is one flow-mapping scalar: collapse embedded
         // newlines/whitespace runs the same way timeline-add normalizes --text,
         // so a stray newline in --title cannot corrupt the YAML.
-        const rawTitle = typeof flags.title === 'string' ? flags.title.replace(/\s+/g, ' ').trim() : '';
+        const rawTitle = (requireFlagValue(flags, 'title') ?? '').replace(/\s+/g, ' ').trim();
         const title = rawTitle ? rawTitle : undefined;
 
         const projectRoot = await requireProjectRoot();
@@ -2590,17 +2612,17 @@ async function main(argv) {
           fail('timeline-add --text may not contain an HTML comment marker', 2);
         }
 
-        const kind = typeof flags.kind === 'string' ? flags.kind : 'note';
+        const kind = requireFlagValue(flags, 'kind') ?? 'note';
         if (!TIMELINE_KINDS.includes(kind)) {
           fail(`Invalid --kind: ${kind}. Must be one of: ${TIMELINE_KINDS.join(', ')}`, 2);
         }
 
-        const date = typeof flags.date === 'string' ? flags.date : today();
+        const date = requireFlagValue(flags, 'date') ?? today();
         if (!isValidIsoDate(date)) {
           fail(`Invalid --date: ${date}. Must be a real calendar date (YYYY-MM-DD)`, 2);
         }
 
-        const source = typeof flags.source === 'string' ? flags.source : null;
+        const source = requireFlagValue(flags, 'source') ?? null;
         if (source && source.includes('..')) {
           fail('Slug may not contain ..', 2);
         }

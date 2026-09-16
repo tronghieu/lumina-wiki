@@ -3421,7 +3421,7 @@ describe('timeline-add', () => {
       const json2 = parseJson(r2.stdout);
       assert.equal(json2.added, false);
       assert.equal(json2.reason, 'entry already exists');
-      assert.equal(json2.edge, 'none');
+      assert.equal(json2.edge, 'skipped');
 
       const hash2 = await hashFile(join(tmp, 'wiki', 'topics', 'idem-topic.md'));
       assert.equal(hash1, hash2, 'file unchanged on duplicate timeline-add');
@@ -3475,7 +3475,46 @@ describe('timeline-add', () => {
       );
       const json2 = parseJson(r2.stdout);
       assert.equal(json2.added, false);
-      assert.equal(json2.edge, 'exists');
+      assert.equal(json2.edge, 'skipped');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('replaying timeline-add --source after the edge was deliberately removed does not recreate it', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'topic-dropped-edge');
+      await writeMinimalSource(tmp, 'dropped-edge-source');
+      const args = [
+        'timeline-add', 'topics/topic-dropped-edge',
+        '--text', 'Original claim', '--kind', 'ingest',
+        '--source', 'sources/dropped-edge-source', '--date', '2026-02-02',
+      ];
+
+      const r1 = runWiki(args, { cwd: tmp });
+      assert.equal(r1.status, 0, `first timeline-add failed: ${r1.stderr}`);
+      assert.equal(parseJson(r1.stdout).added, true);
+
+      const removed = runWiki(
+        ['remove-edge', 'topics/topic-dropped-edge', 'includes_source', 'sources/dropped-edge-source'],
+        { cwd: tmp },
+      );
+      assert.equal(removed.status, 0, `remove-edge failed: ${removed.stderr}`);
+
+      // Replay the exact original call: the timeline row is still there (duplicate),
+      // so the edge must NOT be recreated.
+      const r2 = runWiki(args, { cwd: tmp });
+      assert.equal(r2.status, 0, `replayed timeline-add failed: ${r2.stderr}`);
+      const json2 = parseJson(r2.stdout);
+      assert.equal(json2.added, false);
+      assert.equal(json2.edge, 'skipped');
+
+      const edgesRaw = (await readFile(join(tmp, 'wiki', 'graph', 'edges.jsonl'), 'utf8')).trim();
+      const edges = edgesRaw ? edgesRaw.split('\n').map((l) => JSON.parse(l)) : [];
+      const fwd = edges.find((e) => e.from === 'topics/topic-dropped-edge' && e.type === 'includes_source' && e.to === 'sources/dropped-edge-source');
+      assert.equal(fwd, undefined, 'includes_source edge stays removed after replaying the original call');
     } finally {
       await cleanTmp(tmp);
     }
@@ -3513,6 +3552,60 @@ describe('timeline-add', () => {
       assert.equal(r2.status, 2, 'Feb 30 rejected');
 
       assert.equal(await hashFile(filePath), hashBefore, 'no write on invalid --date');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('bare --source (no value) exits 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'bare-source-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'bare-source-topic.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['timeline-add', 'topics/bare-source-topic', '--text', 'x', '--source'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.match(parseJson(r.stderr).error, /--source requires a value/);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on bare --source');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('bare --kind (no value) exits 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'bare-kind-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'bare-kind-topic.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['timeline-add', 'topics/bare-kind-topic', '--text', 'x', '--kind'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.match(parseJson(r.stderr).error, /--kind requires a value/);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on bare --kind');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('bare --date (no value) exits 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalTopic(tmp, 'bare-date-topic');
+      const filePath = join(tmp, 'wiki', 'topics', 'bare-date-topic.md');
+      const hashBefore = await hashFile(filePath);
+
+      const r = runWiki(['timeline-add', 'topics/bare-date-topic', '--text', 'x', '--date'], { cwd: tmp });
+      assert.equal(r.status, 2);
+      assert.match(parseJson(r.stderr).error, /--date requires a value/);
+
+      assert.equal(await hashFile(filePath), hashBefore, 'no write on bare --date');
     } finally {
       await cleanTmp(tmp);
     }
@@ -3881,19 +3974,43 @@ describe('add-citation-by-id', () => {
     }
   });
 
-  test('omits title when not given or empty', async () => {
+  test('omits title when not given', async () => {
     const tmp = await makeTmp();
     try {
       initWorkspace(tmp);
       await writeMinimalSource(tmp, 'no-title-paper');
       runWiki(['add-citation-by-id', 'sources/no-title-paper', 'doi', '10.2500/one'], { cwd: tmp });
-      runWiki(['add-citation-by-id', 'sources/no-title-paper', 'doi', '10.2500/two', '--title', ''], { cwd: tmp });
 
       const read = runWiki(['read-meta', 'sources/no-title-paper'], { cwd: tmp });
       const fm = parseJson(read.stdout).frontmatter;
       for (const entry of fm.pending_citations) {
         assert.ok(!('title' in entry), `expected no title field on ${JSON.stringify(entry)}`);
       }
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  // `--title ''` (an explicit empty-string argument) and a truly bare `--title`
+  // both parse to boolean `true` in parseArgs (a falsy next-token is treated as
+  // "no value"), so both must now be rejected rather than silently treated as
+  // an omitted title.
+  test('bare --title (no value) exits 2, no write', async () => {
+    const tmp = await makeTmp();
+    try {
+      initWorkspace(tmp);
+      await writeMinimalSource(tmp, 'bare-title-source');
+
+      const r = runWiki(
+        ['add-citation-by-id', 'sources/bare-title-source', 'doi', '10.9999/bare', '--title'],
+        { cwd: tmp },
+      );
+      assert.equal(r.status, 2);
+      assert.match(parseJson(r.stderr).error, /--title requires a value/);
+
+      const read = runWiki(['read-meta', 'sources/bare-title-source'], { cwd: tmp });
+      const fm = parseJson(read.stdout).frontmatter;
+      assert.deepEqual(fm.pending_citations ?? [], [], 'no write on bare --title');
     } finally {
       await cleanTmp(tmp);
     }
