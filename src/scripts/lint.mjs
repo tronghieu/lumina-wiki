@@ -13,7 +13,7 @@
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * Summary output schema (--summary flag):
- * {"errors":N,"warnings":N,"by_check":{"L01":n,...,"L20":n},"fixable":N}
+ * {"errors":N,"warnings":N,"by_check":{"L01":n,...,"L22":n},"fixable":N}
  * Single-line JSON. Exit code follows default lint rules.
  * Compatible with --json --summary (--summary takes precedence over verbose shape).
  * ─────────────────────────────────────────────────────────────────────────────
@@ -54,6 +54,8 @@ import {
   REQUIRED_FRONTMATTER,
   EDGE_CONFIDENCE,
   LEGACY_ENUM_DEFAULTS,
+  TIMELINE_MARKER_OPEN,
+  TIMELINE_MARKER_CLOSE,
 } from './schemas.mjs';
 import {
   EXTERNAL_ID_NAMESPACES,
@@ -87,7 +89,7 @@ const isIndexExempt = (f) => INDEX_EXEMPT_PREFIXES.some(p => f.startsWith(p));
 /** All check IDs in run order.
  *  L15 is intentionally absent — collision check was deferred as premature
  *  for typical wiki size. Adding L15 later is the natural next slot. */
-const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17', 'L18', 'L19', 'L20'];
+const ALL_CHECK_IDS = ['L01', 'L02', 'L03', 'L04', 'L05', 'L06', 'L07', 'L08', 'L09', 'L10', 'L11', 'L12', 'L13', 'L14', 'L16', 'L17', 'L18', 'L19', 'L20', 'L21', 'L22'];
 
 /**
  * Legacy frontmatter fields that have been renamed across versions.
@@ -926,6 +928,49 @@ function safejoin(base, ...parts) {
 }
 
 /**
+ * Parse one YAML flow-mapping list item — `{ns: doi, value: "10.1/x", title: "T"}` —
+ * into a plain object. This is the shape wiki.mjs's stringifyFrontmatter writes for
+ * array-of-object fields (e.g. `pending_citations`); without this, such items would
+ * come back as opaque strings instead of objects with readable keys. Any other list
+ * item (a plain scalar) passes through unchanged.
+ * @param {string} raw  Already trimmed list-item text (without the leading "- ").
+ * @returns {string|Record<string, string|number|null>}
+ */
+function parseFlowMappingItem(raw) {
+  if (!raw.startsWith('{') || !raw.endsWith('}')) return raw;
+  const inner = raw.slice(1, -1);
+  const parts = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (c === '"' && inner[i - 1] !== '\\') inQuotes = !inQuotes;
+    if (c === ',' && !inQuotes) { parts.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  if (cur.trim() !== '') parts.push(cur);
+
+  const obj = {};
+  for (const part of parts) {
+    const m = part.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/s);
+    if (!m) continue;
+    const key = m[1];
+    const val = m[2].trim();
+    if (val.startsWith('"') && val.endsWith('"')) {
+      obj[key] = val.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    } else if (val === 'null') {
+      obj[key] = null;
+    } else {
+      // Kept as a string, deliberately not number-coerced — an id like the
+      // arxiv value "1706.03762" must round-trip as a string, never a number
+      // (same reasoning as the block-mapping branch above, for external_ids).
+      obj[key] = val;
+    }
+  }
+  return obj;
+}
+
+/**
  * Minimal YAML frontmatter parser.
  * Returns { data: object, body: string, end: number } or null if no frontmatter.
  * Supports string, number, array (- item per line), and inline YAML arrays.
@@ -975,7 +1020,7 @@ function parseFrontmatter(content) {
       while (i < lines.length) {
         const ln = lines[i];
         const listM = ln.match(/^\s+-\s+(.*)$/);
-        if (listM) { listItems.push(listM[1].trim()); i++; continue; }
+        if (listM) { listItems.push(parseFlowMappingItem(listM[1].trim())); i++; continue; }
         const mapM = ln.match(/^(\s+)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/);
         if (mapM) {
           // Block-mapping values are kept as strings — external_ids namespaces
@@ -1997,6 +2042,80 @@ function checkL20(citations, resolves) {
   return findings;
 }
 
+/**
+ * L21: a `topics` page's timeline has entries newer than its `compiled_at` —
+ * the compiled summary is behind the evidence trail. Severity: warning.
+ * Not auto-fixable (refreshing the summary is a user-invoked synthesis step,
+ * not something --fix can safely generate).
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @param {string} content
+ * @returns {Finding[]}
+ */
+function checkL21(wikiRelPath, fm, content) {
+  if (entityTypeForPath(wikiRelPath) !== 'topics') return [];
+
+  const lines = content.split('\n');
+  const openIdx = lines.findIndex(l => l.includes(TIMELINE_MARKER_OPEN));
+  if (openIdx === -1) return [];
+  let closeIdx = lines.findIndex((l, i) => i > openIdx && l.includes(TIMELINE_MARKER_CLOSE));
+  if (closeIdx === -1) closeIdx = lines.length;
+
+  const entryRe = /^- \*\*(\d{4}-\d{2}-\d{2})\*\* \|/;
+  const compiledAt = typeof fm.compiled_at === 'string' && ISO_DATE_RE.test(fm.compiled_at)
+    ? fm.compiled_at
+    : null;
+
+  let staleCount = 0;
+  let firstStaleLine = null;
+  for (let i = openIdx + 1; i < closeIdx; i++) {
+    const m = entryRe.exec(lines[i]);
+    if (!m) continue;
+    if (compiledAt === null || m[1] > compiledAt) {
+      staleCount++;
+      if (firstStaleLine === null) firstStaleLine = i + 1;
+    }
+  }
+  if (staleCount === 0) return [];
+
+  const bareSlug = basename(wikiRelPath, '.md');
+  return [finding(
+    'L21-topic-timeline-stale', 'warning', false,
+    wikiRelPath, firstStaleLine,
+    `topic summary is behind its timeline: ${staleCount} new ${staleCount === 1 ? 'entry' : 'entries'} since ${compiledAt ?? 'never'}; refresh it with /lumi-research-topic ${bareSlug}`,
+  )];
+}
+
+/**
+ * L22: a `sources` page's `pending_citations` (queued by `add-citation-by-id`
+ * when the cited work has no matching page yet) are otherwise invisible —
+ * nothing else lists them, so a citation to a work that never gets ingested
+ * silently disappears from the visible record. Severity: info, purely
+ * advisory (ingesting the work or leaving the citation queued are both fine
+ * end states). Not auto-fixable.
+ * @param {string} wikiRelPath
+ * @param {Record<string,unknown>} fm
+ * @returns {Finding[]}
+ */
+function checkL22(wikiRelPath, fm) {
+  if (entityTypeForPath(wikiRelPath) !== 'sources') return [];
+  const pending = Array.isArray(fm.pending_citations) ? fm.pending_citations : [];
+  if (pending.length === 0) return [];
+
+  const render = (p) => {
+    if (!p || typeof p !== 'object' || typeof p.ns !== 'string' || typeof p.value !== 'string') return 'malformed';
+    if (typeof p.title === 'string' && p.title.trim() !== '') return p.title;
+    return `${p.ns}:${p.value}`;
+  };
+  const shown = pending.slice(0, 3).map(render).join(', ');
+  const more = pending.length > 3 ? ', ...' : '';
+  return [finding(
+    'L22-pending-citations', 'info', false,
+    wikiRelPath, null,
+    `${pending.length} citation(s) wait for works not yet in the wiki: ${shown}${more}; ingest those works or leave this as is`
+  )];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FIXERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2792,6 +2911,8 @@ async function runLint(projectRoot, opts) {
     allFindings.push(...checkL14(wikiRelPath, fm));
     allFindings.push(...checkL16(wikiRelPath, fm));
     allFindings.push(...checkL18(wikiRelPath, fm));
+    allFindings.push(...checkL21(wikiRelPath, fm, content));
+    allFindings.push(...checkL22(wikiRelPath, fm));
   }
 
   allFindings.push(...checkL06(edges, new Set(edgeSet)));
@@ -3374,7 +3495,7 @@ export {
   entityTypeForPath,
   checkL01, checkL02, checkL03, checkL04, checkL05,
   checkL06, checkL07, checkL08, checkL09, checkL10, checkL11, checkL12,
-  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20,
+  checkL13, checkL14, checkL16, checkL17, checkL18, checkL19, checkL20, checkL21, checkL22,
   fixL01, fixL02, planL03, fixL03, fixL05, fixL06, fixL07, fixL09, fixL19,
   runLint,
   reportSummary,

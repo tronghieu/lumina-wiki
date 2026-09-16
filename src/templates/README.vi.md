@@ -95,7 +95,7 @@ Mỗi trang wiki có loại, frontmatter và cấu trúc phần được định
 | Person     | `people/`    | Hồ sơ của người được đề cập với các nguồn chính và mối quan hệ           |
 | Summary    | `summary/`   | Tổng hợp cấp vùng trải rộng nhiều nguồn và khái niệm                     |
 | Reading note | `readings/` | Ghi chú theo từng chương của một nguồn dài, có trích trang; viết trong quá trình ingest nguồn dài |
-{{#if pack_research}}| Topic      | `topics/`     | Cụm chủ đề nhóm các khái niệm và nguồn liên quan; tạo qua `/lumi-research-topic` (research) |
+{{#if pack_research}}| Topic      | `topics/`     | Cụm chủ đề nhóm các khái niệm và nguồn liên quan; tạo qua `/lumi-research-topic` (research). Cuối trang có danh sách nguồn theo ngày, ghi lại các nguồn xuất hiện sau lần cập nhật gần nhất của chủ đề |
 | Foundation | `foundations/`| Kiến thức nền tảng/tiên quyết; trang cuối cùng (research)               |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Ghi chú theo chương cho sách hoặc tác phẩm dài (reading)                |
 | Character  | `characters/` | Hồ sơ nhân vật với diễn biến, mối quan hệ, các chương chính (reading)   |

@@ -95,7 +95,7 @@ Every wiki page has a defined type, frontmatter, and section structure. **Open `
 | Person     | `people/`     | Profile of a referenced person with key sources and relationships    |
 | Summary    | `summary/`    | Area-level synthesis spanning multiple sources and concepts          |
 | Reading note | `readings/` | Per-chapter notes for a long source, page-cited; written during long-source ingest |
-{{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources; created via `/lumi-research-topic` (research) |
+{{#if pack_research}}| Topic      | `topics/`     | Thematic cluster grouping related concepts and sources; created via `/lumi-research-topic` (research). Ends with a dated list of sources that arrived after the topic was last refreshed |
 | Foundation | `foundations/`| Prerequisite/background knowledge; terminal page (research)          |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | Per-chapter notes for a book or long-form work (reading)             |
 | Character  | `characters/` | Character profile with arcs, relationships, key chapters (reading)   |

@@ -26,6 +26,8 @@ output in `/lumi-check`.
 | L18 | Frontmatter `id` no longer names the file it lives in | warning | No — by design; user sets `id` to match the file or renames the file to match `id`. The pre-v0.1 form `<own-entity-dir>/<slug>` (e.g. `concepts/ab-testing` on a page in `concepts/`) is tolerated and never rewritten; a prefix naming a *different* entity dir is not |
 | L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` | error | Yes, when both endpoints name real wiki files — migrates the row into `graph/citations.jsonl` (always stored as the `cites` direction; a `cited_by` row's endpoints are swapped), deduping against citations already recorded there. A row with an endpoint that resolves to nothing is reported and left in place |
 | L20 | Dangling citation endpoint in `citations.jsonl` | error | No — remove the citation or restore the missing page |
+| L21 | A topic page's timeline has entries newer than its `compiled_at` | warning | No — run `/lumi-research-topic <slug>` and choose refresh |
+| L22 | A source page has `pending_citations` queued for works not yet in the wiki | info | No — advisory; ingest the cited work or leave it |
 
 (L15 is intentionally unassigned — reserved for a future collision check.)
 
@@ -55,6 +57,8 @@ Advisories to surface to the user:
 - L13: `external_ids` missing a derivable namespace
 - L16: `external_ids` disagrees with `urls[]`
 - L18: `id` no longer names the file it lives in
+- L21: topic summary behind its timeline
+- L22: source page has citations waiting for works not yet in the wiki
 
 ## Fix Behavior
 
@@ -118,18 +122,22 @@ Advisories to surface to the user:
   because L17 checks `edges.jsonl` and L20 checks `citations.jsonl` — moving
   it would not repair the dangling reference.
 
-L04, L08, L10, L11, L12, L13, L14, L16, L17, L18, and L20 require manual correction
-— none of them are touched by `--fix`. So do the individual L01/L02/L05
-findings above that `--fix` could recognize but not safely resolve on its own
-(a `number`/enum field with no default, or an ambiguous/unresolvable wikilink)
-— they remain in the findings list with `fixable: false` after a `--fix` pass.
+L04, L08, L10, L11, L12, L13, L14, L16, L17, L18, L20, L21, and L22 require
+manual correction — none of them are touched by `--fix`. So do the individual
+L01/L02/L05 findings above that `--fix` could recognize but not safely resolve
+on its own (a `number`/enum field with no default, or an
+ambiguous/unresolvable wikilink) — they remain in the findings list with
+`fixable: false` after a `--fix` pass.
 If L06 remains after `--fix`, the target page may not exist; identify it and
 suggest `/lumi-ingest` or `/lumi-edit`. For L13 and L16, the fix path is
 `/lumi-migrate-legacy --backfill-ids`, not `lint.mjs --fix`. For L17, the fix
 path is `wiki.mjs remove-edge` (drop the stale edge) or recreating the missing
 page the edge still points at — never hand-edit `edges.jsonl`. For L20, use
 `wiki.mjs remove-citation <from> <to>` to remove the stale citation or restore
-the missing page; never hand-edit `citations.jsonl`.
+the missing page; never hand-edit `citations.jsonl`. For L21, run
+`/lumi-research-topic <slug>` and choose the refresh option. For L22, run
+`wiki.mjs add-citation-by-id` again once the cited work has been ingested, or
+leave the citation queued — both are legitimate end states.
 
 ### `--suggest` — resolutions for what `--fix` could not resolve
 

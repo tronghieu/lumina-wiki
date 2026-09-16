@@ -34,7 +34,7 @@
 │  Consumed by agent skills invoked via Bash + JSON:       │
 │                                                          │
 │  • wiki.mjs — graph/frontmatter mutations [only path]    │
-│  • lint.mjs — schema validation (9 checks)               │
+│  • lint.mjs — schema validation (L01–L22)                │
 │  • reset.mjs — scoped destructive operations             │
 │  • discover-runner.mjs — scheduled research automation   │
 │  • tools/*.py — PDF extraction, research fetchers        │
@@ -120,7 +120,7 @@ export const exemptionGlobs = [
 **Both downstream modules import from `schemas.mjs`:**
 
 - **`wiki.mjs`:** Enforces schema on page create/mutate. Validates frontmatter, link types, bidirectional reverse writes.
-- **`lint.mjs`:** Validates pages against schema. 9 checks (L01–L09) include slug format, missing reverses, required fields, exemption compliance.
+- **`lint.mjs`:** Validates pages against schema. Checks L01–L22 (L15 unassigned) include slug format, missing reverses, required fields, exemption compliance.
 
 **Change propagation:** If you add an edge type, both `wiki.mjs` and `lint.mjs` immediately recognize it (no separate updates needed).
 

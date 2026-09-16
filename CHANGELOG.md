@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Topic pages now keep a dated, append-only timeline of sources that arrive
+  after the topic was last refreshed; `/lumi-ingest` appends to it
+  automatically and `/lumi-research-topic` refresh folds the entries into the
+  summary and marks it current. Lint L21 warns when a topic summary is behind
+  its timeline.
+- Citations to works not yet in the wiki are recorded and linked
+  automatically when that work is ingested (`add-citation-by-id`,
+  `resolve-pending-citations`). Lint L22 lists the ones still waiting, as
+  information only.
+- `/lumi-edit` records why a claim was corrected and adds a correction entry
+  to the topics the page belongs to; `/lumi-research-topic` refresh proposes
+  conflicting-claim pairs for confirmation; `/lumi-ask` reads topic summaries
+  before individual sources.
+
 ## [1.13.2] - 2026-09-15
 
 ### Changed

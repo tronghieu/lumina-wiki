@@ -96,7 +96,7 @@
 | Person     | `people/`    | 被引用人物的档案，包含关键来源和关系                                  |
 | Summary    | `summary/`   | 跨多个来源和概念的区域级综合                                          |
 | Reading note | `readings/` | 长篇来源的逐章笔记，附页码引用；在长篇来源导入过程中写入 |
-{{#if pack_research}}| Topic      | `topics/`     | 将相关概念和来源分组的主题集群；通过 `/lumi-research-topic` 创建（research） |
+{{#if pack_research}}| Topic      | `topics/`     | 将相关概念和来源分组的主题集群；通过 `/lumi-research-topic` 创建（research）。页面末尾附有按日期排列的列表，记录主题上次更新后新增的来源 |
 | Foundation | `foundations/`| 先决条件/背景知识；终端页面（research）                              |
 {{/if}}{{#if pack_reading}}| Chapter    | `chapters/`   | 书籍或长篇作品的逐章笔记（reading）                                  |
 | Character  | `characters/` | 包含弧线、关系、关键章节的人物档案（reading）                        |

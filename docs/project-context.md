@@ -88,6 +88,8 @@ These are absolutes. Every one corresponds to a real failure mode.
 14. **No silent overwrites.** Preserve sections marked `<!-- user-edited -->`. Append changes in a new section.
 15. **`wiki.mjs` is the only allowed path for graph/frontmatter mutation.** Skills call it via `Bash` + JSON; never `import` it from skill code. (Skills are markdown, but if you ever build a skill into a JS module — don't.)
 
+15a. **Topic pages have two zones.** Everything above `<!-- lumina:timeline -->` is the compiled zone, rewritten only by `/lumi-research-topic` refresh, which then sets `compiled_at`. The timeline zone between the markers is append-only and written only by `wiki.mjs timeline-add`; entries are English, one per line, `- **YYYY-MM-DD** | ingest|correction|note | [[source]] — text`. L21 warns when entries are newer than `compiled_at`.
+
 ### README schema region
 
 16. The `<!-- lumina:schema --> ... <!-- /lumina:schema -->` markers in `README.md` (and its localized versions) are the **only** region the installer rewrites on upgrade. Markers must be on their own lines (`line.trim() === marker`) — inline backtick mentions are skipped. Never put user content inside this region.
@@ -186,7 +188,9 @@ Hard 2 s `AbortController` timeout + 500 ms belt-and-suspenders `exec` timeout. 
 
 ### `src/scripts/wiki.mjs`
 
-Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `remove-edge`, `replace-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+Subcommands (selected): `init`, `slug`, `log`, `read-meta`, `set-meta`, `add-edge`, `remove-edge`, `replace-edge`, `add-citation`, `batch-edges`, `dedup-edges`, `list-entities`, `read-edges`, `read-citations`, `verify-frontmatter`, `checkpoint-read`, `checkpoint-write`, `timeline-add`, `add-citation-by-id`, `resolve-pending-citations`. All reads emit JSON to stdout; mutations emit a JSON status object; errors emit `{"error":"…","code":2|3}` to stderr. `findProjectRoot` walks up from `cwd` looking for `wiki/` — must be invoked with cwd inside the workspace.
+
+`timeline-add <topic-slug> --text "<text>" [--source <source-slug>] [--kind ingest|correction|note] [--date YYYY-MM-DD]` appends one dated line to a topic's timeline zone (creating the region on demand) and, when `--source` is given, writes the `includes_source` edge and its reverse in the same operation. `add-citation-by-id <from-source-slug> <ns> <value> [--title "<title>"]` and `resolve-pending-citations <new-source-slug> [--dry-run]` implement pending citations: `add-citation-by-id` links immediately when a source page already carries that `external_ids` value, otherwise appends `{ns, value, title?}` to the citing page's `pending_citations`; `resolve-pending-citations <new>` runs at ingest finalize and drains every pending entry matching the new page's ids into `citations.jsonl`.
 
 `remove-edge <from> <type> <to> [--dry-run]` idempotently removes one relationship (both directions, respecting the terminal/exempt/symmetric gate) regardless of stored confidence; no-op exit 0 if absent; rejects `cites`/`cited_by` and unknown types (exit 2); emits `advisories` if a page body still carries the `[[wikilink]]` post-removal. `replace-edge <from> <old-type> <to> <new-type> [--confidence high|medium|low] [--dry-run]` corrects an edge's type as one convergent write (remove old + add new, both directions), preserving confidence unless overridden — the type-only change needs no page edit since bodies list concepts in a type-agnostic section.
 
@@ -205,12 +209,12 @@ Single source of truth. **Pure data, no I/O, no side effects.** Safe to import a
 **Exemption globs:** `foundations/**`, `outputs/**`, `*://*` — the `exempt-only` bidi mode default.
 
 **Required frontmatter** (always: `id`, `title`, `type`, `created`, `updated` ISO) — `outputs` and `graph` have no `REQUIRED_FRONTMATTER` entry (not schema-enforced, absent from the table below by design, not by omission):
-- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?, ns?, value?}]` — append on every (re-)ingest, never replace; `ns/value` (added 2026-05) record *which* external identifier the provider returned, must appear together or both are dropped)
+- `sources`: + `authors[]`, `year`, `importance` (1–5), optional `url`, optional `external_ids` object, optional `sources` array (fetch provenance: `[{provider, fetched_at, url?, ns?, value?}]` — append on every (re-)ingest, never replace; `ns/value` (added 2026-05) record *which* external identifier the provider returned, must appear together or both are dropped), optional `pending_citations` array (`[{ns, value, title?}]` — citations to works not yet in the wiki)
 - `concepts`: + `key_sources[]`, `related_concepts[]`
 - `people`: + `key_sources[]`, optional `affiliations[]`
 - `summary`: + `covers[]`
 - `readings`: + `source` (parent source slug), `part` (unit order within the source), optional `pages`
-- pack-gated, research: `foundations` (optional `aliases[]`), `topics` (+ `key_sources[]`)
+- pack-gated, research: `foundations` (optional `aliases[]`), `topics` (+ `key_sources[]`, optional `compiled_at` iso-date — date the compiled zone was last rewritten)
 - pack-gated, reading: `chapters` (+ `book`, `number`), `characters` (+ `book`, optional `first_seen`), `themes` (+ `book`), `plot` (+ `book`, `up_to_chapter`)
 - pack-gated, learning: `reflections` (+ `related_concepts[]`, `related_sources[]`, `evolution_count`)
 
@@ -292,7 +296,7 @@ Lint enforces:
 
 ### `src/scripts/lint.mjs`
 
-`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L20 (L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
+`node lint.mjs [path] [--fix] [--dry-run] [--suggest] [--json]`. `ALL_CHECK_IDS` in `src/scripts/lint.mjs` runs L01-L14 + L16-L22 (L15 is intentionally unassigned — reserved slot for a future collision check, deferred as premature for typical wiki size):
 
 | Check | Description | Fixable |
 |---|---|---|
@@ -315,6 +319,8 @@ Lint enforces:
 | L18 | Frontmatter `id` no longer names the file it lives in, per `deriveIdFromPath` (warning) | no |
 | L19 | Citation stored as a graph edge — a `cites`/`cited_by` row sitting in `edges.jsonl` instead of `citations.jsonl` (error) | yes when both endpoints resolve (migrates the row into `graph/citations.jsonl`, deduping against citations already recorded there); a row with a dangling endpoint is reported and left in place |
 | L20 | Dangling citation — a citation's internal `from` or `to` endpoint does not resolve to any wiki file (error) | no |
+| L21 | Topic timeline has entries newer than compiled_at (warning) | no |
+| L22 | `sources` page has `pending_citations` queued for works not yet in the wiki (info) | no |
 
 Exit codes: `0` clean, `1` unresolved violations, `2` user error, `3` internal. `--dry-run` implies fix intent but zero writes; sets `proposed_fix` instead of `fix_applied`.
 
@@ -348,9 +354,9 @@ All tools follow these contracts:
 | Summary | `summary/` | Area-level synthesis |
 | Reading note | `readings/` | Per-unit page-anchored notes for long sources (books, theses); written by `/lumi-ingest` long-source pipeline, linked to the source via `annotates`/`annotated_by`, exempt from `wiki/index.md` (L09) like `reflections/` |
 
-**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `contradicts`, `cites`, `mentions`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
+**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `challenges`, `cites`, `includes_source`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 
-**Bidirectional `exempt-only` mode** is the default. Only `outputs/**`, `*://*`, and (research pack only) `foundations/**` may have a forward link without a reverse. Anything else without a reverse is a lint error.
+**Bidirectional `exempt-only` mode** is the default. Only `outputs/**`, `*://*`, `reflections/**`, and (research pack only) `foundations/**` may have a forward link without a reverse. Anything else without a reverse is a lint error.
 
 ---
 
@@ -522,6 +528,7 @@ Five scenarios: `core-default`; `full-pack` (core + research + reading + learnin
 19. **DeepXiv:** `read` is GET with `?section=`; `search` is POST with JSON body. Don't mix.
 20. **S2 silence:** when `SEMANTIC_SCHOLAR_API_KEY` is missing, `init_discovery.py` phases 2/3 return `[]` quietly. Zero results doesn't mean "no data" — check the key.
 21. **Ingest checkpoints are keyed by file basename, not slug:** `_lumina/_state/ingest-<file-basename>.json` exists before a slug is generated (slug assignment happens mid-flow, in `step-01-draft.md`'s "Generate slug" phase), so the checkpoint filename can't use the slug. The checkpoint JSON itself stores a `slug` field once generated (merged in during the `slug` phase) so other skills can match a checkpoint to its wiki entry by content rather than re-deriving the filename from the raw source path.
+22. **`timeline-add` writes the `includes_source` edge (and its reverse) in the same operation as the timeline line**, so a topic's edges may list sources that `key_sources` does not yet — that gap is what refresh reconciles; do not "fix" it by hand.
 
 ---
 

@@ -199,13 +199,23 @@ Write checkpoint: `phase: "edges"`.
 
 ### Phase 6 — Citations
 
-For every other source this one explicitly cites AND that already exists in the wiki:
+For every cited work whose wiki slug you already know (it is already ingested and you can name its page):
 
 ```bash
 node _lumina/scripts/wiki.mjs add-citation sources/<slug> sources/<cited-slug>
 ```
 
-Do not create stubs for cited sources not yet ingested — note them in `## Open Questions`.
+For every other cited work — one this source explicitly cites but whose slug you don't already have — check whether it carries an identifier (DOI, arXiv ID, S2 ID, OpenAlex ID, or a canonical URL). If it does:
+
+```bash
+node _lumina/scripts/wiki.mjs add-citation-by-id sources/<slug> <ns> <value> [--title "<title>"]
+```
+
+`<ns>` is one of `doi`, `arxiv`, `s2`, `openalex`, `url`. This links immediately (`{"resolved":true,"to":"sources/<slug>"}`) when the cited work is already in the wiki; otherwise it records the citation as pending on this page (`{"resolved":false,"pending":true}`) and it becomes a real citation edge automatically when that work is ingested later (see `step-04-finalize.md` Phase 8.7).
+
+Only a cited work with no identifier at all goes to `## Open Questions` as prose.
+
+Do not create stub pages for cited works not yet ingested, identified or not.
 
 Write checkpoint: `phase: "citations"`.
 
@@ -215,6 +225,24 @@ Add the new source page (and any new concept/person pages) to the catalog betwee
 
 Write checkpoint: `phase: "index"`.
 
+### Phase 7.5 — Topic candidates
+
+Only when `wiki/topics/` exists (research pack installed and at least one topic created). Skip this phase entirely otherwise — leave the checkpoint's `topics` field absent.
+
+For every concept this source was linked to in Phase 5, find which topics already cover it:
+
+```bash
+node _lumina/scripts/wiki.mjs read-edges concepts/<concept> --type covered_by_topic --direction outbound
+```
+
+`to` is a canonical path (e.g. `topics/<name>`) — store it, and every other value read from `read-edges`, `key_sources`, or this checkpoint, unchanged everywhere downstream; never prepend `topics/`, `sources/`, or `concepts/` to a value that already has it. Across all linked concepts, collect the distinct topic paths from `to`, and for each one, which concept(s) led to it. Merge into the checkpoint:
+
+```json
+{"topics": [{"path": "topics/<name>", "via": ["concepts/<concept-slug>", "..."]}]}
+```
+
+Write checkpoint: `phase: "topics"`.
+
 ## Draft Gate
 
 Present a draft summary to the user:
@@ -223,6 +251,7 @@ Present a draft summary to the user:
 - Edges added
 - Citations added
 - Index updated: yes/no
+- Topics touched: `<topic-title> (via <concept>, <concept>)`, one entry per topic from Phase 7.5 — read the title via `read-meta <path>` on each entry's `path`; if that fails, show the name after `topics/` instead. Or `Topics touched: none` if the list is empty or the phase was skipped. Mention in one sentence that accepting the draft also confirms this source's membership in the topics listed.
 - A 3–5 line excerpt of `## Summary` and `## Key Claims` so the user can sanity-check the draft
 
 Use the user's configured communication language. Explain "provenance", "edges", "citations", and "index" in plain language, or hide the labels and show the outcome instead.
@@ -234,7 +263,7 @@ Use the user's configured communication language. Explain "provenance", "edges",
   node _lumina/scripts/wiki.mjs set-meta sources/<slug> ingest_status drafted
   ```
   → NEXT
-- **E**: Take the user's revision instructions. Re-edit the affected files (source page, stubs, or edges as instructed). Re-present the draft summary. Loop back to "HALT and ask human" — do not advance.
+- **E**: Take the user's revision instructions. Re-edit the affected files (source page, stubs, or edges as instructed). If the revision added or removed any concept edge, re-run Phase 7.5 before re-presenting the draft summary, so "Topics touched" and the checkpoint match the final edges. Re-present the draft summary. Loop back to "HALT and ask human" — do not advance.
 - **Q**: Leave the phase-level checkpoint in place; do not write `ingest_status`. Before exiting, tell the user in plain language that the draft pages and links written so far stay in the wiki as work-in-progress — coming back to `/lumi-ingest <slug>` continues from here, and `/lumi-reset` can clean up if they decide not to keep this source at all. **STOP — do not read the NEXT directive below.** Exit cleanly with no further action this run.
 
 ## NEXT
