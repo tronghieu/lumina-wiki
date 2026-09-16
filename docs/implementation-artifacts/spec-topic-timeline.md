@@ -2,7 +2,7 @@
 title: 'Topic timeline, retro-linked citations, and correction trail'
 type: 'feature'
 created: '2026-09-16'
-status: 'in-progress'
+status: 'done'
 baseline_commit: '9db9d0e'
 review_loop_iteration: 1
 context:
