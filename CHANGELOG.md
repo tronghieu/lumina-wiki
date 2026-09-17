@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-09-17
+
 ### Added
 
 - Topic pages now keep a dated, append-only timeline of sources that arrive
@@ -1271,7 +1273,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.2...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.2...v1.14.0
 [1.13.2]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.10.1...v1.13.0
