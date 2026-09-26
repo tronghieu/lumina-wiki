@@ -101,7 +101,7 @@ const CLAUDE_MARKER_OPEN = '<!-- lumina:project -->';
 const CLAUDE_MARKER_CLOSE = '<!-- /lumina:project -->';
 const GITIGNORE_MARKER_OPEN = '# >>> lumina';
 const GITIGNORE_MARKER_CLOSE = '# <<< lumina';
-const GITIGNORE_BODY = ['_lumina/graph/', '_lumina/_state/', '_lumina/manifest.json'].join('\n');
+const GITIGNORE_BODY = ['_lumina/graph/', '_lumina/_state/', '_lumina/manifest.json', '_lumina/config/user.config.yaml'].join('\n');
 const SKILL_PREFIX = 'lumi-project-';
 
 function projectMarkerBody(pkgVersion) {

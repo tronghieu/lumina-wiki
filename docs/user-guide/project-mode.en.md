@@ -30,7 +30,18 @@ With `--yes` and no `--ide-targets`, project mode installs for `claude_code` onl
 
 ## Set it up
 
-Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it. Once you approve and it writes the config, it reports how many docs need ingesting and offers to start ingest right away.
+Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it.
+
+Before it scans, setup asks how Lumina's project skills should talk to you: a reply language and a reply style (for example "plain, non-technical, short"). Both are optional; say "skip" to keep the default, which is replying in the language you write in. Your answers go to `_lumina/config/user.config.yaml`, which is gitignored, so each person on a team keeps their own. Setup asks only when that file doesn't exist; to change it later, edit the file or delete it and re-run setup. It changes how skills talk to you, never the facts, quotes, or files they write.
+
+```yaml
+schemaVersion: 1
+response:
+  language: Vietnamese
+  style: plain, non-technical, short
+```
+
+Once you approve and it writes the config, it reports how many docs need ingesting and offers to start ingest right away.
 
 Answer yes: if your coding agent can start another skill from inside setup, it ingests every one of them with no second command or approval. Otherwise setup tells you to run `/lumi-project-ingest ingest all` yourself, and ingest asks once more for approval when there are more than 20 docs. Answer no: setup ends and gives you the command to run later.
 
@@ -116,7 +127,7 @@ This removes everything under `_lumina/` except `_lumina/facts/` and `_lumina/co
 Project mode never creates `raw/` or `wiki/`. It writes:
 
 - `_lumina/project/` — the engine (`project.mjs` and its libraries). Committed.
-- `_lumina/config/` — your approved scope and type/relation mapping (`project.yaml`), written later by setup. Committed.
+- `_lumina/config/` — your approved scope and type/relation mapping (`project.yaml`), written later by setup. Committed. `user.config.yaml` (your reply preferences) lives here too and is gitignored.
 - `_lumina/facts/` — one file per source doc, holding the facts an agent extracted from it. Committed.
 - `_lumina/graph/` — the graph viewer file. Gitignored, rebuilt after every ingest that commits a doc, and on every `lumi-project-view` run.
 - `_lumina/_state/` — the engine's write lock. Gitignored.

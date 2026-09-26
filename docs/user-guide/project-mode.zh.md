@@ -32,6 +32,15 @@ npx lumina-wiki install --mode project --yes --ide-targets claude_code,codex
 
 接下来运行 `lumi-project-setup`。它会扫描范围内的文档，提出一个范围、一份类型/关系映射和一份概念词表。在你批准之前，它不会写入任何内容。
 
+在扫描之前，setup 会先问 Lumina 的项目技能该如何回复你：回复语言和回复风格（例如"通俗、非技术、简短"）。两者都是可选的；输入"skip"保留默认，即用你书写时使用的语言回复。你的回答保存在 `_lumina/config/user.config.yaml`，该文件已加入 gitignore，团队里每个人各自保留自己的一份。只有在该文件不存在时 setup 才会问；之后想修改，直接编辑该文件，或删除它后重新运行 setup。这些偏好只改变技能与你交流的方式，不会改变技能写出的事实、引用或文件。
+
+```yaml
+schemaVersion: 1
+response:
+  language: Vietnamese
+  style: plain, non-technical, short
+```
+
 批准之后，配置写入完成，它会报告需要处理的文档数量，并主动询问是否立即处理文档。
 
 回答"是"：如果你的编码助手能够从 setup 内部启动另一个 skill，就会把所有文档都处理掉，不需要再输入第二个命令，也不需要再批准一次；否则 setup 会让你自己运行 `/lumi-project-ingest ingest all`，超过 20 份文档时 ingest 还会再请求一次批准。回答"否"：设置到此结束，并给出之后可以运行的命令。
@@ -118,7 +127,7 @@ npx lumina-wiki uninstall
 项目模式不会创建 `raw/` 或 `wiki/`。它会写入：
 
 - `_lumina/project/` — 引擎本体（`project.mjs` 及其库文件）。会被提交。
-- `_lumina/config/` — 你批准的范围以及类型/关系映射（`project.yaml`），由随后运行的设置写入。会被提交。
+- `_lumina/config/` — 你批准的范围以及类型/关系映射（`project.yaml`），由随后运行的设置写入。会被提交。`user.config.yaml`（你的回复偏好）也存放在这里，并已加入 gitignore。
 - `_lumina/facts/` — 每份源文档对应一个文件，保存代理从中提取的事实。会被提交。
 - `_lumina/graph/` — 图查看器文件。已加入 gitignore，每次有文档被提交的处理（ingest）之后，以及每次运行 `lumi-project-view` 时都会重新建立。
 - `_lumina/_state/` — 引擎的写锁。已加入 gitignore。

@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   view and printing its link.
 - `lumi-project-setup` offers to start ingest once the config is written.
 - `project.mjs status` reports each doc's `metaType` and project `type`.
+- `lumi-project-setup` asks for a reply language and style (optional) and
+  saves them to `_lumina/config/user.config.yaml`, which every project
+  skill follows. The file is gitignored so each person keeps their own.
 
 ## [1.15.0-next.0] - 2026-09-26
 

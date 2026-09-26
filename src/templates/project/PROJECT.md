@@ -28,17 +28,25 @@ Installed by lumina-wiki {{package_version}}.
   exit 1, prints `{error, code}` to stderr, with nothing usable on stdout.
   `lint` exit 1 means findings at or above `--fail-on` — not a run
   failure — and its full findings report is still printed on stdout.
+- **Reply preferences.** If `_lumina/config/user.config.yaml` exists, every
+  `lumi-project-*` skill follows its `response` block in everything it says
+  to the user: `language` (absent: the language the user writes in) and
+  `style` (free text, e.g. "plain, non-technical, short"). It shapes the
+  conversation only — never a fact's quote, a config value, a command, a
+  path, or an identifier. Unknown keys are ignored. Setup writes it from the
+  user's answers; the user may edit it by hand.
 
 ## What's committed vs. gitignored
 
 - **Committed:** `_lumina/project/` (this engine tree), `_lumina/config/`
-  (your approved scope and mapping), `_lumina/facts/` (one file per source
+  (your approved scope and mapping, except `user.config.yaml`), `_lumina/facts/` (one file per source
   doc — the agent-extracted facts your team paid tokens for).
 - **Gitignored:** `_lumina/graph/` (the viewer file `view` writes),
   `_lumina/_state/` (the write lock), `_lumina/manifest.json` (local install
   bookkeeping). Never hand-edit any of the three; Lumina (engine or
   installer) is their only writer, and they are rebuilt or reacquired on
-  demand.
+  demand. Also gitignored: `_lumina/config/user.config.yaml`, one person's
+  reply preferences.
 
 ## Engine commands
 
