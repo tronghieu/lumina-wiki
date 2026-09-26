@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Project mode: `npx lumina-wiki install --mode project` builds a typed graph
+  over a repo's own docs (decisions, requirements, rules, processes) instead
+  of a new wiki, with six skills for setup, ingest, ask, check, verify, and
+  view (`lumi-project-*`).
+  - `lumi-project-ingest` updates only docs that changed or went stale, by
+    default.
+  - `lumi-project-ask` reads the doc text it cites to answer content
+    questions, and falls back to a doc search when nothing in the graph
+    matches.
+  - `facts-prune` removes committed fact files for docs deleted from disk; a
+    doc merely excluded from scope, or renamed and not yet re-ingested,
+    keeps its facts.
+  - The Decision lifecycle includes `rejected`.
+  - Lint reports non-string frontmatter id/relation values (P21) instead of
+    dropping them.
+
+  See
+  [docs/user-guide/project-mode.en.md](docs/user-guide/project-mode.en.md).
+
 ## [1.14.0] - 2026-09-17
 
 ### Added

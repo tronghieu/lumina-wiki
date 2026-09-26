@@ -19,6 +19,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, basename, isAbsolute, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { atomicWrite, ensureDir } from './fs.js';
+import { isProjectModeRepo, projectModeRefusalMessage } from './manifest.js';
 
 // ---------------------------------------------------------------------------
 // Base dir / paths
@@ -249,7 +250,8 @@ export async function sameDirectory(a, b) {
   let statA;
   let statB;
   try {
-    [statA, statB] = await Promise.all([stat(a), stat(b)]);
+    // bigint: Windows file IDs are 64-bit; as Numbers, two nearby IDs can round to one value.
+    [statA, statB] = await Promise.all([stat(a, { bigint: true }), stat(b, { bigint: true })]);
   } catch (err) {
     if (err.code === 'ENOENT') return stringsEqual;
     // Non-ENOENT (permissions, ENOTDIR, ...): identity unknown — fall back
@@ -334,6 +336,17 @@ export async function addWiki({ dirPath, name, aliases = [], description = '' })
     const err = new Error(`Wiki path must be an absolute path: "${dirPath}"`);
     err.code = 2;
     throw err;
+  }
+
+  // Project-mode repos are a separate product (spec-project-docs-overlay) and
+  // are never managed by lumi-hub — no fleet registration, no provisioning.
+  // Checked via isProjectModeRepo (not just the manifest below) so this also
+  // refuses a teammate's clone that has no local manifest but a committed
+  // project.yaml/install.json.
+  if (await isProjectModeRepo(dirPath)) {
+    const e = new Error(projectModeRefusalMessage(dirPath));
+    e.code = 2;
+    throw e;
   }
 
   const manifestPath = join(dirPath, '_lumina', 'manifest.json');

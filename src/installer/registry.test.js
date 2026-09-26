@@ -326,6 +326,37 @@ describe('addWiki', () => {
     });
   });
 
+  test('rejects (err.code = 2) a project-mode repo — lumi-hub never manages project mode', async () => {
+    const dirPath = await mkdtemp(join(tmpdir(), 'lumina-project-mode-wiki-'));
+    await mkdir(join(dirPath, '_lumina'), { recursive: true });
+    await writeFile(
+      join(dirPath, '_lumina', 'manifest.json'),
+      JSON.stringify({ schemaVersion: 5, packageVersion: '1.14.0', mode: 'project' }, null, 2) + '\n',
+      'utf8',
+    );
+    await assert.rejects(() => addWiki({ dirPath, name: 'Project Repo' }), (err) => {
+      assert.equal(err.code, 2);
+      assert.match(err.message, /project-mode/);
+      return true;
+    });
+    const reg = await readRegistry();
+    assert.deepEqual(reg.wikis, {});
+  });
+
+  test('rejects (err.code = 2) a no-manifest project repo (teammate clone, project.yaml only)', async () => {
+    const dirPath = await mkdtemp(join(tmpdir(), 'lumina-project-clone-wiki-'));
+    await mkdir(join(dirPath, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(dirPath, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n', 'utf8');
+
+    await assert.rejects(() => addWiki({ dirPath, name: 'Project Clone' }), (err) => {
+      assert.equal(err.code, 2);
+      assert.match(err.message, /project-mode/);
+      return true;
+    });
+    const reg = await readRegistry();
+    assert.deepEqual(reg.wikis, {});
+  });
+
   test('rejects (err.code = 1) re-adding under an already-registered key', async () => {
     const dirPath = await makeFakeWiki();
     await addWiki({ dirPath, name: 'AI Engineering' });

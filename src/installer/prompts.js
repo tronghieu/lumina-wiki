@@ -154,6 +154,7 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
  * @param {string}  [opts.cwd]                  - Project root for defaults.
  * @param {Function} [opts.t]                   - Locale translator function.
  * @param {Function} [opts.resolveDestination]  - Detect an existing install after directory selection.
+ * @param {string|null} [opts.presetLocale]     - Locale already chosen this session (mode gate); skips Prompt 0.
  * @param {InstallAnswers|null} [opts.modifyAnswers] - Non-null switches to "modify installation"
  *   mode (upgrade menu): directory and research-purpose prompts are skipped
  *   (the install location is fixed and README purpose is never rewritten on
@@ -168,6 +169,7 @@ export async function runInstallPrompts({
   t: initialT = null,
   resolveDestination = null,
   modifyAnswers = null,
+  presetLocale = null,
 } = {}) {
   if (acceptDefaults) {
     const loc = existingManifest?.locale ?? defaultLocale;
@@ -187,18 +189,7 @@ export async function runInstallPrompts({
 
   // ── Prompt 0: Locale (UI language) ───────────────────────────────────────
   const initialLocale = existingManifest?.locale ?? defaultLocale;
-  const localeRaw = await select({
-    // Locale selector uses a trilingual label; not routed through t() by design
-    message: 'Installer language / Ngôn ngữ / 语言',
-    options: [...LOCALE_LABELS],
-    initialValue: initialLocale,
-  });
-  if (isCancel(localeRaw)) {
-    // t may be EN or may not be loaded yet — use cancel string from t if available
-    cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
-    process.exit(4);
-  }
-  const locale = localeRaw;
+  const locale = presetLocale ?? await runLocaleOnlyPrompt({ initialLocale, t });
   const langDefault = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
 
   // Rebind t to the just-selected locale so the remaining prompts render in
@@ -477,6 +468,151 @@ export async function runUninstallConfirm({ acceptDefaults = false, t = null } =
   if (isCancel(readmeAction)) return null;
 
   return { confirmed: true, stripReadme: Boolean(readmeAction) };
+}
+
+// ---------------------------------------------------------------------------
+// Project mode prompts (spec-project-docs-overlay, story 7 / AD-2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the installer's own UI language, standalone — the same trilingual,
+ * not-itself-translated locale select as classic Prompt 0 (see
+ * `runInstallPrompts`, which now calls this directly instead of carrying its
+ * own copy of the same `select`).
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @param {'en'|'vi'|'zh'} [opts.initialLocale='en']
+ * @param {Function|null} [opts.t] - locale translator for the cancel message;
+ *   EN literal when not supplied (matches classic Prompt 0's pre-locale state).
+ * @returns {Promise<'en'|'vi'|'zh'>}
+ */
+export async function runLocaleOnlyPrompt({ acceptDefaults = false, initialLocale = 'en', t = null } = {}) {
+  if (acceptDefaults) return initialLocale;
+  const { select, isCancel, cancel } = await getClack();
+  const localeRaw = await select({
+    message: 'Installer language / Ngôn ngữ / 语言',
+    options: [...LOCALE_LABELS],
+    initialValue: initialLocale,
+  });
+  if (isCancel(localeRaw)) {
+    cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
+    process.exit(4);
+  }
+  return localeRaw;
+}
+
+/**
+ * Ask classic vs. project mode on a fresh, interactive, no-`--mode` install.
+ * `acceptDefaults` (--yes) returns 'classic' without prompting (Boundaries:
+ * "`--yes` with no `--ide-targets` defaults to `claude_code`" implies the
+ * same "no prompt, safe default" rule applies to the mode question itself).
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @param {Function} [opts.t]
+ * @returns {Promise<'classic'|'project'>}
+ */
+export async function runProjectModePrompt({ acceptDefaults = false, t = null } = {}) {
+  if (acceptDefaults) return 'classic';
+  const { select, isCancel, cancel } = await getClack();
+
+  const mode = await select({
+    message: t ? t('prompt.mode.message') : 'How do you want to use Lumina in this repo?',
+    options: [
+      {
+        value: 'classic',
+        label: t ? t('prompt.mode.option.classic.label') : 'Classic wiki',
+        hint:  t ? t('prompt.mode.option.classic.hint') : 'raw/, wiki/, and the classic skills',
+      },
+      {
+        value: 'project',
+        label: t ? t('prompt.mode.option.project.label') : 'Project mode',
+        hint:  t ? t('prompt.mode.option.project.hint') : 'a typed graph over this project\'s existing docs',
+      },
+    ],
+    initialValue: 'classic',
+  });
+  if (isCancel(mode)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+  return mode;
+}
+
+/**
+ * Which agent(s) will read this project-mode repo (AD-4). `acceptDefaults`
+ * returns `['claude_code']`, matching the CLI's non-interactive default.
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @param {Function} [opts.t]
+ * @returns {Promise<string[]>}
+ */
+export async function runProjectTargetsPrompt({ acceptDefaults = false, t = null } = {}) {
+  if (acceptDefaults) return ['claude_code'];
+  const { multiselect, isCancel, cancel } = await getClack();
+
+  const targetsRaw = await multiselect({
+    message: t ? t('prompt.project_targets.message') : 'Which agent(s) will read this project? (space to toggle, enter to confirm)',
+    options: [
+      { value: 'claude_code', label: t ? t('prompt.project_targets.option.claude_code.label') : 'Claude Code',   hint: t ? t('prompt.project_targets.option.claude_code.hint') : 'CLAUDE.md + .claude/skills/ symlinks' },
+      { value: 'codex',       label: t ? t('prompt.project_targets.option.codex.label') : 'Codex',               hint: t ? t('prompt.project_targets.option.codex.hint') : 'writes AGENTS.md' },
+      { value: 'antigravity', label: t ? t('prompt.project_targets.option.antigravity.label') : 'Antigravity',   hint: t ? t('prompt.project_targets.option.antigravity.hint') : 'writes AGENTS.md' },
+    ],
+    initialValues: ['claude_code'],
+    required: false,
+  });
+  if (isCancel(targetsRaw)) { cancel(t ? t('prompt.cancelled') : 'Installation cancelled.'); process.exit(4); }
+  return Array.isArray(targetsRaw) && targetsRaw.length > 0 ? targetsRaw : ['claude_code'];
+}
+
+/**
+ * Main uninstall confirmation for a project-mode repo (distinct wording from
+ * the classic `runUninstallConfirm` — there is no `wiki/`/`raw/` to mention).
+ * `acceptDefaults` (--yes) confirms without prompting.
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @param {Function} [opts.t]
+ * @returns {Promise<boolean>}
+ */
+export async function runProjectUninstallConfirm({ acceptDefaults = false, t = null } = {}) {
+  if (acceptDefaults) return true;
+  const { confirm, isCancel } = await getClack();
+  const confirmed = await confirm({
+    message: t
+      ? t('prompt.project_uninstall.confirm')
+      : 'Uninstall Lumina project mode? This removes _lumina/project/, _lumina/graph/, _lumina/_state/, ' +
+        'lumi-project-* skills, and the lumina:project block from CLAUDE.md/AGENTS.md and the lumina block from .gitignore. ' +
+        '_lumina/facts/ and _lumina/config/ are kept unless you say otherwise next.',
+    initialValue: false,
+  });
+  if (isCancel(confirmed)) return false;
+  return Boolean(confirmed);
+}
+
+/**
+ * Whether to also delete the committed `_lumina/facts/` and
+ * `_lumina/config/` during a project-mode uninstall (AD-17). Default No —
+ * these hold paid-for ingest results and user-approved config. `acceptDefaults`
+ * (--yes) also answers No ("--yes keeps them").
+ *
+ * @param {object}  [opts]
+ * @param {boolean} [opts.acceptDefaults=false]
+ * @param {Function} [opts.t]
+ * @returns {Promise<boolean>}
+ */
+export async function runProjectUninstallFactsPrompt({ acceptDefaults = false, t = null } = {}) {
+  if (acceptDefaults) return false;
+  const { confirm, isCancel, cancel } = await getClack();
+  const proceed = await confirm({
+    message: t
+      ? t('prompt.project_uninstall.facts.message')
+      : 'Also delete _lumina/facts/ and _lumina/config/ (committed ingest results and scope config)?',
+    initialValue: false,
+  });
+  // Ctrl-C here cancels the whole uninstall (exit 4, nothing removed) —
+  // never "No, keep them" followed by an uninstall the user just aborted.
+  if (isCancel(proceed)) { cancel(t ? t('uninstall.cancelled') : 'Uninstall cancelled.'); process.exit(4); }
+  return Boolean(proceed);
 }
 
 // ---------------------------------------------------------------------------

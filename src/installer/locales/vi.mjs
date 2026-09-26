@@ -58,6 +58,29 @@ export default {
   'prompt.uninstall.readme.option.strip.label':'Loại bỏ vùng schema',
   'prompt.uninstall.readme.option.strip.hint': 'Xóa khối <!-- lumina:schema -->; giữ nội dung của bạn',
 
+  // ── Chế độ dự án ─────────────────────────────────────────────────────────────
+  'prompt.mode.message':                       'Bạn muốn dùng Lumina trong repo này theo cách nào?',
+  'prompt.mode.option.classic.label':          'Wiki cổ điển',
+  'prompt.mode.option.classic.hint':           'raw/, wiki/ và các kỹ năng cổ điển',
+  'prompt.mode.option.project.label':          'Chế độ dự án',
+  'prompt.mode.option.project.hint':           'đồ thị có kiểu dựng trên tài liệu sẵn có của dự án',
+  'prompt.project_targets.message':            'Trợ lý nào sẽ đọc dự án này? (space để chọn, enter để xác nhận)',
+  'prompt.project_targets.option.claude_code.label': 'Claude Code',
+  'prompt.project_targets.option.claude_code.hint':  '.agents/skills/lumi-project-*, CLAUDE.md và symlink vào .claude/skills/',
+  'prompt.project_targets.option.codex.label': 'Codex',
+  'prompt.project_targets.option.codex.hint':  '.agents/skills/lumi-project-* và AGENTS.md',
+  'prompt.project_targets.option.antigravity.label': 'Antigravity',
+  'prompt.project_targets.option.antigravity.hint':  '.agents/skills/lumi-project-* và AGENTS.md',
+  'prompt.project_uninstall.confirm':          'Gỡ cài đặt chế độ dự án Lumina? Thao tác này xóa _lumina/project/, _lumina/graph/, _lumina/_state/, các kỹ năng lumi-project-*, khối lumina:project trong CLAUDE.md/AGENTS.md, và khối lumina trong .gitignore. _lumina/facts/ và _lumina/config/ được giữ lại trừ khi bạn xác nhận xóa ở bước sau.',
+  'prompt.project_uninstall.facts.message':    'Có xóa luôn _lumina/facts/ và _lumina/config/ không (kết quả ingest đã commit và cấu hình phạm vi)?',
+  'project.progress.installing':               'Đang cài đặt chế độ dự án Lumina tại: {dir}',
+  'project.progress.upgrading':                'Đang nâng cấp chế độ dự án Lumina tại: {dir}',
+  'project.success.installed':                 '[xong] Đã cài đặt chế độ dự án Lumina.',
+  'project.success.targets':                   '  Trợ lý:   {targets}',
+  'project.success.skills':                    '  Kỹ năng:  {count} đã cài',
+  'project_uninstall.done.kept':                '[xong] Đã gỡ cài đặt chế độ dự án Lumina. _lumina/facts/ và _lumina/config/ được giữ lại — khi còn _lumina/config/project.yaml, repo này vẫn được nhận diện là chế độ dự án; xóa file đó để chuyển về cổ điển.',
+  'project_uninstall.done.deleted':             '[xong] Đã gỡ cài đặt chế độ dự án Lumina. _lumina/facts/ và _lumina/config/ đã bị xóa.',
+
   // ── README merge prompt ────────────────────────────────────────────────────
   'prompt.readme_merge.message':               'README.md đã tồn tại. Lumina nên xử lý vùng schema thế nào?',
   'prompt.readme_merge.option.merge.label':    'Hợp nhất nội dung schema',
@@ -112,5 +135,7 @@ export default {
 
   // ── Symlink error ──────────────────────────────────────────────────────────
   'error.symlink':                             '  [lỗi] Không thể liên kết {skill}: {message}',
+  'error.mode_conflict.project':               '"{dir}" đã được cài ở chế độ dự án, nên không thể cài theo chế độ {mode}. Chạy lại không kèm --mode để nâng cấp giữ nguyên chế độ. Muốn chuyển về cổ điển, trước tiên hãy xóa _lumina/config/project.yaml, _lumina/project/install.json và _lumina/manifest.json.',
+  'error.mode_conflict.classic':               '"{dir}" là bản cài Lumina cổ điển, nên không thể cài theo chế độ {mode}. Chạy lại không kèm --mode để nâng cấp giữ nguyên chế độ, hoặc chạy lumina uninstall trước để chuyển sang chế độ dự án.',
 
 };

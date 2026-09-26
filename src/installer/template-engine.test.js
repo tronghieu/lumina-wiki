@@ -12,7 +12,13 @@ import {
   renderReadme,
   extractSchemaRegion,
   replaceSchemaRegion,
+  upsertMarkerBlock,
+  stripMarkerBlock,
+  MarkerBlockError,
 } from './template-engine.js';
+
+const OPEN = '<!-- lumina:project -->';
+const CLOSE = '<!-- /lumina:project -->';
 
 // ---------------------------------------------------------------------------
 // render — variable substitution
@@ -239,5 +245,137 @@ describe('renderReadme', () => {
     const template = '# {{project_name}}\n\n<!-- lumina:schema -->\n{{project_name}}\n<!-- /lumina:schema -->\n';
     const result = renderReadme(template, { project_name: 'AwesomeWiki' }, '');
     assert.ok(result.includes('# AwesomeWiki'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// upsertMarkerBlock / stripMarkerBlock (project-docs-overlay story 7 / AD-3)
+// ---------------------------------------------------------------------------
+
+describe('upsertMarkerBlock', () => {
+  test('absent file (empty content) is created holding only the block', () => {
+    const result = upsertMarkerBlock('', OPEN, CLOSE, 'body line');
+    assert.equal(result, `${OPEN}\nbody line\n${CLOSE}\n`);
+  });
+
+  test('appends block to existing content with one blank separator line, LF', () => {
+    const existing = '# AGENTS.md\n\nSome existing content.\n';
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'body');
+    assert.equal(result, `# AGENTS.md\n\nSome existing content.\n\n${OPEN}\nbody\n${CLOSE}\n`);
+  });
+
+  test('appends block to existing CRLF content, preserving CRLF throughout', () => {
+    const existing = '# AGENTS.md\r\n\r\nSome existing content.\r\n';
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'body');
+    assert.equal(result, `# AGENTS.md\r\n\r\nSome existing content.\r\n\r\n${OPEN}\r\nbody\r\n${CLOSE}\r\n`);
+    assert.ok(result.split('\r\n').every(line => !line.includes('\n')));
+  });
+
+  test('unterminated last line is not counted: one CRLF line picks CRLF', () => {
+    const result = upsertMarkerBlock('a\r\nb', OPEN, CLOSE, 'body');
+    assert.equal(result, `a\r\nb\r\n\r\n${OPEN}\r\nbody\r\n${CLOSE}\r\n`);
+  });
+
+  test('replaces only the region between existing markers, keeps bytes outside untouched', () => {
+    const existing = 'before\n\n' + OPEN + '\nold body\n' + CLOSE + '\n\nafter\n';
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'new body');
+    assert.equal(result, 'before\n\n' + OPEN + '\nnew body\n' + CLOSE + '\n\nafter\n');
+  });
+
+  test('re-running with identical body is idempotent (byte-identical output)', () => {
+    const first = upsertMarkerBlock('# Foo\n', OPEN, CLOSE, 'body');
+    const second = upsertMarkerBlock(first, OPEN, CLOSE, 'body');
+    assert.equal(second, first);
+  });
+
+  test('multi-line body renders one line per body line', () => {
+    const result = upsertMarkerBlock('', OPEN, CLOSE, 'line one\nline two');
+    assert.equal(result, `${OPEN}\nline one\nline two\n${CLOSE}\n`);
+  });
+});
+
+describe('stripMarkerBlock', () => {
+  test('markers not found returns content unchanged', () => {
+    const existing = 'nothing to see here\n';
+    assert.equal(stripMarkerBlock(existing, OPEN, CLOSE), existing);
+  });
+
+  test('file holding only the block strips to empty string', () => {
+    const existing = `${OPEN}\nbody\n${CLOSE}\n`;
+    const result = stripMarkerBlock(existing, OPEN, CLOSE);
+    assert.equal(result.trim(), '');
+  });
+
+  test('strips block plus its leading blank separator line, keeps the rest', () => {
+    const existing = 'before\n\n' + OPEN + '\nbody\n' + CLOSE + '\n\nafter\n';
+    const result = stripMarkerBlock(existing, OPEN, CLOSE);
+    assert.equal(result, 'before\n\nafter\n');
+  });
+
+  test('preserves CRLF line endings on the remaining content', () => {
+    const existing = 'before\r\n\r\n' + OPEN + '\r\nbody\r\n' + CLOSE + '\r\n\r\nafter\r\n';
+    const result = stripMarkerBlock(existing, OPEN, CLOSE);
+    assert.equal(result, 'before\r\n\r\nafter\r\n');
+  });
+});
+
+describe('upsertMarkerBlock / stripMarkerBlock — EOL edge cases', () => {
+  test('mixed EOL: every existing line keeps its own terminator; new lines use the dominant EOL', () => {
+    const existing = 'a\r\nb\nc\r\n'; // 2 CRLF, 1 LF -> dominant CRLF
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'X');
+    assert.equal(result, 'a\r\nb\nc\r\n\r\n' + OPEN + '\r\nX\r\n' + CLOSE + '\r\n');
+  });
+
+  test('no trailing newline: existing bytes are kept, a terminator is added only where new content follows', () => {
+    const existing = 'a\nb'; // no trailing newline
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'X');
+    assert.equal(result, 'a\nb\n\n' + OPEN + '\nX\n' + CLOSE + '\n');
+  });
+
+  test('replace case never adds a trailing EOL the file did not have', () => {
+    const existing = 'before\n' + OPEN + '\nold\n' + CLOSE; // close marker is the last line, no trailing newline
+    const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'new');
+    assert.equal(result, 'before\n' + OPEN + '\nnew\n' + CLOSE);
+  });
+
+  test('install-then-strip round trip restores a file that already had content, byte-for-byte', () => {
+    const original = 'before\n';
+    const installed = upsertMarkerBlock(original, OPEN, CLOSE, 'body');
+    const stripped = stripMarkerBlock(installed, OPEN, CLOSE);
+    assert.equal(stripped, original);
+  });
+
+  test('install-then-strip round trip restores content surrounding the block', () => {
+    const original = 'before\ntext\n';
+    const installed = upsertMarkerBlock(original, OPEN, CLOSE, 'body\nmore body');
+    const stripped = stripMarkerBlock(installed, OPEN, CLOSE);
+    assert.equal(stripped, original);
+  });
+});
+
+describe('upsertMarkerBlock / stripMarkerBlock — refuse unbalanced or duplicated markers', () => {
+  test('upsert throws MarkerBlockError on an open marker with no close', () => {
+    const broken = 'before\n' + OPEN + '\nuser content\n';
+    assert.throws(() => upsertMarkerBlock(broken, OPEN, CLOSE, 'body'), MarkerBlockError);
+  });
+
+  test('upsert throws MarkerBlockError on a duplicated open marker', () => {
+    const broken = OPEN + '\na\n' + OPEN + '\nb\n' + CLOSE + '\n';
+    assert.throws(() => upsertMarkerBlock(broken, OPEN, CLOSE, 'body'), MarkerBlockError);
+  });
+
+  test('upsert throws MarkerBlockError on a duplicated close marker', () => {
+    const broken = OPEN + '\na\n' + CLOSE + '\nb\n' + CLOSE + '\n';
+    assert.throws(() => upsertMarkerBlock(broken, OPEN, CLOSE, 'body'), MarkerBlockError);
+  });
+
+  test('upsert throws MarkerBlockError when close appears before open', () => {
+    const broken = CLOSE + '\na\n' + OPEN + '\n';
+    assert.throws(() => upsertMarkerBlock(broken, OPEN, CLOSE, 'body'), MarkerBlockError);
+  });
+
+  test('strip throws MarkerBlockError on the same malformed input, never silently deletes', () => {
+    const broken = 'before\n' + OPEN + '\nuser content\n';
+    assert.throws(() => stripMarkerBlock(broken, OPEN, CLOSE), MarkerBlockError);
   });
 });

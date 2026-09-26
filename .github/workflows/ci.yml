@@ -55,6 +55,9 @@ jobs:
       - name: Script tests
         run: npm run test:scripts
 
+      - name: Project engine tests
+        run: npm run test:project
+
       - name: Python tool tests
         run: npm run test:python
 

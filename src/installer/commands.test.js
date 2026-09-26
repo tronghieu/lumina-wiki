@@ -1323,6 +1323,61 @@ describe('installCommand — profile: minimal', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Project mode gate — bad-flags applies to the RESOLVED mode, not just a
+// literal `--mode project`, and the mode-select prompt must never run when
+// profile: 'minimal' (always hub-driven, never a human at a terminal).
+// ---------------------------------------------------------------------------
+
+describe('installCommand — mode gate applies bad-flags against the resolved mode', () => {
+  test('mode: "project" + profile: "minimal" exits 1, nothing written (hub-provisioning callers never combine these)', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'proj-minimal');
+    await mkdir(workspace, { recursive: true });
+    try {
+      await assert.rejects(
+        () => installCommand({ directory: workspace, yes: true, mode: 'project', profile: 'minimal', noUpdate: true }),
+        (err) => {
+          assert.equal(err.code, 1);
+          return true;
+        },
+      );
+      await assert.rejects(() => access(join(workspace, '_lumina')));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('profile: "minimal" with no --mode never shows the mode-select prompt (resolves classic, not project)', async () => {
+    const tmp = await makeTmpDir();
+    const workspace = join(tmp, 'proj-minimal-default');
+    await mkdir(workspace, { recursive: true });
+    // Fake a TTY so the non-TTY fallback can't pass this on its own: only
+    // the minimal guard keeps the mode prompt from running.
+    const ttyDesc = {
+      stdin: Object.getOwnPropertyDescriptor(process.stdin, 'isTTY'),
+      stdout: Object.getOwnPropertyDescriptor(process.stdout, 'isTTY'),
+    };
+    try {
+      process.stdin.isTTY = true;
+      process.stdout.isTTY = true;
+      // No `yes: true` here on purpose: if the "never prompt for minimal"
+      // guard regressed, this would hang waiting on a TTY prompt instead of
+      // completing — the 30s test timeout would catch it either way, but
+      // asserting the classic result is the direct proof.
+      await installCommand({ directory: workspace, profile: 'minimal', noUpdate: true });
+      await access(join(workspace, '_lumina', 'manifest.json'));
+      await assert.rejects(() => access(join(workspace, '_lumina', 'project')));
+    } finally {
+      for (const [name, desc] of Object.entries(ttyDesc)) {
+        if (desc) Object.defineProperty(process[name], 'isTTY', desc);
+        else delete process[name].isTTY;
+      }
+      await cleanTmp(tmp);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Skill deletion ownership guard — foreign-collision protection
 //
 // A destructive site is "foreign-collision safe" when it never deletes an
@@ -2061,6 +2116,25 @@ describe('uninstallCommand — IDE stub files are content-checked, not blindly d
 
       assert.equal(await readFile(claudeMdPath, 'utf8'), userContent, 'a modified CLAUDE.md must survive uninstall byte-identical');
       assert.match(output, /preserved|Kept modified file/i);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  // [regression] detectInstallMode (used by uninstallCommand's project-mode
+  // branch, spec-project-docs-overlay story 7) throws MANIFEST_READ_FAILED
+  // (code 2) on a corrupt manifest. uninstallCommand must treat that
+  // detection failure as "not project" and fall through to the classic
+  // uninstall path below — not let it propagate and abort the uninstall.
+  test('[regression] a classic install with a corrupt manifest.json still uninstalls cleanly (exit 0, _lumina/ removed)', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await writeFile(join(tmp, '_lumina', 'manifest.json'), '{broken', 'utf8');
+
+      await uninstallCommand({ cwd: tmp, yes: true }); // must not throw / must not exit(!0)
+
+      await assert.rejects(() => access(join(tmp, '_lumina')));
     } finally {
       await cleanTmp(tmp);
     }

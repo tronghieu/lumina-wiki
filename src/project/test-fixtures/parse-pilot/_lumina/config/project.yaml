@@ -1,0 +1,27 @@
+schemaVersion: 1
+sources:
+  include: [docs, "packages/*/docs"]
+  exclude: []
+types:
+  ADR:
+    metaType: Decision
+    paths: ["docs/adr/**"]
+    frontmatter: { type: adr }
+    idPattern: 'ADR-\d{4}'
+    status:
+      - { frontmatter: status }
+      - { heading: Status }
+  Convention:
+    metaType: Rule
+    paths: ["docs/conventions/**"]
+    idPattern: 'C\d{3}'
+    status: { heading: Status }
+relations:
+  superseded_by: { relation: supersedes, inverse: true }
+  implements: satisfies
+relatedRules:
+  - { source: Capability, target: Decision, relation: governs, inverse: true }
+externalIds:
+  - { pattern: 'FR-\d+', metaType: Requirement }
+concepts:
+  - { name: credit limit, aliases: [hạn mức] }

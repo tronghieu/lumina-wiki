@@ -126,6 +126,29 @@ export async function atomicCopyFile(srcPath, destPath) {
 }
 
 // ---------------------------------------------------------------------------
+// pathExists
+// ---------------------------------------------------------------------------
+
+/**
+ * True when `p` exists (any type). Rethrows anything other than
+ * ENOENT/ENOTDIR — those two alone mean "not there"; any other error
+ * (EACCES, EPERM, ...) means "we don't actually know," which callers must
+ * not silently treat as "missing."
+ *
+ * @param {string} p
+ * @returns {Promise<boolean>}
+ */
+export async function pathExists(p) {
+  try {
+    await access(p, fsConstants.F_OK);
+    return true;
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // safePath
 // ---------------------------------------------------------------------------
 

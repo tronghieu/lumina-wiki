@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of spec-project-docs-overlay (2026-09-26)
+
+- **Project skills missing from agent-context files** — repo `CLAUDE.md` skills list and `docs/project-context.md` §6 do not mention the `lumi-project-*` skills. Deferred because the fix edits agent-context files.
+- **`facts-prune` realpath guard untested** — the check before unlink (`src/project/project.mjs:741`) is reachable only if a directory is swapped for a symlink between classify and unlink; a deterministic test needs a seam there.
+
 ## Deferred from: code review of spec-paper-ranking (2026-06-16)
 
 - **404 "no data" results are not cached** — `_cache.py` only caches HTTP 200, so re-ranking a paper Scite/Altmetric do not index re-hits the API every run. By design across all fetchers; revisit only if it becomes a rate-limit problem.
@@ -49,3 +54,6 @@
 **Why deferred:** Adds prompt complexity for a tier we expect almost no one to use. Most runtimes that don't support Agent will hit the prompt-files-paste-back fallback first; `--single` is the third tier and rarely needed. Re-evaluate after dogfooding.
 
 **Target milestone:** v0.10 or later, only if dogfooding surfaces demand.
+- source_spec: `docs/specs/spec-project-docs-overlay/stories/2-deterministic-parse-and-buildgraph.md`
+  summary: Register `src/project/**/*.test.mjs` in a `test:project` npm script, include it in `test:all`, and run it in CI.
+  evidence: No npm script or CI job runs the project engine tests; story 1 assigns the wiring to story 7.

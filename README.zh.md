@@ -149,7 +149,7 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 | `/lumi-verify` | 检查笔记是否与引用的来源一致。 |
 | `/lumi-check` | 检查失效链接和其他问题。 |
 
-所有命令请查看[命令参考](docs/user-guide/commands.zh.md)。
+查看[命令参考](docs/user-guide/commands.zh.md)获取经典模式的全部命令。项目模式有自己的技能——见下方“项目模式”一节。
 
 ## 其他指南
 
@@ -161,6 +161,16 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 - [连接 OpenClaw 或 Hermes](docs/user-guide/openclaw-hermes-integration.zh.md) — 高级
 
 你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹，以图形界面浏览 Markdown 笔记。
+
+## 项目模式
+
+项目模式是为软件（或类似）项目自身仓库准备的一次独立安装。它会在项目已有的文档（决策、需求、规则）之上建立一个类型化图，而不是建立新的 wiki。这里没有 `raw/` 或 `wiki/`。
+
+```bash
+npx lumina-wiki install --mode project
+```
+
+关于它会安装什么、怎样使用，请查看[项目模式指南](docs/user-guide/project-mode.zh.md)。
 
 ## 更新或卸载
 

@@ -123,14 +123,18 @@ Exit codes:
   4  user cancelled (Ctrl-C in interactive prompt or declined confirm)
 
 Flags applicable to all commands:
-  --directory <path>  installation directory (defaults to current directory)
-  --yes, -y           accept all defaults; non-interactive (CI use)
-  --no-update         skip npm registry version check
-  --re-link           recompute symlink/junction/copy strategy from platform
-  --packs <list>      install packs: core,research,reading
+  --directory <path>    installation directory (defaults to current directory)
+  --yes, -y             accept all defaults; non-interactive (CI use)
+  --no-update           skip npm registry version check
+  --re-link             recompute symlink/junction/copy strategy from platform
+
+Install-only flags:
+  --mode <mode>         install mode: classic (default) or project
+  --packs <list>        install packs: core,research,reading (classic mode only)
   --ide-targets <list>  target CLIs: claude_code,codex,gemini_cli,qwen,iflow,cursor,generic
-                          codex covers all AGENTS.md-compatible CLIs
-                          (OpenAI CodexApp (ChatGPT), Amp, Crush, Goose, Auggie, OpenCode, etc.)
+                        codex covers all AGENTS.md-compatible CLIs
+                        (OpenAI CodexApp (ChatGPT), Amp, Crush, Goose, Auggie, OpenCode, etc.)
+                        project mode targets: claude_code,codex,antigravity
 
 Examples:
   npx lumina-wiki install
@@ -204,6 +208,7 @@ program
   .option('--lang <code>', 'installer UI locale: en, vi, zh')
   .option('--force-locale-switch', 'allow switching installer locale during upgrade')
   .option('--agents <targets>', 'install skills globally for AI agent platforms (openclaw, hermes)')
+  .option('--mode <mode>', 'install mode: classic (default) or project (typed graph over existing docs)')
   .action(async (cmdOpts) => {
     const globalOpts = program.opts();
     const hasExplicitDirectory = (
@@ -235,6 +240,7 @@ program
         forceLocaleSwitch: Boolean(cmdOpts.forceLocaleSwitch),
         searchParents: !hasExplicitDirectory,
         agents: cmdOpts.agents,
+        mode: cmdOpts.mode,
       });
     } catch (err) {
       // Top-level catch: locale may not be resolved yet (pre-loadLocale path).

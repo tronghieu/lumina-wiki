@@ -7,11 +7,13 @@
  * files drift. Runtime state timestamps are intentionally excluded.
  */
 
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+
+import { pathExists } from '../src/installer/fs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,6 +53,20 @@ const scenarios = [
     name: 'multilingual-zh',
     workspaceBasename: 'ci-multilingual-zh',
     args: ['install', '--yes', '--no-update', '--lang', 'zh', '--packs', 'core,research'],
+  },
+  {
+    name: 'project',
+    workspaceBasename: 'ci-project-mode',
+    args: ['install', '--mode', 'project', '--yes', '--no-update', '--ide-targets', 'claude_code,codex'],
+    isProject: true,
+    // Pre-existing CRLF AGENTS.md and .gitignore — AD-3 requires every byte
+    // outside the marker block, including line endings, survives. Asserted
+    // after install #1 (the git diff below only compares install #2 to #1).
+    seed: {
+      'AGENTS.md': 'Existing project instructions.\r\n',
+      '.gitignore': '.env\n',
+    },
+    diffPaths: ['AGENTS.md', '.gitignore', 'CLAUDE.md', '.agents', '.claude', '_lumina/project'],
   },
 ];
 
@@ -103,13 +119,28 @@ async function runScenario(scenario) {
     run('git', ['config', 'user.email', 'ci@example.invalid'], { cwd: workspace });
     run('git', ['config', 'user.name', 'Lumina CI'], { cwd: workspace });
 
+    for (const [rel, content] of Object.entries(scenario.seed ?? {})) {
+      await writeFile(join(workspace, rel), content, 'utf8');
+    }
+
     run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
+    for (const [rel, content] of Object.entries(scenario.seed ?? {})) {
+      if (!(await readFile(join(workspace, rel), 'utf8')).startsWith(content)) {
+        throw new Error(`Scenario "${scenario.name}": seeded bytes of ${rel} did not survive install #1.`);
+      }
+    }
+    // AD-26 classic isolation gate: a classic (non-project) install must
+    // never create _lumina/project/ — project code leaking into a classic
+    // install is exactly what the mode gate exists to prevent.
+    if (!scenario.isProject && await pathExists(join(workspace, '_lumina', 'project'))) {
+      throw new Error(`Classic scenario "${scenario.name}" must never create _lumina/project/, but it did.`);
+    }
     run('git', ['add', '-A'], { cwd: workspace });
     run('git', ['commit', '-m', 'baseline'], { cwd: workspace });
 
     run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
 
-    const diff = spawnSync('git', ['diff', '--exit-code', '--', ...managedDiffPaths], {
+    const diff = spawnSync('git', ['diff', '--exit-code', '--', ...(scenario.diffPaths ?? managedDiffPaths)], {
       cwd: workspace,
       encoding: 'utf8',
       timeout: 60000,

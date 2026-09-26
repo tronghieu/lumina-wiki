@@ -26,6 +26,8 @@ import {
   statePaths,
   migrateManifest,
   cleanupObsoleteCatalog,
+  detectInstallMode,
+  isProjectModeRepo,
 } from './manifest.js';
 
 async function makeTmpDir() {
@@ -463,6 +465,137 @@ describe('migrateManifest', () => {
     assert.deepEqual(result.ideTargets, ['cursor']);
   });
 
+  test('4->5 migration adds mode=classic when missing (spec-project-docs-overlay story 7)', () => {
+    const manifest = {
+      schemaVersion: 4,
+      packageVersion: '1.14.0',
+      locale: 'en',
+    };
+    const result = migrateManifest(manifest, 5);
+    assert.equal(result.schemaVersion, 5);
+    assert.equal(result.mode, 'classic');
+    assert.equal(result.packageVersion, '1.14.0');
+  });
+
+  test('4->5 migration preserves an explicit mode', () => {
+    const manifest = { schemaVersion: 4, packageVersion: '1.14.0', mode: 'project' };
+    const result = migrateManifest(manifest, 5);
+    assert.equal(result.schemaVersion, 5);
+    assert.equal(result.mode, 'project');
+  });
+
+  test('chains 3->4->5: locale and mode both get their defaults', () => {
+    const manifest = { schemaVersion: 3, packageVersion: '1.1.0' };
+    const result = migrateManifest(manifest, 5);
+    assert.equal(result.schemaVersion, 5);
+    assert.equal(result.locale, 'en');
+    assert.equal(result.mode, 'classic');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// detectInstallMode (spec-project-docs-overlay, story 7 / AD-2)
+// ---------------------------------------------------------------------------
+
+describe('detectInstallMode', () => {
+  test('fresh directory (no manifest, no project signal) -> null', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    assert.equal(await detectInstallMode(root), null);
+  });
+
+  test('manifest.mode === "project" -> project', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'project' });
+    assert.equal(await detectInstallMode(root), 'project');
+  });
+
+  test('manifest.mode === "classic" (no project signal) -> classic', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'classic' });
+    assert.equal(await detectInstallMode(root), 'classic');
+  });
+
+  test('legacy manifest with no mode field at all -> classic (migration default)', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeManifest(root, { schemaVersion: 3, packageVersion: '1.1.0' });
+    assert.equal(await detectInstallMode(root), 'classic');
+  });
+
+  test('no manifest, only a committed _lumina/config/project.yaml -> project (teammate clone)', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+    assert.equal(await detectInstallMode(root), 'project');
+  });
+
+  test('no manifest, only a committed _lumina/project/install.json -> project (teammate clone)', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await mkdir(join(root, '_lumina', 'project'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'project', 'install.json'), '{"schemaVersion":1}\n');
+    assert.equal(await detectInstallMode(root), 'project');
+  });
+
+  test('classic manifest together with a committed project.yaml is a conflict -> throws code 3', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'classic' });
+    await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+    await assert.rejects(() => detectInstallMode(root), (err) => {
+      assert.equal(err.code, 3);
+      assert.match(err.message, /MODE_CONFLICT/);
+      return true;
+    });
+  });
+
+  test('classic manifest together with a committed install.json is also a conflict -> throws code 3', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'classic' });
+    await mkdir(join(root, '_lumina', 'project'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'project', 'install.json'), '{"schemaVersion":1}\n');
+    await assert.rejects(() => detectInstallMode(root), (err) => {
+      assert.equal(err.code, 3);
+      return true;
+    });
+  });
+
+  test('corrupt manifest JSON -> throws MANIFEST_READ_FAILED, code 2', async () => {
+    const base = await makeTmpDir();
+    const root = await setupProjectRoot(base);
+    await writeFile(join(root, '_lumina', 'manifest.json'), '{broken', 'utf8');
+    await assert.rejects(() => detectInstallMode(root), (err) => {
+      assert.equal(err.code, 2);
+      assert.match(err.message, /MANIFEST_READ_FAILED/);
+      return true;
+    });
+  });
+});
+
+describe('isProjectModeRepo', () => {
+  test('MODE_CONFLICT (classic manifest + project.yaml) counts as project', async () => {
+    const root = await setupProjectRoot(await makeTmpDir());
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'classic' });
+    await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+    assert.equal(await isProjectModeRepo(root), true);
+  });
+
+  test('corrupt manifest: project only when a project signal exists', async () => {
+    const root = await setupProjectRoot(await makeTmpDir());
+    await writeFile(join(root, '_lumina', 'manifest.json'), '{broken', 'utf8');
+    assert.equal(await isProjectModeRepo(root), false);
+    await mkdir(join(root, '_lumina', 'project'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'project', 'install.json'), '{}\n');
+    assert.equal(await isProjectModeRepo(root), true);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,9 @@
+schemaVersion: 1
+sources:
+  include: [docs]
+types:
+  REQ:
+    metaType: Requirement
+    paths: ["docs/req/**"]
+    frontmatter: { type: req }
+    idPattern: 'FR-\d+'

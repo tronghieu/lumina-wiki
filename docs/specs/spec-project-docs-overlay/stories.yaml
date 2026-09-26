@@ -1,0 +1,78 @@
+- id: "1"
+  title: Project engine core
+  description: >-
+    Meta-ontology, shared libs, project.yaml loading and validation, root discovery, and the
+    scope and config-check subcommands on synthetic fixtures (SPEC CAP-2, CAP-4; spine AD-5 to AD-9, AD-18, AD-21, AD-25).
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml (src/project/vendor/js-yaml.mjs).
+- id: "2"
+  title: Deterministic parse and buildGraph
+  description: >-
+    Parse frontmatter, links, IDs, headings, status sources, and concept mentions into raw facts; one
+    buildGraph() that resolves, types, and merges; build and status, computed in memory with no cache or lock (SPEC CAP-5, CAP-7, CAP-8; spine AD-11, AD-12, AD-19, AD-20).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml. Include a parse-determinism test.
+- id: "3"
+  title: facts-write and evidence checking
+  description: >-
+    Validated per-doc fact files written only through facts-write, with sourceHash, quote, anchor, and
+    concept checks, plus verify-evidence (SPEC CAP-6 engine side, CAP-11; spine AD-10, AD-18, AD-20, AD-22, AD-23).
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml.
+- id: "4"
+  title: Cross-doc lint
+  description: >-
+    Relation rules owned by meta-relations plus engine rules, --fail-on, and the fixed lint JSON
+    shape, runnable with no agent (SPEC CAP-9; spine AD-7, AD-14, AD-27).
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml.
+- id: "5"
+  title: Graph query
+  description: >-
+    The query subcommand the ask skill uses, returning answers from buildGraph with file:line on every
+    item (SPEC CAP-10 engine side; spine AD-15, AD-19, AD-28).
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml.
+- id: "6"
+  title: Graph view
+  description: >-
+    Self-contained view.html with inlined force-graph and escaped graph data, Obsidian-like interaction,
+    lint and stale highlighting (SPEC CAP-12, graph-view.md; spine AD-16).
+  invoke_dev_with: >-
+    Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
+    vendored js-yaml.
+- id: "7"
+  title: Installer project mode
+  description: >-
+    --mode project with mode detection, manifest v5, marker blocks, .gitignore block, engine copy list,
+    PROJECT.md, antigravity target, uninstall, wikis skipping, and CI gates (SPEC CAP-1; spine AD-2, AD-3, AD-4, AD-17, AD-24, AD-26).
+  spec_checkpoint: true
+- id: "8"
+  title: lumi-project-setup skill
+  description: >-
+    Scan, domain-neutral ontology proposal, frontmatter report, and project.yaml writing
+    for Claude Code, Codex, and Antigravity (SPEC CAP-3; spine AD-1, AD-8).
+  spec_checkpoint: true
+- id: "9"
+  title: Remaining project skills
+  description: >-
+    lumi-project-ingest, ask, check, verify, and view skills over the engine subcommands
+    (SPEC CAP-6, CAP-10, CAP-11, CAP-12; spine AD-15).
+  done_checkpoint: true
+- id: "10"
+  title: User documentation
+  description: >-
+    Project-mode user guide in en, vi, and zh plus CHANGELOG entry, following the multi-language doc sync rule.
+- id: "11"
+  title: Prune, ask content, ingest update
+  description: >-
+    facts-prune for fact files of deleted docs, ask answering from the cited doc text with a scoped
+    doc-search fallback, and ingest update mode as the default (spine AD-10, AD-15 amended).
