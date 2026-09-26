@@ -134,6 +134,19 @@ findings at or above `--fail-on` — not a failed run.
 1. **Check for an existing config.** If `_lumina/config/project.yaml` is
    present, read it — this is a re-run. Scan its current `sources.include`/
    `exclude` too, as the starting point for step 2, not just its `types`.
+   Then reply preferences (PROJECT.md "Reply preferences"): if
+   `_lumina/config/user.config.yaml` exists, read it and follow it. If not,
+   ask once, before scanning: which language to reply in, and what style
+   (e.g. plain and non-technical, or brief) — both optional, "skip" keeps
+   the defaults. Write only the keys the user gave, right away (their
+   answer is the approval), and follow them from here on:
+   ```yaml
+   schemaVersion: 1
+   response:
+     language: Vietnamese
+     style: plain, non-technical, short
+   ```
+   Skipped entirely: write nothing.
 
 2. **Discover scope, repo-wide.** Look across the whole repo, not just
    `docs/`, for Markdown-heavy folders (respecting Engine facts §2's
@@ -181,7 +194,7 @@ findings at or above `--fail-on` — not a failed run.
    frontmatter report, and the glossary offer together. Approval can cover
    the whole config, a whole family of frontmatter fixes, an explicitly
    named batch, a single doc, or the glossary — there is no "fix all"
-   default. **If nothing is approved, stop here: write nothing, run no
+   default. **If nothing is approved, stop here: write nothing more, run no
    validation, and report that no changes were made.**
 
 7. **Write only what was approved.** Before this step's first write, capture
@@ -206,6 +219,22 @@ findings at or above `--fail-on` — not a failed run.
    3. `lint`. Summarize findings by rule id and point to the top config-side
       fixes (Engine facts §9).
 
+9. **Offer to run ingest.** Only when a config was written and Definition
+   of Done (a)-(d) all pass. Run `node _lumina/project/project.mjs status`;
+   N is its `summary` `neverIngested` + `changed` + `stale` (every
+   in-scope doc on a fresh install; `fresh` docs are never re-ingested).
+   N = 0: say nothing needs ingesting and skip the offer. Otherwise report
+   N and ask: run `/lumi-project-ingest` now?
+   - **Yes:** if the host can invoke another skill from here, start
+     `/lumi-project-ingest`, passing the approval explicitly so it doesn't
+     ask again: "approved at setup handoff: ingest all `<N>` docs". You
+     still never call `facts-write` yourself — the handoff hands the run to
+     the ingest skill, which does that work. If the host cannot invoke
+     another skill from inside a skill, say so and tell the user to run
+     `/lumi-project-ingest ingest all` themselves.
+   - **No:** end setup here and give the exact command to run later:
+     `/lumi-project-ingest ingest all`.
+
 ## Output Format
 
 Report, in this order:
@@ -220,6 +249,12 @@ Report, in this order:
    and stop here.
 5. **Validation** — `config-check` result (with any fix-and-re-approve
    round), `scope` file count vs. scan, `lint` summary by rule id.
+6. **Handoff** — only after (a)-(d) pass: N (docs to ingest) and the
+   yes/no offer to run `/lumi-project-ingest` now, and its outcome (started
+   with the passed-through approval, told to the user to run it themselves,
+   or the command to run later on "no").
+7. **Reply preferences** — saved (with the values), already set, or
+   skipped; changeable later by editing `_lumina/config/user.config.yaml`.
 
 ## Examples
 
@@ -277,18 +312,32 @@ The user declines the proposal outright. Nothing is written, `config-check`/
 changes and can be re-run any time.
 </example>
 
+<example>
+Fresh install, the config is approved and written, and (a)-(d) all pass with
+228 in-scope docs, all `never-ingested`. Setup reports N = 228 and asks to run
+`/lumi-project-ingest` now. The user says yes; the host can invoke another
+skill, so setup starts `/lumi-project-ingest` with
+"approved at setup handoff: ingest all 228 docs" — ingest does not ask the
+>20 gate again. Had the user said no, setup would end here and tell them to
+run `/lumi-project-ingest ingest all` later.
+</example>
+
 ## Guardrails
 
-- Never write anything before the user approves it. No "fix all" default —
+- Never write anything before the user approves it (step 1's reply
+  preferences are the user's own answer, written as given). No "fix all" default —
   approval must name what it covers; nothing approved means nothing written
   and no validation run.
 - Never write `_lumina/facts/`, `_lumina/graph/`, or `_lumina/_state/`, and
-  never run `facts-write`. Never touch a doc beyond an approved frontmatter
-  fix (frontmatter block only; body stays byte-identical) or an approved
-  glossary file.
+  never run `facts-write` — not even after the ingest handoff in step 9,
+  which only starts or points to `/lumi-project-ingest`; that skill does
+  the ingest work, setup does none of it. Never touch a doc beyond an
+  approved frontmatter fix (frontmatter block only; body stays
+  byte-identical) or an approved glossary file.
 - Never change the engine, the installer, or the config schema — this skill
-  only ever writes `_lumina/config/project.yaml` and, on approval, doc
-  frontmatter or a glossary file.
+  only ever writes `_lumina/config/project.yaml`,
+  `_lumina/config/user.config.yaml`, and, on approval, doc frontmatter or a
+  glossary file.
 - Never assume a software-only frame: no rule, mapping, or example that only
   fits a software project's doc names or ID schemes. Map by what a family of
   docs does, not by its label or folder.
@@ -298,7 +347,8 @@ changes and can be re-run any time.
 
 ## Definition of Done
 
-If nothing was approved: confirm nothing was written and report that — done.
+If nothing was approved: confirm nothing was written beyond step 1's reply
+preferences and report that — done.
 
 If a config (or an approved subset) was written, verify before reporting done:
 (a) `config-check` exits 0 (after at most 3 fix-and-re-approve attempts);
@@ -306,5 +356,8 @@ If a config (or an approved subset) was written, verify before reporting done:
 (c) `lint` ran and its findings are summarized by rule id;
 (d) `git status --porcelain` (read-only), compared against the baseline
     captured before step 7's first write, shows new changes only under
-    `_lumina/config/project.yaml` and any approved frontmatter/glossary
+    `_lumina/config/project.yaml` (and `user.config.yaml`, if an older
+    `.gitignore` block still lacks it) and any approved frontmatter/glossary
     paths.
+
+Only once (a)-(d) all pass does step 9's ingest offer run.

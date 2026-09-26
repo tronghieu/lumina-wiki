@@ -208,7 +208,7 @@ function makeEnvelopeLookup(facts) {
 /**
  * Every in-scope doc's freshness state (AD-12), shared by `status` and
  * `lint` (P13) so the two never compute it two different ways.
- * @returns {{docs: {path: string, hash: string, state: string}[], summary: object}}
+ * @returns {{docs: {path: string, hash: string, metaType: string, type?: string, state: string}[], summary: object}}
  */
 function computeDocStatuses({
   parsed, facts, graph, ontologyVer,
@@ -229,7 +229,10 @@ function computeDocStatuses({
       sourceText,
       refResolves,
     });
-    docs.push({ path: doc.path, hash: doc.hash, state });
+    const entry = { path: doc.path, hash: doc.hash, metaType: doc.metaType ?? 'Document' };
+    if (doc.type != null) entry.type = doc.type;
+    entry.state = state;
+    docs.push(entry);
     summary[STATUS_SUMMARY_KEY[state]] += 1;
   }
   return { docs, summary };

@@ -141,7 +141,7 @@ describe('install --mode project', () => {
 
       const gitignore = await readFile(join(tmp, '.gitignore'), 'utf8');
       assert.ok(gitignore.startsWith('.env\n'));
-      assert.ok(gitignore.includes('# >>> lumina\n_lumina/graph/\n_lumina/_state/\n_lumina/manifest.json\n# <<< lumina\n'));
+      assert.ok(gitignore.includes('# >>> lumina\n_lumina/graph/\n_lumina/_state/\n_lumina/manifest.json\n_lumina/config/user.config.yaml\n# <<< lumina\n'));
 
       const manifest = JSON.parse(await readFile(join(tmp, '_lumina', 'manifest.json'), 'utf8'));
       assert.equal(manifest.schemaVersion, 5);

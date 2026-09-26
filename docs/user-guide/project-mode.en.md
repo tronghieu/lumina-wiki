@@ -32,7 +32,20 @@ With `--yes` and no `--ide-targets`, project mode installs for `claude_code` onl
 
 Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it.
 
-Once you approve, confirm the setup worked:
+Before it scans, setup asks how Lumina's project skills should talk to you: a reply language and a reply style (for example "plain, non-technical, short"). Both are optional; say "skip" to keep the default, which is replying in the language you write in. Your answers go to `_lumina/config/user.config.yaml`, which is gitignored, so each person on a team keeps their own. Setup asks only when that file doesn't exist; to change it later, edit the file or delete it and re-run setup. It changes how skills talk to you, never the facts, quotes, or files they write.
+
+```yaml
+schemaVersion: 1
+response:
+  language: Vietnamese
+  style: plain, non-technical, short
+```
+
+Once you approve and it writes the config, it reports how many docs need ingesting and offers to start ingest right away.
+
+Answer yes: if your coding agent can start another skill from inside setup, it ingests every one of them with no second command or approval. Otherwise setup tells you to run `/lumi-project-ingest ingest all` yourself, and ingest asks once more for approval when there are more than 20 docs. Answer no: setup ends and gives you the command to run later.
+
+If you'd rather ingest later, confirm the setup worked first:
 
 ```bash
 node _lumina/project/project.mjs status
@@ -43,18 +56,22 @@ A fresh setup, with nothing ingested yet, looks like this (trimmed):
 ```json
 {
   "docs": [
-    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "state": "never-ingested" },
-    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "state": "never-ingested" }
+    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" },
+    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" }
   ],
   "summary": { "fresh": 0, "changed": 0, "stale": 0, "neverIngested": 2 }
 }
 ```
 
-Every doc appears with a state. `never-ingested` for every doc, right after setup, is expected — nothing has been read into the graph yet.
+Every doc appears with a state. `never-ingested` for every doc, right after setup, is expected — nothing has been read into the graph yet. Each doc also carries a `metaType` (its project role, or `Document` when nothing narrower applies) and, once it matches a type rule, a `type`.
 
 ## Ingest and ask
 
 Run `lumi-project-ingest` to read your docs into the graph. On the first run, with nothing ingested yet, it offers every doc. Past 20 docs, it shows the count and waits for your approval before continuing.
+
+When there are more than 20 docs to ingest and your coding agent supports subagents (Claude Code does), ingest runs them in parallel: docs are sorted by type and split into batches of at most 25, one subagent per batch, all started at once under the single approval above — the coding agent runs as many at a time as it can. A batch that fails doesn't stop the others, and any doc still missed once they're all done gets one automatic retry. Without subagent support, it ingests one doc at a time, as before. Either way it's safe: each doc's facts are written to their own file under a lock, and the graph rebuilds from docs and facts on every read, so write order can't change it.
+
+Ingest ends by regenerating the graph view and printing its `file://` link. Run `lumi-project-view` any time you want to regenerate it again.
 
 After that, ask a question:
 
@@ -110,9 +127,9 @@ This removes everything under `_lumina/` except `_lumina/facts/` and `_lumina/co
 Project mode never creates `raw/` or `wiki/`. It writes:
 
 - `_lumina/project/` — the engine (`project.mjs` and its libraries). Committed.
-- `_lumina/config/` — your approved scope and type/relation mapping (`project.yaml`), written later by setup. Committed.
+- `_lumina/config/` — your approved scope and type/relation mapping (`project.yaml`), written later by setup. Committed. `user.config.yaml` (your reply preferences) lives here too and is gitignored.
 - `_lumina/facts/` — one file per source doc, holding the facts an agent extracted from it. Committed.
-- `_lumina/graph/` — the graph viewer file. Gitignored, rebuilt on every `lumi-project-view` run.
+- `_lumina/graph/` — the graph viewer file. Gitignored, rebuilt after every ingest that commits a doc, and on every `lumi-project-view` run.
 - `_lumina/_state/` — the engine's write lock. Gitignored.
 - `_lumina/manifest.json` — local install bookkeeping. Gitignored.
 - `.agents/skills/lumi-project-*` — the six skills below, for every selected target.

@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `lumi-project-ingest` runs batches of more than 20 docs in parallel on
+  hosts with subagents: docs are sorted by type into clusters of at most 25,
+  all dispatched at once, one approval covers the plan, a failed cluster doesn't stop the others, and
+  missed docs get one automatic retry. It ends by regenerating the graph
+  view and printing its link.
+- `lumi-project-setup` offers to start ingest once the config is written.
+- `project.mjs status` reports each doc's `metaType` and project `type`.
+- `lumi-project-setup` asks for a reply language and style (optional) and
+  saves them to `_lumina/config/user.config.yaml`, which every project
+  skill follows. The file is gitignored so each person keeps their own.
+
 ## [1.15.0-next.0] - 2026-09-26
 
 > Preview build, published to the `next` dist-tag. `latest` is untouched.

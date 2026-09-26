@@ -32,7 +32,20 @@ Với `--yes` và không có `--ide-targets`, project mode chỉ cài cho `claud
 
 Chạy `lumi-project-setup` tiếp theo. Nó quét các tài liệu trong phạm vi và đề xuất một phạm vi, một ánh xạ loại/quan hệ, và một bộ từ vựng khái niệm. Nó không ghi gì cho đến khi bạn duyệt.
 
-Sau khi duyệt, xác nhận việc thiết lập đã thành công:
+Trước khi quét, setup hỏi các skill dự án của Lumina nên trả lời bạn thế nào: ngôn ngữ và văn phong (ví dụ "đơn giản, không kỹ thuật, ngắn gọn"). Cả hai đều không bắt buộc; gõ "skip" để giữ mặc định, tức là trả lời bằng ngôn ngữ bạn đang dùng. Câu trả lời được lưu vào `_lumina/config/user.config.yaml`, tệp này bị gitignore nên mỗi người trong nhóm giữ bản riêng. Setup chỉ hỏi khi tệp chưa tồn tại; muốn đổi sau này, hãy sửa tệp, hoặc xóa nó rồi chạy lại setup. Tùy chọn này chỉ đổi cách skill nói chuyện với bạn, không đổi fact, trích dẫn hay tệp mà skill ghi ra.
+
+```yaml
+schemaVersion: 1
+response:
+  language: Vietnamese
+  style: plain, non-technical, short
+```
+
+Sau khi bạn duyệt và cấu hình đã được ghi, nó báo số tài liệu cần ingest và hỏi luôn có muốn chạy ingest ngay không.
+
+Trả lời có: nếu ứng dụng AI của bạn có thể khởi động một skill khác ngay từ trong setup, nó sẽ ingest mọi tài liệu trong phạm vi mà không cần chạy thêm lệnh hay duyệt lần hai. Nếu không, setup sẽ bảo bạn tự chạy `/lumi-project-ingest ingest all`, và ingest sẽ hỏi duyệt thêm một lần nữa nếu có hơn 20 tài liệu. Trả lời không: setup kết thúc và cho bạn lệnh để ingest sau.
+
+Nếu bạn muốn ingest sau, hãy xác nhận việc thiết lập đã thành công trước:
 
 ```bash
 node _lumina/project/project.mjs status
@@ -43,18 +56,22 @@ Một thiết lập mới, chưa ingest gì, trông như sau (đã rút gọn):
 ```json
 {
   "docs": [
-    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "state": "never-ingested" },
-    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "state": "never-ingested" }
+    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" },
+    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" }
   ],
   "summary": { "fresh": 0, "changed": 0, "stale": 0, "neverIngested": 2 }
 }
 ```
 
-Mỗi tài liệu xuất hiện kèm một trạng thái. `never-ingested` cho mọi tài liệu, ngay sau khi thiết lập, là bình thường — chưa có gì được đọc vào đồ thị.
+Mỗi tài liệu xuất hiện kèm một trạng thái. `never-ingested` cho mọi tài liệu, ngay sau khi thiết lập, là bình thường — chưa có gì được đọc vào đồ thị. Mỗi tài liệu cũng kèm `metaType` (`Document` khi chưa được gán loại cụ thể) và `type` khi tài liệu đã được gán một loại theo ánh xạ đã duyệt.
 
 ## Ingest và hỏi
 
 Chạy `lumi-project-ingest` để đọc tài liệu của bạn vào đồ thị. Ở lần chạy đầu, khi chưa ingest gì, nó đề xuất mọi tài liệu. Quá 20 tài liệu, nó hiện số lượng và chờ bạn duyệt trước khi tiếp tục.
+
+Nếu ứng dụng AI của bạn hỗ trợ subagent (Claude Code có hỗ trợ) và số tài liệu vượt 20, ingest chạy song song: tài liệu được sắp theo loại và chia thành các lô tối đa 25 tài liệu, mỗi lô một subagent, tất cả được khởi động cùng lúc dưới một lần duyệt như trên — ứng dụng AI chạy song song nhiều lô nhất có thể. Một lô lỗi không chặn các lô khác; sau khi tất cả lô chạy xong, những tài liệu bị bỏ sót được tự động thử ingest lại một lần. Không có subagent, ingest chạy tuần tự từng tài liệu một như trước. Cách này an toàn: fact của mỗi tài liệu được ghi vào một tệp riêng dưới một khóa, và đồ thị luôn được dựng lại từ tài liệu và fact mỗi khi đọc, nên thứ tự ghi không thể làm sai đồ thị.
+
+Ingest kết thúc bằng việc dựng lại khung xem đồ thị (`_lumina/graph/view.html`) và in ra liên kết `file://` của nó. `lumi-project-view` vẫn dùng được để dựng lại khung xem này bất cứ lúc nào.
 
 Sau đó, đặt một câu hỏi:
 
@@ -110,9 +127,9 @@ Lệnh này gỡ mọi thứ bên trong `_lumina/` ngoại trừ `_lumina/facts/
 Project mode không bao giờ tạo `raw/` hay `wiki/`. Nó ghi ra:
 
 - `_lumina/project/` — engine (`project.mjs` và các thư viện của nó). Đã commit.
-- `_lumina/config/` — phạm vi bạn đã duyệt và ánh xạ loại/quan hệ (`project.yaml`), được setup ghi sau đó. Đã commit.
+- `_lumina/config/` — phạm vi bạn đã duyệt và ánh xạ loại/quan hệ (`project.yaml`), được setup ghi sau đó. Đã commit. `user.config.yaml` (các tùy chọn trả lời của bạn) cũng nằm ở đây và bị gitignore.
 - `_lumina/facts/` — một tệp cho mỗi tài liệu nguồn, chứa các fact mà agent trích ra từ đó. Đã commit.
-- `_lumina/graph/` — tệp xem đồ thị. Bị gitignore, được dựng lại mỗi lần chạy `lumi-project-view`.
+- `_lumina/graph/` — tệp xem đồ thị. Bị gitignore, được dựng lại sau mỗi lần ingest có ghi tài liệu, và mỗi lần chạy `lumi-project-view`.
 - `_lumina/_state/` — khóa ghi của engine. Bị gitignore.
 - `_lumina/manifest.json` — thông tin quản lý cài đặt cục bộ. Bị gitignore.
 - `.agents/skills/lumi-project-*` — sáu skill bên dưới, cho mọi đích đã chọn.

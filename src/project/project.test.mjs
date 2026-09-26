@@ -35,6 +35,19 @@ function runFactsWrite(cwd, input, env) {
   return run(cwd, ['facts-write'], { input: JSON.stringify(input), env });
 }
 
+/** Async, concurrent-friendly `facts-write` -- `runFactsWrite` above uses `spawnSync`, which blocks and can't run several at once. */
+function spawnFactsWrite(cwd, input, env) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [PROJECT_MJS, 'facts-write'], { cwd, env: { ...process.env, ...env } });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('close', (status) => resolve({ status, stdout: stdout.trim(), stderr: stderr.trim() }));
+    child.stdin.end(JSON.stringify(input));
+  });
+}
+
 function factFilePath(root, source) {
   return join(root, '_lumina', 'facts', `${source}.json`);
 }
@@ -302,6 +315,18 @@ describe('status', () => {
     assert.ok(result.summary.neverIngested > 0);
     assert.ok(result.docs.every((d) => d.state === 'never-ingested'));
     assert.equal(result.summary.neverIngested, result.docs.length);
+  });
+
+  test('each doc carries its metaType, and type only when the doc resolved to a config type', () => {
+    const { status, stdout } = run(PARSE_PILOT, ['status']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    const typed = result.docs.find((d) => d.path === 'docs/adr/0009-partial.md');
+    assert.equal(typed.type, 'ADR');
+    assert.equal(typed.metaType, 'Decision');
+    const untyped = result.docs.find((d) => d.path === 'docs/misc/unmapped.md');
+    assert.equal(untyped.metaType, 'Document');
+    assert.equal(Object.hasOwn(untyped, 'type'), false);
   });
 
   test('every doc carries its current content hash', async () => {
@@ -949,6 +974,74 @@ describe('facts-write', () => {
       assert.equal(await factFileExists(root, docPath), false);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// facts-write concurrency (AD-23's lock): 20 distinct docs, 20 concurrent
+// writers -- they all succeed, reach the same end state a sequential run
+// would, and leave no lock behind. Lock mutual exclusion itself is covered
+// by the held-lock tests above and fsx.test.mjs.
+// ---------------------------------------------------------------------------
+
+const STRESS_DOC_COUNT = 20;
+
+/** A fresh temp project with `STRESS_DOC_COUNT` in-scope docs, each with one quotable line. */
+async function makeStressFixture() {
+  const dir = await mkdtemp(join(tmpdir(), 'lumina-project-cli-stress-'));
+  await mkdir(join(dir, '_lumina', 'config'), { recursive: true });
+  await writeFile(join(dir, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+  await mkdir(join(dir, 'docs'), { recursive: true });
+  for (let i = 0; i < STRESS_DOC_COUNT; i += 1) {
+    await writeFile(join(dir, 'docs', `doc-${String(i).padStart(2, '0')}.md`), `# Doc ${i}\n\nStress line ${i}.\n`);
+  }
+  return dir;
+}
+
+function stressInputs(root) {
+  return Promise.all(Array.from({ length: STRESS_DOC_COUNT }, async (_, i) => {
+    const docPath = `docs/doc-${String(i).padStart(2, '0')}.md`;
+    return {
+      source: docPath,
+      sourceHash: await hashOfFile(root, docPath),
+      facts: [{
+        kind: 'attr',
+        subject: `doc:${docPath}`,
+        relation: 'status',
+        value: 'accepted',
+        ref: 'stress test',
+        evidence: { quote: `Stress line ${i}.` },
+        provenance: 'extracted',
+      }],
+    };
+  }));
+}
+
+describe('facts-write concurrency', () => {
+  test('20 concurrent writers, one per doc, converge to the same build as a sequential run, and release the lock', async () => {
+    const concurrentRoot = await makeStressFixture();
+    const sequentialRoot = await makeStressFixture();
+    try {
+      const inputs = await stressInputs(concurrentRoot); // same generated content in both roots -> same hashes/quotes apply to either
+
+      const results = await Promise.all(inputs.map((input) => spawnFactsWrite(concurrentRoot, input, { LUMINA_PROJECT_LOCK_TIMEOUT_MS: '30000' })));
+      for (const r of results) assert.equal(r.status, 0, r.stderr);
+
+      for (const input of inputs) {
+        assert.equal(runFactsWrite(sequentialRoot, input).status, 0);
+      }
+
+      const concurrentBuild = run(concurrentRoot, ['build']);
+      const sequentialBuild = run(sequentialRoot, ['build']);
+      assert.equal(concurrentBuild.status, 0);
+      assert.equal(sequentialBuild.status, 0);
+      assert.equal(concurrentBuild.stdout, sequentialBuild.stdout);
+
+      await assert.rejects(readFile(join(concurrentRoot, '_lumina', '_state', 'lock')), { code: 'ENOENT' });
+    } finally {
+      await rm(concurrentRoot, { recursive: true, force: true });
+      await rm(sequentialRoot, { recursive: true, force: true });
     }
   });
 });
