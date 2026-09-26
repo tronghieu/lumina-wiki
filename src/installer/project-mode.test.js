@@ -400,13 +400,31 @@ describe('install --mode project', () => {
     }
   });
 
-  test('no skills yet: src/skills/project/ absent -> success, 0 skills, no lumi-project-* dirs', async () => {
+  test('ships every src/skills/project skill: byte-identical .agents/skills/<id>/SKILL.md, ' +
+       'Skills: N installed matches the shipped set', async () => {
+    const skillsSrcDir = join(REPO_ROOT, 'src', 'skills', 'project');
+    const entries = await readdir(skillsSrcDir, { withFileTypes: true });
+    // Same filter as listProjectSkillDefs: a directory counts only when it holds a SKILL.md.
+    const expectedIds = (await Promise.all(entries
+      .filter((e) => e.isDirectory())
+      .map(async (e) => ((await pathExists(join(skillsSrcDir, e.name, 'SKILL.md'))) ? e.name : null))))
+      .filter((id) => id !== null)
+      .sort();
+    assert.ok(expectedIds.length > 0, 'src/skills/project/ has no skill directories holding a SKILL.md');
+
     const tmp = await makeTmpDir();
     try {
       const result = runCli(['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp]);
       assert.equal(result.status, 0, result.stderr);
-      assert.match(result.stdout, /Skills:\s+0 installed/);
-      assert.ok(!(await pathExists(join(tmp, '.agents', 'skills'))));
+      assert.match(result.stdout, new RegExp(`Skills:\\s+${expectedIds.length} installed`));
+
+      for (const id of expectedIds) {
+        const srcPath = join(skillsSrcDir, id, 'SKILL.md');
+        const destPath = join(tmp, '.agents', 'skills', id, 'SKILL.md');
+        assert.ok(await pathExists(destPath), `missing ${destPath}`);
+        const [src, dest] = await Promise.all([readFile(srcPath), readFile(destPath)]);
+        assert.ok(src.equals(dest), `${id}/SKILL.md is not byte-identical to its source`);
+      }
     } finally {
       await cleanTmp(tmp);
     }
@@ -482,6 +500,8 @@ describe('uninstall project mode', () => {
       assert.ok(!(await pathExists(join(tmp, '_lumina', 'manifest.json'))));
       assert.ok(await pathExists(join(tmp, '_lumina', 'facts', 'doc.json')), '--yes keeps facts/');
       assert.ok(await pathExists(join(tmp, '_lumina', 'config', 'project.yaml')), '--yes keeps config/');
+      assert.ok(!(await pathExists(join(tmp, '.agents', 'skills', 'lumi-project-setup'))), 'uninstall removes .agents/skills/lumi-project-setup');
+      assert.ok(!(await pathExists(join(tmp, '.claude', 'skills', 'lumi-project-setup'))), 'uninstall removes .claude/skills/lumi-project-setup');
 
       const gitignore = await readFile(join(tmp, '.gitignore'), 'utf8');
       assert.ok(!gitignore.includes('lumina:project') && !gitignore.includes('>>> lumina'));
@@ -492,9 +512,10 @@ describe('uninstall project mode', () => {
 });
 
 describe('installProject — skill copy/link/prune (direct call, fixture skills dir)', () => {
-  // src/skills/project/ is empty today (stories 8/9 not done yet), so the
-  // CLI-spawn tests above always see "0 skills". Exercise the copy/link/
-  // prune path directly with a fixture skill instead.
+  // The CLI-spawn tests above already cover the real src/skills/project/
+  // set. Exercise the copy/link/prune path in isolation with a fixture
+  // skill instead, so this describe block stays independent of which real
+  // skills currently ship.
   const colors = { yellow: (s) => s, red: (s) => s, green: (s) => s, bold: (s) => s, dim: (s) => s };
 
   async function makeFixtureSkillsDir() {

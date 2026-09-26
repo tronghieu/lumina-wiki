@@ -2,16 +2,23 @@
 title: 'lumi-project-setup skill'
 type: 'feature'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/ontology.md'
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
   - '{project-root}/src/templates/project/PROJECT.md'
 warnings: ['oversized']
-deferred: []
+deferred:
+  - summary: >-
+      Project uninstall leaves empty .claude/skills/, .claude/ and _lumina/ dirs.
+    evidence: |-
+      Verification Gap reviewer, sandbox install then uninstall; story 7 code, first reachable with a shipped skill.
+    location: >-
+      src/installer/project-mode.js uninstallProject
+    severity: low
 ---
 
 <intent-contract>
@@ -91,7 +98,7 @@ deferred: []
 - `src/installer/project-mode.test.js` -- replace the "no skills yet" test with "ships every src/skills/project skill". The expected set comes from reading `src/skills/project/*/SKILL.md`. Assert the `Skills: N installed` count, and that each `.agents/skills/<id>/SKILL.md` exists byte-identical to its source. It must stay green when story 9 adds skills.
 
 **Acceptance Criteria:**
-- Given a Capigo copy with project mode installed, when a fresh host agent follows the skill with every proposal approved, then:
+- Given a Capigo copy with project mode installed, when a fresh host agent follows the skill with the config approved and no doc fixes, then:
   - the report names the 32 frontmatter-less ADRs;
   - `project.yaml` uses a heading status source for them;
   - `config-check` exits 0;
@@ -110,7 +117,84 @@ deferred: []
 
 ## Spec Change Log
 
+- 2026-09-26: Capigo acceptance approved "every proposal", which would edit docs through frontmatter fixes and contradict "only `project.yaml` added". It now reads "config approved and no doc fixes". KEEP: doc fixes are approved separately from the config.
+
 ## Review Triage Log
+
+### 2026-09-26 — Review pass
+- verdicts: about 70 raw findings merged into 40 rows — high 5, medium 16, low 12, false 7, maybe-false 0
+- live acceptance, run before patching:
+  - Capigo: config-check 0, scope 424 = scan, lint P20 0, P19 1 (real doc drift, adr-058), only `_lumina/config/` added.
+  - KEPs: config-check 0, KEP mapped to `Decision`, only `_lumina/config/` added.
+  - Both host agents had to read engine source to get there.
+- findings:
+  - `[high]` `patch` `docs/` default scope and `sources` never proposed (Blind, Intent, VerifGap, KEP run) — discover roots; always propose `sources`
+  - `[high]` `patch` PROJECT.md claimed to hold the yaml shape; 4 of 7 keys undocumented (Edge, Intent) — add an Engine facts section with the full skeleton
+  - `[high]` `patch` decline or frontmatter-only approval still runs validation; DoD (a) unmeetable (Blind, Edge, Intent) — nothing approved means stop; DoD made conditional
+  - `[high]` `patch` "retry until 0" is unbounded and rewrites approved content silently (Blind, Edge) — re-approve changed content; stop after 3 attempts
+  - `[high]` `patch` paths+frontmatter ANDed; frontmatter-less docs fall to `Document` (Edge) — state it in Engine facts
+  - `[medium]` `patch` first-match type order, P12 semantics, declared-ID source, inverse relations, sidecar metadata, symlinks and md-only scope undocumented (Edge, Capigo and KEP runs) — Engine facts items
+  - `[medium]` `patch` stacking a status source on a different axis manufactures P19 (Capigo run) — Engine facts
+  - `[medium]` `patch` Decision lifecycle values never listed for `map` targets (Blind) — listed
+  - `[medium]` `patch` wrapped status form needed for a list plus a map (Edge) — skeleton
+  - `[medium]` `patch` over-broad `idPattern`; H1 ID shape inconsistencies (Edge, Capigo run) — Engine facts
+  - `[medium]` `patch` P11 described wrongly; P09 cross-check for missing externalIds (Intent, VerifGap, Capigo run) — corrected
+  - `[medium]` `patch` unclosed `---` and thematic breaks miscounted as broken; unclear block boundary (Edge, Blind) — Engine facts item 8
+  - `[medium]` `patch` re-run rewrites the whole file with Write (Blind, Edge) — Edit only the approved keys
+  - `[medium]` `patch` relations never recorded by the scan (Blind) — scan records relation keys
+  - `[medium]` `patch` glossary never offered and no path given (Blind, Intent) — explicit offer
+  - `[medium]` `patch` example 1 idPattern unevidenced; emphasis stripping unstated (Blind) — example fixed
+  - `[medium]` `patch` non-software example drops IDs and sidecar case; every example uses `docs/` (Intent) — example fixed
+  - `[medium]` `patch` uninstall of the shipped skill unasserted (VerifGap) — two asserts added
+  - `[medium]` `patch` "no git operations" blocks DoD (d) (Blind) — read-only `git status` allowed
+  - `[medium]` `patch` DoD (e) unverifiable in-run (Blind, Intent) — dropped
+  - `[medium]` `patch` Capigo acceptance "every proposal approved" contradicts "only project.yaml" (Edge) — spec amended (Change Log)
+  - `[low]` `patch` citations only for types, and as keys versus comments (Intent, Blind) — `#` comment on every item
+  - `[low]` `patch` per-doc problem not required in the report (Intent) — required
+  - `[low]` `patch` exit 3, missing-root exit 2 and lint exit 1 unhandled (Edge) — Engine facts item 10
+  - `[low]` `patch` glob limits and single-quoted regex (Edge) — Engine facts item 3
+  - `[low]` `patch` `.` as repo root matches nothing (Edge) — `**`
+  - `[low]` `patch` meta-type list duplicated from PROJECT.md (Intent) — removed
+  - `[low]` `patch` test counts dirs without SKILL.md; planning text in message (Blind, Edge, Intent) — filtered; message removed
+  - `[low]` `patch` P16 misses type-path typos (Edge) — per-type count cross-check
+  - `[low]` `reject` "only the engine reads project.yaml" contradicts step 1 — superseded by the Engine facts rewrite
+  - `[low]` `reject` scope exit 2 on case-fold collision — rare; the exit-code rule covers stopping
+  - `[low]` `reject` UserGuide minimal-shape frontmatter bucket (Capigo run) — not a problem the engine sees; no rule
+  - `[low]` `defer` uninstall leaves empty `.claude/skills/`, `.claude/` and `_lumina/` dirs (VerifGap) — story 7 code
+  - `[false]` `reject` missing `readdir`/`readFile` imports — the suite passes 357/357
+  - `[false]` `reject` test fails on a clean checkout because the dir is untracked — it is committed with this story
+  - `[false]` `reject` absent-dir case lost — the fixture tests with a tmp `skillsSrcDir` cover empty sources
+  - `[false]` `reject` unbounded scan effort — host judgment; the P09 cross-check bounds misses
+  - `[false]` `reject` software examples in rules — grep hits sit only in example 1, next to a non-software one
+  - `[false]` `reject` config-check P16 loop on an empty scan — nothing approved means no write
+  - `[false]` `reject` KEP P09 x8 — a partial-copy artifact
+
+### 2026-09-26 — Re-acceptance and skill-creator pass
+- Host agents were barred from reading engine source.
+  - Capigo: the 32 frontmatter-less ADRs listed by path; `status: {heading: Status}`; config-check 0; scope 423 = scan; no P19/P20 on the ADR type; only `_lumina/config/` added.
+  - KEPs: `sources: **`; KEP mapped to `Decision`; the sidecar `kep.yaml` reported as a gap; config-check 0; scope 75 = scan; only `_lumina/config/` added.
+- `[low]` `patch` user direction: the description only says what the skill does and when it triggers
+- `[low]` `patch` the example suggested copying sidecar status into docs, contradicting Engine facts §6 — reworded; example renamed to a neutral `meta.yaml`
+- `[low]` `patch` symlinks look like duplicate docs; members with no declared ID raise no lint (KEP run) — added to §2 and §5
+- `[low]` `patch` inline `Status:` source key, idPattern prefix of a frontmatter id, generic shared `type:` values, and scope stopping rule (Capigo run) — added to §4, §5, §6 and step 2
+
+## Auto Run Result
+
+- **Change:** `lumi-project-setup`, a host-neutral skill. It discovers doc roots, scans families, and proposes a full `project.yaml` and a per-doc frontmatter report. It writes only what the user approves, then validates with `config-check`, `scope` and `lint`. An Engine facts section carries the config shape and the parser behaviour, so no engine source is needed.
+- **Files:**
+  - `src/skills/project/lumi-project-setup/SKILL.md` (new, 305 lines).
+  - `src/installer/project-mode.test.js`: the ships-every-project-skill test, and uninstall asserts.
+- **Review:** about 70 raw findings merged into 40 rows. 33 patched (5 high); 1 deferred (empty dirs left after uninstall, story 7); 6 rejected plus 7 false. A second pass after re-acceptance patched 4 more low items.
+- **Follow-up review:** recommended. 5 high and 16 medium entries were patched, and the skill was largely rewritten after the first review.
+- **Verification:**
+  - `npm run test:installer`: 357 pass, 0 fail.
+  - `ci:package`: ok, 141 files.
+  - `ci:idempotency`: 6 `[ok]`.
+  - Capigo and KEPs acceptance, re-run without engine source: every criterion met.
+  - Domain-neutrality grep: hits only in example 1.
+- **Residual risks:**
+  - The runs used Sonnet as the host on Claude Code. Codex and Antigravity hosts have not been run.
+  - Scan quality on very large repos is still a judgment call. Capigo's run left `_bmad-output/` out by judgment.
 
 ## Design Notes
 
