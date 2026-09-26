@@ -2,15 +2,23 @@
 title: 'Cross-doc lint'
 type: 'feature'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
+baseline_revision: '6981094835a88d767339c63014a58abaf653277d'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/ontology.md'
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
 warnings: []
-deferred: []
+deferred:
+  - summary: >-
+      src/project tests run in no npm script or CI job.
+    evidence: |-
+      package.json and ci.yml reference no src/project tests; story 7 owns test:project wiring.
+    location: >-
+      package.json
+    severity: medium
 ---
 
 <intent-contract>
@@ -112,3 +120,74 @@ A merged `supersedes` edge is partial when its `to` is `frag:` or any of its evi
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-09-26 — Review pass
+- verdicts: 34 findings — high 0, medium 16, low 14, false 4, maybe-false 0
+- findings:
+  - Blind Hunter:
+    - `[medium]` `patch` lint bad-argument exit depends on cwd (exit 2 outside a root) — parse lint flags in `main` before `findRoot`
+    - `[medium]` `patch` P03 flags self-references (target's own fragments, superseding doc's fragments) — Design Notes forbid; compare doc paths
+    - `[medium]` `patch` P03 flags other `supersedes` edges into the same target — reproduced on parse-pilot (`dec-a.md:2`, `dec-b.md:3`); exclude `supersedes` edges and every superseding doc of the target
+    - `[medium]` `patch` full supersession misses citers of `frag:X#…` — a fragment is part of the doc
+    - `[low]` `patch` cycles through fragments missed — collapse `frag:` to its doc for P01/P06/P07, drop resulting self-loops
+    - `[low]` `reject` recursive Tarjan overflows at ~5000-edge chains — no doc graph has such chains; iterative rewrite adds complexity
+    - `[medium]` `patch` `buildGraph` evidence `scope` untested — add graph tests and a CLI scoped P03 test
+    - `[medium]` `patch` P13/P14/P16 fold-ins and error exit untested at the CLI — add lint tests
+    - `[false]` `reject` AC "build equals story 2" untested — checked by hand: nodes and edges identical, only the `partially-superseded` P20 removed; Seli AC recorded by the implementer (P03 at README:102, 0.19 s)
+    - `[low]` `patch` `lint.mjs` header says graph findings are P09–P20 — fix the range
+    - `[low]` `patch` `scope: null` treated as a scope — use `!= null` in graph and lint
+    - `[low]` `patch` `makeFinding` in four places — export one next to `sortFindings`
+    - `[low]` `reject` `statusOf` uses `split('#')` — matches `docPathOfSubject` in graph; changing one diverges them
+    - `[low]` `patch` dead `parsed.warnings ?? []` — delete
+  - Verification Gap:
+    - `[medium]` `defer` `src/project` tests not in CI — story 7 owns it
+    - `[medium]` `patch` scope-on-evidence untested — same as above
+    - `[medium]` `patch` fold-ins untested — same as above
+    - `[low]` `patch` fragment's own status overriding its doc untested — add a lint test
+    - `[medium]` `patch` two superseders flag each other — same as the other-supersedes row
+  - Intent Alignment:
+    - `[low]` `patch` rule tests run on hand-built graphs, not through `buildGraph` — covered by the added CLI scoped-P03 and Mixed tests
+    - `[medium]` `patch` A1 exclusion flags pilot docs — same as the other-supersedes row
+    - `[medium]` `patch` B1 misses fragment citers of a fully superseded doc — same as above
+    - `[false]` `reject` C3 fragment status fallback — the Code Map specifies it
+    - `[medium]` `patch` D2 bad args after root lookup — same as above
+  - Edge Case Hunter:
+    - `[low]` `reject` Tarjan recursion depth — same as above
+    - `[medium]` `patch` superseding doc's fragment cites target → false P03 — same as the self-reference row
+    - `[medium]` `patch` full supersession misses fragment citers — same as above
+    - `[low]` `patch` P04 ignores `satisfies` into a fragment of the requirement doc — count fragment targets for their doc
+    - `[low]` `reject` rule evidence may be an absorbed mention line — same doc; fixing needs relation origin on evidence
+    - `[low]` `patch` spurious P11 on an `id:X` that is a duplicate declared ID — skip when `declaredIdOwners` has X
+    - `[low]` `patch` hand-edited `scope` null or empty — same as the `!= null` row, plus empty string ignored
+    - `[false]` `reject` scope whitespace/case mismatch — AD-27 requires verbatim labels
+    - `[false]` `reject` shared `sortFindings` dedups identical P14 rows — messages carry the fact id; identical rows are true duplicates
+    - `[medium]` `patch` bad-arg exit 2 outside a root — same as the D2 row
+
+## Auto Run Result
+
+- **Change:** `project.mjs lint [--fail-on error|warning]` runs relation rules P01–P08 (`lib/lint.mjs`, partial supersession per AD-27) over `buildGraph`, and folds in graph findings, P13, P14/P15 and P16. The output shape and exit codes are fixed. The Decision lifecycle gains `partially-superseded`. Edge evidence now carries `scope`. `buildGraph` emits P11.
+- **Files:**
+  - `src/project/lib/lint.mjs` (new): the relation rules.
+  - `src/project/lib/graph.mjs`: `scope` on evidence, P11, shared `makeFinding`/`sortFindings`.
+  - `src/project/lib/parse.mjs`: `parseAll` returns scope `warnings`.
+  - `src/project/lib/factfile.mjs`: uses the shared helpers.
+  - `src/project/ontology.mjs`: new lifecycle value.
+  - `src/project/project.mjs`: the `lint` subcommand, flag parsing before root discovery, and a shared status loop.
+  - Fixture `test-fixtures/lint-basic/`, plus tests.
+- **Review:** 34 findings.
+  - 26 patched: 16 medium, 10 low.
+  - 1 deferred: CI wiring, story 7.
+  - 7 rejected:
+    - 4 false;
+    - 3 low: Tarjan recursion depth, absorbed-mention evidence line, `#` in paths.
+- **Follow-up review:** recommended. Patched medium entries: 16. Unverified risk: the P03 citer and exclusion logic was rewritten after the first review.
+- **Verification:**
+  - `node --test src/project/`: 448 pass, 2 skipped.
+  - `npm run test:scripts`: 614 pass.
+  - parse-pilot `build` against story 2: nodes and edges identical; only the `partially-superseded` P20 was removed.
+  - Seli copy with two `facts-write` facts:
+    - exactly one P03, at `docs/adr/README.md:102`;
+    - `lint` in 0.17 s, with byte-identical stdout across two runs.
+- **Residual risks:**
+  - Seli shows 694 warnings with the minimal acceptance config, mostly P09 from unconfigured FR IDs, so setup (story 8) must propose `externalIds`.
+  - Lint tests are not yet in CI.

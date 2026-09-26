@@ -10,12 +10,14 @@ import { tmpdir } from 'node:os';
 import { contentHash } from './lib/hash.mjs';
 import { loadConfig, ontologyVersion } from './lib/config.mjs';
 import { makeFact } from './lib/fact.mjs';
+import { RULES } from './ontology.mjs';
 import { readStdinText } from './project.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_MJS = join(HERE, 'project.mjs');
 const FIXTURES = join(HERE, 'test-fixtures');
 const PARSE_PILOT = join(FIXTURES, 'parse-pilot');
+const LINT_BASIC = join(FIXTURES, 'lint-basic');
 
 function run(cwd, args, { input, env } = {}) {
   const result = spawnSync(process.execPath, [PROJECT_MJS, ...args], {
@@ -965,6 +967,223 @@ describe('verify-evidence', () => {
       assert.equal(findings.length, 1);
       assert.equal(findings[0].id, 'P15');
       assert.equal(findings[0].file, renamedPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('lint', () => {
+  test('output shape: schemaVersion, checks_run in RULES order, a P04 warning, no errors', () => {
+    const { status, stdout } = run(LINT_BASIC, ['lint']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.deepEqual(Object.keys(result), ['schemaVersion', 'checks_run', 'findings', 'summary']);
+    assert.equal(result.schemaVersion, 1);
+    assert.deepEqual(result.checks_run, RULES.map((r) => r.id));
+    assert.deepEqual(Object.keys(result.summary), ['errors', 'warnings', 'infos']);
+    assert.equal(result.summary.errors, 0);
+    assert.ok(result.summary.warnings >= 1);
+    assert.ok(result.findings.some((f) => f.id === 'P04' && f.severity === 'warning'));
+  });
+
+  test('fail-on: warnings only -> exit 0 by default, exit 1 with --fail-on warning', () => {
+    const byDefault = run(LINT_BASIC, ['lint']);
+    assert.equal(byDefault.status, 0);
+    const explicitError = run(LINT_BASIC, ['lint', '--fail-on', 'error']);
+    assert.equal(explicitError.status, 0);
+    const failOnWarning = run(LINT_BASIC, ['lint', '--fail-on', 'warning']);
+    assert.equal(failOnWarning.status, 1);
+    // The JSON is still printed even when the fail-on threshold is reached.
+    assert.deepEqual(JSON.parse(failOnWarning.stdout), JSON.parse(byDefault.stdout));
+  });
+
+  test('bad args: --fail-on info exits 1 with nothing on stdout', () => {
+    const { status, stdout, stderr } = run(LINT_BASIC, ['lint', '--fail-on', 'info']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  });
+
+  test('bad args: an unknown flag exits 1 with nothing on stdout', () => {
+    const { status, stdout, stderr } = run(LINT_BASIC, ['lint', '--bogus']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  });
+
+  test('bad args: an extra positional argument exits 1 with nothing on stdout', () => {
+    const { status, stdout, stderr } = run(LINT_BASIC, ['lint', 'extra']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  });
+
+  test('bad args: a bad flag with no project root still exits 1, not 2 (flags parse before the root lookup)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'lumina-project-cli-lint-no-root-'));
+    try {
+      const { status, stdout, stderr } = run(dir, ['lint', '--bogus']);
+      assert.equal(status, 1);
+      assert.equal(stdout, '');
+      assert.equal(JSON.parse(stderr).code, 1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('P16: an include pattern matching zero files is folded in at _lumina/config/project.yaml:1', () => {
+    const { status, stdout } = run(join(FIXTURES, 'config-p16-warning'), ['lint']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    const p16 = result.findings.filter((f) => f.id === 'P16');
+    assert.equal(p16.length, 1);
+    assert.equal(p16[0].file, '_lumina/config/project.yaml');
+    assert.equal(p16[0].line, 1);
+    assert.equal(p16[0].severity, 'warning');
+  });
+
+  test('running twice produces byte-identical stdout', () => {
+    const first = run(LINT_BASIC, ['lint']);
+    const second = run(LINT_BASIC, ['lint']);
+    assert.equal(first.status, 0);
+    assert.equal(first.stdout, second.stdout);
+  });
+
+  test('determinism: a fixture with a relation-rule finding (P08 contradicts) still lints byte-identical across two runs', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const write = runFactsWrite(root, {
+        source: docPath,
+        sourceHash,
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${docPath}`,
+          relation: 'contradicts',
+          object: 'ADR-0009',
+          evidence: { quote: 'Supersedes ADR-0009 in part.' },
+          provenance: 'extracted',
+        }],
+      });
+      assert.equal(write.status, 0);
+
+      const first = run(root, ['lint']);
+      const second = run(root, ['lint']);
+      assert.equal(first.status, 0);
+      assert.ok(JSON.parse(first.stdout).findings.some((f) => f.id === 'P08'), 'expected the P08 relation-rule finding');
+      assert.equal(first.stdout, second.stdout);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('lint touches no file under the fixture tree', async () => {
+    const before = await hashTree(LINT_BASIC);
+    run(LINT_BASIC, ['lint']);
+    const after = await hashTree(LINT_BASIC);
+    assert.equal(after, before);
+  });
+
+  test('parse-pilot: the dec-a/dec-b/dec-c mutual supersession gives no spurious P03', () => {
+    const { status, stdout } = run(PARSE_PILOT, ['lint']);
+    assert.equal(status, 0);
+    const { findings } = JSON.parse(stdout);
+    assert.equal(findings.filter((f) => f.id === 'P03').length, 0);
+  });
+
+  test('P03: a scoped supersedes citer is flagged at its own line; a scope-less citer of the same target is not', async () => {
+    const root = await copyParsePilot();
+    try {
+      const superseder = 'docs/adr/0052-new.md';
+      const scope = 'row: Retry policy';
+      assert.equal(runFactsWrite(root, {
+        source: superseder,
+        sourceHash: await hashOfFile(root, superseder),
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${superseder}`,
+          relation: 'supersedes',
+          object: 'ADR-0009',
+          scope,
+          evidence: { quote: 'Supersedes ADR-0009 in part.' },
+          provenance: 'extracted',
+        }],
+      }).status, 0);
+
+      const citer = 'docs/adr/0011-inline-status.md';
+      assert.equal(runFactsWrite(root, {
+        source: citer,
+        sourceHash: await hashOfFile(root, citer),
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${citer}`,
+          relation: 'references',
+          object: 'ADR-0009',
+          scope,
+          evidence: { quote: 'Some rationale text.' },
+          provenance: 'extracted',
+        }],
+      }).status, 0);
+
+      const scopeless = 'docs/misc/unmapped.md';
+      assert.equal(runFactsWrite(root, {
+        source: scopeless,
+        sourceHash: await hashOfFile(root, scopeless),
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${scopeless}`,
+          relation: 'references',
+          object: 'ADR-0009',
+          evidence: { quote: 'Some content, no special mentions.' },
+          provenance: 'extracted',
+        }],
+      }).status, 0);
+
+      const { status, stdout } = run(root, ['lint']);
+      assert.equal(status, 0);
+      const { findings } = JSON.parse(stdout);
+      const p03 = findings.filter((f) => f.id === 'P03');
+      assert.equal(p03.length, 1);
+      assert.equal(p03[0].file, citer);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('P14 (error) + P13 (stale, at file:1) fold in; default --fail-on exits 1 on the P14 error', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      assert.equal(runFactsWrite(root, {
+        source: docPath,
+        sourceHash: await hashOfFile(root, docPath),
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${docPath}`,
+          relation: 'references',
+          object: 'ADR-0009',
+          evidence: { quote: 'Supersedes ADR-0009 in part.' },
+          provenance: 'extracted',
+        }],
+      }).status, 0);
+
+      const filePath = join(root, docPath);
+      const edited = (await readFile(filePath, 'utf8')).replace('Supersedes ADR-0009 in part.\n', '');
+      await writeFile(filePath, edited);
+
+      const { status, stdout } = run(root, ['lint']);
+      assert.equal(status, 1);
+      const result = JSON.parse(stdout);
+      assert.ok(result.summary.errors >= 1);
+
+      const p14 = result.findings.find((f) => f.id === 'P14' && f.file === docPath);
+      assert.ok(p14, 'expected a P14 finding for the broken quote');
+      assert.equal(p14.severity, 'error');
+
+      const p13 = result.findings.find((f) => f.id === 'P13' && f.file === docPath);
+      assert.ok(p13, 'expected a P13 finding for the now-stale doc');
+      assert.equal(p13.line, 1);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

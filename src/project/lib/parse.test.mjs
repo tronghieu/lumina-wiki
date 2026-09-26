@@ -467,13 +467,13 @@ describe('parseDoc: status', () => {
     assert.equal(doc.status, null);
   });
 
-  test('sources disagree: P19 fires, first source wins (the Seli ADR-0009 pattern)', () => {
+  test('sources disagree: P19 fires, first source wins (the Seli ADR-0009 pattern); partially-superseded is in the lifecycle, so no P20', () => {
     const config = makeConfig({ sources: [{ frontmatter: 'status' }, { heading: 'Status' }], map: {} });
     const text = '---\nstatus: partially-superseded\n---\n# T\n\n## Status\n\nAccepted\n';
     const doc = parseDoc('docs/x.md', text, config);
     assert.equal(doc.status, 'partially-superseded');
     assert.ok(doc.findings.some((f) => f.id === 'P19'));
-    assert.ok(doc.findings.some((f) => f.id === 'P20'));
+    assert.equal(doc.findings.some((f) => f.id === 'P20'), false);
   });
 
   test('a valid lifecycle value on a Decision does not fire P20', () => {
@@ -501,7 +501,7 @@ describe('parseDoc: status', () => {
 
   test('P19/P20 report the winning source\'s line (a frontmatter key), not line 1', () => {
     const config = makeConfig({ sources: [{ frontmatter: 'status' }, { heading: 'Status' }], map: {} });
-    const text = '---\ntitle: X\nstatus: partially-superseded\n---\n# T\n\n## Status\n\nAccepted\n';
+    const text = '---\ntitle: X\nstatus: weird-status\n---\n# T\n\n## Status\n\nAccepted\n';
     const doc = parseDoc('docs/x.md', text, config);
     const p19 = doc.findings.find((f) => f.id === 'P19');
     const p20 = doc.findings.find((f) => f.id === 'P20');
@@ -610,7 +610,7 @@ describe('parseAll: parse-pilot fixture', () => {
     assert.equal(doc.hash, contentHash(raw));
   });
 
-  test('ADR-0009: type, declared id, disagreeing status, P19+P20 (Seli pilot scenario)', async () => {
+  test('ADR-0009: type, declared id, disagreeing status, P19 only -- partially-superseded is in the lifecycle (Seli pilot scenario)', async () => {
     const { docs } = await parseAll(root, config);
     const doc = docs.find((d) => d.path === 'docs/adr/0009-partial.md');
     assert.equal(doc.type, 'ADR');
@@ -618,7 +618,7 @@ describe('parseAll: parse-pilot fixture', () => {
     assert.equal(doc.declares, 'ADR-0009');
     assert.equal(doc.status, 'partially-superseded');
     assert.ok(doc.findings.some((f) => f.id === 'P19'));
-    assert.ok(doc.findings.some((f) => f.id === 'P20'));
+    assert.equal(doc.findings.some((f) => f.id === 'P20'), false);
   });
 
   test('ADR-0009: skipped regions hide ADR-9999, prose/inline-code/concept mentions still land', async () => {

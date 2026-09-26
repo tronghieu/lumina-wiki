@@ -39,11 +39,17 @@ export const PREFIXED_ID_RE = /^(?:doc|frag|concept|id):/;
 
 function severityOf(id) {
   const rule = RULE_BY_ID.get(id);
-  if (!rule) throw new Error(`graph.mjs: unknown finding id "${id}" (missing from ontology.mjs RULES)`);
+  if (!rule) throw new Error(`unknown finding id "${id}" (missing from ontology.mjs RULES)`);
   return rule.severity;
 }
 
-function makeFinding(id, file, line, message) {
+/**
+ * Build one finding, severity looked up from `RULES` by `id`. Exported (next
+ * to `sortFindings`): the one implementation, used by `graph.mjs`,
+ * `factfile.mjs`, `lint.mjs`, and `project.mjs` alike, instead of each
+ * keeping its own copy.
+ */
+export function makeFinding(id, file, line, message) {
   return { id, severity: severityOf(id), file, line, message };
 }
 
@@ -70,11 +76,13 @@ function sortEdges(edges) {
 }
 
 function sortEvidence(list) {
-  const sorted = [...list].sort((a, b) => cmp(a.file, b.file) || cmp(a.line, b.line) || cmp(a.quote, b.quote));
+  const sorted = [...list].sort(
+    (a, b) => cmp(a.file, b.file) || cmp(a.line, b.line) || cmp(a.quote, b.quote) || cmp(a.scope ?? '', b.scope ?? ''),
+  );
   const seen = new Set();
   const out = [];
   for (const e of sorted) {
-    const key = `${e.file}\u0000${e.line}\u0000${e.quote}\u0000${e.provenance}`;
+    const key = `${e.file}\u0000${e.line}\u0000${e.quote}\u0000${e.provenance}\u0000${e.scope ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(e);
@@ -82,7 +90,13 @@ function sortEvidence(list) {
   return out;
 }
 
-function sortFindings(findings) {
+/**
+ * Sort and dedupe a findings list: by `(file, line, id, message)`, each
+ * combination kept once. Exported (AD-14/lint.mjs): the one implementation,
+ * used by `graph.mjs`, `factfile.mjs`, and `lint.mjs` alike, instead of each
+ * module keeping its own copy.
+ */
+export function sortFindings(findings) {
   const sorted = [...findings].sort(
     (a, b) => cmp(a.file, b.file) || cmp(a.line, b.line) || cmp(a.id, b.id) || cmp(a.message, b.message),
   );
@@ -611,6 +625,21 @@ export function buildGraph({ config, parsed, facts, exists }) {
     ensureNode(nodesById, fact.subject, ctx.docsMap.has(subjPath));
 
     const raw = fact.object;
+
+    // P11 (already-prefixed `id:<X>` object matching neither a type
+    // `idPattern` nor an `externalIds` pattern): checked directly on the raw
+    // object, before resolution -- an `id:` reference always resolves
+    // (validatePrefixed never rejects it), so this is the only place the
+    // pattern mismatch itself gets reported. Skipped when `X` is itself a
+    // declared ID (P10 already reports a duplicate one; a non-duplicate one
+    // would have resolved through `doc:`, never reaching here as `id:`).
+    if (raw.startsWith('id:')) {
+      const idValue = raw.slice(3);
+      if (!ctx.declaredIdOwners.has(idValue) && classifyIdShape(idValue, ctx) === null) {
+        findings.push(makeFinding('P11', subjPath, fact.evidence.line, `external ID pattern mismatch: "${idValue}"`));
+      }
+    }
+
     let result = resolveFactRef(raw, citingDoc, ctx);
 
     if (result.kind === 'ignored') {
@@ -648,7 +677,15 @@ export function buildGraph({ config, parsed, facts, exists }) {
       from,
       relation,
       to,
-      evidence: [{ file: subjPath, line: fact.evidence.line, quote: fact.evidence.quote, provenance: fact.provenance }],
+      evidence: [{
+        file: subjPath,
+        line: fact.evidence.line,
+        quote: fact.evidence.quote,
+        provenance: fact.provenance,
+        // Only a non-empty string is a scope -- `null`/`""` from a
+        // hand-edited envelope must not make the edge look partial.
+        ...(typeof fact.scope === 'string' && fact.scope.length > 0 ? { scope: fact.scope } : {}),
+      }],
     });
   }
 

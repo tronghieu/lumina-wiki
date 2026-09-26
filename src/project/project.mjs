@@ -3,14 +3,14 @@
  * @module project
  * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
  * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
- * `verify-evidence` (story 3); every other subcommand exits 1. JSON to
- * stdout; `{error, code}` to stderr.
+ * `verify-evidence` (story 3), `lint` (story 4); every other subcommand
+ * exits 1. JSON to stdout; `{error, code}` to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
  * Exit codes (AD-14):
- *   0  success
- *   1  bad arguments or unknown subcommand
+ *   0  success (for `lint`: no finding at or above --fail-on)
+ *   1  bad arguments or unknown subcommand (for `lint`: also a finding at or above --fail-on)
  *   2  invalid config, no project root, or unsafe/colliding scope
  *   3  internal error or newer schemaVersion, or Node < 24
  */
@@ -18,6 +18,7 @@
 import { realpathSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import {
   findRoot, loadConfig, ontologyVersion, ConfigError, SchemaVersionError, CURRENT_SCHEMA_VERSION,
@@ -26,13 +27,15 @@ import { contentHash } from './lib/hash.mjs';
 import { selectScope, ScopeCollisionError } from './lib/scope.mjs';
 import { parseAll } from './lib/parse.mjs';
 import {
-  buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef,
+  buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef, sortFindings, makeFinding,
 } from './lib/graph.mjs';
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
 import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './lib/factfile.mjs';
+import { lintGraph } from './lib/lint.mjs';
+import { RULES } from './ontology.mjs';
 
 const MIN_NODE_MAJOR = 24;
-const SUBCOMMANDS = new Set(['scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence']);
+const SUBCOMMANDS = new Set(['scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint']);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
 // these to exit 2, not 3.
@@ -140,7 +143,34 @@ const STATUS_SUMMARY_KEY = {
   'never-ingested': 'neverIngested',
 };
 
-/** `doc`'s current full text, preferring `parseAll`'s own decoded text over a second read of the file. */
+/**
+ * Every in-scope doc's freshness state (AD-12), shared by `status` and
+ * `lint` (P13) so the two never compute it two different ways.
+ * @returns {{docs: {path: string, hash: string, state: string}[], summary: object}}
+ */
+function computeDocStatuses({
+  parsed, facts, graph, ontologyVer,
+}) {
+  const docs = [];
+  const summary = { fresh: 0, changed: 0, stale: 0, neverIngested: 0 };
+  for (const doc of parsed.docs) {
+    const envelope = facts.get(doc.path);
+    const sourceText = parsed.texts.get(doc.path) ?? '';
+    const refResolves = makeRefResolves(graph, doc.path);
+    const state = computeDocStatus({
+      path: doc.path,
+      hash: doc.hash,
+      envelope,
+      ontologyVersion: ontologyVer,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      sourceText,
+      refResolves,
+    });
+    docs.push({ path: doc.path, hash: doc.hash, state });
+    summary[STATUS_SUMMARY_KEY[state]] += 1;
+  }
+  return { docs, summary };
+}
 
 async function runStatus(root, config) {
   try {
@@ -148,25 +178,9 @@ async function runStatus(root, config) {
     const facts = await loadFacts(root);
     const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
     const ontologyVer = ontologyVersion(config);
-
-    const docs = [];
-    const summary = { fresh: 0, changed: 0, stale: 0, neverIngested: 0 };
-    for (const doc of parsed.docs) {
-      const envelope = facts.get(doc.path);
-      const sourceText = parsed.texts.get(doc.path) ?? '';
-      const refResolves = makeRefResolves(graph, doc.path);
-      const state = computeDocStatus({
-        path: doc.path,
-        hash: doc.hash,
-        envelope,
-        ontologyVersion: ontologyVer,
-        schemaVersion: CURRENT_SCHEMA_VERSION,
-        sourceText,
-        refResolves,
-      });
-      docs.push({ path: doc.path, hash: doc.hash, state });
-      summary[STATUS_SUMMARY_KEY[state]] += 1;
-    }
+    const { docs, summary } = computeDocStatuses({
+      parsed, facts, graph, ontologyVer,
+    });
     console.log(JSON.stringify({ docs, summary }));
   } catch (e) {
     failForEngineError(e);
@@ -342,13 +356,93 @@ async function runVerifyEvidence(root, config) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// lint (CAP-9, AD-14, AD-27): agent-free, report-only. Folds P01-P08
+// (lib/lint.mjs) with buildGraph's own P09/P10/P11/P12/P17-P20, P13 (stale
+// facts, from the shared status loop), P14/P15 (verifyEvidence), and P16
+// (scope warnings). `--fail-on error|warning` (default error).
+// ---------------------------------------------------------------------------
+
+// Every finding severity ranks here (for computing the "worst" finding);
+// only 'error'/'warning' are valid `--fail-on` values (there's no reaching
+// 'info': it's the lowest rank, never a promise the CLI makes).
+const SEVERITY_RANK = { error: 2, warning: 1, info: 0 };
+const FAIL_ON_VALUES = new Set(['error', 'warning']);
+
+/** @throws {Error} on an unknown flag, an extra positional, or a `--fail-on` value other than error/warning. */
+function parseLintArgs(rest) {
+  const { values } = parseArgs({ args: rest, options: { 'fail-on': { type: 'string' } }, allowPositionals: false });
+  const failOn = values['fail-on'] ?? 'error';
+  if (!FAIL_ON_VALUES.has(failOn)) {
+    throw new Error(`--fail-on must be "error" or "warning", got ${JSON.stringify(failOn)}`);
+  }
+  return failOn;
+}
+
+async function runLint(root, config, failOn) {
+  try {
+    const parsed = await parseAll(root, config);
+    const facts = await loadFacts(root);
+    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
+    const ontologyVer = ontologyVersion(config);
+    const { docs: statusDocs } = computeDocStatuses({
+      parsed, facts, graph, ontologyVer,
+    });
+
+    const findings = [
+      ...graph.findings, // P09, P10, P11, P12, P17-P20
+      ...lintGraph({ graph, parsed }), // P01-P08
+      ...statusDocs
+        .filter((d) => d.state === 'stale')
+        .map((d) => makeFinding('P13', d.path, 1, `stale facts: ${d.path}`)),
+      ...verifyEvidence({ parsed, texts: parsed.texts, facts }), // P14, P15
+      ...parsed.warnings.map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
+    ];
+
+    const sorted = sortFindings(findings);
+    const summary = { errors: 0, warnings: 0, infos: 0 };
+    for (const f of sorted) {
+      if (f.severity === 'error') summary.errors += 1;
+      else if (f.severity === 'warning') summary.warnings += 1;
+      else if (f.severity === 'info') summary.infos += 1;
+    }
+
+    console.log(JSON.stringify({
+      schemaVersion: 1,
+      checks_run: RULES.map((r) => r.id),
+      findings: sorted,
+      summary,
+    }));
+
+    const threshold = SEVERITY_RANK[failOn];
+    const worst = sorted.reduce((max, f) => Math.max(max, SEVERITY_RANK[f.severity]), -1);
+    process.exitCode = worst >= threshold ? 1 : 0;
+  } catch (e) {
+    failForEngineError(e);
+  }
+}
+
 export async function main(argv = process.argv.slice(2)) {
   if (!checkNodeVersion()) return;
 
   const [subcommand, ...rest] = argv;
-  if (!subcommand || !SUBCOMMANDS.has(subcommand) || rest.length > 0) {
+  // `lint` parses its own flags (`--fail-on`) via `parseLintArgs`; every
+  // other subcommand still rejects anything after its own name.
+  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (subcommand !== 'lint' && rest.length > 0)) {
     fail(1, `unknown subcommand or bad arguments: ${JSON.stringify(argv)}`);
     return;
+  }
+
+  // Parsed before the root/config lookup: a bad flag is a bad argument
+  // (exit 1) regardless of whether a project root exists.
+  let failOn;
+  if (subcommand === 'lint') {
+    try {
+      failOn = parseLintArgs(rest);
+    } catch (e) {
+      fail(1, e.message);
+      return;
+    }
   }
 
   const root = await findRoot(process.cwd());
@@ -385,6 +479,8 @@ export async function main(argv = process.argv.slice(2)) {
     await runFactsWrite(root, config);
   } else if (subcommand === 'verify-evidence') {
     await runVerifyEvidence(root, config);
+  } else if (subcommand === 'lint') {
+    await runLint(root, config, failOn);
   }
 }
 

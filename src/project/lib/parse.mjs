@@ -518,13 +518,15 @@ export function parseDoc(path, text, config, hash) {
  * Parse every in-scope document under `root`.
  * @param {string} root absolute repo root.
  * @param {object} config validated `project.yaml`.
- * @returns {Promise<{docs: object[], texts: Map<string, string>}>} `docs`
- *   sorted by `path`. `texts` maps each doc's `path` to its decoded source
- *   (not part of any JSON output -- callers such as `status` reuse it
- *   instead of re-reading files).
+ * @returns {Promise<{docs: object[], texts: Map<string, string>, warnings: object[]}>}
+ *   `docs` sorted by `path`. `texts` maps each doc's `path` to its decoded
+ *   source (not part of any JSON output -- callers such as `status` reuse it
+ *   instead of re-reading files). `warnings` is `selectScope`'s own
+ *   (P16, "include pattern matches no files") -- passed through unchanged so
+ *   `lint` can fold them in.
  */
 export async function parseAll(root, config) {
-  const { files } = await selectScope(root, config.sources);
+  const { files, warnings } = await selectScope(root, config.sources);
   const docs = [];
   const texts = new Map();
   for (const file of files) {
@@ -535,5 +537,5 @@ export async function parseAll(root, config) {
     docs.push(parseDoc(file, text, config, hash));
   }
   docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return { docs, texts };
+  return { docs, texts, warnings };
 }

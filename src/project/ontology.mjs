@@ -24,7 +24,7 @@
 export const META_TYPES = Object.freeze({
   Decision: Object.freeze({
     governance: true,
-    lifecycle: Object.freeze(['proposed', 'accepted', 'superseded', 'deprecated']),
+    lifecycle: Object.freeze(['proposed', 'accepted', 'partially-superseded', 'superseded', 'deprecated']),
   }),
   Requirement: Object.freeze({ governance: true }),
   Rule: Object.freeze({ governance: true }),

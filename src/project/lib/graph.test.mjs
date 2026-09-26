@@ -32,8 +32,12 @@ function doc(overrides = {}) {
   };
 }
 
-function edgeFact({ subject, relation, object, ref, line = 1, quote = 'evidence text', provenance = 'extracted' }) {
-  return makeFact({ kind: 'edge', subject, relation, object, ref: ref ?? object, evidence: { line, quote }, provenance });
+function edgeFact({
+  subject, relation, object, ref, line = 1, quote = 'evidence text', provenance = 'extracted', scope,
+}) {
+  return makeFact({
+    kind: 'edge', subject, relation, object, ref: ref ?? object, scope, evidence: { line, quote }, provenance,
+  });
 }
 
 function attrFact({ subject, relation, value, ref = 'r', line = 1, quote = 'evidence text', provenance = 'inferred' }) {
@@ -387,6 +391,47 @@ describe('buildGraph: pre-prefixed agent references are validated', () => {
     assert.ok(findNode(graph, 'frag:docs/a.md#row'), 'expected the edge subject node to exist');
     assert.ok(findEdge(graph, 'frag:docs/a.md#row', 'doc:docs/b.md'));
   });
+
+  test('an id: object matching neither a type idPattern nor an externalIds pattern: P11, at the fact evidence line, still resolves', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const fact = edgeFact({
+      subject: 'doc:docs/a.md', relation: 'related', object: 'id:ZZ-1', line: 6,
+    });
+    const config = cfg({ types: { ADR: { metaType: 'Decision', idPattern: 'ADR-\\d{4}' } } });
+    const graph = build({ docs: [a], facts: committed('docs/a.md', fact), config });
+
+    const p11 = graph.findings.find((f) => f.id === 'P11');
+    assert.ok(p11, 'expected a P11 finding');
+    assert.equal(p11.file, 'docs/a.md');
+    assert.equal(p11.line, 6);
+    assert.equal(p11.severity, 'warning');
+    assert.ok(findNode(graph, 'id:ZZ-1'), 'the id: node still resolves despite the pattern mismatch');
+    assert.equal(graph.findings.filter((f) => f.id === 'P09').length, 0, 'not also reported as dangling');
+  });
+
+  test('an id: object matching an externalIds pattern: no P11', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const fact = edgeFact({ subject: 'doc:docs/a.md', relation: 'related', object: 'id:FR-17' });
+    const config = cfg({ externalIds: [{ pattern: 'FR-\\d+', metaType: 'Requirement' }] });
+    const graph = build({ docs: [a], facts: committed('docs/a.md', fact), config });
+
+    assert.equal(graph.findings.filter((f) => f.id === 'P11').length, 0);
+    assert.ok(findEdge(graph, 'doc:docs/a.md', 'id:FR-17'));
+  });
+
+  test('an already-prefixed id: object naming a duplicate declared ID: P10 only, no spurious P11', () => {
+    const a = doc({ path: 'docs/adr/0009.md', declares: 'ADR-0009', declaresLine: 2 });
+    const b = doc({ path: 'docs/adr/0009-dup.md', declares: 'ADR-0009', declaresLine: 1 });
+    const c = doc({ path: 'docs/c.md' });
+    // No type idPattern/externalIds configured -- "ADR-0009" matches nothing,
+    // so without the declaredIdOwners guard this would also fire P11.
+    const fact = edgeFact({ subject: 'doc:docs/c.md', relation: 'mentions', object: 'id:ADR-0009' });
+    const graph = build({ docs: [a, b, c], facts: committed('docs/c.md', fact) });
+
+    assert.equal(graph.findings.filter((f) => f.id === 'P10').length, 2);
+    assert.equal(graph.findings.filter((f) => f.id === 'P11').length, 0);
+    assert.ok(findEdge(graph, 'doc:docs/c.md', 'id:ADR-0009'));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -601,6 +646,51 @@ describe('buildGraph: merge', () => {
     });
     const graph = build({ docs: [a] });
     assert.equal(graph.edges.length, 0);
+  });
+
+  test('a scoped fact\'s evidence carries scope', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({
+      path: 'docs/b.md',
+      facts: [edgeFact({
+        subject: 'doc:docs/b.md', relation: 'supersedes', object: 'a.md', scope: 'row: Retry policy',
+      })],
+    });
+    const graph = build({ docs: [a, b] });
+    const edge = findEdge(graph, 'doc:docs/b.md', 'doc:docs/a.md');
+    assert.equal(edge.evidence.length, 1);
+    assert.equal(edge.evidence[0].scope, 'row: Retry policy');
+  });
+
+  test('a scope-less fact\'s evidence has no scope key', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({
+      path: 'docs/b.md',
+      facts: [edgeFact({ subject: 'doc:docs/b.md', relation: 'supersedes', object: 'a.md' })],
+    });
+    const graph = build({ docs: [a, b] });
+    const edge = findEdge(graph, 'doc:docs/b.md', 'doc:docs/a.md');
+    assert.equal(edge.evidence.length, 1);
+    assert.equal(Object.hasOwn(edge.evidence[0], 'scope'), false);
+  });
+
+  test('two evidence entries on the same edge differing only in scope both survive (not deduped)', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({
+      path: 'docs/b.md',
+      facts: [
+        edgeFact({
+          subject: 'doc:docs/b.md', relation: 'supersedes', object: 'a.md', line: 5, quote: 'same quote', scope: 'row A',
+        }),
+        edgeFact({
+          subject: 'doc:docs/b.md', relation: 'supersedes', object: 'a.md', line: 5, quote: 'same quote', scope: 'row B',
+        }),
+      ],
+    });
+    const graph = build({ docs: [a, b] });
+    const edge = findEdge(graph, 'doc:docs/b.md', 'doc:docs/a.md');
+    assert.equal(edge.evidence.length, 2);
+    assert.deepEqual(edge.evidence.map((e) => e.scope).sort(), ['row A', 'row B']);
   });
 });
 

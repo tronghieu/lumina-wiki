@@ -16,8 +16,8 @@ test('META_TYPES has the eleven fixed meta-types with governance on the first th
   }
 });
 
-test('Decision carries the four-state lifecycle; no other meta-type does', () => {
-  assert.deepEqual(META_TYPES.Decision.lifecycle, ['proposed', 'accepted', 'superseded', 'deprecated']);
+test('Decision carries the five-state lifecycle; no other meta-type does', () => {
+  assert.deepEqual(META_TYPES.Decision.lifecycle, ['proposed', 'accepted', 'partially-superseded', 'superseded', 'deprecated']);
   for (const [name, entry] of Object.entries(META_TYPES)) {
     if (name === 'Decision') continue;
     assert.equal(entry.lifecycle, undefined, `${name} must not carry a lifecycle`);

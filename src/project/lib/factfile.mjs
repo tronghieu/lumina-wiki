@@ -15,29 +15,14 @@ import { quoteMatches, findQuoteLine } from './evidence.mjs';
 import { slug } from './markdown.mjs';
 import { CURRENT_SCHEMA_VERSION } from './config.mjs';
 import { RULES } from '../ontology.mjs';
-import { PREFIXED_ID_RE } from './graph.mjs';
+import { PREFIXED_ID_RE, sortFindings, makeFinding } from './graph.mjs';
 
-const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
 for (const id of ['P14', 'P15']) {
-  if (!RULE_BY_ID.has(id)) throw new Error(`ontology.mjs RULES is missing rule ${id}`);
-}
-
-function severityOf(id) {
-  return RULE_BY_ID.get(id).severity;
-}
-
-function makeFinding(id, file, line, message) {
-  return { id, severity: severityOf(id), file, line, message };
+  if (!RULES.some((r) => r.id === id)) throw new Error(`ontology.mjs RULES is missing rule ${id}`);
 }
 
 function cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function sortFindings(findings) {
-  return [...findings].sort(
-    (a, b) => cmp(a.file, b.file) || cmp(a.line, b.line) || cmp(a.id, b.id) || cmp(a.message, b.message),
-  );
 }
 
 // ---------------------------------------------------------------------------
