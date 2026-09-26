@@ -2,15 +2,23 @@
 title: 'Graph query'
 type: 'feature'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
+baseline_revision: 'a1088c7d0f6c1636741ac873e8f8225f570db3e7'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/ontology.md'
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
 warnings: []
-deferred: []
+deferred:
+  - summary: >-
+      src/project tests run in no npm script or CI job.
+    evidence: |-
+      package.json and ci.yml reference no src/project tests; story 7 owns test:project wiring.
+    location: >-
+      package.json
+    severity: medium
 ---
 
 <intent-contract>
@@ -103,3 +111,64 @@ deferred: []
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-09-26 — Review pass
+- verdicts: 34 findings — high 0, medium 11, low 16, false 7, maybe-false 0
+- findings:
+  - Edge Case Hunter:
+    - `[medium]` `patch` undeclared type-shaped ID (placeholder `id:<raw>` node) unreachable by its bare ref — accept a dangling result's `placeholder` when the graph has it
+    - `[low]` `reject` duplicate declared ID never cited exits 2 — lint P10 reports the duplicate; query has nothing to return
+    - `[low]` `reject` `frag:` id without `#` — facts-write validates subjects; hand-edited envelopes only
+    - `[medium]` `patch` `id:`/`concept:` node with only outgoing edges gets `at` with empty file — fall back to the first outgoing evidence
+    - `[low]` `patch` BOM leaks into `at.quote` on line 1 — strip a leading U+FEFF
+    - `[low]` `reject` O(N·E) `at` lookup in `queryList` — Seli is 473 nodes × 1975 edges, well under budget
+    - `[low]` `reject` non-string fragment status from an attr fact — agent-written value, `--status` compares strings by design
+    - `[low]` `patch` `--status ""` silently returns nothing — reject an empty `--status` with exit 1
+    - `[low]` `patch` same as the empty-`at` row (claim form)
+    - `[false]` `reject` unknown-ref error carries no freshness — the matrix requires nothing on stdout
+    - `[medium]` `patch` CLI tests run in the checked-in fixture — Tasks require mkdtemp copies
+  - Blind Hunter:
+    - `[medium]` `patch` placeholder `id:` unreachable — same as above
+    - `[false]` `reject` `list --meta-type Decision` includes fragments — a fragment is a node with its doc's metaType; the Items rule covers nodes; pinned by a new test
+    - `[medium]` `patch` fabricated `at` — same as above; out-of-scope doc `at.quote` stays `''` (its text is never read)
+    - `[low]` `patch` ref `path#nope` returns the whole doc — a ref with `#` that resolves to a `doc:` is not found (exit 2)
+    - `[medium]` `patch` acceptance tests missing or vacuous — add the CAP-10 chain, a "credit limit" name query, and a mention-line check reading the file line
+    - `[low]` `patch` vacuous CLI loops — assert non-empty lists; stale test also checks a parse-derived result reflects the edit; no-writes covers all three ops
+    - `[medium]` `patch` not mkdtemp — same as above
+    - `[low]` `patch` `< 1000 ms` CLI assertion is flaky and off-criterion — remove; timing stays in the manual Seli check
+    - `[low]` `patch` duplicated `cmp`/`sortEvidence`, repeated `byId` and `nodeMetaType` work, no-op `?? undefined` — reuse graph exports, build once
+  - Intent Alignment:
+    - `[false]` `reject` R1a: stale facts still returned — parse-derived results are live and `freshness.staleDocs` flags the rest, which is CAP-8's contract
+    - `[false]` `reject` R2a: fragments in `list` — same as above
+    - `[false]` `reject` R3b: keys omitted when unknown — graph nodes omit them too; consumers treat absence as unknown
+    - `[medium]` `patch` R4: placeholder IDs — same as above
+    - `[false]` `reject` R5a: `scope` dropped from evidence — the Items rule fixes evidence to `{file, line, quote}`
+    - `[low]` `patch` tests on other surfaces than the matrix examples — covered by the CAP-10 chain, the `supersedes` neighbors and the Path CLI tests
+  - Verification Gap:
+    - `[medium]` `defer` `src/project` tests not in CI — story 7 owns it
+    - `[low]` `patch` `neighbors --direction out` never tested with results — assert neighbor ids are the `to` endpoints
+    - `[low]` `patch` `queryList` tested only over `doc:` nodes — add Requirement (external ID) and Decision-with-fragment cases
+    - `[low]` `patch` `doc:` `at` fallback to line 1 never asserted — deepEqual in the Path test
+    - `[low]` `patch` in-edge `(relation, from)` order never asserted — ordered deepEqual
+    - `[low]` `patch` neighbors unknown ref exit 2 and freshness counts unverified — add both
+    - `[false]` `reject` fragments in `list` (other finding) — same as above
+    - `[medium]` `patch` placeholder `C005` unreachable (other finding) — same as the placeholder row
+
+## Auto Run Result
+
+- **Change:** `project.mjs query` with `node`, `list` and `neighbors` (AD-28). It is computed live from `buildGraph` with the shared resolver. Every item carries `at` or `evidence` as `{file, line, quote}`, and every response carries `freshness` including `staleDocs`.
+- **Files:**
+  - `src/project/lib/query.mjs` (new, pure).
+  - `src/project/project.mjs`: the `query` subcommand; flags are parsed before root discovery.
+  - `src/project/lib/graph.mjs`: exports `cmp` and `sortEvidence`.
+  - Tests: `query.test.mjs` (new) and `project.test.mjs`.
+- **Review:** 34 findings. 22 patched (11 medium, 11 low); 1 deferred (CI wiring, story 7); 11 rejected (7 false, 4 low and unlikely).
+- **Follow-up review:** recommended. Patched medium entries: 11. The unverified risk is that placeholder and anchor ref resolution changed after the first review.
+- **Verification:**
+  - `node --test src/project/`: 494 pass, 2 skipped.
+  - `npm run test:scripts`: 614 pass.
+  - Seli copy: `query node "credit limit"` returns 12 docs and 29 mentions. Every cited line contains the term. The query takes 0.21 s.
+  - `freshness.staleDocs` names docs whose facts predate a config change.
+- **Residual risks:**
+  - `list --meta-type T` includes heading fragments. This is pinned by a test; revisit if the ask skill finds it noisy.
+  - Tests are not in CI.

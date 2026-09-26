@@ -1189,3 +1189,337 @@ describe('lint', () => {
     }
   });
 });
+
+describe('query', () => {
+  // Every test below runs on its own throwaway mkdtemp copy of `parse-pilot`
+  // (never the fixture itself), same convention as `facts-write`/`lint`.
+  async function withParsePilotCopy(fn) {
+    const root = await copyParsePilot();
+    try {
+      await fn(root);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  /** The 1-based `line` of `file` under `root`, read straight off disk -- for checking a citation's quote against the real file, not against the engine's own idea of it. */
+  async function fileLineAt(root, file, line) {
+    const text = await readFile(join(root, file), 'utf8');
+    return text.split(/\r\n|\r|\n/)[line - 1] ?? '';
+  }
+
+  function assertWellFormedAt(at) {
+    assert.ok(at.file.length > 0, 'at.file must not be empty');
+    assert.ok(Number.isInteger(at.line) && at.line >= 1, 'at.line must be a positive integer');
+    assert.ok(at.quote.length > 0, 'at.quote must not be empty');
+  }
+
+  function assertWellFormedEvidence(evidence) {
+    for (const ev of evidence) {
+      assert.deepEqual(Object.keys(ev), ['file', 'line', 'quote']);
+      assert.ok(ev.file.length > 0);
+      assert.ok(Number.isInteger(ev.line) && ev.line >= 1);
+      assert.ok(ev.quote.length > 0);
+    }
+  }
+
+  test('node: resolves by declared ID; response has {schemaVersion, op, node, out, in, freshness}; a pristine copy has every doc never-ingested', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'node', 'ADR-0009']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.deepEqual(Object.keys(result), ['schemaVersion', 'op', 'node', 'out', 'in', 'freshness']);
+    assert.equal(result.schemaVersion, 1);
+    assert.equal(result.op, 'node');
+    assert.equal(result.node.id, 'doc:docs/adr/0009-partial.md');
+    assert.equal(result.node.metaType, 'Decision');
+    assert.equal(result.node.status, 'partially-superseded');
+    assert.deepEqual(result.freshness, {
+      stale: 0, changed: 0, neverIngested: 11, staleDocs: [],
+    });
+  }));
+
+  test('node: a bare repo-relative path resolves to its doc: node', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'node', 'docs/adr/0052-new.md']);
+    assert.equal(status, 0);
+    assert.equal(JSON.parse(stdout).node.id, 'doc:docs/adr/0052-new.md');
+  }));
+
+  test('node: a concept name resolves to the concept node; every mentions edge cites a real file:line', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'node', 'credit limit']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.equal(result.node.id, 'concept:credit-limit');
+    assert.ok(result.in.length > 0);
+    for (const edge of result.in) {
+      assert.equal(edge.relation, 'mentions');
+      assertWellFormedEvidence(edge.evidence);
+      for (const ev of edge.evidence) {
+        const actualLine = await fileLineAt(root, ev.file, ev.line);
+        assert.ok(actualLine.includes(ev.quote), `expected ${JSON.stringify(actualLine)} to include ${JSON.stringify(ev.quote)}`);
+      }
+    }
+  }));
+
+  test('node: an alias resolves to the same concept node as its name', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'node', 'hạn mức']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.equal(result.node.id, 'concept:credit-limit');
+    assert.ok(result.in.length > 0);
+    for (const edge of result.in) {
+      for (const ev of edge.evidence) {
+        const actualLine = await fileLineAt(root, ev.file, ev.line);
+        assert.ok(actualLine.includes(ev.quote));
+      }
+    }
+  }));
+
+  test('node: an unknown ref exits 2 with nothing on stdout', () => withParsePilotCopy(async (root) => {
+    const { status, stdout, stderr } = run(root, ['query', 'node', 'NOPE-1']);
+    assert.equal(status, 2);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 2);
+  }));
+
+  test('list: --meta-type + --status, sorted by id, non-empty', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'list', '--meta-type', 'Decision', '--status', 'accepted']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.equal(result.op, 'list');
+    assert.ok(result.items.length > 0);
+    assert.deepEqual(
+      result.items.map((i) => i.id),
+      [...result.items.map((i) => i.id)].sort(),
+    );
+    for (const item of result.items) {
+      assert.equal(item.status, 'accepted');
+      assertWellFormedAt(item.at);
+    }
+  }));
+
+  test('list: bad --meta-type exits 1 with nothing on stdout', () => withParsePilotCopy(async (root) => {
+    const { status, stdout, stderr } = run(root, ['query', 'list', '--meta-type', 'Foo']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  }));
+
+  test('list: missing --meta-type exits 1', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'list']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+  }));
+
+  test('list: an empty --status exits 1', () => withParsePilotCopy(async (root) => {
+    const { status, stdout, stderr } = run(root, ['query', 'list', '--meta-type', 'Decision', '--status', '']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  }));
+
+  test('list: an extra positional argument exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'list', '--meta-type', 'Decision', 'extra']);
+    assert.equal(status, 1);
+  }));
+
+  test('neighbors: --direction + --relation, each item {relation, node, evidence}, non-empty', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query', 'neighbors', 'ADR-0009', '--direction', 'in', '--relation', 'mentions']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.equal(result.op, 'neighbors');
+    assert.ok(result.items.length > 0);
+    for (const item of result.items) {
+      assert.deepEqual(Object.keys(item), ['relation', 'node', 'evidence']);
+      assert.equal(item.relation, 'mentions');
+      assertWellFormedAt(item.node.at);
+      assertWellFormedEvidence(item.evidence);
+    }
+  }));
+
+  test('neighbors: a fact committed via facts-write (supersedes) is a non-empty result', () => withParsePilotCopy(async (root) => {
+    const docPath = 'docs/adr/0052-new.md';
+    const write = runFactsWrite(root, {
+      source: docPath,
+      sourceHash: await hashOfFile(root, docPath),
+      facts: [{
+        kind: 'edge',
+        subject: `doc:${docPath}`,
+        relation: 'supersedes',
+        object: 'ADR-0009',
+        evidence: { quote: 'Supersedes ADR-0009 in part.' },
+        provenance: 'extracted',
+      }],
+    });
+    assert.equal(write.status, 0);
+
+    const { status, stdout } = run(root, ['query', 'neighbors', 'ADR-0009', '--direction', 'in', '--relation', 'supersedes']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.ok(result.items.length > 0);
+    assert.ok(result.items.some((i) => i.node.id === `doc:${docPath}`));
+  }));
+
+  test('neighbors: an unknown ref exits 2 with nothing on stdout', () => withParsePilotCopy(async (root) => {
+    const { status, stdout, stderr } = run(root, ['query', 'neighbors', 'NOPE-1', '--direction', 'in']);
+    assert.equal(status, 2);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 2);
+  }));
+
+  test('neighbors: missing --direction exits 1', () => withParsePilotCopy(async (root) => {
+    const { status, stdout, stderr } = run(root, ['query', 'neighbors', 'ADR-0009']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  }));
+
+  test('neighbors: invalid --direction exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'neighbors', 'ADR-0009', '--direction', 'sideways']);
+    assert.equal(status, 1);
+  }));
+
+  test('neighbors: --relation not in META_RELATIONS exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'neighbors', 'ADR-0009', '--direction', 'in', '--relation', 'bogus']);
+    assert.equal(status, 1);
+  }));
+
+  test('neighbors: missing <ref> exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'neighbors', '--direction', 'in']);
+    assert.equal(status, 1);
+  }));
+
+  test('neighbors: an extra positional argument exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'neighbors', 'ADR-0009', 'extra', '--direction', 'in']);
+    assert.equal(status, 1);
+  }));
+
+  test('bad op: missing op exits 1', () => withParsePilotCopy(async (root) => {
+    const { status, stdout } = run(root, ['query']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+  }));
+
+  test('bad op: unknown op exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'bogus']);
+    assert.equal(status, 1);
+  }));
+
+  test('bad op: node with a missing ref exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'node']);
+    assert.equal(status, 1);
+  }));
+
+  test('bad op: node with an extra positional exits 1', () => withParsePilotCopy(async (root) => {
+    const { status } = run(root, ['query', 'node', 'ADR-0009', 'extra']);
+    assert.equal(status, 1);
+  }));
+
+  test('a bad flag with no project root still exits 1, not 2 (flags parse before the root lookup)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'lumina-project-cli-query-no-root-'));
+    try {
+      const { status, stdout, stderr } = run(dir, ['query', 'list', '--meta-type', 'Bogus']);
+      assert.equal(status, 1);
+      assert.equal(stdout, '');
+      assert.equal(JSON.parse(stderr).code, 1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('running twice produces byte-identical stdout', () => withParsePilotCopy(async (root) => {
+    const first = run(root, ['query', 'node', 'ADR-0009']);
+    const second = run(root, ['query', 'node', 'ADR-0009']);
+    assert.equal(first.status, 0);
+    assert.equal(first.stdout, second.stdout);
+  }));
+
+  test('query touches no file under the fixture tree (node, list, neighbors)', () => withParsePilotCopy(async (root) => {
+    const before = await hashTree(root);
+    run(root, ['query', 'node', 'ADR-0009']);
+    run(root, ['query', 'list', '--meta-type', 'Decision']);
+    run(root, ['query', 'neighbors', 'ADR-0009', '--direction', 'in']);
+    const after = await hashTree(root);
+    assert.equal(after, before);
+  }));
+
+  test('stale: a committed fact whose quoted sentence was deleted from its doc names that doc in freshness.staleDocs; list still reflects the current (live-parsed) doc', () => withParsePilotCopy(async (root) => {
+    const docPath = 'docs/adr/0052-new.md';
+    assert.equal(runFactsWrite(root, {
+      source: docPath,
+      sourceHash: await hashOfFile(root, docPath),
+      facts: [{
+        kind: 'edge',
+        subject: `doc:${docPath}`,
+        relation: 'references',
+        object: 'ADR-0009',
+        evidence: { quote: 'Supersedes ADR-0009 in part.' },
+        provenance: 'extracted',
+      }],
+    }).status, 0);
+
+    const filePath = join(root, docPath);
+    const edited = (await readFile(filePath, 'utf8')).replace('Supersedes ADR-0009 in part.\n', '');
+    await writeFile(filePath, edited);
+
+    const { status, stdout } = run(root, ['query', 'node', 'ADR-0009']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.deepEqual(result.freshness.staleDocs, [docPath]);
+    assert.equal(result.freshness.stale, 1);
+
+    // `list` is computed live off the current file too: the doc is still
+    // correctly parsed and returned (metaType/status unaffected by the
+    // edit), even though the committed fact for it is stale -- CAP-8's
+    // "results still reflect the current text".
+    const list = JSON.parse(run(root, ['query', 'list', '--meta-type', 'Decision', '--status', 'accepted']).stdout);
+    const item = list.items.find((i) => i.id === `doc:${docPath}`);
+    assert.ok(item, 'expected the edited doc to still be listed, parsed live');
+    assert.equal(item.status, 'accepted');
+  }));
+
+  test('CAP-10 chain: list --meta-type Decision --status superseded, then neighbors <it> --direction out --relation governs', () => withParsePilotCopy(async (root) => {
+    // parse-pilot's config already has `relatedRules: [{source: Capability,
+    // target: Decision, relation: governs, inverse: true}]` (ontology.md's
+    // own example) -- it just has no `Capability` project type yet.
+    const configPath = join(root, '_lumina', 'config', 'project.yaml');
+    const config = await readFile(configPath, 'utf8');
+    await writeFile(configPath, config.replace(
+      'types:\n',
+      'types:\n  Capability:\n    metaType: Capability\n    frontmatter: { type: capability }\n',
+    ));
+
+    await writeFile(join(root, 'docs', 'adr', '9001-test-superseded.md'), [
+      '---',
+      'id: ADR-9001',
+      'type: adr',
+      'status: superseded',
+      '---',
+      '# ADR-9001: Test Decision',
+      '',
+      'Superseded for testing.',
+      '',
+    ].join('\n'));
+    await mkdir(join(root, 'docs', 'capabilities'), { recursive: true });
+    await writeFile(join(root, 'docs', 'capabilities', 'test-capability.md'), [
+      '---',
+      'type: capability',
+      'related: ADR-9001',
+      '---',
+      '# Test Capability',
+      '',
+    ].join('\n'));
+
+    const list = JSON.parse(run(root, ['query', 'list', '--meta-type', 'Decision', '--status', 'superseded']).stdout);
+    assert.ok(list.items.length > 0);
+    const decision = list.items.find((i) => i.id === 'doc:docs/adr/9001-test-superseded.md');
+    assert.ok(decision, 'expected the new superseded Decision in the list');
+    assertWellFormedAt(decision.at);
+
+    const neighbors = JSON.parse(run(root, ['query', 'neighbors', decision.id, '--direction', 'out', '--relation', 'governs']).stdout);
+    assert.ok(neighbors.items.length > 0);
+    const capability = neighbors.items.find((i) => i.node.id === 'doc:docs/capabilities/test-capability.md');
+    assert.ok(capability, 'expected the Decision to govern the Capability (Capability.related -> Decision, inverse)');
+    assertWellFormedAt(capability.node.at);
+    assertWellFormedEvidence(capability.evidence);
+  }));
+});

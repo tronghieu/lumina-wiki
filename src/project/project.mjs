@@ -3,15 +3,15 @@
  * @module project
  * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
  * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
- * `verify-evidence` (story 3), `lint` (story 4); every other subcommand
- * exits 1. JSON to stdout; `{error, code}` to stderr.
+ * `verify-evidence` (story 3), `lint` (story 4), `query` (story 5); every
+ * other subcommand exits 1. JSON to stdout; `{error, code}` to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
  * Exit codes (AD-14):
  *   0  success (for `lint`: no finding at or above --fail-on)
  *   1  bad arguments or unknown subcommand (for `lint`: also a finding at or above --fail-on)
- *   2  invalid config, no project root, or unsafe/colliding scope
+ *   2  invalid config, no project root, unsafe/colliding scope, or (for `query`) a ref with no node
  *   3  internal error or newer schemaVersion, or Node < 24
  */
 
@@ -32,10 +32,13 @@ import {
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
 import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './lib/factfile.mjs';
 import { lintGraph } from './lib/lint.mjs';
-import { RULES } from './ontology.mjs';
+import { queryNode, queryList, queryNeighbors } from './lib/query.mjs';
+import { RULES, META_TYPES, META_RELATIONS } from './ontology.mjs';
 
 const MIN_NODE_MAJOR = 24;
-const SUBCOMMANDS = new Set(['scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint']);
+const SUBCOMMANDS = new Set([
+  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query',
+]);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
 // these to exit 2, not 3.
@@ -422,13 +425,120 @@ async function runLint(root, config, failOn) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// query (CAP-7, CAP-10, AD-28): `node <ref>`, `list --meta-type T [--status
+// S]`, `neighbors <ref> --direction in|out [--relation R]`. Read-only,
+// computed live from `buildGraph`; every response carries `freshness`.
+// ---------------------------------------------------------------------------
+
+const QUERY_OPS = new Set(['node', 'list', 'neighbors']);
+const DIRECTIONS = new Set(['in', 'out']);
+
+/** @throws {Error} on a missing/unknown op, bad flags, a missing `<ref>`, or an extra positional. */
+function parseQueryArgs(rest) {
+  const [op, ...opArgs] = rest;
+  if (!op || !QUERY_OPS.has(op)) {
+    throw new Error(`query: op must be "node", "list", or "neighbors", got ${JSON.stringify(op ?? null)}`);
+  }
+
+  if (op === 'node') {
+    const { positionals } = parseArgs({ args: opArgs, options: {}, allowPositionals: true });
+    if (positionals.length !== 1) throw new Error('query node: expected exactly one <ref>');
+    return { op, ref: positionals[0] };
+  }
+
+  if (op === 'list') {
+    const { values, positionals } = parseArgs({
+      args: opArgs,
+      options: { 'meta-type': { type: 'string' }, status: { type: 'string' } },
+      allowPositionals: true,
+    });
+    if (positionals.length > 0) throw new Error('query list: unexpected positional argument');
+    const metaType = values['meta-type'];
+    if (typeof metaType !== 'string' || !Object.hasOwn(META_TYPES, metaType)) {
+      throw new Error(`query list: --meta-type must be one of ${Object.keys(META_TYPES).join(', ')}, got ${JSON.stringify(metaType ?? null)}`);
+    }
+    if (values.status === '') {
+      throw new Error('query list: --status must not be empty');
+    }
+    return { op, metaType, status: values.status };
+  }
+
+  // neighbors
+  const { values, positionals } = parseArgs({
+    args: opArgs,
+    options: { direction: { type: 'string' }, relation: { type: 'string' } },
+    allowPositionals: true,
+  });
+  if (positionals.length !== 1) throw new Error('query neighbors: expected exactly one <ref>');
+  const direction = values.direction;
+  if (!DIRECTIONS.has(direction)) {
+    throw new Error(`query neighbors: --direction must be "in" or "out", got ${JSON.stringify(direction ?? null)}`);
+  }
+  if (values.relation !== undefined && !META_RELATIONS.includes(values.relation)) {
+    throw new Error(`query neighbors: --relation must be one of ${META_RELATIONS.join(', ')}, got ${JSON.stringify(values.relation)}`);
+  }
+  return {
+    op, ref: positionals[0], direction, relation: values.relation,
+  };
+}
+
+async function runQuery(root, config, queryArgs) {
+  try {
+    const parsed = await parseAll(root, config);
+    const facts = await loadFacts(root);
+    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
+    const ontologyVer = ontologyVersion(config);
+    const { docs: statusDocs, summary } = computeDocStatuses({
+      parsed, facts, graph, ontologyVer,
+    });
+    const freshness = {
+      stale: summary.stale,
+      changed: summary.changed,
+      neverIngested: summary.neverIngested,
+      staleDocs: statusDocs.filter((d) => d.state === 'stale').map((d) => d.path).sort(),
+    };
+
+    const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
+    const resolve = (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
+
+    let payload;
+    if (queryArgs.op === 'node') {
+      const result = queryNode(queryArgs.ref, { graph, parsed, resolve });
+      if (!result) {
+        fail(2, `no node resolves for ref: ${queryArgs.ref}`);
+        return;
+      }
+      payload = { op: 'node', ...result };
+    } else if (queryArgs.op === 'list') {
+      const items = queryList({ metaType: queryArgs.metaType, status: queryArgs.status }, { graph, parsed, resolve });
+      payload = { op: 'list', items };
+    } else {
+      const items = queryNeighbors(
+        queryArgs.ref,
+        { direction: queryArgs.direction, relation: queryArgs.relation },
+        { graph, parsed, resolve },
+      );
+      if (!items) {
+        fail(2, `no node resolves for ref: ${queryArgs.ref}`);
+        return;
+      }
+      payload = { op: 'neighbors', items };
+    }
+
+    console.log(JSON.stringify({ schemaVersion: 1, ...payload, freshness }));
+  } catch (e) {
+    failForEngineError(e);
+  }
+}
+
 export async function main(argv = process.argv.slice(2)) {
   if (!checkNodeVersion()) return;
 
   const [subcommand, ...rest] = argv;
-  // `lint` parses its own flags (`--fail-on`) via `parseLintArgs`; every
-  // other subcommand still rejects anything after its own name.
-  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (subcommand !== 'lint' && rest.length > 0)) {
+  // `lint` and `query` parse their own flags/op below; every other
+  // subcommand still rejects anything after its own name.
+  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (subcommand !== 'lint' && subcommand !== 'query' && rest.length > 0)) {
     fail(1, `unknown subcommand or bad arguments: ${JSON.stringify(argv)}`);
     return;
   }
@@ -439,6 +549,15 @@ export async function main(argv = process.argv.slice(2)) {
   if (subcommand === 'lint') {
     try {
       failOn = parseLintArgs(rest);
+    } catch (e) {
+      fail(1, e.message);
+      return;
+    }
+  }
+  let queryArgs;
+  if (subcommand === 'query') {
+    try {
+      queryArgs = parseQueryArgs(rest);
     } catch (e) {
       fail(1, e.message);
       return;
@@ -481,6 +600,8 @@ export async function main(argv = process.argv.slice(2)) {
     await runVerifyEvidence(root, config);
   } else if (subcommand === 'lint') {
     await runLint(root, config, failOn);
+  } else if (subcommand === 'query') {
+    await runQuery(root, config, queryArgs);
   }
 }
 

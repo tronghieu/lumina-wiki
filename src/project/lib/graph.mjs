@@ -63,7 +63,8 @@ function normalizeFinding(f) {
 // (file, line, quote), findings by (file, line, id, message).
 // ---------------------------------------------------------------------------
 
-function cmp(a, b) {
+/** Exported (query.mjs): the one string/number comparator, instead of a second copy. */
+export function cmp(a, b) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
@@ -75,7 +76,8 @@ function sortEdges(edges) {
   return [...edges].sort((a, b) => cmp(a.from, b.from) || cmp(a.relation, b.relation) || cmp(a.to, b.to));
 }
 
-function sortEvidence(list) {
+/** Exported (query.mjs): sort-and-dedupe evidence by (file, line, quote, scope), instead of a second copy. */
+export function sortEvidence(list) {
   const sorted = [...list].sort(
     (a, b) => cmp(a.file, b.file) || cmp(a.line, b.line) || cmp(a.quote, b.quote) || cmp(a.scope ?? '', b.scope ?? ''),
   );
