@@ -94,6 +94,7 @@ ${viewerCss}
       <label>Status <select id="filter-status"><option value="">(any)</option></select></label>
       <label>Folder <select id="filter-folder"><option value="">(any)</option></select></label>
       <label><input type="checkbox" id="filter-orphans"> Hide orphan nodes</label>
+      <label><input type="checkbox" id="show-rings"> Show finding rings</label>
       <label>Local graph hops <input type="number" id="local-hops" min="0" step="1" value=""> <button id="local-clear" type="button">Clear</button></label>
       <label>Center force <input type="range" id="force-center" min="0" max="2" step="0.05" value="1"></label>
       <label>Repel force <input type="range" id="force-charge" min="-500" max="0" step="10" value="-200"></label>

@@ -96,7 +96,9 @@
     if (fs.some(function (f) { return f.severity === 'warning'; })) return 'warning';
     return fs.length ? 'info' : null;
   }
-  function nodeRadius(n) { return Math.sqrt(1 + (degree[n.id] || 0)) * NODE_REL_SIZE; }
+  // sqrt damps hubs: degree 100 -> radius ~13px, not ~40px.
+  function nodeVal(n) { return 1 + Math.sqrt(degree[n.id] || 0); }
+  function nodeRadius(n) { return Math.sqrt(nodeVal(n)) * NODE_REL_SIZE; }
   function fade(hex) { return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + '33' : hex; }
   function idOf(x) { return x && typeof x === 'object' ? x.id : x; }
   function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -268,13 +270,13 @@
     })
     .nodeId('id')
     .nodeRelSize(NODE_REL_SIZE)
-    // sqrt damps hubs: degree 100 -> radius ~13px, not ~40px.
-    .nodeVal(function (n) { return 1 + Math.sqrt(degree[n.id] || 0); })
+    .nodeVal(nodeVal)
     .nodeColor(nodeColorAccessor)
     .nodeLabel(function (n) { return escapeHtml(n.id + (n.metaType ? ' (' + n.metaType + ')' : '') + (n.status ? ' [' + n.status + ']' : '')); })
     .nodeVisibility(function (n) { return visibleSet.has(n.id); })
     .nodeCanvasObjectMode(function () { return 'after'; })
     .nodeCanvasObject(function (node, ctx) {
+      if (!document.getElementById('show-rings').checked) return;
       var sev = nodeWorstSeverity(node);
       var stale = nodeIsStale(node);
       if (!sev && !stale) return;
@@ -500,6 +502,7 @@
   buildLegend();
   buildSummary();
   document.getElementById('filter-orphans').addEventListener('change', refreshFilters);
+  document.getElementById('show-rings').addEventListener('change', redraw);
   document.getElementById('local-hops').addEventListener('input', refreshFilters);
   document.getElementById('local-clear').addEventListener('click', function () {
     document.getElementById('local-hops').value = '';
