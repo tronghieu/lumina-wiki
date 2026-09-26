@@ -159,8 +159,19 @@ See the [command reference](docs/user-guide/commands.en.md) for every available 
 - [Find research regularly](docs/user-guide/advanced-scheduled-discovery.en.md) — advanced
 - [Use QMD for local search](docs/user-guide/advanced-qmd.en.md) — advanced
 - [Connect OpenClaw or Hermes](docs/user-guide/openclaw-hermes-integration.en.md) — advanced
+- [Project mode](docs/user-guide/project-mode.en.md) — advanced
 
 You can also open the project root in [Obsidian](https://obsidian.md) to browse the Markdown notes visually.
+
+## Project mode
+
+Project mode is a separate install for a software (or similar) project's own repo: it builds a typed graph over the docs already there (decisions, requirements, rules), instead of a new wiki. There is no `raw/` or `wiki/`.
+
+```bash
+npx lumina-wiki install --mode project
+```
+
+See the [project mode guide](docs/user-guide/project-mode.en.md) for what it installs and how to use it.
 
 ## Update or uninstall
 

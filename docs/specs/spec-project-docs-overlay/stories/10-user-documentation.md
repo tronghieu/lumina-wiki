@@ -2,7 +2,7 @@
 title: 'User documentation'
 type: 'chore'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -78,3 +78,18 @@ deferred: []
 ## Spec Change Log
 
 ## Review Triage Log
+
+- Reviewed together with story 11; see its triage log. The guide fixes landed in en and were synced to vi and zh.
+
+## Auto Run Result
+
+- **Change:**
+  - project-mode guides in en, vi and zh;
+  - a Project mode section and link in each README;
+  - CHANGELOG `[Unreleased]` entries for project mode, facts-prune, ask content reading and the ingest update mode.
+- **Verification:**
+  - Every documented command was run in scratchpad sandboxes: install with each target, the bad-flag errors, every engine subcommand, and facts-prune's deleted, renamed and bad-flag cases.
+  - en, vi and zh parity: 9 headings, 3 fenced blocks and 80 inline-code tokens each, identical.
+  - `npm run test:all` passes.
+- **Residual risks:**
+  - The out-of-scope `kept` case was verified in engine tests, not re-run against the guide text.

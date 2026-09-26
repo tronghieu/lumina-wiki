@@ -159,8 +159,19 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 - [定期查找研究资料](docs/user-guide/advanced-scheduled-discovery.zh.md) — 高级
 - [使用 QMD 进行本机搜索](docs/user-guide/advanced-qmd.zh.md) — 高级
 - [连接 OpenClaw 或 Hermes](docs/user-guide/openclaw-hermes-integration.zh.md) — 高级
+- [项目模式](docs/user-guide/project-mode.zh.md) — 高级
 
 你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹，以图形界面浏览 Markdown 笔记。
+
+## 项目模式
+
+项目模式是为软件（或类似）项目自身仓库准备的另一种安装方式：它会在项目已有的文档（决策、需求、规则）之上建立一个类型化图，而不是建立新的 wiki。这里没有 `raw/` 或 `wiki/`。
+
+```bash
+npx lumina-wiki install --mode project
+```
+
+关于它会安装什么、怎样使用，请查看[项目模式指南](docs/user-guide/project-mode.zh.md)。
 
 ## 更新或卸载
 

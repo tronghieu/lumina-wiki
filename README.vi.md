@@ -159,8 +159,19 @@ Xem [bảng tra cứu lệnh](docs/user-guide/commands.vi.md) để biết toàn
 - [Tìm tài liệu định kỳ](docs/user-guide/advanced-scheduled-discovery.vi.md) — nâng cao
 - [Dùng QMD để tìm kiếm trên máy](docs/user-guide/advanced-qmd.vi.md) — nâng cao
 - [Kết nối OpenClaw hoặc Hermes](docs/user-guide/openclaw-hermes-integration.vi.md) — nâng cao
+- [Project mode](docs/user-guide/project-mode.vi.md) — nâng cao
 
 Bạn cũng có thể mở thư mục gốc bằng [Obsidian](https://obsidian.md) để xem các ghi chú Markdown bằng giao diện trực quan.
+
+## Project mode
+
+Project mode là một bản cài đặt riêng cho chính repo của một dự án phần mềm (hoặc tương tự): nó xây một đồ thị có kiểu trên các tài liệu đã có sẵn (quyết định, yêu cầu, quy tắc), thay vì tạo một wiki mới. Không có `raw/` hay `wiki/`.
+
+```bash
+npx lumina-wiki install --mode project
+```
+
+Xem [hướng dẫn project mode](docs/user-guide/project-mode.vi.md) để biết nó cài những gì và cách dùng.
 
 ## Cập nhật hoặc gỡ cài đặt
 
