@@ -23,11 +23,11 @@ These invariants stay fully in force for classic installs.
 
 | Part | Rebuild cost | Committed |
 |---|---|---|
-| Parsed (frontmatter, links, IDs, headings, vocabulary mentions) | Sub-second, deterministic | No |
-| Agent-extracted facts | Agent tokens, non-deterministic | Yes, one record per source doc keyed by content hash |
+| Parsed (frontmatter, links, IDs, headings, vocabulary mentions) | Sub-second, deterministic; recomputed on every read | Never stored |
+| Agent-extracted facts | Agent tokens, non-deterministic | Yes, one record per source doc; valid while evidence quotes match and references resolve |
 
 Per-doc records mean two branches conflict only when both edit the same doc, which already conflicts.
 
 ## Hook
 
-The hook cannot run an agent. On doc change it rebuilds the parsed part and marks that doc's agent facts stale. The real update runs through the ingest skill, invoked by the user or a host scheduler.
+Deferred to story 8. Every read parses live, so no hook is needed for correctness. Ingest runs through the ingest skill, invoked by the user or a host scheduler.

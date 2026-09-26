@@ -34,6 +34,6 @@ sources:
 sources:
   include: [docs, "packages/*/docs"]
   exclude: [docs/user-guide, docs/templates]   # templates carry placeholder IDs
-external_ids:
+externalIds:
   - pattern: 'FR[\w.-]+'
 ```

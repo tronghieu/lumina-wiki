@@ -10,7 +10,7 @@
   title: Deterministic parse and buildGraph
   description: >-
     Parse frontmatter, links, IDs, headings, status sources, and concept mentions into raw facts; one
-    buildGraph() that resolves, types, merges, and caches; refresh, build, status (SPEC CAP-5, CAP-7, CAP-8; spine AD-11, AD-12, AD-19, AD-20, AD-23).
+    buildGraph() that resolves, types, and merges; build and status, computed in memory with no cache or lock (SPEC CAP-5, CAP-7, CAP-8; spine AD-11, AD-12, AD-19, AD-20).
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-

@@ -23,17 +23,14 @@ companions:
 ```mermaid
 flowchart LR
   docs[In-scope docs<br/>read-only] --> parse[parse: raw facts]
-  hook[Host hook] --> refresh[refresh]
-  refresh --> parse
-  refresh --> state[(_lumina/_state<br/>lock, gitignored)]
   docs --> agent[Host agent<br/>lumi-project-ingest]
   agent -->|JSON stdin + sourceHash| fw[facts-write]
   cfg[_lumina/config/project.yaml] --> fw
   cfg --> bg
   fw --> f[(_lumina/facts<br/>committed)]
+  fw --> state[(_lumina/_state<br/>lock, gitignored)]
   parse --> bg[buildGraph<br/>resolve, type, merge]
   f --> bg
-  bg --> cache[(_lumina/graph/graph.json<br/>gitignored cache)]
   bg --> lint[lint]
   bg --> query[query]
   bg --> verify[verify-evidence]
@@ -89,7 +86,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-2, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10, CAP-11, CAP-12
 - **Prevents:** project code shipping into classic installs (`copyScripts` copies every file in `src/scripts/` and `src/scripts/lib/`); skills writing Lumina state with divergent formats.
-- **Rule:** All project-mode engine code lives in `src/project/` (`project.mjs`, `ontology.mjs`, `lib/`, `vendor/`) and installs to `_lumina/project/` by an explicit copy list that exits 3 on any missing file; every path is in `package.json` `files` and `ci-package` `requiredFiles`. Nothing is added to `src/scripts/`. Engine writers replace named files and never clear a directory. `project.mjs` is the sole writer of `_lumina/facts/`, `_lumina/graph/`, `_lumina/_state/`; skills call it via Bash and never import it. Subcommands: `scope`, `refresh`, `status`, `facts-write`, `build`, `query`, `lint`, `verify-evidence`, `view`, `config-check`.
+- **Rule:** All project-mode engine code lives in `src/project/` (`project.mjs`, `ontology.mjs`, `lib/`, `vendor/`) and installs to `_lumina/project/` by an explicit copy list that exits 3 on any missing file; every path is in `package.json` `files` and `ci-package` `requiredFiles`. Nothing is added to `src/scripts/`. Engine writers replace named files and never clear a directory. `project.mjs` is the sole writer of `_lumina/facts/`, `_lumina/graph/`, `_lumina/_state/`; skills call it via Bash and never import it. Subcommands: `scope`, `status`, `facts-write`, `build`, `query`, `lint`, `verify-evidence`, `view`, `config-check`.
 
 ### AD-6 — Engine is zero-dependency `[ADOPTED]`
 
@@ -103,7 +100,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 - **Prevents:** lint keyed on project type names; classic `schemas.mjs` drifting under project changes.
 - **Rule:** `src/project/ontology.mjs` exports `META_TYPES`, `META_RELATIONS`, and `RULES` (every finding id the engine emits, each with an owner: a meta-relation or `engine`), with no I/O. An emitted id missing from `RULES` fails the tests. Every project type and relation resolves to a meta-type or meta-relation inside `buildGraph()`; an unmapped relation becomes `references`.
 
-### AD-8 — Project config is one JSON file, agent-written, engine-validated
+### AD-8 — Project config is one YAML file, agent-written, engine-validated
 
 - **Binds:** CAP-2, CAP-3, CAP-4
 - **Prevents:** scope, mapping, and ID patterns split across files that disagree; a hand-rolled YAML parser; setup guidance biased to software.
@@ -124,19 +121,20 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 ### AD-11 — References are kept as written, resolved at build
 
 - **Binds:** CAP-6, CAP-7, CAP-9, CAP-10
-- **Prevents:** the parser and the agent choosing incompatible reference formats; ids churning between spellings or when a doc enters scope.
-- **Rule:** Every fact keeps `ref` exactly as written. `buildGraph()` resolves in order: declared project ID, `path#anchor`, path, concept alias, external ID pattern, else a dangling-reference finding. Every node id carries a prefix: `doc:<path>`, `frag:<path>#<anchor>`, `id:<ID>` with `defined: true|false` (an external ID is `defined: false`; adding its source to scope flips the flag, not the id), `concept:<slug>`.
+- **Prevents:** the parser and the agent choosing incompatible reference formats; one document appearing as two nodes.
+- **Rule:** Every fact keeps `ref` exactly as written. `buildGraph()` resolves in order: declared project ID, `path#anchor`, path, concept alias, external ID pattern, else a dangling-reference finding. Every node id carries a prefix: `doc:<path>`, `frag:<path>#<anchor>`, `id:<ID>`, `concept:<slug>`. A declared ID (one per doc: frontmatter `id` first, else the H1) is an alias that resolves to its defining `doc:` or `frag:` node; `id:<ID>` nodes exist only for IDs with no single definition (external, undeclared, or declared twice).
 
 ### AD-12 — Freshness is computed live, never written to committed files `[ADOPTED]`
 
 - **Binds:** CAP-5, CAP-8
-- **Prevents:** hooks producing diffs; a stored stale list disagreeing with a live check; docs re-ingested forever.
-- **Rule:** Content hash = sha256 of file bytes after stripping a leading BOM and normalizing CRLF and lone CR to LF (`lib/hash.mjs`). Each in-scope doc is `fresh`, `stale`, or `never-ingested`, always computed from `sourceHash` versus the current hash; skills select docs through `status --json`. A doc with nothing to extract gets `facts: []` and counts as ingested. `refresh` writes only `_lumina/graph/` and `_lumina/_state/`.
+- **Prevents:** a stored stale list disagreeing with a live check; docs re-ingested forever; near-total re-ingest when docs churn.
+- **Rule:** Content hash = sha256 of file bytes after stripping a leading BOM and normalizing CRLF and lone CR to LF (`lib/hash.mjs`); it is a hint, not the validity test. Each in-scope doc is `fresh` (hash equals `sourceHash`), `changed` (hash differs, every fact still passes the AD-22 evidence match and its ref still resolves), `stale` (a fact fails either check, or `ontologyVersion` differs), or `never-ingested`, always computed live; skills select docs through `status --json`. A doc with nothing to extract gets `facts: []` and counts as ingested.
 
-### AD-13 — Hook registration belongs to the setup skill `[ADOPTED]`
+### AD-13 — Hook registration belongs to the setup skill `[DEFERRED]`
 
 - **Binds:** CAP-3, CAP-8
 - **Prevents:** the installer overwriting user-owned, committed host settings; a hook that breaks the agent.
+- **Status:** Deferred to story 8. Every read parses live (AD-19), so a hook is not needed for correctness; if story 8 keeps one, this rule applies.
 - **Rule:** The setup skill merges only Lumina's entry, identified by its command string, into `.claude/settings.json` (`PostToolUse`, `Edit|Write|MultiEdit`), `.codex/hooks.json` (`PostToolUse`, `apply_patch`), and `.agents/hooks.json` (`PostToolUse`, `write_to_file|replace_file_content|multi_replace_file_content`), for installed targets. The command runs `project.mjs refresh`, ignores host stdin, resolves the script path from the host project-dir variable where one exists (`$CLAUDE_PROJECT_DIR`) else cwd, and is wrapped so a missing script or any error exits 0 silently. Installer upgrades never touch hook files; `lumi-project-check` reports a stale hook entry.
 
 ### AD-14 — Lint is agent-free and report-only
@@ -174,7 +172,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-5, CAP-6, CAP-9, CAP-10, CAP-12
 - **Prevents:** consumers building different graphs; parse typing relations without the resolver; `references` and typed edges double-counting; two owners of document status.
-- **Rule:** `src/project/lib/graph.mjs` `buildGraph()` is the only resolver and typer; parse emits raw relation names. Edges merge by resolved `(from, metaRelation, to)`, dropping a `references` edge when a typed edge exists for the pair and keeping all evidence. Document status comes only from the configured status source; agent facts may set status only on fragments; a document-level conflict is a finding. The parsed part is one file that embeds the doc-hash map it was built from; `_lumina/graph/graph.json` is a cache stamped with a hash over that map, fact file hashes, and the config hash. Readers trust either only when the stamp matches. Output is byte-identical on unchanged input (sorted keys and records, no timestamps).
+- **Rule:** `src/project/lib/graph.mjs` `buildGraph()` is the only resolver and typer; parse emits raw relation names. Edges merge by resolved `(from, metaRelation, to)`, dropping a `references` edge when a typed edge exists for the pair and keeping all evidence. Document status comes only from the configured status source; agent facts may set status only on fragments; a document-level conflict is a finding. Every read parses the in-scope docs and builds the graph in memory; nothing is cached until a measured read is too slow. Output is byte-identical on unchanged input (sorted keys and records, no timestamps).
 
 ### AD-20 — Fragment and concept identity come from the parse and the config
 
@@ -197,8 +195,8 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 ### AD-23 — Single writer at a time
 
 - **Binds:** CAP-6, CAP-8
-- **Prevents:** a hook refresh and `facts-write` racing on `_lumina/graph` and `_lumina/_state`.
-- **Rule:** Engine writers take `_lumina/_state/lock` (exclusive create; stale after 30 s). A hook `refresh` finding it locked exits 0 silently; `facts-write` retries up to 10 s, then exits 3. The engine's atomicWrite uses unique temp names (pid + random).
+- **Prevents:** two `facts-write` calls racing on the same fact file.
+- **Rule:** `facts-write` takes `_lumina/_state/lock` (exclusive create; stale after 30 s), retries up to 10 s, then exits 3. The engine's atomicWrite uses unique temp names (pid + random).
 
 ### AD-24 — Commit matrix and version skew
 
@@ -280,16 +278,20 @@ project repo after install:
 | CAP-2 source scope | `lib/scope.mjs`, `project.yaml` | AD-8, AD-9 |
 | CAP-3 setup skill | `lumi-project-setup` | AD-1, AD-8, AD-13 |
 | CAP-4 two-tier ontology | `ontology.mjs`, `project.yaml` | AD-7, AD-8, AD-21 |
-| CAP-5 deterministic parse | `project.mjs refresh`, `lib/graph.mjs` | AD-9, AD-12, AD-18, AD-19 |
+| CAP-5 deterministic parse | `lib/parse.mjs`, `lib/graph.mjs` | AD-9, AD-12, AD-18, AD-19 |
 | CAP-6 agent ingest | `lumi-project-ingest` + `facts-write` | AD-10, AD-18, AD-20, AD-22, AD-23 |
 | CAP-7 node granularity | `buildGraph()` | AD-11, AD-20 |
-| CAP-8 freshness | `refresh`, `status`, hook | AD-12, AD-13, AD-23 |
+| CAP-8 freshness | `status`, live parse | AD-12, AD-19 |
 | CAP-9 cross-doc lint | `project.mjs lint` | AD-7, AD-14, AD-19 |
 | CAP-10 ask | `lumi-project-ask` + `query` | AD-15, AD-19 |
 | CAP-11 evidence verify | `verify-evidence` | AD-15, AD-22 |
 | CAP-12 graph view | `project.mjs view` | AD-16, AD-19 |
 
 ## Deferred
+
+- Host hooks (AD-13) and a parsed/graph cache: revisit at story 8, or when a measured read is slow.
+- Partial-supersession model for lint (P02, P03, P05): decide before story 4.
+- Query contract (fixed query operations): decide before story 5.
 
 - Project-mode support for `cursor`, `gemini_cli`, `qwen`, `iflow`, `generic`: add when a pilot needs one (AD-4).
 - Consolidating classic `wiki.mjs`/`lint.mjs` parsers with the project libs: touches classic installs.

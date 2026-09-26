@@ -38,13 +38,13 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
   - **intent:** A deterministic parse builds the fast-path graph from frontmatter, links, ID mentions, heading-based status, and concept-vocabulary mentions, with no agent involved.
   - **success:** Two consecutive parses of unchanged docs produce byte-identical output; parsing Seli's `docs/` (234 files) completes in under one second.
 - **CAP-6**
-  - **intent:** The host agent ingests docs guided by the ontology, extracting entities, fragments, and relations beyond what the parse sees; every fact carries an evidence quote and `file:line`; results are stored per source doc, keyed by content hash, and only changed docs are re-ingested.
+  - **intent:** The host agent ingests docs guided by the ontology, extracting entities, fragments, and relations beyond what the parse sees; every fact carries an evidence quote and `file:line`; results are stored per source doc, and only docs whose facts no longer hold are re-ingested.
   - **success:** After ingest on Seli, `ADR-0009`'s partial supersession by `ADR-0052` appears as fragment-level facts with quotes; re-running ingest with no doc changes processes zero docs.
 - **CAP-7**
   - **intent:** Nodes exist at three granularities: document, fragment (ID- or anchor-addressable part of a doc), and concept (domain term with name, aliases, and mentions, holding no prose).
   - **success:** Asking "what do we know about credit limit" returns the concept node with every mention across Seli's docs, each linked to `file:line`.
 - **CAP-8**
-  - **intent:** The graph stays fresh without trusting the hook: a doc change rebuilds the parsed part and marks that doc's agent facts stale; queries rebuild a stale parsed part themselves and report how many docs changed since the last ingest.
+  - **intent:** The graph stays fresh with no hook: every read parses the docs live; a doc's agent facts are stale only when an evidence quote is gone or a reference no longer resolves, and reads report how many docs are stale or changed since the last ingest.
   - **success:** Editing a doc with hooks disabled, then querying, returns results reflecting the edit plus a warning naming one stale doc.
 - **CAP-9**
   - **intent:** Cross-doc lint checks the rules attached to meta-relations and reports violations without editing any doc; it runs in CI with no agent.
@@ -68,7 +68,7 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 - Source selection follows `source-scope.md`: one matcher shared by every engine subcommand, with the same `*`/`**` semantics as classic `matchGlob`.
 - Project config is YAML at `_lumina/config/project.yaml`.
 - Project-mode host targets in this iteration: Claude Code, Codex, Antigravity.
-- The parsed graph and the viewer file are gitignored; agent-extracted facts are committed, one record per source doc.
+- The viewer file is gitignored and the parsed graph is never stored; agent-extracted facts are committed, one record per source doc.
 - The viewer is one self-contained HTML file that works from `file://`, loads nothing from the network (zero-telemetry rule 10), and uses no React (see `graph-view.md`).
 - Classic IDE installs and AI-agent installs stay byte-identical to today; all repo policies in `project-context.md` hold (atomicWrite, safePath, no postinstall, no native modules, empty devDependencies, cold start under 300 ms with lazy imports, exit codes 0–4, no emoji, en/vi/zh doc sync).
 
@@ -96,3 +96,6 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 
 - Is the fixed meta-type list complete? The software pilots answer this for software; `Capability` and `Structure` naming is revisited after a later non-software pilot (see `pilot-evidence.md`).
 - Install flag name: decided in architecture.
+- Partial-supersession model for lint, decided before story 4: Seli's only real stale citer of `ADR-0009` (`adr/README.md:101`) links the path and cites no ID, and `partially-superseded` is not a Decision lifecycle value.
+- Query contract (the fixed operations `lumi-project-ask` uses), defined before story 5.
+- Whether a host hook is needed at all, revisited in story 8.

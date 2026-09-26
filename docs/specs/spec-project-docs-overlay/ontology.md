@@ -52,7 +52,7 @@ Every fact, parsed or agent-extracted, carries:
 - source `file:line` (or `file#anchor`);
 - evidence quote (agent-extracted facts; required);
 - provenance: `extracted` (parse) or `inferred` (agent);
-- content hash of the source doc at extraction time, used for staleness.
+- content hash of the source doc at extraction time, a staleness hint; a fact is stale only when its evidence quote is gone or its reference no longer resolves.
 
 ## Typing sources, cheapest first
 

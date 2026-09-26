@@ -21,8 +21,9 @@ On Seli, collect about ten real manager questions and lint cases. Continue only 
 
 ## Capigo (surveyed 2026-09-26)
 
-- About 1,400 content `.md`; `docs/` 440 (user-guide 121, adr 95, features 79, workflows 49); `_bmad-output/` 936.
-- 95 ADRs have no frontmatter; status under `## Status`.
+- About 1,400 content `.md`; `docs/` 430 (user-guide 110, adr 95, features 79, workflows 49); `_bmad-output/` 936. Re-surveyed after story 1.
+- 32 of 95 ADRs have no frontmatter; status under `## Status`, often as `**Accepted** - <date>`; `adr-011` uses an inline `**Status:** Accepted`.
+- `related:` paths are relative to `docs/`; `superseded_by:` holds a path list, a scalar, or null.
 - IDs: `ADR-088`, `FR-WMS-22-9`, `CAP-N`, `SPEC-*`, `C020`.
 - Existing checkers: `scripts/check-frontmatter.mjs`, dead-link checker, ADR-number check, user-guide CI.
 - `docs/templates/` carries placeholder IDs; `graphify-out/` already present.
