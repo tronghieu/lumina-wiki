@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import {
@@ -1705,11 +1705,11 @@ describe('view', () => {
     try {
       const { status, stdout } = run(root, ['view']);
       assert.equal(status, 0);
-      assert.deepEqual(JSON.parse(stdout), {
-        ok: true,
-        file: '_lumina/graph/view.html',
-        url: pathToFileURL(await realpath(await viewHtmlPath(root))).href,
-      });
+      const out = JSON.parse(stdout);
+      assert.deepEqual({ ok: out.ok, file: out.file }, { ok: true, file: '_lumina/graph/view.html' });
+      assert.deepEqual(Object.keys(out).sort(), ['file', 'ok', 'url']);
+      // Compare by realpath: Windows may report the temp root as an 8.3 short name.
+      assert.equal(await realpath(fileURLToPath(out.url)), await realpath(await viewHtmlPath(root)));
       const html = await readFile(await viewHtmlPath(root), 'utf8');
       assert.match(html, /<!doctype html>/i);
       const vendorSrc = await readFile(join(HERE, 'vendor', 'force-graph.min.js'), 'utf8');
@@ -1860,11 +1860,11 @@ describe('view', () => {
       );
       const { status, stdout } = run(root, ['view']);
       assert.equal(status, 0);
-      assert.deepEqual(JSON.parse(stdout), {
-        ok: true,
-        file: '_lumina/graph/view.html',
-        url: pathToFileURL(await realpath(await viewHtmlPath(root))).href,
-      });
+      const out = JSON.parse(stdout);
+      assert.deepEqual({ ok: out.ok, file: out.file }, { ok: true, file: '_lumina/graph/view.html' });
+      assert.deepEqual(Object.keys(out).sort(), ['file', 'ok', 'url']);
+      // Compare by realpath: Windows may report the temp root as an 8.3 short name.
+      assert.equal(await realpath(fileURLToPath(out.url)), await realpath(await viewHtmlPath(root)));
       const html = await readFile(await viewHtmlPath(root), 'utf8');
       assert.match(html, /<!doctype html>/i);
       assert.ok(html.includes('No in-scope documents'));
