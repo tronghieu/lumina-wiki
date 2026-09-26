@@ -2,9 +2,10 @@
 title: 'Installer project mode'
 type: 'feature'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
+baseline_revision: '018de4905be190694c600f61c0b642350fb7ddc3'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/brownfield.md'
@@ -157,3 +158,90 @@ How later stories extend this:
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-09-26 — Review pass
+- verdicts: 54 findings — high 0, medium 25, low 28, false 1, maybe-false 0
+- findings:
+  - Edge Case Hunter:
+    - `[medium]` `patch` orphan open marker: upsert appends a second block, next run deletes user lines between orphan and new close — refuse unbalanced/duplicate markers
+    - `[medium]` `patch` mixed CRLF/LF rewritten to one EOL outside the block — keep each line terminator
+    - `[low]` `patch` missing trailing newline gains one in the replace case — keep the original ending
+    - `[medium]` `patch` `.claude/skills` prune passes no `expectedTarget`, so every stale link is judged foreign — pass it
+    - `[medium]` `patch` `.agents/skills` pruned before `.claude/skills`, leaving dangling links — prune `.claude` first
+    - `[medium]` `patch` uninstall aborts on a corrupt or newer manifest (regression: baseline exits 0) — detection failure means not-project
+    - `[low]` `reject` non-project `ideTargets` in a hand-edited install.json gives a bad-flags message — hand-edited file only; adding shape validation is new guard code
+    - `[low]` `reject` corrupt install.json bypasses the skew check — hand-edited committed file; re-run rewrites it
+    - `[low]` `reject` a missing mid-list engine file leaves a partial tree — packaging error blocked by ci-package; exit 3 names the file
+    - `[low]` `reject` install.json written before links — a link failure exits 2 and a re-run completes the install
+    - `[low]` `patch` `--re-link` ignored in project mode — pass `Boolean(opts.reLink)`
+    - `[low]` `reject` `--ide-targets ','` exits 2 not 1 — same classic `parseListOption` behavior; nothing written
+    - `[medium]` `patch` `doctorOne` misses a manifest-less teammate clone — use `detectInstallMode`
+    - `[medium]` `patch` claim: locale keys never used — wire `t` and locale keys through the project branch
+    - `[medium]` `patch` claim: helpers do not keep every byte outside the block — same fix as the mixed-EOL row
+  - Blind Hunter:
+    - `[medium]` `patch` stale Claude links never pruned — same as the `expectedTarget` row
+    - `[medium]` `patch` orphan open marker deletes user content — same as above
+    - `[medium]` `patch` bytes outside markers (mixed EOL, trailing newline, strip not the inverse of upsert) — same as the mixed-EOL row; BOM-on-first-line part is a Lumina-created file only
+    - `[low]` `patch` bad-flag rule only applied to a typed `--mode project` — check against the resolved mode
+    - `[medium]` `patch` no locale support in project mode — same as the locale row
+    - `[medium]` `patch` hub `addWiki`/`doctorOne` check `manifest.mode` only; `doctor --fix` could seed classic dirs into a clone — use `detectInstallMode`
+    - `[low]` `patch` after uninstall the repo stays project mode with no hint — name the files to delete in the done message and MODE_CONFLICT
+    - `[low]` `patch` skew refusal comes after the target prompt — check skew before any prompt
+    - `[low]` `reject` targets not validated at read time — same as the non-project `ideTargets` row
+    - `[medium]` `patch` test gaps (manifest migration and `detectInstallMode`, skills path, project.yaml-only clone, antigravity, facts prompt, nested cwd) — tests added
+    - `[low]` `reject` ci-idempotency project scenario omits `README.md`/`wiki/`/`raw/` — `project-mode.test.js` asserts their absence on every fresh install
+    - `[low]` `patch` declined uninstall exits 0, contract says 4 — exit 4
+    - `[low]` `patch` `--mode` help text placement and alignment — fixed
+    - `[low]` `patch` PROJECT.md lacks `facts-write` input form and committed-vs-ignored paths — added
+    - `[low]` `patch` locale copy names the wrong `.gitignore` marker and omits `.agents/skills/` — corrected
+    - `[low]` `reject` duplicated `pathExists`/`removeDirIfEmpty` and double workspace resolution — no caller diverges; style only
+  - Verification Gap:
+    - `[medium]` `patch` classic manifest plus project signal converts silently (spec Design Notes rule 4 says exit 3) — refuse with exit 3, test added
+    - `[medium]` `patch` classic uninstall regressed on a corrupt manifest — same as the uninstall row; test added
+    - `[medium]` `patch` new `findEnclosingWorkspace` stops untested — nested-cwd test added
+    - `[medium]` `patch` project skill install/link/prune never runs in tests — injectable skills dir, fixture test added
+    - `[low]` `patch` skew test does not assert nothing written — assertions added
+    - `[medium]` `patch` other: stale `.claude` links — same as the `expectedTarget` row
+    - `[medium]` `patch` other: mixed line endings — same as the mixed-EOL row
+    - `[medium]` `patch` other: vi/zh keys unused — same as the locale row
+  - Intent Alignment:
+    - `[false]` `reject` no before/after classic comparison — acceptance ran it by hand: branch and `main` classic installs differ only in the directory name
+    - `[medium]` `patch` changed parent-directory resolution untested — same as the nested-cwd row
+    - `[low]` `patch` mode prompt runs before the minimal-profile guard — never prompt for `profile: minimal`
+    - `[medium]` `patch` marker byte cases (mixed EOL, no trailing newline) — same as the mixed-EOL row
+    - `[medium]` `patch` locale keys never wired — same as the locale row
+    - `[low]` `patch` `project.yaml`-only clone prompts for targets on a TTY — default to `claude_code` when detected
+    - `[low]` `patch` manifest-less clone prints "Installing" — prints "Upgrading" when install.json exists
+    - `[low]` `patch` bad flags applied only to typed `--mode` — same as the resolved-mode row
+    - `[low]` `reject` reused cleanup removes owned `lumi-*`, not only `lumi-project-*` — classic and project never share a repo, so no classic-owned entry is present
+    - `[low]` `reject` CI isolation is one directory check — same as the ci-idempotency row
+    - `[medium]` `patch` hub `add`/`doctor` manifest-only — same as the hub row
+    - `[low]` `patch` TTY rows untested — prompt-function tests added
+    - `[low]` `patch` declined confirm exits 0 — same as the exit-4 row
+    - `[low]` `patch` `profile` bad-flag case untested — programmatic test added
+    - `[low]` `reject` missing-engine exit-3 path untested — ci-package requires every listed file; the exit is a one-line guard
+
+## Auto Run Result
+
+- **Change:** `lumina install --mode project` installs the engine into `_lumina/project/` from one explicit list, plus `PROJECT.md`, `install.json`, `lumi-project-*` skills (none ship yet), and marker blocks in `CLAUDE.md`/`AGENTS.md`/`.gitignore`. The mode is detected per repo; uninstall keeps `facts/` and `config/`. Manifest v5 adds `mode`.
+- **Files:**
+  - `src/installer/project-mode.js` (new): engine list, targets, install, uninstall, skew check.
+  - `src/installer/commands.js`: mode gate, lazy project branch, project uninstall, `findEnclosingWorkspace` stops at project markers.
+  - `src/installer/manifest.js`: v5, `4->5` migration, `detectInstallMode` (classic manifest plus project signal exits 3).
+  - `src/installer/template-engine.js`: `upsertMarkerBlock`/`stripMarkerBlock`, per-line EOL kept, unbalanced markers refused.
+  - `src/installer/prompts.js`, `locales/{en,vi,zh}.mjs`: mode, target, uninstall prompts and all project messages.
+  - `src/installer/registry.js`, `wikis-command.js`: hub refuses or skips project repos, including manifest-less clones.
+  - `bin/lumina.js`: `--mode`. `src/templates/project/PROJECT.md` (new).
+  - `package.json` (`files`, `test:project`), `scripts/ci-package.mjs`, `scripts/ci-idempotency.mjs` (`project` scenario), `.github/workflows/ci.yml`.
+  - Tests: `project-mode.test.js` (new), `manifest`, `template-engine`, `prompts`, `commands`, `registry`, `wikis-command`.
+- **Review:** 54 findings. 38 patched (25 medium, 13 low), 0 deferred, 16 rejected (1 false, 15 low; reasons in the triage log). After the patch pass, a detected clone still hit the new UI-locale prompt; it now never prompts. The uninstall message no longer names the already-deleted `install.json`.
+- **Follow-up review:** recommended. Patched medium entries: 25. The unverified risk is the rewritten marker helpers (per-line EOL, unbalanced-marker refusal) and the new UI-locale resolution in the project branch.
+- **Verification:**
+  - `npm run test:all`: all pass (project 513, scripts 614, python 486, installer suites 0 fail).
+  - `ci:idempotency` (6 scenarios incl. `project`), `ci:package` (140 files), `ci:agent-isolation`, `ci:cold-start` (median 271 ms): pass.
+  - Seli git clone: `install --mode project --yes` changes only `.gitignore` and `CLAUDE.md` inside markers; re-run leaves `git status` clean; a fresh clone upgrades with no prompts; `--mode classic` exits 3; uninstall restores `.gitignore` and `CLAUDE.md` byte-identical.
+  - Classic install from this branch and from `main` (same flags): identical except the directory name.
+- **Residual risks:**
+  - The skill copy/link/prune path is tested only against a fixture skill; real skills land in stories 8 and 9.
+  - TTY prompt paths are covered by prompt-function tests, not a real terminal.
+

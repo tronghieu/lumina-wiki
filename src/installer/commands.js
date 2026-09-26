@@ -40,6 +40,7 @@ import {
   readFilesManifest,
   writeFilesManifest,
   cleanupObsoleteCatalog,
+  detectInstallMode,
   MANIFEST_SCHEMA_VERSION,
 } from './manifest.js';
 import {
@@ -54,6 +55,11 @@ import {
   runReadmeMergePrompt,
   runUpgradeModePrompt,
   runAgentInstallAcknowledgment,
+  runProjectModePrompt,
+  runProjectTargetsPrompt,
+  runProjectUninstallConfirm,
+  runProjectUninstallFactsPrompt,
+  runLocaleOnlyPrompt,
   LOCALE_LANGUAGE_NAME,
 } from './prompts.js';
 import { VALID_LOCALES, loadLocale } from './locales.js';
@@ -124,14 +130,29 @@ const RESEARCH_TOOL_FILES = [
   'fetch_rss.py', 'fetch_scite.py', 'fetch_altmetric.py',
 ];
 
+async function pathExistsForWorkspace(p) {
+  try {
+    await access(p, fsConstants.F_OK);
+    return true;
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
+    return false;
+  }
+}
+
+// Stops at a classic workspace (_lumina/manifest.json) OR a project-mode one
+// — the manifest is gitignored, so a project-mode repo's only durable marker
+// may be the committed `_lumina/config/project.yaml` / `_lumina/project/
+// install.json` (AD-2 teammate-clone case).
 async function findEnclosingWorkspace(startDir) {
   let current = resolve(startDir);
   while (true) {
-    try {
-      await access(join(current, '_lumina', 'manifest.json'), fsConstants.F_OK);
+    if (
+      await pathExistsForWorkspace(join(current, '_lumina', 'manifest.json'))
+      || await pathExistsForWorkspace(join(current, '_lumina', 'config', 'project.yaml'))
+      || await pathExistsForWorkspace(join(current, '_lumina', 'project', 'install.json'))
+    ) {
       return current;
-    } catch (err) {
-      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err;
     }
     const parent = dirname(current);
     if (parent === current) return null;
@@ -186,6 +207,24 @@ async function readManifestForInstall(projectRoot) {
  *   Purpose' text; equivalent to the interactive research-purpose prompt.
  */
 export async function installCommand(opts = {}) {
+  // --mode gate, part 1 (CAP-1 / AD-2): bad-flags validation runs before
+  // EVERY other path, including the --agents-only fast path just below,
+  // since `--mode project` + `--agents` is itself a bad-flags combination.
+  if (opts.mode !== undefined && opts.mode !== null && opts.mode !== '') {
+    if (opts.mode !== 'classic' && opts.mode !== 'project') {
+      const e = new Error(`UNKNOWN_MODE: "${opts.mode}". Valid values: classic, project`);
+      e.code = 1;
+      throw e;
+    }
+    if (opts.mode === 'project' && (opts.packs || opts.agents || opts.profile)) {
+      const e = new Error(
+        '--mode project cannot be combined with --packs, --agents, or a profile.',
+      );
+      e.code = 1;
+      throw e;
+    }
+  }
+
   // --agents-only fast path (CAP-8/CAP-10 fix): `--agents` documents a
   // GLOBAL, skills-only install (README.md / user-guides "AI-agent
   // installs"). Previously it ran the ENTIRE classic per-project install
@@ -213,6 +252,68 @@ export async function installCommand(opts = {}) {
       await runAgentInstallAcknowledgment({ acceptDefaults: yes });
     }
     return;
+  }
+
+  // --mode gate, part 2: resolve the mode BEFORE any classic step and
+  // diverge early into the project branch — mirrors the --agents fast path
+  // above. Detection is fixed per repo (AD-2): a repo already set up one way
+  // ignores --mode entirely unless it conflicts, in which case nothing is
+  // written and the process exits 3.
+  {
+    const initialDirForMode = opts.directory ?? opts.cwd ?? process.cwd();
+    const requestedRootForMode = resolve(initialDirForMode);
+    const projectRootForMode = opts.searchParents
+      ? (await findEnclosingWorkspace(requestedRootForMode) ?? requestedRootForMode)
+      : requestedRootForMode;
+
+    // detectInstallMode itself throws (code 3) for a classic manifest sitting
+    // alongside a committed project signal (Design Notes rule 4) — let that
+    // propagate as-is, nothing written.
+    const detectedMode = await detectInstallMode(projectRootForMode);
+    if (opts.mode && detectedMode && detectedMode !== opts.mode) {
+      const e = new Error(
+        `MODE_CONFLICT: "${projectRootForMode}" is already set up in '${detectedMode}' mode; ` +
+        `--mode ${opts.mode} is refused. Re-run with no --mode to upgrade it as-is. To switch this repo ` +
+        `back to classic, first delete _lumina/config/project.yaml and _lumina/project/install.json.`,
+      );
+      e.code = 3;
+      throw e;
+    }
+
+    let resolvedMode = detectedMode ?? opts.mode ?? null;
+    // The repo already carried a mode signal (manifest.mode, project.yaml, or
+    // install.json) before this call — never re-prompt for it, and default
+    // silently rather than ask again (teammate-clone rows: "no prompts").
+    const wasDetected = detectedMode !== null;
+    let presetLocale = null;
+    if (!resolvedMode) {
+      if (Boolean(opts.yes) || opts.profile === 'minimal') {
+        // Minimal profile is always hub-driven, never a human at a terminal.
+        resolvedMode = 'classic';
+      } else if (process.stdin.isTTY && process.stdout.isTTY) {
+        presetLocale = await resolveProjectUiLocale(opts, null, false);
+        const { t: gateT } = await loadLocale(presetLocale);
+        resolvedMode = await runProjectModePrompt({ acceptDefaults: false, t: gateT });
+      } else {
+        resolvedMode = 'classic';
+      }
+    }
+
+    if (resolvedMode === 'project') {
+      // Bad-flags check applies to the RESOLVED mode, not just a literal
+      // --mode project: a repo auto-detected as project must refuse the same
+      // classic-only flags, even when the user never typed --mode.
+      if (opts.packs || opts.agents || opts.profile) {
+        const e = new Error(
+          '--mode project cannot be combined with --packs, --agents, or a profile.',
+        );
+        e.code = 1;
+        throw e;
+      }
+      const colors = await getColorFns();
+      await runProjectInstall(opts, projectRootForMode, colors, { presetLocale, wasDetected });
+      return;
+    }
   }
 
   const profile = opts.profile === 'minimal' ? 'minimal' : 'full';
@@ -483,6 +584,7 @@ export async function installCommand(opts = {}) {
     schemaVersion:    MANIFEST_SCHEMA_VERSION,
     packageVersion:   PKG.version,
     locale:           locale,
+    mode:             'classic',
     installedAt:      existingManifest?.installedAt ?? now,
     updatedAt:        now,
     packs:            Object.fromEntries(packs.map(p => [p, { version: PKG.version, source: 'built-in' }])),
@@ -558,6 +660,139 @@ export async function installCommand(opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Project mode — install branch (CAP-1 / AD-2 through AD-5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the installer's own UI language for project mode — same source
+ * order as classic's Prompt 0 (--lang, else the previously installed
+ * locale, else a TTY prompt, else 'en') but never persists a
+ * communication/document-output language: project mode records no
+ * communication language (agents follow the user's language).
+ *
+ * @param {object} opts
+ * @param {object|null} existingManifest
+ * @param {boolean} yes
+ * @returns {Promise<'en'|'vi'|'zh'>}
+ */
+async function resolveProjectUiLocale(opts, existingManifest, yes) {
+  if (opts.lang !== undefined && opts.lang !== null && opts.lang !== '') {
+    const normalized = String(opts.lang).toLowerCase().trim();
+    if (!VALID_LOCALES.includes(normalized)) {
+      const e = new Error(`UNKNOWN_LOCALE: ${opts.lang}. Valid: ${VALID_LOCALES.join(', ')}`);
+      e.code = 2;
+      throw e;
+    }
+    return normalized;
+  }
+  if (existingManifest?.locale) return existingManifest.locale;
+  if (!yes && process.stdin.isTTY && process.stdout.isTTY) {
+    return runLocaleOnlyPrompt({ acceptDefaults: false });
+  }
+  return 'en';
+}
+
+/**
+ * `--mode project` install/upgrade branch. Diverges early, like `--agents`:
+ * never scaffolds `raw/`/`wiki/`, never calls `renderIdeStubs`. The actual
+ * engine/skills/marker-block payload lives in `project-mode.js`, lazily
+ * imported here to avoid a static import cycle (that module imports several
+ * skill-management helpers back from this one).
+ *
+ * @param {object} opts          - the original installCommand opts
+ * @param {string} projectRoot
+ * @param {object} colors
+ * @param {object} [ctx]
+ * @param {string|null} [ctx.presetLocale] - already resolved by the mode gate
+ *   (it needed one to localize the classic-vs-project prompt); reused here
+ *   to avoid asking twice in the same interactive session.
+ * @param {boolean} [ctx.wasDetected] - the repo already carried a mode
+ *   signal (manifest.mode / project.yaml / install.json) before this call —
+ *   never prompt for ideTargets in that case (teammate-clone rows: "no
+ *   prompts"), and always report progress as an upgrade.
+ */
+async function runProjectInstall(opts, projectRoot, colors, { presetLocale = null, wasDetected = false } = {}) {
+  const { installProject, validateProjectIdeTargets, checkProjectVersionSkew } = await import('./project-mode.js');
+
+  // Version-skew refusal happens before ANY prompt — nothing written, and
+  // the user isn't asked questions for an install that's about to be refused.
+  await checkProjectVersionSkew(projectRoot, PKG.version);
+
+  const existingManifest = await readManifestForInstall(projectRoot);
+  const isUpgrade = existingManifest !== null || wasDetected;
+  const yes = Boolean(opts.yes);
+
+  // A detected repo (teammate clone) never prompts -- matrix row "no prompts".
+  const uiLocale = presetLocale ?? await resolveProjectUiLocale(opts, existingManifest, yes || wasDetected);
+  const { t } = await loadLocale(uiLocale);
+
+  // The manifest is gitignored (AD-24), so a teammate's clone has no
+  // existingManifest even on an upgrade — install.json is the committed
+  // record of the previous ideTargets in that case.
+  let previousInstallJson = null;
+  if (!existingManifest?.ideTargets?.length) {
+    try {
+      previousInstallJson = JSON.parse(
+        await readFile(join(projectRoot, '_lumina', 'project', 'install.json'), 'utf8'),
+      );
+    } catch (_) { /* fresh install: no committed install.json either */ }
+  }
+
+  const override = parseListOption(opts.ideTargets ?? opts.ide, '--ide-targets');
+  let ideTargets;
+  if (override) {
+    validateProjectIdeTargets(unique(override));
+    ideTargets = unique(override);
+  } else if (existingManifest?.ideTargets?.length) {
+    ideTargets = existingManifest.ideTargets;
+  } else if (previousInstallJson?.ideTargets?.length) {
+    ideTargets = previousInstallJson.ideTargets;
+  } else if (!yes && !wasDetected && process.stdin.isTTY && process.stdout.isTTY) {
+    ideTargets = await runProjectTargetsPrompt({ acceptDefaults: false, t });
+  } else {
+    // "--yes with no --ide-targets defaults to claude_code" (Boundaries);
+    // same default when the repo was detected and carries no prior targets.
+    ideTargets = ['claude_code'];
+  }
+
+  console.log('');
+  console.log(colors.bold(t(isUpgrade ? 'project.progress.upgrading' : 'project.progress.installing', { dir: projectRoot })));
+
+  const result = await installProject({
+    projectRoot,
+    ideTargets,
+    pkgVersion: PKG.version,
+    existingManifest,
+    colors,
+    reLink: Boolean(opts.reLink),
+  });
+
+  const now = new Date().toISOString();
+  const migrated = existingManifest ? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION) : {};
+  const manifest = {
+    ...migrated,
+    schemaVersion:  MANIFEST_SCHEMA_VERSION,
+    packageVersion: PKG.version,
+    mode:           'project',
+    locale:         uiLocale,
+    installedAt:    existingManifest?.installedAt ?? now,
+    updatedAt:      now,
+    ideTargets,
+    symlinkStrategies: result.symlinkStrategies,
+    resolvedPaths: {
+      projectRoot,
+      lumina: join(projectRoot, '_lumina'),
+    },
+  };
+  await writeManifest(projectRoot, manifest);
+
+  console.log('');
+  console.log(colors.green(t('project.success.installed')));
+  console.log(t('project.success.targets', { targets: ideTargets.join(', ') }));
+  console.log(t('project.success.skills', { count: result.skillCount }));
+}
+
+// ---------------------------------------------------------------------------
 // uninstall command
 // ---------------------------------------------------------------------------
 
@@ -570,6 +805,39 @@ export async function uninstallCommand(opts = {}) {
   const { cwd = process.cwd(), yes = false } = opts;
   const projectRoot = resolve(cwd);
   const colors = await getColorFns();
+
+  // Project mode branches before ANY classic step (AD-17). A detection
+  // failure (corrupt manifest, or a classic-manifest/project-signal
+  // conflict) is not a reason to refuse an uninstall — treat it as "not
+  // project" and fall through to the classic path below, which is exactly
+  // what ran here before project mode existed.
+  const mode = await detectInstallMode(projectRoot).catch(() => null);
+  if (mode === 'project') {
+    let projectUninstallLocale = 'en';
+    try {
+      const mf = await readManifest(projectRoot);
+      if (mf?.locale) projectUninstallLocale = mf.locale;
+    } catch (_) {}
+    const { t } = await loadLocale(projectUninstallLocale);
+
+    const confirmed = yes ? true : await runProjectUninstallConfirm({ acceptDefaults: false, t });
+    if (!confirmed) {
+      console.log(colors.yellow(t('uninstall.cancelled')));
+      // CLI contract: a declined confirmation is a user cancellation (exit 4),
+      // matching every other confirm prompt in this file.
+      process.exit(4);
+    }
+    // "--yes keeps them" (facts/ and config/ survive unless explicitly confirmed).
+    const deleteFactsAndConfig = yes ? false : await runProjectUninstallFactsPrompt({ acceptDefaults: false, t });
+    const { uninstallProject } = await import('./project-mode.js');
+    await uninstallProject({ projectRoot, colors, deleteFactsAndConfig });
+    console.log(colors.green(
+      deleteFactsAndConfig
+        ? t('project_uninstall.done.deleted')
+        : t('project_uninstall.done.kept'),
+    ));
+    return;
+  }
 
   // Load locale from manifest; fall back to EN if manifest missing/corrupt.
   // uninstall has no --lang flag — it always reads from the installed manifest.
@@ -2230,7 +2498,7 @@ export async function seedWikiFiles(projectRoot) {
   }
 }
 
-async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors, t = null) {
+export async function createSkillSymlinks(projectRoot, skillRows, existingManifest, reLink, colors, t = null) {
   const strategies = {};
   const errors = [];
   const recordedStrategies = existingManifest?.symlinkStrategies ?? {};

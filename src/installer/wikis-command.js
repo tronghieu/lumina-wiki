@@ -45,6 +45,7 @@ import { createRequire } from 'node:module';
 import { addWiki, removeWiki, listWikis, resolveWiki, refreshPacks, normalizeKey, sameDirectory } from './registry.js';
 import { checkLayout } from './layout.js';
 import { ensureDir } from './fs.js';
+import { detectInstallMode } from './manifest.js';
 
 const require = createRequire(import.meta.url);
 
@@ -255,6 +256,17 @@ function assembleInspectReport(absPath, state, exists, entryCount, sampleEntries
  *   placeholder in `hint` when provisioning applies.
  */
 async function buildInspectReport(absPath, packs) {
+  // Project-mode repos are a separate product and are never managed by
+  // lumi-hub (spec-project-docs-overlay). Detected via detectInstallMode
+  // (not just readManifestQuiet below) so this also refuses a teammate's
+  // clone that has no local manifest but a committed project.yaml/install.json.
+  const detected = await detectInstallMode(absPath).catch(() => null);
+  if (detected === 'project') {
+    const e = new Error(`"${absPath}" is a Lumina project-mode repo; lumi-hub does not manage project-mode repos.`);
+    e.code = 2;
+    throw e;
+  }
+
   const registryMatch = await findRegistryMatch(absPath);
 
   let st = null;
@@ -398,6 +410,11 @@ async function runAdd(args, options, json) {
  *    re-implemented here.
  */
 async function runAddWithProvision({ dirPath, options, aliases, json }) {
+  const detected = await detectInstallMode(dirPath).catch(() => null);
+  if (detected === 'project') {
+    return emitError(json, `"${dirPath}" is a Lumina project-mode repo; lumi-hub does not manage project-mode repos.`, 2);
+  }
+
   const manifest = await readManifestQuiet(dirPath);
 
   if (manifest) {
@@ -641,6 +658,19 @@ async function doctorOne(key, entry, fix) {
   } catch (_) {
     issues.push(`Wiki directory not found: ${wikiPath}`);
     return { key, path: wikiPath, reachable: false, hasManifest: false, structureOk: false, lintOk: false, issues };
+  }
+
+  // A registered entry that has since become a project-mode repo (a separate
+  // product, never fleet-managed) is skipped, not treated as broken. Checked
+  // via detectInstallMode (not just the manifest below) so this also catches
+  // a teammate clone with no local manifest but a committed project.yaml/
+  // install.json — `--fix` must never seed raw//wiki/ into a project repo.
+  const detectedMode = await detectInstallMode(wikiPath).catch(() => null);
+  if (detectedMode === 'project') {
+    return {
+      key, path: wikiPath, reachable: true, hasManifest: true, structureOk: true, lintOk: true,
+      issues: ['This is now a Lumina project-mode repo; skipped (not managed by lumi-hub)'],
+    };
   }
 
   const manifestPath = join(wikiPath, '_lumina', 'manifest.json');

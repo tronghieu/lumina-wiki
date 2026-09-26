@@ -7,7 +7,7 @@
  * files drift. Runtime state timestamps are intentionally excluded.
  */
 
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,7 +52,24 @@ const scenarios = [
     workspaceBasename: 'ci-multilingual-zh',
     args: ['install', '--yes', '--no-update', '--lang', 'zh', '--packs', 'core,research'],
   },
+  {
+    name: 'project',
+    workspaceBasename: 'ci-project-mode',
+    args: ['install', '--mode', 'project', '--yes', '--no-update', '--ide-targets', 'claude_code,codex'],
+    isProject: true,
+    // Seeds a pre-existing CRLF AGENTS.md and .gitignore — AD-3 requires
+    // every byte outside the marker block, including line endings, survives.
+    async seed(workspace) {
+      await writeFile(join(workspace, 'AGENTS.md'), 'Existing project instructions.\r\n', 'utf8');
+      await writeFile(join(workspace, '.gitignore'), '.env\n', 'utf8');
+    },
+    diffPaths: ['AGENTS.md', '.gitignore', 'CLAUDE.md', '.agents', '.claude', '_lumina/project'],
+  },
 ];
+
+async function pathExists(p) {
+  try { await access(p); return true; } catch { return false; }
+}
 
 const managedDiffPaths = [
   'README.md',
@@ -103,13 +120,24 @@ async function runScenario(scenario) {
     run('git', ['config', 'user.email', 'ci@example.invalid'], { cwd: workspace });
     run('git', ['config', 'user.name', 'Lumina CI'], { cwd: workspace });
 
+    if (scenario.seed) await scenario.seed(workspace);
+
     run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
+    // AD-26 classic isolation gate: a classic (non-project) install must
+    // never create _lumina/project/ — project code leaking into a classic
+    // install is exactly what the mode gate exists to prevent.
+    if (!scenario.isProject && await pathExists(join(workspace, '_lumina', 'project'))) {
+      throw new Error(`Classic scenario "${scenario.name}" must never create _lumina/project/, but it did.`);
+    }
     run('git', ['add', '-A'], { cwd: workspace });
     run('git', ['commit', '-m', 'baseline'], { cwd: workspace });
 
     run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
+    if (!scenario.isProject && await pathExists(join(workspace, '_lumina', 'project'))) {
+      throw new Error(`Classic scenario "${scenario.name}" must never create _lumina/project/, but it did.`);
+    }
 
-    const diff = spawnSync('git', ['diff', '--exit-code', '--', ...managedDiffPaths], {
+    const diff = spawnSync('git', ['diff', '--exit-code', '--', ...(scenario.diffPaths ?? managedDiffPaths)], {
       cwd: workspace,
       encoding: 'utf8',
       timeout: 60000,

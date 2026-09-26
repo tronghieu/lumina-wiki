@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { fileHash } from './fs.js';
-import { normalizeKey } from './registry.js';
+import { normalizeKey, readRegistry, writeRegistry } from './registry.js';
 // Direct import — used ONLY for the console-restoration test below, where the
 // assertion is about in-process global state (console.log identity) that a
 // spawned child process can't expose. Every commander-flag-collision test
@@ -826,6 +826,127 @@ describe('lumina wikis add --provision — console-suppression safety', () => {
     console.log('probe-after-restore');
     console.log = originalConsoleLog;
     assert.ok(sawProbe);
+  });
+});
+
+async function pathExistsHelper(p) {
+  try { await access(p); return true; } catch { return false; }
+}
+
+describe('lumina wikis — project-mode repos are refused', () => {
+  test('inspect on a project-mode repo exits 2, refused, writes nothing', async () => {
+    const workspace = await installSandboxWiki('proj-inspect', ['--mode', 'project']);
+    const before = await snapshotFiles(workspace);
+    const result = run(['wikis', 'inspect', workspace, '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.equal(err.code, 2);
+    assert.match(err.error, /project-mode/);
+    const after = await snapshotFiles(workspace);
+    assert.deepEqual(after, before);
+  });
+
+  test('inspect on a no-manifest project repo (teammate clone, project.yaml only) exits 2, refused', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'lumina-wikis-cmd-wiki-'));
+    trackedDirs.push(tmp);
+    const workspace = join(tmp, 'proj-clone-inspect');
+    await mkdir(join(workspace, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(workspace, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+    const before = await snapshotFiles(workspace);
+
+    const result = run(['wikis', 'inspect', workspace, '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.match(err.error, /project-mode/);
+    const after = await snapshotFiles(workspace);
+    assert.deepEqual(after, before);
+  });
+
+  test('add on a no-manifest project repo (teammate clone, install.json only) exits 2, nothing registered', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'lumina-wikis-cmd-wiki-'));
+    trackedDirs.push(tmp);
+    const workspace = join(tmp, 'proj-clone-add');
+    await mkdir(join(workspace, '_lumina', 'project'), { recursive: true });
+    await writeFile(
+      join(workspace, '_lumina', 'project', 'install.json'),
+      JSON.stringify({ schemaVersion: 1, packageVersion: PKG_VERSION, ideTargets: ['claude_code'] }, null, 2) + '\n',
+    );
+
+    const result = run(['wikis', 'add', workspace, '--json']);
+    assert.equal(result.status, 2);
+    const err = JSON.parse(result.stderr);
+    assert.match(err.error, /project-mode/);
+    const listed = JSON.parse(run(['wikis', 'list', '--json']).stdout);
+    assert.deepEqual(listed.wikis, {});
+  });
+
+  test('add on a project-mode repo exits 2, nothing registered', async () => {
+    const workspace = await installSandboxWiki('proj-add', ['--mode', 'project']);
+    const result = run(['wikis', 'add', workspace, '--json']);
+    assert.equal(result.status, 2);
+    const listResult = run(['wikis', 'list', '--json']);
+    const listed = JSON.parse(listResult.stdout);
+    assert.deepEqual(listed.wikis, {});
+  });
+
+  test('add --provision on a project-mode repo exits 2, nothing written or registered', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'lumina-wikis-cmd-wiki-'));
+    trackedDirs.push(tmp);
+    const workspace = join(tmp, 'proj-provision');
+    await mkdir(workspace, { recursive: true });
+    assert.equal(run(['install', '--mode', 'project', '--yes', '--no-update', '--directory', workspace]).status, 0);
+    const before = await snapshotFiles(workspace);
+
+    const result = run(['wikis', 'add', workspace, '--provision', '--yes', '--json']);
+    assert.equal(result.status, 2);
+    const after = await snapshotFiles(workspace);
+    assert.deepEqual(after, before);
+  });
+
+  test('doctor skips a registered entry that has since become project mode, with one issue line', async () => {
+    const workspace = await installSandboxWiki('proj-doctor');
+    assert.equal(run(['wikis', 'add', workspace, '--name', 'Proj Doctor']).status, 0);
+    // Simulate drift: the wiki was re-installed in project mode after being
+    // registered (addWiki itself refuses this, so mutate the manifest
+    // directly to reach the "already registered, now project mode" state).
+    const manifestPath = join(workspace, '_lumina', 'manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.mode = 'project';
+    await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+
+    const result = run(['wikis', 'doctor', '--json']);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    const entry = report.wikis.find((w) => w.path === workspace);
+    assert.ok(entry, 'doctor must still report the entry, not drop it');
+    assert.ok(entry.issues.some((issue) => /project-mode/.test(issue)));
+  });
+
+  test('doctor skips a registered entry with no manifest but a committed project.yaml (teammate clone), and --fix never seeds raw//wiki/', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'lumina-wikis-cmd-wiki-'));
+    trackedDirs.push(tmp);
+    const workspace = join(tmp, 'proj-clone-doctor');
+    await mkdir(join(workspace, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(workspace, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+
+    // Bypass addWiki's own project-mode refusal — write the registry entry
+    // directly to reach "registered, now drifted to a no-manifest clone".
+    const reg = await readRegistry();
+    const key = normalizeKey('Proj Clone Doctor');
+    reg.wikis[key] = {
+      name: 'Proj Clone Doctor', aliases: [], path: workspace, description: '', packs: [],
+      addedAt: new Date().toISOString(),
+    };
+    await writeRegistry(reg);
+
+    const result = run(['wikis', 'doctor', '--fix', '--json']);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    const entry = report.wikis.find((w) => w.path === workspace);
+    assert.ok(entry, 'doctor must still report the entry, not drop it');
+    assert.ok(entry.issues.some((issue) => /project-mode/.test(issue)));
+    assert.ok(!(await pathExistsHelper(join(workspace, 'raw'))), '--fix must never seed raw/ into a project-mode repo');
+    assert.ok(!(await pathExistsHelper(join(workspace, 'wiki'))), '--fix must never seed wiki/ into a project-mode repo');
   });
 });
 

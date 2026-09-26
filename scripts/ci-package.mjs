@@ -11,6 +11,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { PROJECT_ENGINE_FILES } from '../src/installer/project-mode.js';
+
 const npmCache = process.env.LUMINA_NPM_CACHE || join(tmpdir(), 'lumina-npm-cache');
 const npmHome = join(tmpdir(), 'lumina-npm-home');
 const npmUserConfig = join(npmHome, '.npmrc');
@@ -66,6 +68,7 @@ const prohibitedPatterns = [
   /^docs\/planning-artifacts\//,
   /^\.github\//,
   /^scripts\/ci-/,
+  /^src\/project\/test-fixtures\//,
 ];
 
 const requiredFiles = [
@@ -106,6 +109,8 @@ const requiredFiles = [
   'src/tools/resolve_pdf.py',
   'src/tools/verify_quotes.py',
   'src/tools/requirements.txt',
+  'src/installer/project-mode.js',
+  ...PROJECT_ENGINE_FILES.map((f) => `src/project/${f}`),
   'README.md',
   'LICENSE',
 ];

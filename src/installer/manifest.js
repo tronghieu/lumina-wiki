@@ -18,15 +18,16 @@
  * Reads are defensive: missing file → null; truncated CSV → empty rows + warning.
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
+import { constants as fsConstants } from 'node:fs';
 import { atomicWrite, ensureDir } from './fs.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const MANIFEST_SCHEMA_VERSION = 4;
+export const MANIFEST_SCHEMA_VERSION = 5;
 
 export const SKILLS_CSV_HEADER = 'canonical_id,display_name,pack,source,relative_path,target_link_path,version';
 export const FILES_CSV_HEADER = 'relative_path,sha256,source_pack,installed_version';
@@ -309,6 +310,10 @@ const MIGRATIONS = {
   // 3->4 (v1.x): multilingual installer. Adds top-level `locale` field.
   // Default 'en' for legacy installs. Source of truth for installer UI language.
   '3->4': (m) => ({ ...m, locale: m.locale ?? 'en' }),
+  // 4->5: project mode (spec-project-docs-overlay, story 7). Adds top-level
+  // `mode` field. Every manifest written before this version was a classic
+  // install — default 'classic'.
+  '4->5': (m) => ({ ...m, mode: m.mode ?? 'classic' }),
 };
 
 /**
@@ -407,4 +412,65 @@ export function statePaths(projectRoot) {
     skillsCsv:    join(projectRoot, '_lumina', '_state', 'skills-manifest.csv'),
     filesCsv:     join(projectRoot, '_lumina', '_state', 'files-manifest.csv'),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Install mode detection (project-docs-overlay, story 7 / AD-2)
+// ---------------------------------------------------------------------------
+
+async function pathExists(path) {
+  try {
+    await access(path, fsConstants.F_OK);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Detect whether `projectRoot` is a classic or project-mode Lumina install.
+ *
+ * Order (Design Notes, spec-project-docs-overlay story 7):
+ *   1. 'project' when manifest.mode === 'project', `_lumina/config/project.yaml`
+ *      exists, or `_lumina/project/install.json` exists (the manifest is
+ *      gitignored, so a teammate's clone has no manifest but has these two
+ *      committed files).
+ *   2. 'classic' for any other manifest.
+ *   3. null when none of the above is true (fresh directory).
+ *   4. A classic manifest together with a project signal (rule 1's file
+ *      checks) is a conflict, not a silent mode switch: exits 3.
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<'project'|'classic'|null>}
+ */
+export async function detectInstallMode(projectRoot) {
+  let manifest = null;
+  try {
+    manifest = await readManifest(projectRoot);
+  } catch (err) {
+    const e = new Error(`MANIFEST_READ_FAILED: ${err.message} (path: ${projectRoot}/_lumina/manifest.json)`);
+    e.code = 2;
+    throw e;
+  }
+  const migrated = manifest ? migrateManifest(manifest, MANIFEST_SCHEMA_VERSION) : null;
+  if (migrated?.mode === 'project') return 'project';
+
+  const hasProjectYaml = await pathExists(join(projectRoot, '_lumina', 'config', 'project.yaml'));
+  const hasInstallJson = await pathExists(join(projectRoot, '_lumina', 'project', 'install.json'));
+  const hasProjectSignal = hasProjectYaml || hasInstallJson;
+
+  if (migrated?.mode === 'classic' && hasProjectSignal) {
+    const e = new Error(
+      `MODE_CONFLICT: "${projectRoot}" has a classic manifest (mode: 'classic') but also a committed ` +
+      `project-mode signal (_lumina/config/project.yaml or _lumina/project/install.json). To keep this ` +
+      `repo classic, delete _lumina/config/project.yaml and _lumina/project/install.json; to switch it ` +
+      `to project mode, delete _lumina/manifest.json (or set its "mode" to "project") first.`,
+    );
+    e.code = 3;
+    throw e;
+  }
+  if (hasProjectSignal) return 'project';
+
+  if (migrated) return migrated.mode ?? 'classic';
+  return null;
 }
