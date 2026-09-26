@@ -225,7 +225,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-7, CAP-10
 - **Prevents:** a query language the ask skill and engine interpret differently.
-- **Rule:** `query node <ref>` resolves an ID, path, or concept alias and returns the node with its in and out edges; `query list --meta-type T [--status S]` filters nodes; `query neighbors <ref> --relation R --direction in|out` walks one hop. Every returned item carries `file:line` and quote; every response carries `freshness{stale, changed, neverIngested}`. No path search or full-text.
+- **Rule:** `query node <ref>` resolves an ID, path, or concept alias and returns the node with its in and out edges; `query list --meta-type T [--status S]` filters nodes; `query neighbors <ref> --direction in|out [--relation R]` walks one hop. Every returned item carries `file:line` and quote; every response carries `freshness{stale, changed, neverIngested, staleDocs[]}`. No path search or full-text.
 
 ```mermaid
 flowchart TD
