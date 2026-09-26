@@ -2,17 +2,19 @@
 title: 'Installer project mode'
 type: 'feature'
 created: '2026-09-26'
-status: 'draft'
-route: 'dispatch'
+status: 'ready-for-dev'
 review_loop_iteration: 0
+followup_review_recommended: false
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/brownfield.md'
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
   - '{project-root}/docs/project-context.md'
+warnings: [oversized]
+deferred: []
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+<intent-contract>
 
 ## Intent
 
@@ -51,7 +53,7 @@ context:
 | Hub | `wikis add`, `add --provision`, or `inspect` on a project repo | refused, nothing written | exit 2 |
 | Hub doctor | registered entry is now a project repo | skipped with one issue line | N/A |
 
-</frozen-after-approval>
+</intent-contract>
 
 ## Code Map
 
@@ -67,34 +69,34 @@ context:
 - Hub commands: `src/installer/registry.js:332` `addWiki`; `src/installer/wikis-command.js` `buildInspectReport` (`:257`), `runAddWithProvision` (`:400`), which would install a classic minimal wiki into a repo that has no manifest, and `doctorOne` (`:633`).
 - `src/installer/update-check.js:129` `isNewerVersion` handles the skew check. It does not handle pre-release versions (project-context gotcha 18).
 - CI and packaging: `scripts/ci-idempotency.mjs` (scenarios at `:21`, `managedDiffPaths` at `:55`), `scripts/ci-package.mjs` (`:61`, `:72`), `package.json` `files` and `scripts`, `.github/workflows/ci.yml`.
-- The engine files today are `project.mjs`, `ontology.mjs`, `lib/{config,evidence,fact,frontmatter,fsx,graph,hash,markdown,parse,scope}.mjs`, `vendor/js-yaml.mjs`, and `vendor/THIRD-PARTY-NOTICES.md`. `ontology.mjs` exports `META_TYPES` and `META_RELATIONS`.
+- The engine files today (stories 1-6 done) are `project.mjs`, `ontology.mjs`, `lib/{config,evidence,fact,factfile,frontmatter,fsx,graph,hash,lint,markdown,parse,query,scope,view}.mjs`, `view/{viewer.js,viewer.css}`, `vendor/{js-yaml.mjs,force-graph.min.js,THIRD-PARTY-NOTICES.md}`. `ontology.mjs` exports `META_TYPES` and `META_RELATIONS`. `lib/view.mjs` reads `../vendor/force-graph.min.js` and `../view/viewer.{js,css}` relative to `import.meta.url`, so the installed tree must keep that layout.
 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/installer/manifest.js` + test: set v5 with migration `4->5` (`mode: m.mode ?? 'classic'`). Add `detectInstallMode(root)`, which returns `'project'`, `'classic'`, or `null`, as described in Design Notes.
-- [ ] `src/installer/template-engine.js` + test: add `upsertMarkerBlock(content, open, close, body)` and `stripMarkerBlock(content, open, close)`. Markers must be alone on their lines. The helpers keep the file's EOL and every byte outside the block.
-- [ ] `src/installer/project-mode.js` (new) + `project-mode.test.js` (new, spawns the real CLI): exports `PROJECT_ENGINE_FILES`, `PROJECT_IDE_TARGETS`, `installProject`, and `uninstallProject`. Each matrix row gets a test. Other tests check that:
+- `src/installer/manifest.js` + test: set v5 with migration `4->5` (`mode: m.mode ?? 'classic'`). Add `detectInstallMode(root)`, which returns `'project'`, `'classic'`, or `null`, as described in Design Notes.
+- `src/installer/template-engine.js` + test: add `upsertMarkerBlock(content, open, close, body)` and `stripMarkerBlock(content, open, close)`. Markers must be alone on their lines. The helpers keep the file's EOL and every byte outside the block.
+- `src/installer/project-mode.js` (new) + `project-mode.test.js` (new, spawns the real CLI): exports `PROJECT_ENGINE_FILES`, `PROJECT_IDE_TARGETS`, `installProject`, and `uninstallProject`. Each matrix row gets a test. Other tests check that:
   - bytes outside the block equal the original;
   - every file under `src/project/` except `*.test.mjs` and `test-fixtures/` is in `PROJECT_ENGINE_FILES`, and every listed file is in `package.json` `files`;
   - `PROJECT.md` names every meta-type and meta-relation.
   This file placement is a prescription. Push back if the circular import with `commands.js` gets awkward.
-- [ ] `src/templates/project/PROJECT.md` (new): lists the engine commands (`node _lumina/project/project.mjs scope|config-check|build|status`) and a meta-type and meta-relation summary. It also states these rules:
+- `src/templates/project/PROJECT.md` (new): lists the engine commands (`node _lumina/project/project.mjs scope|config-check|build|status|facts-write|verify-evidence|lint|query|view`) and a meta-type and meta-relation summary. It also states these rules:
   - docs are read-only;
   - only the engine writes `_lumina/facts|graph|_state`;
   - skills call the engine through Bash and never import it;
   - the exit codes.
-- [ ] `commands.js`: add the mode gate, the lazy project branch, the uninstall branch, and `findEnclosingWorkspace`.
-- [ ] `prompts.js` and all three locales: add the mode select, the project target multiselect, the uninstall prompt for facts and config, and the project install and uninstall messages.
-- [ ] `bin/lumina.js`: add `--mode <classic|project>` to `install`.
-- [ ] `registry.js` and `wikis-command.js` + tests: refuse project repos in add, provision, and inspect; skip them in doctor.
-- [ ] `package.json`:
+- `commands.js`: add the mode gate, the lazy project branch, the uninstall branch, and `findEnclosingWorkspace`.
+- `prompts.js` and all three locales: add the mode select, the project target multiselect, the uninstall prompt for facts and config, and the project install and uninstall messages.
+- `bin/lumina.js`: add `--mode <classic|project>` to `install`.
+- `registry.js` and `wikis-command.js` + tests: refuse project repos in add, provision, and inspect; skip them in doctor.
+- `package.json`:
   - add each engine path and `src/installer/project-mode.js` to `files`;
   - add `project-mode.test.js` to `test:installer`;
   - add `"test:project": "node --test src/project/"`, chained into `test:all`.
-- [ ] `scripts/ci-package.mjs`: require `src/project/<f>` for each entry of the imported `PROJECT_ENGINE_FILES`, plus `src/installer/project-mode.js`. Prohibit `^src/project/test-fixtures/`.
-- [ ] `scripts/ci-idempotency.mjs`: add a `project` scenario. It seeds a CRLF `AGENTS.md` and a `.gitignore`, and diffs those two files plus `CLAUDE.md`, `.agents`, `.claude`, and `_lumina/project`. Classic scenarios must fail if `_lumina/project/` exists.
-- [ ] `.github/workflows/ci.yml`: add a `Project engine tests` step (`npm run test:project`).
+- `scripts/ci-package.mjs`: require `src/project/<f>` for each entry of the imported `PROJECT_ENGINE_FILES`, plus `src/installer/project-mode.js`. Prohibit `^src/project/test-fixtures/`.
+- `scripts/ci-idempotency.mjs`: add a `project` scenario. It seeds a CRLF `AGENTS.md` and a `.gitignore`, and diffs those two files plus `CLAUDE.md`, `.agents`, `.claude`, and `_lumina/project`. Classic scenarios must fail if `_lumina/project/` exists.
+- `.github/workflows/ci.yml`: add a `Project engine tests` step (`npm run test:project`).
 
 **Acceptance Criteria:**
 - Given a git copy of `../seli`, when `install --mode project --yes` runs, then `git status` shows pre-existing files changed only inside the marker regions and `.gitignore`. A second install leaves `git diff` empty.
