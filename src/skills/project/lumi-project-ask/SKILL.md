@@ -25,8 +25,6 @@ cites `file:line` that the engine or the search actually returned.
 
 ## Context
 
-- `_lumina/project/PROJECT.md`: engine commands, meta-types, meta-relations,
-  exit codes.
 - `_lumina/config/project.yaml`: this project's own `types`/`relations`/
   `concepts`. Read it to translate the user's words into the fixed
   meta-type/meta-relation list. Never hardcode a mapping (e.g. assume "ADR"
@@ -64,9 +62,8 @@ silent empty result. `--status` matches the node's own status value
 meta-type actually uses, run `list --meta-type <T>` with no `--status` first
 and use only the values seen. A question about "superseded" things checks
 both `superseded` and `partially-superseded` — the `Decision` lifecycle
-(`proposed`/`accepted`/`partially-superseded`/`superseded`/`deprecated`)
-treats a partial supersession as its own value, and a user asking about
-"superseded" decisions usually means both.
+(PROJECT.md "Meta-ontology") treats a partial supersession as its own
+value, and a user asking about "superseded" decisions usually means both.
 
 **4. `at` vs. `evidence`** — a node's own `at` backs an existence/status
 claim ("X is a Decision, status superseded, defined here"); an edge's

@@ -7,8 +7,23 @@
  * to recompute a mention's line the same way. Pure -- no I/O.
  */
 
-function normalizeForMatch(text) {
+export function normalizeForMatch(text) {
   return String(text).normalize('NFC').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A matcher closed over one doc's already-normalized source text -- the
+ * per-doc cost of `normalizeForMatch(source)` is paid once here instead of
+ * once per fact when many facts are checked against the same doc.
+ * @param {string} source full document text.
+ * @returns {(quote: string) => boolean}
+ */
+export function makeQuoteMatcher(source) {
+  const normalizedSource = normalizeForMatch(source);
+  return (quote) => {
+    const needle = normalizeForMatch(quote);
+    return needle !== '' && normalizedSource.includes(needle);
+  };
 }
 
 /**
@@ -18,24 +33,18 @@ function normalizeForMatch(text) {
  * @returns {boolean}
  */
 export function quoteMatches(source, quote) {
-  const needle = normalizeForMatch(quote);
-  if (needle === '') return false;
-  return normalizeForMatch(source).includes(needle);
+  return makeQuoteMatcher(source)(quote);
 }
 
 /**
- * 1-based line of the first character of the first match of `quote` in
- * `source`, after the same NFC + whitespace-collapse normalization (so a
- * quote whose whitespace was reflowed still resolves to the line its match
- * starts on).
+ * A locator closed over one doc's already-built collapsed-text/line-map
+ * index -- the per-doc cost of building it (an O(doc length) scan) is paid
+ * once here instead of once per fact when many facts are located against
+ * the same doc.
  * @param {string} source full document text.
- * @param {string} quote evidence quote to look for.
- * @returns {number|null} 1-based line, or null when no match is found.
+ * @returns {(quote: string) => number|null} 1-based line, or null when no match is found.
  */
-export function findQuoteLine(source, quote) {
-  const needle = normalizeForMatch(quote);
-  if (needle === '') return null;
-
+export function makeQuoteLocator(source) {
   const nfcSource = String(source).normalize('NFC');
   const collapsedChars = [];
   const charLines = [];
@@ -59,7 +68,24 @@ export function findQuoteLine(source, quote) {
   }
 
   const collapsedSource = collapsedChars.join('');
-  const idx = collapsedSource.indexOf(needle);
-  if (idx === -1) return null;
-  return charLines[idx] ?? null;
+  return (quote) => {
+    const needle = normalizeForMatch(quote);
+    if (needle === '') return null;
+    const idx = collapsedSource.indexOf(needle);
+    if (idx === -1) return null;
+    return charLines[idx] ?? null;
+  };
+}
+
+/**
+ * 1-based line of the first character of the first match of `quote` in
+ * `source`, after the same NFC + whitespace-collapse normalization (so a
+ * quote whose whitespace was reflowed still resolves to the line its match
+ * starts on).
+ * @param {string} source full document text.
+ * @param {string} quote evidence quote to look for.
+ * @returns {number|null} 1-based line, or null when no match is found.
+ */
+export function findQuoteLine(source, quote) {
+  return makeQuoteLocator(source)(quote);
 }

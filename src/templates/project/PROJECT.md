@@ -22,7 +22,9 @@ Installed by lumina-wiki {{package_version}}.
 - **Exit codes:** `0` success · `1` bad arguments · `2` invalid config,
   missing root, or a path-safety violation · `3` internal error, lock
   timeout, a newer `schemaVersion` than this engine knows, or (`facts-prune`
-  only) one or more files it could not delete (listed in `failed`).
+  only) one or more files it could not delete (listed in `failed`). Every
+  nonzero exit other than that last `facts-prune` case prints `{error,
+  code}` to stderr, with nothing usable on stdout.
 
 ## What's committed vs. gitignored
 
@@ -69,28 +71,40 @@ node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
 - `lint` — cross-doc checks P01-P20, report-only, agent-free. `--fail-on`
   (default `error`) sets the severity that makes it exit 1.
 - `query` — three fixed operations, no path search or full-text: `node
-  <ref>` resolves an ID/path/concept alias and returns it with its edges;
-  `list --meta-type <T> [--status <S>]` filters nodes; `neighbors <ref>
+  <ref>` resolves an ID/path/concept alias and returns it with its edges —
+  for a doc node, also its `frags` (that doc's fragment ids); `list
+  --meta-type <T> [--status <S>]` filters nodes; `neighbors <ref>
   --direction in|out [--relation <R>]` walks one hop. Every returned item
-  carries `file:line` and its evidence quote; every response carries a
-  `freshness` summary.
+  carries `file:line` and its evidence quote (including the evidence's
+  `scope`); every response carries a `freshness` summary.
 - `view` — writes `_lumina/graph/view.html` (gitignored), a self-contained
-  page you open with `file://`, no network, no server.
+  page you open with `file://`, no network, no server; stdout includes
+  `url`, that page's `file://` URL.
 - `facts-prune` — removes only the committed fact files whose doc was
   actually **deleted**. It never removes one for a doc that still exists but
   fell out of scope (a scope edit or a typo) — that would lose facts you
   paid tokens for; those are `kept` with reason `out-of-scope` instead, same
   as a newer-schema file (`newer-schema`, never touched) and a rename
   candidate (`rename-candidate`, with the new path — re-ingest it first,
-  then prune removes the old file). `--dry-run` reports
-  `{removed, kept, skipped, failed, warnings}` without deleting anything.
-  Pass fact file paths (as printed in a prior `--dry-run`'s `removed`) as
-  positional arguments to delete only that approved set — anything on the
-  list that's no longer removable by the time of the real run is reported in
+  then prune removes the old file). Stdout: `{ok, dryRun, removed: [<fact
+  file paths>], kept: [{file, reason:
+  "rename-candidate"|"out-of-scope"|"newer-schema", candidate?}], skipped:
+  [{file, reason: "not-removable"}], failed: [{file, error}], warnings:
+  [...]}`; `--dry-run` prints the same shape without deleting anything. A
+  scope-shaped warning (for example an include-pattern-matches-nothing
+  warning) can mean the doc scope itself is misconfigured, not just a
+  deleted or renamed doc.
+
+  **Prune flow:** dry-run first, show `removed`/`kept`/`warnings` to the
+  user, get explicit approval, then run the real prune passing exactly the
+  dry run's `removed` paths as positional arguments — anything on that
+  list no longer removable by the time of the real run comes back in
   `skipped`, not deleted; anything removable but left off the list is
-  untouched. No positionals deletes the whole removable set. A per-file
-  delete error is reported in `failed` and makes the run exit `3`, without
-  stopping the rest.
+  untouched; no positionals deletes the whole removable set. A per-file
+  delete error lands in `failed` and makes the run exit `3` (a completed
+  run, not an engine error — the full JSON is still on stdout), without
+  stopping the rest. Remind the user to commit the removed fact files
+  afterward — `facts-prune` deletes, it never commits.
 
 ## Meta-ontology
 

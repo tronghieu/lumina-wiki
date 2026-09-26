@@ -24,8 +24,8 @@ const SOURCES_KEYS = new Set(['include', 'exclude']);
 const TYPE_KEYS = new Set(['metaType', 'paths', 'frontmatter', 'idPattern', 'status']);
 // A single status source names exactly one of these.
 const STATUS_SOURCE_KEYS = new Set(['heading', 'frontmatter']);
-// The single-source object shape (see validateStatus below) may also carry `map`.
-const STATUS_OBJECT_KEYS = new Set(['heading', 'frontmatter', 'map']);
+// The wrapped `{sources: [...], map}` shape's own top-level keys.
+const WRAPPED_STATUS_KEYS = new Set(['sources', 'map']);
 const RELATION_VALUE_KEYS = new Set(['relation', 'inverse']);
 const RELATED_RULE_KEYS = new Set(['source', 'target', 'relation', 'inverse']);
 const EXTERNAL_ID_KEYS = new Set(['pattern', 'metaType']);
@@ -79,6 +79,13 @@ function isPlainObject(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
+/** Push `${label}: unknown key "<key>"` for every key of `obj` not in `allowed` -- the one "reject unknown keys" loop every validate* function below needs, instead of nine copies. */
+function checkKeys(errors, label, obj, allowed) {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.has(key)) errors.push(`${label}: unknown key "${key}"`);
+  }
+}
+
 function checkSafePattern(errors, label, pattern) {
   if (typeof pattern !== 'string') {
     errors.push(`${label}: must be a string`);
@@ -113,9 +120,7 @@ function validateSources(errors, sources) {
     errors.push('sources: must be a mapping');
     return { include: ['docs'], exclude: [] };
   }
-  for (const key of Object.keys(sources)) {
-    if (!SOURCES_KEYS.has(key)) errors.push(`sources: unknown key "${key}"`);
-  }
+  checkKeys(errors, 'sources', sources, SOURCES_KEYS);
   const include = sources.include ?? ['docs'];
   const exclude = sources.exclude ?? [];
   if (!Array.isArray(include)) errors.push('sources.include: must be an array');
@@ -175,9 +180,7 @@ function validateStatusSourceItem(errors, label, item) {
     errors.push(`${label}: must be a mapping`);
     return null;
   }
-  for (const key of Object.keys(item)) {
-    if (!STATUS_SOURCE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-  }
+  checkKeys(errors, label, item, STATUS_SOURCE_KEYS);
   const keys = Object.keys(item).filter((k) => STATUS_SOURCE_KEYS.has(k));
   if (keys.length !== 1) {
     errors.push(`${label}: must have exactly one of "heading" or "frontmatter"`);
@@ -215,9 +218,7 @@ function validateStatus(errors, label, status) {
   }
 
   if (Object.hasOwn(status, 'sources')) {
-    for (const key of Object.keys(status)) {
-      if (key !== 'sources' && key !== 'map') errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, status, WRAPPED_STATUS_KEYS);
     let sourcesBad = false;
     const sources = [];
     if (!Array.isArray(status.sources) || status.sources.length === 0) {
@@ -236,21 +237,17 @@ function validateStatus(errors, label, status) {
     return sourcesBad ? undefined : { sources, map };
   }
 
-  for (const key of Object.keys(status)) {
-    if (!STATUS_OBJECT_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-  }
-  const keys = Object.keys(status).filter((k) => STATUS_SOURCE_KEYS.has(k));
-  if (keys.length !== 1) {
-    errors.push(`${label}: must have exactly one of "heading" or "frontmatter"`);
-    return undefined;
-  }
-  const [key] = keys;
-  if (typeof status[key] !== 'string' || status[key].length === 0) {
-    errors.push(`${label}.${key}: must be a non-empty string`);
-    return undefined;
-  }
-  const map = validateStatusMap(errors, `${label}.map`, status.map);
-  return { sources: [{ [key]: status[key] }], map };
+  // Single-source object shape: the same source-item rules as a list entry
+  // or a wrapped `sources[]` item, routed through `validateStatusSourceItem`
+  // instead of a second copy of them -- `map` is validated separately (and,
+  // to match the wrapped shape's own "every problem in one pass" comment
+  // above, only when the source itself is valid: existing behavior here,
+  // unlike the wrapped shape, short-circuits on a bad source).
+  const { map: rawMap, ...sourceOnly } = status;
+  const source = validateStatusSourceItem(errors, label, sourceOnly);
+  if (source === null) return undefined;
+  const map = validateStatusMap(errors, `${label}.map`, rawMap);
+  return { sources: [source], map };
 }
 
 function validateTypes(errors, types) {
@@ -266,9 +263,7 @@ function validateTypes(errors, types) {
       errors.push(`${label}: must be a mapping`);
       continue;
     }
-    for (const key of Object.keys(entry)) {
-      if (!TYPE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, entry, TYPE_KEYS);
     if (typeof entry.metaType !== 'string' || !Object.hasOwn(META_TYPES, entry.metaType)) {
       errors.push(`${label}.metaType: unknown meta-type "${entry.metaType}"`);
     }
@@ -322,9 +317,7 @@ function validateRelations(errors, relations) {
       errors.push(`${label}: must be a meta-relation string or a mapping`);
       continue;
     }
-    for (const key of Object.keys(value)) {
-      if (!RELATION_VALUE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, value, RELATION_VALUE_KEYS);
     const relationOk = typeof value.relation === 'string' && META_RELATIONS.includes(value.relation);
     if (!relationOk) {
       errors.push(value.relation === undefined
@@ -352,9 +345,7 @@ function validateRelatedRules(errors, relatedRules) {
       errors.push(`${label}: must be a mapping`);
       continue;
     }
-    for (const key of Object.keys(rule)) {
-      if (!RELATED_RULE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, rule, RELATED_RULE_KEYS);
     if (typeof rule.source !== 'string' || !Object.hasOwn(META_TYPES, rule.source)) {
       errors.push(`${label}.source: unknown meta-type "${rule.source}"`);
     }
@@ -383,9 +374,7 @@ function validateExternalIds(errors, externalIds) {
       errors.push(`${label}: must be a mapping`);
       continue;
     }
-    for (const key of Object.keys(entry)) {
-      if (!EXTERNAL_ID_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, entry, EXTERNAL_ID_KEYS);
     checkRegex(errors, `${label}.pattern`, entry.pattern);
     if (entry.metaType !== undefined && (typeof entry.metaType !== 'string' || !Object.hasOwn(META_TYPES, entry.metaType))) {
       errors.push(`${label}.metaType: unknown meta-type "${entry.metaType}"`);
@@ -408,9 +397,7 @@ function validateConcepts(errors, concepts) {
       errors.push(`${label}: must be a mapping`);
       continue;
     }
-    for (const key of Object.keys(entry)) {
-      if (!CONCEPT_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
-    }
+    checkKeys(errors, label, entry, CONCEPT_KEYS);
     if (typeof entry.name !== 'string' || entry.name.length === 0) {
       errors.push(`${label}.name: must be a non-empty string`);
       continue;

@@ -21,8 +21,6 @@ behalf.
 
 ## Context
 
-- `_lumina/project/PROJECT.md`: engine commands, meta-types, meta-relations,
-  exit codes.
 - Read through the engine only: this skill calls `lint`. It never reads or
   writes `_lumina/facts/`, `_lumina/graph/`, or `_lumina/_state/` directly.
   Reading in-scope docs or `_lumina/config/project.yaml` yourself, to add
@@ -32,19 +30,11 @@ behalf.
   the `lumi-project-setup` skill (a config change), the
   `lumi-project-ingest` skill (a re-ingest), or `facts-prune` (run by this
   skill itself, see below) does afterward.
-- **`facts-prune [--dry-run] [<fact file>...]`** removes fact files, but
-  only for a doc that was actually deleted — a doc that still exists but
-  is merely excluded from scope is never removed. With no positional args
-  it surveys every fact file project-wide. Positional args restrict a
-  real run to exactly that approved set: anything in it that's no longer
-  removable comes back `skipped`, not deleted. Stdout: `{ok, dryRun,
-  removed: [<fact file paths>], kept: [{file, reason:
-  "rename-candidate"|"out-of-scope"|"newer-schema", candidate?}], skipped:
-  [{file, reason: "not-removable"}], failed: [{file, error}], warnings:
-  [...]}`. Exit 1 bad flag, 2 config/root; exit 3 either for a
-  lock/internal error (stderr `{error, code}`) or, on a real run, because
-  `failed` came back non-empty — that second case is a completed run, not
-  an engine error, and the full JSON is still on stdout.
+- **`facts-prune`** (output shape and prune flow: PROJECT.md) is the one
+  write this skill makes — only for a P14 finding whose doc isn't in scope
+  (or a P15 whose re-ingest already ran, see Rule reference below). The
+  dry run decides whether it's prunable at all, versus needing a
+  re-ingest instead.
 
 ### Rule reference
 
@@ -138,25 +128,15 @@ message-based fixes above.
    `summary.infos` up front.
 
 5. **Run `facts-prune` for any P14 finding whose doc isn't in scope (or a
-   P15 whose re-ingest already ran).** Run:
+   P15 whose re-ingest already ran).** Follow PROJECT.md's prune flow:
+   dry run first —
    ```
    node _lumina/project/project.mjs facts-prune --dry-run
    ```
-   On a stderr `{error, code}`, report it verbatim and stop. Otherwise
-   show `removed`, `kept` (each entry's reason explained per the P14 note
-   above), and `warnings` verbatim alongside the P14 group.
-   - If `warnings` includes a scope-shaped warning (for example an
-     include-pattern-matches-nothing warning), say the doc scope may be
-     misconfigured before asking for approval.
-   Ask the user to approve the real prune. Only after they say yes, run
-   the real prune with exactly the dry run's `removed` paths as
-   positional arguments:
-   ```
-   node _lumina/project/project.mjs facts-prune <removed path> [<removed path> ...]
-   ```
-   Report `skipped` and `failed` verbatim — exit 3 here with a non-empty
-   `failed` is a completed run, not an engine error; the JSON is still on
-   stdout. Then remind the user to commit the removal.
+   show `removed`/`kept`/`warnings` alongside the P14 group they explain,
+   get the user's approval, then run the real prune with exactly the dry
+   run's `removed` paths as positional arguments and remind the user to
+   commit. On a stderr `{error, code}`, report it verbatim and stop.
 
 ## Output Format
 

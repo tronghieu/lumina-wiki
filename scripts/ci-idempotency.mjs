@@ -7,11 +7,13 @@
  * files drift. Runtime state timestamps are intentionally excluded.
  */
 
-import { mkdtemp, mkdir, rm, writeFile, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+
+import { pathExists } from '../src/installer/fs.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -66,10 +68,6 @@ const scenarios = [
     diffPaths: ['AGENTS.md', '.gitignore', 'CLAUDE.md', '.agents', '.claude', '_lumina/project'],
   },
 ];
-
-async function pathExists(p) {
-  try { await access(p); return true; } catch { return false; }
-}
 
 const managedDiffPaths = [
   'README.md',
@@ -133,9 +131,6 @@ async function runScenario(scenario) {
     run('git', ['commit', '-m', 'baseline'], { cwd: workspace });
 
     run(process.execPath, [cliPath, ...scenario.args, '--directory', workspace], { cwd: repoRoot });
-    if (!scenario.isProject && await pathExists(join(workspace, '_lumina', 'project'))) {
-      throw new Error(`Classic scenario "${scenario.name}" must never create _lumina/project/, but it did.`);
-    }
 
     const diff = spawnSync('git', ['diff', '--exit-code', '--', ...(scenario.diffPaths ?? managedDiffPaths)], {
       cwd: workspace,

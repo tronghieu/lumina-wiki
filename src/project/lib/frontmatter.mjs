@@ -15,6 +15,19 @@ const BOM = '﻿';
 const DELIMITER_RE = /^---\s*$/;
 
 /**
+ * BOM-stripped `text` split on any line ending (`\n`, `\r\n`, or bare `\r`)
+ * -- the one line-splitting rule this module, `parse.mjs`'s frontmatter-line
+ * lookups, and `query.mjs`'s `at.quote` line recovery all share, instead of
+ * three copies.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function splitLines(text) {
+  const input = String(text ?? '');
+  return (input.startsWith(BOM) ? input.slice(1) : input).split(/\r\n|\r|\n/);
+}
+
+/**
  * Split `text` into frontmatter data and body.
  * @param {string} text raw file content, as read (may carry a leading BOM).
  * @returns {{data: object|null, error: string|null, body: string, bodyStartLine: number}}
@@ -26,7 +39,7 @@ const DELIMITER_RE = /^---\s*$/;
  */
 export function splitFrontmatter(text) {
   const input = String(text).startsWith(BOM) ? String(text).slice(1) : String(text);
-  const lines = input.split(/\r\n|\r|\n/);
+  const lines = splitLines(text);
 
   if (!DELIMITER_RE.test(lines[0] ?? '')) {
     return { data: null, error: null, body: input, bodyStartLine: 1 };

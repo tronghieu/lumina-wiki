@@ -15,20 +15,15 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { contentHash } from './hash.mjs';
-import { splitFrontmatter } from './frontmatter.mjs';
-import { scanBody, renderedText, slug, escapeRegex, matchAll } from './markdown.mjs';
+import { splitFrontmatter, splitLines } from './frontmatter.mjs';
+import {
+  scanBody, renderedText, slug, escapeRegex, matchAll,
+} from './markdown.mjs';
 import { findQuoteLine } from './evidence.mjs';
 import { makeFact } from './fact.mjs';
 import { selectScope, compilePatternMatcher, resolveIncludeRoot } from './scope.mjs';
-import { RULES, META_TYPES, META_RELATIONS } from '../ontology.mjs';
-
-const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
-for (const id of ['P12', 'P17', 'P19', 'P20']) {
-  if (!RULE_BY_ID.has(id)) throw new Error(`ontology.mjs RULES is missing rule ${id}`);
-}
-function ruleFor(id) {
-  return RULE_BY_ID.get(id);
-}
+import { makeFinding } from './graph.mjs';
+import { META_TYPES, META_RELATIONS } from '../ontology.mjs';
 
 // ---------------------------------------------------------------------------
 // Pattern cache (perf): ID patterns, concept terms, and type path matchers are
@@ -36,14 +31,6 @@ function ruleFor(id) {
 // ---------------------------------------------------------------------------
 
 const PATTERN_CACHE = new WeakMap();
-
-function compileMention(source, ignoreCase) {
-  return { source, ignoreCase };
-}
-
-function runCompiled({ source, ignoreCase }, text) {
-  return matchAll(source, text, { ignoreCase });
-}
 
 function getPatternCache(config) {
   let cache = PATTERN_CACHE.get(config);
@@ -56,12 +43,12 @@ function getPatternCache(config) {
   for (const ext of config.externalIds ?? []) {
     idPatterns.push(ext.pattern);
   }
-  const idMatchers = idPatterns.map((p) => compileMention(p, false));
+  const idMatchers = idPatterns.map((p) => ({ source: p, ignoreCase: false }));
 
   const concepts = (config.concepts ?? []).map((concept) => ({
     conceptSlug: slug(concept.name),
     matchers: [concept.name, ...(concept.aliases ?? [])]
-      .map((term) => compileMention(escapeRegex(term.normalize('NFC')), true)),
+      .map((term) => ({ source: escapeRegex(term.normalize('NFC')), ignoreCase: true })),
   }));
 
   const typePathMatchers = new Map(); // type entry -> compiled path matcher functions
@@ -113,10 +100,6 @@ function resolveType(types, docPath, frontmatterData, cache) {
 // the body, can never be picked instead).
 // ---------------------------------------------------------------------------
 
-function frontmatterLines(text) {
-  return String(text).replace(/^﻿/, '').split(/\r\n|\r|\n/);
-}
-
 /**
  * The 1-based file line of a top-level `<key>:` in the frontmatter block.
  * Top-level only: a line must start at column 0 (no leading whitespace), so
@@ -126,14 +109,13 @@ function frontmatterLines(text) {
  * `type`/relation keys, which are always short scalars or flow/block
  * sequences in practice; upgrade to js-yaml's (unused-by-CORE_SCHEMA)
  * mark/position API if that ever stops holding.
- * @param {string} text the whole raw file (as read; may carry a leading BOM).
+ * @param {string[]} lines the whole raw file, already split (`splitLines`, once per doc).
  * @param {number} bodyStartLine 1-based file line where the body starts
  *   (frontmatter, if any, is lines 2..bodyStartLine-1).
  * @param {string} key the frontmatter key to find.
  * @returns {number|null}
  */
-function findFrontmatterKeyLine(text, bodyStartLine, key) {
-  const lines = frontmatterLines(text);
+function findFrontmatterKeyLine(lines, bodyStartLine, key) {
   const re = new RegExp(`^${escapeRegex(key)}\\s*:`);
   for (let i = 1; i < bodyStartLine - 1 && i < lines.length; i++) {
     if (re.test(lines[i])) return i + 1;
@@ -146,15 +128,14 @@ function findFrontmatterKeyLine(text, bodyStartLine, key) {
  * only from `keyLine` onward and never past the block, so it can't return
  * an earlier occurrence of the same value under a different key (or in the
  * body, which sits entirely outside the searched range).
- * @param {string} text the whole raw file.
+ * @param {string[]} lines the whole raw file, already split (`splitLines`, once per doc).
  * @param {number} bodyStartLine see `findFrontmatterKeyLine`.
  * @param {number|null} keyLine the key's own line, from `findFrontmatterKeyLine`.
  * @param {string} quote the value to find.
  * @returns {number|null}
  */
-function findFrontmatterValueLine(text, bodyStartLine, keyLine, quote) {
+function findFrontmatterValueLine(lines, bodyStartLine, keyLine, quote) {
   if (keyLine === null) return null;
-  const lines = frontmatterLines(text);
   const blockEndLine = bodyStartLine - 2; // last frontmatter line, 1-based
   const slice = lines.slice(keyLine - 1, blockEndLine).join('\n');
   const found = findQuoteLine(slice, quote);
@@ -166,14 +147,14 @@ function findFrontmatterValueLine(text, bodyStartLine, keyLine, quote) {
 // ---------------------------------------------------------------------------
 
 /** @returns {{value: string|null, line: number|null}} */
-function resolveDeclaredId(frontmatterData, headings, idPattern, text, bodyStartLine) {
+function resolveDeclaredId(frontmatterData, headings, idPattern, fmLines, bodyStartLine) {
   let raw = null;
   let line = null;
   let fromFrontmatter = false;
   const fmId = frontmatterData?.id;
   if (typeof fmId === 'string' && fmId.trim() !== '') {
     raw = fmId.trim();
-    line = findFrontmatterKeyLine(text, bodyStartLine, 'id') ?? 1;
+    line = findFrontmatterKeyLine(fmLines, bodyStartLine, 'id') ?? 1;
     fromFrontmatter = true;
   } else {
     const h1 = headings.find((h) => h.level === 1);
@@ -206,26 +187,31 @@ function isRelationKey(key, relations) {
   return key === 'related' || META_RELATIONS.includes(key) || Boolean(relations && Object.hasOwn(relations, key));
 }
 
-function frontmatterRelationFacts(path, frontmatterData, relations, text, bodyStartLine) {
+/** One `doc:<path>` edge fact, `provenance: 'extracted'` -- the one shape frontmatter relations, links, ID mentions, and concept mentions all build, differing only in relation/object/ref/evidence. */
+function docEdge(path, relation, object, ref, line, quote) {
+  return makeFact({
+    kind: 'edge',
+    subject: `doc:${path}`,
+    relation,
+    object,
+    ref,
+    evidence: { line, quote },
+    provenance: 'extracted',
+  });
+}
+
+function frontmatterRelationFacts(path, frontmatterData, relations, fmLines, bodyStartLine) {
   const facts = [];
   if (!frontmatterData) return facts;
   for (const [key, rawValue] of Object.entries(frontmatterData)) {
     if (!isRelationKey(key, relations)) continue;
     if (rawValue === null || rawValue === undefined) continue;
     const items = Array.isArray(rawValue) ? rawValue : [rawValue];
-    const keyLine = findFrontmatterKeyLine(text, bodyStartLine, key);
+    const keyLine = findFrontmatterKeyLine(fmLines, bodyStartLine, key);
     for (const item of items) {
       if (typeof item !== 'string' || item.length === 0) continue;
-      const line = findFrontmatterValueLine(text, bodyStartLine, keyLine, item) ?? keyLine ?? 1;
-      facts.push(makeFact({
-        kind: 'edge',
-        subject: `doc:${path}`,
-        relation: key,
-        object: item,
-        ref: item,
-        evidence: { line, quote: item },
-        provenance: 'extracted',
-      }));
+      const line = findFrontmatterValueLine(fmLines, bodyStartLine, keyLine, item) ?? keyLine ?? 1;
+      facts.push(docEdge(path, key, item, item, line, item));
     }
   }
   return facts;
@@ -236,41 +222,27 @@ function frontmatterRelationFacts(path, frontmatterData, relations, text, bodySt
 // ---------------------------------------------------------------------------
 
 function linkFacts(path, links) {
-  return links.map((link) => makeFact({
-    kind: 'edge',
-    subject: `doc:${path}`,
-    relation: 'link',
-    object: link.target,
-    ref: link.target,
-    evidence: { line: link.line, quote: link.quote },
-    provenance: 'extracted',
-  }));
+  return links.map((link) => docEdge(path, 'link', link.target, link.target, link.line, link.quote));
 }
 
 // ---------------------------------------------------------------------------
 // Body ID mentions and concept mentions (I/O matrix rows "Body ID mention",
 // "Concept mention"). Both scan only `lines` from `scanBody` -- fenced code,
 // HTML comments, and `<!-- lumina:project -->` blocks are already gone;
-// inline code stays. Both normalize each line to NFC before matching (a
-// decomposed body form must still match a precomposed pattern/term).
+// inline code stays. Both take `lines` pre-normalized to NFC (once, in
+// `parseDoc` -- a decomposed body form must still match a precomposed
+// pattern/term), not each re-normalizing every line itself: concepts are the
+// outer loop in `conceptMentionFacts`, so a per-function normalize would run
+// lines x concepts times per doc instead of once.
 // ---------------------------------------------------------------------------
 
 function idMentionFacts(path, lines, idMatchers) {
   const facts = [];
   for (const { line, text } of lines) {
-    const normalizedLine = text.normalize('NFC');
-    for (const re of idMatchers) {
-      for (const { match } of runCompiled(re, normalizedLine)) {
+    for (const { source, ignoreCase } of idMatchers) {
+      for (const { match } of matchAll(source, text, { ignoreCase })) {
         if (match === '') continue;
-        facts.push(makeFact({
-          kind: 'edge',
-          subject: `doc:${path}`,
-          relation: 'mentions',
-          object: match,
-          ref: match,
-          evidence: { line, quote: match },
-          provenance: 'extracted',
-        }));
+        facts.push(docEdge(path, 'mentions', match, match, line, match));
       }
     }
   }
@@ -281,19 +253,10 @@ function conceptMentionFacts(path, lines, concepts) {
   const facts = [];
   for (const { conceptSlug, matchers } of concepts) {
     for (const { line, text } of lines) {
-      const normalizedLine = text.normalize('NFC');
-      for (const re of matchers) {
-        for (const { match } of runCompiled(re, normalizedLine)) {
+      for (const { source, ignoreCase } of matchers) {
+        for (const { match } of matchAll(source, text, { ignoreCase })) {
           if (match === '') continue;
-          facts.push(makeFact({
-            kind: 'edge',
-            subject: `doc:${path}`,
-            relation: 'mentions',
-            object: `concept:${conceptSlug}`,
-            ref: match,
-            evidence: { line, quote: match },
-            provenance: 'extracted',
-          }));
+          facts.push(docEdge(path, 'mentions', `concept:${conceptSlug}`, match, line, match));
         }
       }
     }
@@ -358,7 +321,7 @@ function extractStatusSource(source, doc) {
     if (raw === undefined || raw === null) return null;
     const text = renderedText(String(raw)).trim();
     if (text === '') return null;
-    const line = findFrontmatterKeyLine(doc.text, doc.bodyStartLine, source.frontmatter) ?? 1;
+    const line = findFrontmatterKeyLine(doc.fmLines, doc.bodyStartLine, source.frontmatter) ?? 1;
     return { text, line };
   }
   const name = source.heading;
@@ -391,8 +354,8 @@ function resolveStatusValue(rawText, map) {
   return firstWord.toLowerCase().replace(/[.,;:-]+$/, '');
 }
 
-/** @returns {{value: string|null, line: number|null, findings: object[]}} findings have no `file` yet. */
-function computeStatus(statusConfig, doc) {
+/** @returns {{value: string|null, line: number|null, findings: object[]}} */
+function computeStatus(statusConfig, doc, path) {
   if (!statusConfig) return { value: null, line: null, findings: [] };
   const resolved = [];
   for (const source of statusConfig.sources) {
@@ -405,13 +368,7 @@ function computeStatus(statusConfig, doc) {
   const line = resolved.length > 0 ? resolved[0].line : null;
   const findings = [];
   if (resolved.length > 1 && new Set(resolved.map((r) => r.value)).size > 1) {
-    const rule = ruleFor('P19');
-    findings.push({
-      id: rule.id,
-      severity: rule.severity,
-      line: line ?? 1,
-      message: `status sources disagree: ${resolved.map((r) => r.value).join(', ')}`,
-    });
+    findings.push(makeFinding('P19', path, line ?? 1, `status sources disagree: ${resolved.map((r) => r.value).join(', ')}`));
   }
   return { value, line, findings };
 }
@@ -435,18 +392,16 @@ export function parseDoc(path, text, config, hash) {
   const { data: rawFrontmatterData, error: frontmatterError, body, bodyStartLine } = splitFrontmatter(text);
   const { headings, links, lines } = scanBody(body, bodyStartLine);
   const cache = getPatternCache(config);
+  const fmLines = splitLines(text); // once per doc, shared by every frontmatter-line lookup below
+  // Once per doc, not once per (line x concept) inside conceptMentionFacts'
+  // own concepts-outer loop: id/concept mentions are the only two consumers
+  // that need the NFC form (status/heading extraction below use `lines` as-is).
+  const nfcLines = lines.map((l) => ({ ...l, text: l.text.normalize('NFC') }));
 
   const findings = [];
 
   if (frontmatterError) {
-    const rule = ruleFor('P17');
-    findings.push({
-      id: rule.id,
-      severity: rule.severity,
-      file: path,
-      line: 1,
-      message: `frontmatter does not parse: ${frontmatterError}`,
-    });
+    findings.push(makeFinding('P17', path, 1, `frontmatter does not parse: ${frontmatterError}`));
   }
   // "Bad frontmatter ... doc parsed without frontmatter": on error, treat the
   // doc as if it never had a frontmatter block at all.
@@ -459,43 +414,29 @@ export function parseDoc(path, text, config, hash) {
   const { type, metaType, entry } = resolveType(config.types, path, frontmatterData, cache);
 
   if (type === null && frontmatterType !== null) {
-    const rule = ruleFor('P12');
-    const keyLine = findFrontmatterKeyLine(text, bodyStartLine, 'type');
-    const line = findFrontmatterValueLine(text, bodyStartLine, keyLine, frontmatterType) ?? keyLine ?? 1;
-    findings.push({
-      id: rule.id,
-      severity: rule.severity,
-      file: path,
-      line,
-      message: `unmapped doc type: ${frontmatterType}`,
-    });
+    const keyLine = findFrontmatterKeyLine(fmLines, bodyStartLine, 'type');
+    const line = findFrontmatterValueLine(fmLines, bodyStartLine, keyLine, frontmatterType) ?? keyLine ?? 1;
+    findings.push(makeFinding('P12', path, line, `unmapped doc type: ${frontmatterType}`));
   }
 
-  const declaredId = resolveDeclaredId(frontmatterData, headings, entry?.idPattern, text, bodyStartLine);
+  const declaredId = resolveDeclaredId(frontmatterData, headings, entry?.idPattern, fmLines, bodyStartLine);
   const declares = declaredId.value;
   const declaresLine = declaredId.line;
   const includeRoot = resolveIncludeRoot(config.sources.include, path);
 
   const facts = [
-    ...frontmatterRelationFacts(path, frontmatterData, config.relations, text, bodyStartLine),
+    ...frontmatterRelationFacts(path, frontmatterData, config.relations, fmLines, bodyStartLine),
     ...linkFacts(path, links),
-    ...idMentionFacts(path, lines, cache.idMatchers),
-    ...conceptMentionFacts(path, lines, cache.concepts),
+    ...idMentionFacts(path, nfcLines, cache.idMatchers),
+    ...conceptMentionFacts(path, nfcLines, cache.concepts),
   ];
 
-  const statusResult = computeStatus(entry?.status, { frontmatterData, headings, lines, text, bodyStartLine });
-  for (const f of statusResult.findings) findings.push({ ...f, file: path });
+  const statusResult = computeStatus(entry?.status, { frontmatterData, headings, lines, fmLines, bodyStartLine }, path);
+  findings.push(...statusResult.findings);
 
   if (metaType === 'Decision' && statusResult.value !== null
     && !META_TYPES.Decision.lifecycle.includes(statusResult.value)) {
-    const rule = ruleFor('P20');
-    findings.push({
-      id: rule.id,
-      severity: rule.severity,
-      file: path,
-      line: statusResult.line ?? 1,
-      message: `Decision status "${statusResult.value}" is outside its lifecycle`,
-    });
+    findings.push(makeFinding('P20', path, statusResult.line ?? 1, `Decision status "${statusResult.value}" is outside its lifecycle`));
   }
 
   return {
@@ -536,6 +477,6 @@ export async function parseAll(root, config) {
     texts.set(file, text);
     docs.push(parseDoc(file, text, config, hash));
   }
-  docs.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // Already in path order: `files` comes from `selectScope`, which sorts.
   return { docs, texts, warnings };
 }

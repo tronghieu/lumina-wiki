@@ -28,7 +28,7 @@ import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { RULES, META_RELATIONS } from '../ontology.mjs';
 import { slug } from './markdown.mjs';
-import { quoteMatches } from './evidence.mjs';
+import { makeQuoteMatcher } from './evidence.mjs';
 import { resolveIncludeRootForPattern } from './scope.mjs';
 import { assertSafeRelPath } from './fsx.mjs';
 
@@ -53,8 +53,19 @@ export function makeFinding(id, file, line, message) {
   return { id, severity: severityOf(id), file, line, message };
 }
 
+/**
+ * A parsed doc's own `findings[]` entry, `severity` filled in from `RULES`
+ * when the producer left it out (Design Notes: "severity omitted, since
+ * RULES is the single source of truth for it"); a `severity` already present
+ * is kept as-is.
+ */
 function normalizeFinding(f) {
   return { id: f.id, severity: f.severity ?? severityOf(f.id), file: f.file, line: f.line, message: f.message };
+}
+
+/** `envelope.schemaVersion` newer than `current` -- the one "can't touch this, might be written by a newer engine" check `facts-write`, `facts-prune`, and `computeDocStatus` all need, over their own differently-shaped inputs (a raw number here; each caller extracts it from its own envelope/JSON shape). */
+export function isNewerSchema(schemaVersion, current) {
+  return typeof schemaVersion === 'number' && schemaVersion > current;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +151,8 @@ function normalizeVirtualPath(p) {
   return escaped ? null : parts.join('/');
 }
 
-function docPathOfSubject(subject) {
+/** The underlying doc path of a `doc:`/`frag:` node id or fact subject; `null` for anything else (`concept:`/`id:`). Exported (lint.mjs): the one implementation, instead of a second copy. */
+export function docPathOfSubject(subject) {
   if (typeof subject !== 'string') return null;
   if (subject.startsWith('doc:')) return subject.slice(4);
   if (subject.startsWith('frag:')) return subject.slice(5).split('#')[0];
@@ -274,15 +286,23 @@ function resolvePath(raw, citingDoc, ctx) {
   return { kind: 'unresolved' };
 }
 
-function resolveConceptAlias(raw, concepts) {
-  const norm = String(raw).normalize('NFC').toLowerCase();
+/** `Map<NFC-lowercased name-or-alias, 'concept:<slug>'>` and `Set<slug>`, built once per `makeResolverContext` call instead of re-normalizing every concept's name/aliases (and re-slugging) for every raw ref and every `concept:` fact in the corpus. First concept in config order wins a shared name/alias, same as the linear scan it replaces. */
+function indexConcepts(concepts) {
+  const idByName = new Map();
+  const slugs = new Set();
   for (const c of concepts ?? []) {
-    const names = [c.name, ...(c.aliases ?? [])];
-    if (names.some((n) => String(n).normalize('NFC').toLowerCase() === norm)) {
-      return `concept:${slug(c.name)}`;
+    const s = slug(c.name);
+    slugs.add(s);
+    for (const n of [c.name, ...(c.aliases ?? [])]) {
+      const key = String(n).normalize('NFC').toLowerCase();
+      if (!idByName.has(key)) idByName.set(key, `concept:${s}`);
     }
   }
-  return null;
+  return { idByName, slugs };
+}
+
+function resolveConceptAlias(raw, ctx) {
+  return ctx.conceptIdByName.get(String(raw).normalize('NFC').toLowerCase()) ?? null;
 }
 
 /**
@@ -341,7 +361,7 @@ function resolveRef(raw, citingDoc, ctx) {
   const pathResult = resolvePath(raw, citingDoc, ctx);
   if (pathResult.kind === 'ignored' || pathResult.kind === 'resolved') return pathResult;
 
-  const conceptId = resolveConceptAlias(raw, ctx.config.concepts);
+  const conceptId = resolveConceptAlias(raw, ctx);
   if (conceptId) return { kind: 'resolved', targetId: conceptId, metaType: 'Concept', inScope: undefined };
 
   const idKind = classifyIdShape(raw, ctx);
@@ -380,6 +400,7 @@ export function makeResolverContext({ config, parsed, exists }) {
       declaredIdOwners.get(doc.declares).push(doc.path);
     }
   }
+  const { idByName: conceptIdByName, slugs: conceptSlugs } = indexConcepts(config.concepts);
   return {
     config,
     docsMap,
@@ -387,6 +408,8 @@ export function makeResolverContext({ config, parsed, exists }) {
     exists: typeof exists === 'function' ? exists : () => false,
     otherRoots: rootsInConfigOrder(config, parsed.docs),
     testPattern: makePatternTester(),
+    conceptIdByName,
+    conceptSlugs,
   };
 }
 
@@ -473,8 +496,7 @@ function validatePrefixed(raw, ctx) {
   }
   if (raw.startsWith('concept:')) {
     const conceptSlug = raw.slice(8);
-    const known = (ctx.config.concepts ?? []).some((c) => slug(c.name) === conceptSlug);
-    return known ? { valid: true, metaType: 'Concept', inScope: undefined } : { valid: false };
+    return ctx.conceptSlugs.has(conceptSlug) ? { valid: true, metaType: 'Concept', inScope: undefined } : { valid: false };
   }
   return { valid: true, metaType: metaTypeOfResolvedId(raw, ctx), inScope: nodeIsInScope(raw, ctx) };
 }
@@ -606,8 +628,7 @@ export function buildGraph({ config, parsed, facts, exists }) {
   // Sorted by source path (not readdir/Map-insertion order) so anything
   // order-sensitive downstream -- fragment status "first wins" -- is
   // deterministic regardless of how `loadFacts` walked the directory.
-  const envelopeEntries = (facts instanceof Map ? [...facts.entries()] : Object.entries(facts ?? {}))
-    .sort((a, b) => cmp(a[0], b[0]));
+  const envelopeEntries = [...facts].sort((a, b) => cmp(a[0], b[0]));
   const validEnvelopes = envelopeEntries
     .map(([, e]) => e)
     .filter((e) => e && !e.error && Array.isArray(e.facts));
@@ -800,12 +821,13 @@ export function computeDocStatus({ path, hash, envelope, ontologyVersion, schema
     || !Array.isArray(envelope.facts)
     || typeof envelope.sourceHash !== 'string'
   ) return 'stale';
-  if (typeof envelope.schemaVersion === 'number' && envelope.schemaVersion > schemaVersion) return 'stale';
+  if (isNewerSchema(envelope.schemaVersion, schemaVersion)) return 'stale';
   if (envelope.source !== path) return 'stale';
   if (envelope.ontologyVersion !== ontologyVersion) return 'stale';
+  const matches = makeQuoteMatcher(sourceText);
   for (const fact of envelope.facts) {
     const quote = fact?.evidence?.quote;
-    if (typeof quote !== 'string' || !quoteMatches(sourceText, quote)) return 'stale';
+    if (typeof quote !== 'string' || !matches(quote)) return 'stale';
     if (!refResolves(fact)) return 'stale';
   }
   return envelope.sourceHash === hash ? 'fresh' : 'changed';

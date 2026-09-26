@@ -11,19 +11,12 @@
  */
 
 import { makeFact } from './fact.mjs';
-import { quoteMatches, findQuoteLine } from './evidence.mjs';
+import { makeQuoteMatcher, makeQuoteLocator } from './evidence.mjs';
 import { slug } from './markdown.mjs';
 import { CURRENT_SCHEMA_VERSION } from './config.mjs';
-import { RULES } from '../ontology.mjs';
-import { PREFIXED_ID_RE, sortFindings, makeFinding } from './graph.mjs';
-
-for (const id of ['P14', 'P15']) {
-  if (!RULES.some((r) => r.id === id)) throw new Error(`ontology.mjs RULES is missing rule ${id}`);
-}
-
-function cmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
+import {
+  PREFIXED_ID_RE, sortFindings, makeFinding, cmp, isNewerSchema,
+} from './graph.mjs';
 
 // ---------------------------------------------------------------------------
 // Case-only rename (AD-10): on APFS/NTFS (case-insensitive, case-preserving
@@ -49,24 +42,6 @@ export function lookupCaseInsensitive(map, key) {
   if (map.has(key)) return map.get(key);
   for (const [k, v] of map) {
     if (sameSourcePath(k, key)) return v;
-  }
-  return undefined;
-}
-
-/**
- * Look up a doc's committed envelope in `facts` (`loadFacts()`'s output, or
- * an equivalent plain object in tests): exact key match first, then --
- * case-only rename -- the first key that matches `docPath` case-insensitively.
- * @param {Map<string, object>|Record<string, object>} facts
- * @param {string} docPath
- * @returns {object|undefined}
- */
-export function lookupEnvelope(facts, docPath) {
-  if (facts instanceof Map) return lookupCaseInsensitive(facts, docPath);
-  const obj = facts ?? {};
-  if (Object.hasOwn(obj, docPath)) return obj[docPath];
-  for (const key of Object.keys(obj)) {
-    if (sameSourcePath(key, docPath)) return obj[key];
   }
   return undefined;
 }
@@ -121,7 +96,9 @@ function canonicalizeObject(raw, citingDoc, resolve) {
 // One fact: validate, canonicalize, build through `makeFact` (AD-18).
 // ---------------------------------------------------------------------------
 
-function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
+function prepareOneFact(raw, {
+  source, doc, locateQuote, resolve,
+}) {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('fact must be an object');
   }
@@ -129,15 +106,10 @@ function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
     kind, subject, relation, object, value, ref: inputRef, scope, evidence, provenance,
   } = raw;
 
-  if (kind !== 'edge' && kind !== 'attr') {
-    throw new Error(`kind must be "edge" or "attr", got ${JSON.stringify(kind)}`);
-  }
-  if (typeof relation !== 'string' || relation.length === 0) {
-    throw new Error('relation must be a non-empty string');
-  }
-  if (provenance !== 'extracted' && provenance !== 'inferred') {
-    throw new Error(`provenance must be "extracted" or "inferred", got ${JSON.stringify(provenance)}`);
-  }
+  // Only the checks that must run *before* the calls below -- everything
+  // else (kind, relation, provenance, ref shape, object/value
+  // presence/exclusivity) `makeFact` already enforces (fact.mjs); no need to
+  // check it twice.
   if (!evidence || typeof evidence !== 'object' || typeof evidence.quote !== 'string' || evidence.quote.length === 0) {
     throw new Error('evidence.quote must be a non-empty string');
   }
@@ -151,18 +123,10 @@ function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
   }
   const canonicalSubject = subjectCheck.subject;
 
-  // `findQuoteLine` already fails (returns null) on exactly the same
-  // no-match condition `quoteMatches` would -- one call, one error branch.
-  const line = findQuoteLine(sourceText, evidence.quote);
+  const line = locateQuote(evidence.quote);
   if (line === null) {
     throw new Error(`evidence.quote not found in ${source}: ${JSON.stringify(evidence.quote)}`);
   }
-
-  const hasObject = object !== undefined;
-  const hasValue = value !== undefined;
-  if (hasObject && hasValue) throw new Error('fact cannot have both object and value');
-  if (kind === 'edge' && !hasObject) throw new Error('edge fact requires object');
-  if (kind === 'attr' && !hasValue) throw new Error('attr fact requires value');
 
   let canonicalObject;
   if (kind === 'edge') {
@@ -172,15 +136,7 @@ function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
     canonicalObject = canonicalizeObject(object, doc, resolve);
   }
 
-  let ref;
-  if (inputRef !== undefined && inputRef !== null) {
-    if (typeof inputRef !== 'string' || inputRef.length === 0) {
-      throw new Error('ref must be a non-empty string');
-    }
-    ref = inputRef;
-  } else {
-    ref = kind === 'edge' ? object : subject;
-  }
+  const ref = inputRef ?? (kind === 'edge' ? object : subject);
 
   return makeFact({
     kind,
@@ -204,8 +160,7 @@ function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
  * this throw with every problem listed, and nothing is built.
  * @param {{source: string, sourceHash: string, facts: object[]}} input as read from stdin.
  * @param {object} deps
- * @param {{docs: object[]}} deps.parsed `parseAll()`'s output.
- * @param {Map<string, string>} deps.texts `parsed.texts` (source path -> current decoded text).
+ * @param {{docs: object[], texts: Map<string, string>}} deps.parsed `parseAll()`'s output.
  * @param {(raw: string, citingDoc: object) => object} deps.resolve the shared
  *   resolver (`lib/graph.mjs#resolveFactRef`, closed over a
  *   `makeResolverContext` context) -- injected so this module stays pure.
@@ -213,12 +168,13 @@ function prepareOneFact(raw, { source, doc, sourceText, resolve }) {
  * @returns {{schemaVersion: number, source: string, sourceHash: string, ontologyVersion: string, facts: object[]}}
  * @throws {Error & {errors: {index: number, message: string}[]}} when any fact is invalid.
  */
-export function prepareEnvelope(input, {
-  parsed, texts, resolve, ontologyVersion,
-}) {
+export function prepareEnvelope(input, { parsed, resolve, ontologyVersion }) {
   const source = input.source;
   const doc = parsed.docs.find((d) => d.path === source);
-  const sourceText = texts.get(source) ?? '';
+  const sourceText = parsed.texts.get(source) ?? '';
+  // Built once per doc, not once per incoming fact: every fact in this call
+  // is located against the same source text.
+  const locateQuote = makeQuoteLocator(sourceText);
 
   const errors = [];
   const byId = new Map(); // id -> record, first write wins (dedup)
@@ -227,7 +183,7 @@ export function prepareEnvelope(input, {
   (input.facts ?? []).forEach((raw, index) => {
     try {
       const record = prepareOneFact(raw, {
-        source, doc, sourceText, resolve,
+        source, doc, locateQuote, resolve,
       });
       if (!byId.has(record.id)) {
         byId.set(record.id, record);
@@ -285,16 +241,31 @@ function evidenceLineOf(fact) {
 }
 
 /**
+ * Every in-scope doc whose content hash matches `envelope.sourceHash`,
+ * except one that already has its own committed fact file (already
+ * re-ingested under its new name, not still a candidate). The one "which
+ * docs could this orphaned envelope have been renamed from" set
+ * `verifyEvidence` (P15) and `findPruneCandidates` ("rename-candidate")
+ * both need, instead of two copies.
+ * @param {{sourceHash: string}} envelope
+ * @param {object[]} docs `parsed.docs`, or an equivalent list of `{path, hash}`.
+ * @param {Set<string>} committedSources source paths that already have their own committed fact file.
+ * @returns {object[]}
+ */
+export function renameCandidates(envelope, docs, committedSources) {
+  return docs.filter((d) => d.hash === envelope.sourceHash && !committedSources.has(d.path));
+}
+
+/**
  * Check every committed fact envelope against the live parse.
  * @param {object} params
- * @param {{docs: object[]}} params.parsed `parseAll()`'s output.
- * @param {Map<string, string>} params.texts `parsed.texts`.
- * @param {Map<string, object>|Record<string, object>} params.facts `loadFacts()`'s output.
+ * @param {{docs: object[], texts: Map<string, string>}} params.parsed `parseAll()`'s output.
+ * @param {Map<string, object>} params.facts `loadFacts()`'s output.
  * @returns {object[]} findings, sorted.
  */
-export function verifyEvidence({ parsed, texts, facts }) {
+export function verifyEvidence({ parsed, facts }) {
   const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
-  const entries = facts instanceof Map ? [...facts.entries()] : Object.entries(facts ?? {});
+  const entries = [...facts];
   // Every source path that already has its own committed fact file --
   // a doc in this set is never itself a rename candidate.
   const committedSources = new Set(entries.map(([key]) => key));
@@ -317,14 +288,9 @@ export function verifyEvidence({ parsed, texts, facts }) {
     const source = envelope.source;
     const doc = docsMap.get(source);
     if (!doc) {
-      // A rename candidate for every in-scope doc whose content hash
-      // matches -- except one that already has its own committed envelope
-      // (already re-ingested under its new name, not still a candidate).
-      const renameCandidates = parsed.docs.filter(
-        (d) => d.hash === envelope.sourceHash && !committedSources.has(d.path),
-      );
-      if (renameCandidates.length > 0) {
-        for (const candidate of renameCandidates) {
+      const candidates = renameCandidates(envelope, parsed.docs, committedSources);
+      if (candidates.length > 0) {
+        for (const candidate of candidates) {
           findings.push(makeFinding('P15', candidate.path, 1, `rename candidate: facts committed for "${source}" match this doc's content`));
         }
       } else {
@@ -333,10 +299,11 @@ export function verifyEvidence({ parsed, texts, facts }) {
       continue;
     }
 
-    const sourceText = texts.get(source) ?? '';
+    const sourceText = parsed.texts.get(source) ?? '';
+    const matches = makeQuoteMatcher(sourceText);
     for (const fact of envelope.facts) {
       const quote = fact?.evidence?.quote;
-      if (typeof quote !== 'string' || !quoteMatches(sourceText, quote)) {
+      if (typeof quote !== 'string' || !matches(quote)) {
         findings.push(makeFinding('P14', source, evidenceLineOf(fact), `broken evidence for fact ${fact?.id ?? '?'}: quote no longer found: ${JSON.stringify(quote)}`));
       }
     }
@@ -374,7 +341,7 @@ export function verifyEvidence({ parsed, texts, facts }) {
  */
 export function findPruneCandidates({ parsed, facts, exists }) {
   const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
-  const entries = facts instanceof Map ? [...facts.entries()] : Object.entries(facts ?? {});
+  const entries = [...facts];
   // Same rule as `verifyEvidence`: a source that already has its own
   // committed fact file is never itself a rename candidate.
   const committedSources = new Set(entries.map(([key]) => key));
@@ -389,7 +356,7 @@ export function findPruneCandidates({ parsed, facts, exists }) {
     const rawSchemaVersion = envelope && typeof envelope === 'object' && !envelope.error
       ? envelope.schemaVersion
       : undefined;
-    if (typeof rawSchemaVersion === 'number' && rawSchemaVersion > CURRENT_SCHEMA_VERSION) {
+    if (isNewerSchema(rawSchemaVersion, CURRENT_SCHEMA_VERSION)) {
       kept.push({ file: factFile, reason: 'newer-schema' });
       continue;
     }
@@ -407,11 +374,11 @@ export function findPruneCandidates({ parsed, facts, exists }) {
 
     // 4. A rename candidate (P15): a well-formed envelope whose content
     // hash matches an in-scope doc with no envelope of its own yet.
-    const renameCandidates = isV1Envelope(envelope)
-      ? [...docsMap.values()].filter((d) => d.hash === envelope.sourceHash && !committedSources.has(d.path))
+    const candidates = isV1Envelope(envelope)
+      ? renameCandidates(envelope, [...docsMap.values()], committedSources)
       : [];
-    if (renameCandidates.length > 0) {
-      const candidate = renameCandidates.map((d) => d.path).sort()[0];
+    if (candidates.length > 0) {
+      const candidate = candidates.map((d) => d.path).sort()[0];
       kept.push({ file: factFile, reason: 'rename-candidate', candidate });
       continue;
     }

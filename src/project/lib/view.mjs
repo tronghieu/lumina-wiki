@@ -16,6 +16,7 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { META_TYPES } from '../ontology.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VENDOR_PATH = join(HERE, '..', 'vendor', 'force-graph.min.js');
@@ -66,6 +67,9 @@ export async function renderView({ graph, findings, freshness }) {
     edges: graph.edges,
     findings,
     freshness,
+    // The fixed meta-type list (ontology.mjs), so viewer.js builds its
+    // filters/legend from one source instead of a second, hand-kept copy.
+    metaTypes: Object.keys(META_TYPES),
   };
 
   return `<!doctype html>

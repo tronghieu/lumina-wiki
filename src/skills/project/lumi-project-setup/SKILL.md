@@ -19,7 +19,6 @@ approves it, then validate what you wrote through the engine.
 
 ## Context
 
-- `_lumina/project/PROJECT.md`: engine commands, meta-types, meta-relations.
 - `## Engine facts` below: the `project.yaml` shape and the engine behaviour
   a proposal must fit. `PROJECT.md` does not document the shape.
 - Only the engine (`project.mjs`) validates and reads `project.yaml`; it
@@ -99,8 +98,8 @@ The inline line needs no key of its own: `{heading: Status}` falls back to a
 `Status: value` line when the doc has no `Status` heading.
 `map` is a prefix match (`accepted` doesn't match `accepted-with-changes`);
 with no match, the first word is lowercased and trailing `.,;:-` stripped.
-The `Decision` lifecycle is exactly `proposed`, `accepted`,
-`partially-superseded`, `superseded`, `deprecated`. A sidecar file (e.g. a
+A `map` target must match the `Decision` lifecycle values PROJECT.md lists
+("Meta-ontology") exactly. A sidecar file (e.g. a
 family's own `meta.yaml`) can't be read as a status source — report it as a
 gap, never invent one or suggest copying its data into the doc. Stack
 sources only when they describe the same thing; mixing in an unrelated line

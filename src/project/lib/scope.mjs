@@ -11,7 +11,6 @@
 import { readdir } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { assertSafeRelPath } from './fsx.mjs';
-import { RULES } from '../ontology.mjs';
 
 const MARKDOWN_EXT = new Set(['.md', '.markdown', '.mdx']);
 
@@ -24,11 +23,6 @@ const ALWAYS_EXCLUDED_ROOT_DIRS = new Set(['_lumina']);
 const DEFAULT_EXCLUDED_ROOT_DIRS = new Set([
   '.agents', '.claude', '.agent', '.trae', '.codex', '.serena', 'graphify-out',
 ]);
-
-const P16_RULE = RULES.find((r) => r.id === 'P16');
-if (!P16_RULE) {
-  throw new Error('ontology.mjs RULES is missing rule P16 (include pattern matches no files)');
-}
 
 /**
  * Compile a glob pattern into a RegExp matching repo-relative,
@@ -237,7 +231,7 @@ export async function selectScope(root, sources) {
   const warnings = [];
   for (const pattern of rawInclude) {
     if (!matchedPatterns.has(pattern)) {
-      warnings.push({ rule: P16_RULE.id, pattern, message: `include pattern matches no files: ${pattern}` });
+      warnings.push({ rule: 'P16', pattern, message: `include pattern matches no files: ${pattern}` });
     }
   }
 

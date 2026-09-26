@@ -88,6 +88,7 @@ describe('queryNode', () => {
       id: 'doc:docs/adr/0009.md',
       metaType: 'Decision',
       status: 'accepted',
+      frags: [],
       at: { file: 'docs/adr/0009.md', line: 2, quote: 'id: ADR-0009' },
     });
     assert.deepEqual(result.out, []);
@@ -234,6 +235,41 @@ describe('queryNode', () => {
     assert.equal(result.in.length, 0);
     assert.equal(result.out.length, 1);
     assert.deepEqual(result.node.at, { file: 'docs/adr/9998.md', line: 5, quote: 'superseded_by: ADR-9998' });
+  });
+
+  test('a doc node lists its own frag: children in `frags`, sorted; a non-doc node has no `frags`', () => {
+    const a = doc({
+      path: 'docs/adr/0052.md',
+      headings: [{
+        level: 2, text: 'Status', anchor: 'status', line: 8,
+      }],
+    });
+    const b = doc({
+      path: 'docs/adr/0009.md',
+      facts: [edgeFact({
+        subject: 'doc:docs/adr/0009.md', relation: 'link', object: '0052.md#status', line: 4, quote: '[x](0052.md#status)',
+      })],
+    });
+    const { graph, parsed, resolve } = setup({ docs: [a, b] });
+    const docResult = queryNode('docs/adr/0052.md', { graph, parsed, resolve });
+    assert.deepEqual(docResult.node.frags, ['frag:docs/adr/0052.md#status']);
+    const fragResult = queryNode('docs/adr/0052.md#status', { graph, parsed, resolve });
+    assert.ok(!Object.hasOwn(fragResult.node, 'frags'));
+  });
+
+  test('evidence keeps a non-empty `scope`, dropped when absent', () => {
+    const a = doc({ path: 'docs/adr/0009.md', declares: 'ADR-0009' });
+    const b = doc({
+      path: 'docs/adr/0052.md',
+      facts: [edgeFact({
+        subject: 'doc:docs/adr/0052.md', relation: 'supersedes', object: 'ADR-0009', line: 3, quote: 'x', scope: 'the AP clause',
+      })],
+    });
+    const { graph, parsed, resolve } = setup({ docs: [a, b] });
+    const result = queryNode('ADR-0009', { graph, parsed, resolve });
+    assert.deepEqual(result.in[0].evidence, [{
+      file: 'docs/adr/0052.md', line: 3, quote: 'x', scope: 'the AP clause',
+    }]);
   });
 
   test('in[] is ordered by (relation, from), not merely by from', () => {

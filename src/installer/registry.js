@@ -19,7 +19,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, basename, isAbsolute, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { atomicWrite, ensureDir } from './fs.js';
-import { detectInstallMode } from './manifest.js';
+import { isProjectModeRepo, projectModeRefusalMessage } from './manifest.js';
 
 // ---------------------------------------------------------------------------
 // Base dir / paths
@@ -339,14 +339,11 @@ export async function addWiki({ dirPath, name, aliases = [], description = '' })
 
   // Project-mode repos are a separate product (spec-project-docs-overlay) and
   // are never managed by lumi-hub — no fleet registration, no provisioning.
-  // Checked via detectInstallMode (not just the manifest below) so this also
+  // Checked via isProjectModeRepo (not just the manifest below) so this also
   // refuses a teammate's clone that has no local manifest but a committed
   // project.yaml/install.json.
-  const detectedMode = await detectInstallMode(dirPath).catch(() => null);
-  if (detectedMode === 'project') {
-    const e = new Error(
-      `"${dirPath}" is a Lumina project-mode repo; lumi-hub does not manage project-mode repos.`,
-    );
+  if (await isProjectModeRepo(dirPath)) {
+    const e = new Error(projectModeRefusalMessage(dirPath));
     e.code = 2;
     throw e;
   }

@@ -38,11 +38,11 @@ import { contentHash } from './lib/hash.mjs';
 import { selectScope, ScopeCollisionError } from './lib/scope.mjs';
 import { parseAll } from './lib/parse.mjs';
 import {
-  buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef, sortFindings, makeFinding,
+  buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef, sortFindings, makeFinding, cmp, isNewerSchema,
 } from './lib/graph.mjs';
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
 import {
-  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates, lookupEnvelope,
+  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates,
 } from './lib/factfile.mjs';
 import { lintGraph } from './lib/lint.mjs';
 import {
@@ -51,12 +51,6 @@ import {
 import { RULES, META_TYPES, META_RELATIONS } from './ontology.mjs';
 
 const MIN_NODE_MAJOR = 24;
-const SUBCOMMANDS = new Set([
-  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query', 'view', 'facts-prune',
-]);
-// Subcommands that parse their own flags/positionals below, instead of
-// `main`'s blanket "nothing after the subcommand name" check.
-const SELF_PARSING_SUBCOMMANDS = new Set(['lint', 'query', 'facts-prune']);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
 // these to exit 2, not 3.
@@ -82,23 +76,11 @@ function checkNodeVersion() {
 }
 
 async function runScope(root, config) {
-  try {
-    const { files, warnings } = await selectScope(root, config.sources);
-    console.log(JSON.stringify({ files, warnings }));
-  } catch (e) {
-    if (e instanceof ScopeCollisionError) {
-      fail(2, e.message, { pairs: e.pairs });
-      return;
-    }
-    if (e instanceof RangeError) {
-      fail(2, e.message);
-      return;
-    }
-    fail(exitCodeForError(e), `internal error: ${e.message}`);
-  }
+  const { files, warnings } = await selectScope(root, config.sources);
+  console.log(JSON.stringify({ files, warnings }));
 }
 
-function runConfigCheck(config) {
+function runConfigCheck(root, config) {
   console.log(JSON.stringify({
     ok: true,
     schemaVersion: config.schemaVersion,
@@ -106,19 +88,39 @@ function runConfigCheck(config) {
   }));
 }
 
-/** `exists(path)` for `buildGraph`: true when `path` (repo-relative) is a *file* on disk (a directory link target must not become a `doc:` node). */
+/** `exists(path)` for `buildGraph`: true when `path` (repo-relative) is a *file* on disk (a directory link target must not become a `doc:` node). Cached per instance -- one `existsUnderRoot(root)` shared by every check a single command makes, instead of a fresh `statSync` for the same path from each of `buildGraph` and the resolver. */
 function existsUnderRoot(root) {
+  const cache = new Map();
   return (path) => {
+    if (cache.has(path)) return cache.get(path);
+    let result;
     try {
-      return statSync(join(root, path)).isFile();
+      result = statSync(join(root, path)).isFile();
     } catch {
-      return false;
+      result = false;
     }
+    cache.set(path, result);
+    return result;
   };
 }
 
-/** Map/RangeError-aware failure for `build`/`status`, matching `runScope`'s handling of the same underlying `selectScope` errors. */
+/**
+ * The one failure mapping every subcommand's `run` uses (called from
+ * `main`'s single try/catch around it): a lock timeout is exit 3, an error
+ * some inner step already tagged with `projectExitCode` (e.g. `facts-write`'s
+ * stdin/hash checks) keeps that code, `ScopeCollisionError`/`RangeError` are
+ * exit 2 with their own message, everything else is `exitCodeForError`'s
+ * generic 2/3 split.
+ */
 function failForEngineError(e) {
+  if (e instanceof LockTimeoutError) {
+    fail(3, e.message);
+    return;
+  }
+  if (e && e.projectExitCode) {
+    fail(e.projectExitCode, e.message);
+    return;
+  }
   if (e instanceof ScopeCollisionError) {
     fail(2, e.message, { pairs: e.pairs });
     return;
@@ -146,27 +148,30 @@ function makeRefResolves(graph, docPath) {
   };
 }
 
-/** parsed + facts + graph (AD-19): the one loader `build`, `status`, `lint`, `query`, and `view` all start from, instead of each repeating the same three calls. */
-async function loadGraph(root, config) {
-  const parsed = await parseAll(root, config);
-  const facts = await loadFacts(root);
-  const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
+/**
+ * parsed + facts + graph (AD-19): the one loader `build`, `status`, `lint`,
+ * `query`, and `view` all start from, instead of each repeating the same
+ * three calls. `exists` defaults to a fresh `existsUnderRoot(root)`; `view`
+ * and `query` pass in the same one they also hand `makeResolve`, so a
+ * command that needs both never builds (and caches) it twice.
+ */
+async function loadGraph(root, config, exists = existsUnderRoot(root)) {
+  const [parsed, facts] = await Promise.all([parseAll(root, config), loadFacts(root)]);
+  const graph = buildGraph({
+    config, parsed, facts, exists,
+  });
   return { parsed, facts, graph };
 }
 
-/** The `(raw, citingDoc) => resolveFactRef(...)` resolver `facts-write`, `query`, and `view` each built the same way from `{config, parsed, exists}` -- one function instead of three copies. */
-function makeResolve(root, config, parsed) {
-  const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
+/** The `(raw, citingDoc) => resolveFactRef(...)` resolver `facts-write`, `query`, and `view` each built the same way from `{config, parsed, exists}` -- one function instead of three copies. `exists` defaults to a fresh `existsUnderRoot(root)`. */
+function makeResolve(root, config, parsed, exists = existsUnderRoot(root)) {
+  const resolverCtx = makeResolverContext({ config, parsed, exists });
   return (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
 }
 
 async function runBuild(root, config) {
-  try {
-    const { graph } = await loadGraph(root, config);
-    console.log(JSON.stringify(graph));
-  } catch (e) {
-    failForEngineError(e);
-  }
+  const { graph } = await loadGraph(root, config);
+  console.log(JSON.stringify(graph));
 }
 
 const STATUS_SUMMARY_KEY = {
@@ -177,6 +182,25 @@ const STATUS_SUMMARY_KEY = {
 };
 
 /**
+ * Case-insensitive envelope lookup, built once per command instead of once
+ * per doc: `lookupCaseInsensitive` (factfile.mjs) falls back to an O(facts)
+ * scan on a miss, and every `never-ingested` doc is a miss -- O(docs x facts)
+ * for `status`/`lint`/`query`/`view` on a real corpus otherwise.
+ */
+function makeEnvelopeLookup(facts) {
+  const folded = new Map(); // NFC-lowercased key -> first-seen original key
+  for (const key of facts.keys()) {
+    const norm = key.normalize('NFC').toLowerCase();
+    if (!folded.has(norm)) folded.set(norm, key);
+  }
+  return (docPath) => {
+    if (facts.has(docPath)) return facts.get(docPath);
+    const origKey = folded.get(docPath.normalize('NFC').toLowerCase());
+    return origKey === undefined ? undefined : facts.get(origKey);
+  };
+}
+
+/**
  * Every in-scope doc's freshness state (AD-12), shared by `status` and
  * `lint` (P13) so the two never compute it two different ways.
  * @returns {{docs: {path: string, hash: string, state: string}[], summary: object}}
@@ -184,10 +208,11 @@ const STATUS_SUMMARY_KEY = {
 function computeDocStatuses({
   parsed, facts, graph, ontologyVer,
 }) {
+  const lookupEnvelope = makeEnvelopeLookup(facts);
   const docs = [];
   const summary = { fresh: 0, changed: 0, stale: 0, neverIngested: 0 };
   for (const doc of parsed.docs) {
-    const envelope = lookupEnvelope(facts, doc.path);
+    const envelope = lookupEnvelope(doc.path);
     const sourceText = parsed.texts.get(doc.path) ?? '';
     const refResolves = makeRefResolves(graph, doc.path);
     const state = computeDocStatus({
@@ -206,8 +231,8 @@ function computeDocStatuses({
 }
 
 /** `loadGraph()` plus the freshness loop (AD-12): `status`, `lint`, `query`, and `view` all need it; `build` doesn't, so it stays a separate step. */
-async function loadGraphWithStatus(root, config) {
-  const { parsed, facts, graph } = await loadGraph(root, config);
+async function loadGraphWithStatus(root, config, exists = existsUnderRoot(root)) {
+  const { parsed, facts, graph } = await loadGraph(root, config, exists);
   const ontologyVer = ontologyVersion(config);
   const { docs: statusDocs, summary } = computeDocStatuses({
     parsed, facts, graph, ontologyVer,
@@ -218,12 +243,8 @@ async function loadGraphWithStatus(root, config) {
 }
 
 async function runStatus(root, config) {
-  try {
-    const { statusDocs, summary } = await loadGraphWithStatus(root, config);
-    console.log(JSON.stringify({ docs: statusDocs, summary }));
-  } catch (e) {
-    failForEngineError(e);
-  }
+  const { statusDocs, summary } = await loadGraphWithStatus(root, config);
+  console.log(JSON.stringify({ docs: statusDocs, summary }));
 }
 
 // ---------------------------------------------------------------------------
@@ -255,12 +276,20 @@ function envPositiveInt(name, fallback) {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
+/** Run `fn` while holding the engine's one lock file (`_lumina/_state/lock`), with the two env-var timing overrides shared by every mutating command (`facts-write`, `facts-prune`) -- one lock policy, not two copies. */
+function withProjectLock(root, fn) {
+  const lockPath = join(root, '_lumina', '_state', 'lock');
+  const staleMs = envPositiveInt('LUMINA_PROJECT_LOCK_STALE_MS', 30000);
+  const timeoutMs = envPositiveInt('LUMINA_PROJECT_LOCK_TIMEOUT_MS', 10000);
+  return withLock(lockPath, fn, { staleMs, timeoutMs });
+}
+
 async function runFactsWrite(root, config) {
   let stdinText;
   try {
     stdinText = await readStdinText();
   } catch (e) {
-    fail(e.projectExitCode ?? exitCodeForError(e), e.message);
+    failForEngineError(e);
     return;
   }
 
@@ -284,7 +313,7 @@ async function runFactsWrite(root, config) {
   try {
     assertSafeRelPath(input.source);
   } catch (e) {
-    fail(2, e.message);
+    failForEngineError(e);
     return;
   }
 
@@ -310,24 +339,16 @@ async function runFactsWrite(root, config) {
 
   let envelope;
   try {
-    envelope = prepareEnvelope(input, {
-      parsed,
-      texts: parsed.texts,
-      resolve,
-      ontologyVersion: ontologyVersion(config),
-    });
+    envelope = prepareEnvelope(input, { parsed, resolve, ontologyVersion: ontologyVersion(config) });
   } catch (e) {
     fail(1, e.message, e.errors ? { errors: e.errors } : {});
     return;
   }
 
-  const lockPath = join(root, '_lumina', '_state', 'lock');
   const factFilePath = join(root, '_lumina', 'facts', `${input.source}.json`);
-  const staleMs = envPositiveInt('LUMINA_PROJECT_LOCK_STALE_MS', 30000);
-  const timeoutMs = envPositiveInt('LUMINA_PROJECT_LOCK_TIMEOUT_MS', 10000);
 
   try {
-    await withLock(lockPath, async () => {
+    await withProjectLock(root, async () => {
       // Re-check under the lock: `parsed` (and its `doc.hash`) was read
       // before we ever waited for the lock, so a writer that raced us to
       // acquire it first could have changed the doc in between. Without
@@ -340,32 +361,23 @@ async function runFactsWrite(root, config) {
         throw err;
       }
 
-      let existingSchemaVersion;
+      let existingJson;
       try {
-        const existingJson = JSON.parse(await readFile(factFilePath, 'utf8'));
-        existingSchemaVersion = existingJson?.schemaVersion;
+        existingJson = JSON.parse(await readFile(factFilePath, 'utf8'));
       } catch {
-        existingSchemaVersion = undefined; // no existing file, or it doesn't parse -- nothing newer to protect
+        existingJson = undefined; // no existing file, or it doesn't parse -- nothing newer to protect
       }
-      if (typeof existingSchemaVersion === 'number' && existingSchemaVersion > CURRENT_SCHEMA_VERSION) {
+      if (isNewerSchema(existingJson?.schemaVersion, CURRENT_SCHEMA_VERSION)) {
         const err = new Error(
-          `refusing to replace ${input.source}.json: its schemaVersion (${existingSchemaVersion}) is newer than this engine supports (${CURRENT_SCHEMA_VERSION})`,
+          `refusing to replace ${input.source}.json: its schemaVersion (${existingJson.schemaVersion}) is newer than this engine supports (${CURRENT_SCHEMA_VERSION})`,
         );
         err.projectExitCode = 3;
         throw err;
       }
       await atomicWrite(factFilePath, serializeEnvelope(envelope));
-    }, { staleMs, timeoutMs });
+    });
   } catch (e) {
-    if (e instanceof LockTimeoutError) {
-      fail(3, e.message);
-      return;
-    }
-    if (e.projectExitCode) {
-      fail(e.projectExitCode, e.message);
-      return;
-    }
-    fail(exitCodeForError(e), `internal error: ${e.message}`);
+    failForEngineError(e);
     return;
   }
 
@@ -384,14 +396,9 @@ async function runFactsWrite(root, config) {
 // ---------------------------------------------------------------------------
 
 async function runVerifyEvidence(root, config) {
-  try {
-    const parsed = await parseAll(root, config);
-    const facts = await loadFacts(root);
-    const findings = verifyEvidence({ parsed, texts: parsed.texts, facts });
-    console.log(JSON.stringify({ findings }));
-  } catch (e) {
-    failForEngineError(e);
-  }
+  const [parsed, facts] = await Promise.all([parseAll(root, config), loadFacts(root)]);
+  const findings = verifyEvidence({ parsed, facts });
+  console.log(JSON.stringify({ findings }));
 }
 
 // ---------------------------------------------------------------------------
@@ -434,40 +441,36 @@ function assembleFindings({
     ...statusDocs
       .filter((d) => d.state === 'stale')
       .map((d) => makeFinding('P13', d.path, 1, `stale facts: ${d.path}`)),
-    ...verifyEvidence({ parsed, texts: parsed.texts, facts }), // P14, P15
+    ...verifyEvidence({ parsed, facts }), // P14, P15
     ...parsed.warnings.map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
   ]);
 }
 
 async function runLint(root, config, failOn) {
-  try {
-    const {
-      parsed, facts, graph, statusDocs,
-    } = await loadGraphWithStatus(root, config);
+  const {
+    parsed, facts, graph, statusDocs,
+  } = await loadGraphWithStatus(root, config);
 
-    const sorted = assembleFindings({
-      parsed, facts, graph, statusDocs,
-    });
-    const summary = { errors: 0, warnings: 0, infos: 0 };
-    for (const f of sorted) {
-      if (f.severity === 'error') summary.errors += 1;
-      else if (f.severity === 'warning') summary.warnings += 1;
-      else if (f.severity === 'info') summary.infos += 1;
-    }
-
-    console.log(JSON.stringify({
-      schemaVersion: 1,
-      checks_run: RULES.map((r) => r.id),
-      findings: sorted,
-      summary,
-    }));
-
-    const threshold = SEVERITY_RANK[failOn];
-    const worst = sorted.reduce((max, f) => Math.max(max, SEVERITY_RANK[f.severity]), -1);
-    process.exitCode = worst >= threshold ? 1 : 0;
-  } catch (e) {
-    failForEngineError(e);
+  const sorted = assembleFindings({
+    parsed, facts, graph, statusDocs,
+  });
+  const summary = { errors: 0, warnings: 0, infos: 0 };
+  for (const f of sorted) {
+    if (f.severity === 'error') summary.errors += 1;
+    else if (f.severity === 'warning') summary.warnings += 1;
+    else if (f.severity === 'info') summary.infos += 1;
   }
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    checks_run: RULES.map((r) => r.id),
+    findings: sorted,
+    summary,
+  }));
+
+  const threshold = SEVERITY_RANK[failOn];
+  const worst = sorted.reduce((max, f) => Math.max(max, SEVERITY_RANK[f.severity]), -1);
+  process.exitCode = worst >= threshold ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -480,34 +483,31 @@ async function runLint(root, config, failOn) {
 // ---------------------------------------------------------------------------
 
 async function runView(root, config) {
-  try {
-    const {
-      parsed, facts, graph, statusDocs, summary,
-    } = await loadGraphWithStatus(root, config);
-    const findings = assembleFindings({
-      parsed, facts, graph, statusDocs,
-    });
+  const exists = existsUnderRoot(root);
+  const {
+    parsed, facts, graph, statusDocs, summary,
+  } = await loadGraphWithStatus(root, config, exists);
+  const findings = assembleFindings({
+    parsed, facts, graph, statusDocs,
+  });
 
-    // Enrich every node with the `metaType`/`at` that `query.mjs` already
-    // knows how to compute (reused, not recomputed a second way): doc nodes
-    // already carry `metaType` from `buildGraph`, but frag/concept/id nodes
-    // don't, and no node carries its own source location.
-    const resolve = makeResolve(root, config, parsed);
-    const qctx = buildCtx({ graph, parsed, resolve });
-    const enrichedGraph = {
-      nodes: graph.nodes.map((n) => ({ ...n, metaType: nodeMetaType(n, resolve), at: atFor(n, qctx) })),
-      edges: graph.edges,
-      findings: graph.findings,
-    };
-    const freshness = { docs: statusDocs, summary };
+  // Enrich every node with the `metaType`/`at` that `query.mjs` already
+  // knows how to compute (reused, not recomputed a second way): doc nodes
+  // already carry `metaType` from `buildGraph`, but frag/concept/id nodes
+  // don't, and no node carries its own source location.
+  const resolve = makeResolve(root, config, parsed, exists);
+  const qctx = buildCtx({ graph, parsed, resolve });
+  const enrichedGraph = {
+    nodes: graph.nodes.map((n) => ({ ...n, metaType: nodeMetaType(n, resolve), at: atFor(n, qctx) })),
+    edges: graph.edges,
+  };
+  const freshness = { docs: statusDocs, summary };
 
-    const { renderView } = await import('./lib/view.mjs');
-    const html = await renderView({ graph: enrichedGraph, findings, freshness });
-    await atomicWrite(join(root, '_lumina', 'graph', 'view.html'), html);
-    console.log(JSON.stringify({ ok: true, file: '_lumina/graph/view.html' }));
-  } catch (e) {
-    failForEngineError(e);
-  }
+  const { renderView } = await import('./lib/view.mjs');
+  const html = await renderView({ graph: enrichedGraph, findings, freshness });
+  const viewPath = join(root, '_lumina', 'graph', 'view.html');
+  await atomicWrite(viewPath, html);
+  console.log(JSON.stringify({ ok: true, file: '_lumina/graph/view.html', url: pathToFileURL(viewPath).href }));
 }
 
 // ---------------------------------------------------------------------------
@@ -569,47 +569,44 @@ function parseQueryArgs(rest) {
 }
 
 async function runQuery(root, config, queryArgs) {
-  try {
-    const {
-      parsed, graph, statusDocs, summary,
-    } = await loadGraphWithStatus(root, config);
-    const freshness = {
-      stale: summary.stale,
-      changed: summary.changed,
-      neverIngested: summary.neverIngested,
-      staleDocs: statusDocs.filter((d) => d.state === 'stale').map((d) => d.path).sort(),
-    };
+  const exists = existsUnderRoot(root);
+  const {
+    parsed, graph, statusDocs, summary,
+  } = await loadGraphWithStatus(root, config, exists);
+  const freshness = {
+    stale: summary.stale,
+    changed: summary.changed,
+    neverIngested: summary.neverIngested,
+    staleDocs: statusDocs.filter((d) => d.state === 'stale').map((d) => d.path).sort(),
+  };
 
-    const resolve = makeResolve(root, config, parsed);
+  const resolve = makeResolve(root, config, parsed, exists);
 
-    let payload;
-    if (queryArgs.op === 'node') {
-      const result = queryNode(queryArgs.ref, { graph, parsed, resolve });
-      if (!result) {
-        fail(2, `no node resolves for ref: ${queryArgs.ref}`);
-        return;
-      }
-      payload = { op: 'node', ...result };
-    } else if (queryArgs.op === 'list') {
-      const items = queryList({ metaType: queryArgs.metaType, status: queryArgs.status }, { graph, parsed, resolve });
-      payload = { op: 'list', items };
-    } else {
-      const items = queryNeighbors(
-        queryArgs.ref,
-        { direction: queryArgs.direction, relation: queryArgs.relation },
-        { graph, parsed, resolve },
-      );
-      if (!items) {
-        fail(2, `no node resolves for ref: ${queryArgs.ref}`);
-        return;
-      }
-      payload = { op: 'neighbors', items };
+  let payload;
+  if (queryArgs.op === 'node') {
+    const result = queryNode(queryArgs.ref, { graph, parsed, resolve });
+    if (!result) {
+      fail(2, `no node resolves for ref: ${queryArgs.ref}`);
+      return;
     }
-
-    console.log(JSON.stringify({ schemaVersion: 1, ...payload, freshness }));
-  } catch (e) {
-    failForEngineError(e);
+    payload = { op: 'node', ...result };
+  } else if (queryArgs.op === 'list') {
+    const items = queryList({ metaType: queryArgs.metaType, status: queryArgs.status }, { graph, parsed, resolve });
+    payload = { op: 'list', items };
+  } else {
+    const items = queryNeighbors(
+      queryArgs.ref,
+      { direction: queryArgs.direction, relation: queryArgs.relation },
+      { graph, parsed, resolve },
+    );
+    if (!items) {
+      fail(2, `no node resolves for ref: ${queryArgs.ref}`);
+      return;
+    }
+    payload = { op: 'neighbors', items };
   }
+
+  console.log(JSON.stringify({ schemaVersion: 1, ...payload, freshness }));
 }
 
 // ---------------------------------------------------------------------------
@@ -652,8 +649,7 @@ function isWithin(path, dir) {
 
 /** Strictly *inside* `dir` (`dir` itself does not count) -- stops `pruneEmptyDirUpTo` at `_lumina/facts/` without ever removing it. */
 function isStrictlyInside(path, dir) {
-  const rel = relative(dir, path);
-  return rel !== '' && !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`);
+  return relative(dir, path) !== '' && isWithin(path, dir);
 }
 
 /** Remove `dir` if left empty, then recurse upward toward (but never past) `stopAt`. */
@@ -675,135 +671,139 @@ async function pruneEmptyDirUpTo(dir, stopAt) {
 }
 
 function sortByFile(items) {
-  return [...items].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+  return [...items].sort((a, b) => cmp(a.file, b.file));
+}
+
+/** `requested` split against `removableSet`: `toDelete` (still removable) and `skipped` (`{file, reason: 'not-removable'}` for a stale approval) -- the one partition both the dry run and the real run report. */
+function partitionApproved(requested, removableSet) {
+  const toDelete = [];
+  const skipped = [];
+  for (const file of requested) {
+    if (removableSet.has(file)) toDelete.push(file);
+    else skipped.push({ file, reason: 'not-removable' });
+  }
+  return { toDelete, skipped };
 }
 
 async function runFactsPrune(root, config, { dryRun, positionals }) {
-  try {
-    const exists = existsUnderRoot(root);
-    const classify = async () => findPruneCandidates({
-      parsed: await parseAll(root, config), facts: await loadFacts(root), exists,
-    });
+  const exists = existsUnderRoot(root);
+  const classify = async () => {
+    const [parsed, facts] = await Promise.all([parseAll(root, config), loadFacts(root)]);
+    return findPruneCandidates({ parsed, facts, exists });
+  };
 
-    let result = await classify();
-    const requested = positionals.length > 0 ? positionals : null;
+  const requested = positionals.length > 0 ? positionals : null;
+  // A real run re-classifies under the lock (a concurrent facts-write/ingest
+  // could have changed what's removable since the caller's own dry run), so
+  // classifying here too would be wasted work -- only the dry-run path needs
+  // this one.
+  let result = dryRun ? await classify() : null;
 
-    const removed = [];
-    const skipped = [];
-    const failed = [];
+  const removed = [];
+  const skipped = [];
+  const failed = [];
 
-    if (dryRun) {
-      // Report-only: no lock, nothing on disk changes. With an approval
-      // list, report exactly what a real run would do with it.
-      if (requested) {
-        const removable = new Set(result.removed);
-        for (const file of requested) {
-          if (removable.has(file)) removed.push(file);
-          else skipped.push({ file, reason: 'not-removable' });
-        }
-      } else {
-        removed.push(...result.removed);
-      }
+  if (dryRun) {
+    // Report-only: no lock, nothing on disk changes. With an approval
+    // list, report exactly what a real run would do with it.
+    if (requested) {
+      const partition = partitionApproved(requested, new Set(result.removed));
+      removed.push(...partition.toDelete);
+      skipped.push(...partition.skipped);
     } else {
-      const lockPath = join(root, '_lumina', '_state', 'lock');
-      const factsRoot = join(root, '_lumina', 'facts');
-      const staleMs = envPositiveInt('LUMINA_PROJECT_LOCK_STALE_MS', 30000);
-      const timeoutMs = envPositiveInt('LUMINA_PROJECT_LOCK_TIMEOUT_MS', 10000);
+      removed.push(...result.removed);
+    }
+  } else {
+    const factsRoot = join(root, '_lumina', 'facts');
 
-      await withLock(lockPath, async () => {
-        // Re-classify under the lock: a concurrent facts-write/ingest could
-        // have changed what's removable since the caller's own dry run.
-        result = await classify();
-        const removable = new Set(result.removed);
-        const toDelete = requested
-          ? requested.filter((file) => {
-            if (removable.has(file)) return true;
-            skipped.push({ file, reason: 'not-removable' });
-            return false;
-          })
-          : result.removed;
+    await withProjectLock(root, async () => {
+      result = await classify();
+      const removable = new Set(result.removed);
+      let toDelete;
+      if (requested) {
+        const partition = partitionApproved(requested, removable);
+        toDelete = partition.toDelete;
+        skipped.push(...partition.skipped);
+      } else {
+        toDelete = result.removed;
+      }
 
-        if (toDelete.length === 0) return;
+      if (toDelete.length === 0) return;
 
-        // Validate before the first unlink: factsRoot's own realpath, then
-        // (per file, right before that file's unlink) its parent dir's --
-        // must resolve at or under it. Guards a symlinked `_lumina/facts/`
-        // entry pointing outside the tree.
-        const factsRootReal = await realpath(factsRoot);
-        for (const relFile of toDelete) {
-          const absFile = join(root, relFile);
-          try {
-            const parentReal = await realpath(dirname(absFile));
-            if (!isWithin(parentReal, factsRootReal)) {
-              throw new Error(`refusing to remove outside _lumina/facts/: ${relFile}`);
-            }
-            await unlink(absFile);
-            removed.push(relFile);
-          } catch (e) {
-            if (e.code === 'ENOENT') continue; // already gone; not a failure, not re-reported
-            failed.push({ file: relFile, error: e.message });
+      // Validate before the first unlink: factsRoot's own realpath, then
+      // (per file, right before that file's unlink) its parent dir's --
+      // must resolve at or under it. Guards a symlinked `_lumina/facts/`
+      // entry pointing outside the tree.
+      const factsRootReal = await realpath(factsRoot);
+      for (const relFile of toDelete) {
+        const absFile = join(root, relFile);
+        try {
+          const parentReal = await realpath(dirname(absFile));
+          if (!isWithin(parentReal, factsRootReal)) {
+            throw new Error(`refusing to remove outside _lumina/facts/: ${relFile}`);
           }
+          await unlink(absFile);
+          removed.push(relFile);
+        } catch (e) {
+          if (e.code === 'ENOENT') continue; // already gone; not a failure, not re-reported
+          failed.push({ file: relFile, error: e.message });
         }
-        for (const relFile of removed) {
-          await pruneEmptyDirUpTo(dirname(join(root, relFile)), factsRoot);
-        }
-      }, { staleMs, timeoutMs });
-    }
-
-    console.log(JSON.stringify({
-      ok: true,
-      dryRun,
-      removed: removed.sort(),
-      kept: result.kept,
-      skipped: sortByFile(skipped),
-      failed: sortByFile(failed),
-      warnings: result.warnings,
-    }));
-    process.exitCode = failed.length > 0 ? 3 : 0;
-  } catch (e) {
-    if (e instanceof LockTimeoutError) {
-      fail(3, e.message);
-      return;
-    }
-    failForEngineError(e);
+      }
+      for (const relFile of removed) {
+        await pruneEmptyDirUpTo(dirname(join(root, relFile)), factsRoot);
+      }
+    });
   }
+
+  console.log(JSON.stringify({
+    ok: true,
+    dryRun,
+    removed: removed.sort(),
+    kept: result.kept,
+    skipped: sortByFile(skipped),
+    failed: sortByFile(failed),
+    warnings: result.warnings,
+  }));
+  process.exitCode = failed.length > 0 ? 3 : 0;
 }
+
+// One table instead of a `SUBCOMMANDS` set, a `SELF_PARSING_SUBCOMMANDS`
+// set, and a 10-branch if/else chain: `main` looks up the subcommand,
+// rejects extra args when there's no `parse`, runs `parse` (when present)
+// inside one try/catch mapped to exit 1, then runs `run` inside one
+// try/catch mapped to `failForEngineError`. `run(root, config, args)` --
+// `args` is `undefined` for a subcommand with no `parse` step.
+const COMMANDS = {
+  scope: { run: runScope },
+  'config-check': { run: runConfigCheck },
+  build: { run: runBuild },
+  status: { run: runStatus },
+  'facts-write': { run: runFactsWrite },
+  'verify-evidence': { run: runVerifyEvidence },
+  lint: { parse: parseLintArgs, run: runLint },
+  query: { parse: parseQueryArgs, run: runQuery },
+  view: { run: runView },
+  'facts-prune': { parse: parseFactsPruneArgs, run: runFactsPrune },
+};
 
 export async function main(argv = process.argv.slice(2)) {
   if (!checkNodeVersion()) return;
 
   const [subcommand, ...rest] = argv;
-  // `lint`, `query`, and `facts-prune` parse their own flags/op below; every
-  // other subcommand still rejects anything after its own name.
-  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (!SELF_PARSING_SUBCOMMANDS.has(subcommand) && rest.length > 0)) {
+  const cmd = subcommand && Object.hasOwn(COMMANDS, subcommand) ? COMMANDS[subcommand] : undefined;
+  // A subcommand with no `parse` step (everything but lint/query/facts-prune)
+  // still rejects anything after its own name.
+  if (!cmd || (!cmd.parse && rest.length > 0)) {
     fail(1, `unknown subcommand or bad arguments: ${JSON.stringify(argv)}`);
     return;
   }
 
   // Parsed before the root/config lookup: a bad flag is a bad argument
   // (exit 1) regardless of whether a project root exists.
-  let failOn;
-  if (subcommand === 'lint') {
+  let args;
+  if (cmd.parse) {
     try {
-      failOn = parseLintArgs(rest);
-    } catch (e) {
-      fail(1, e.message);
-      return;
-    }
-  }
-  let queryArgs;
-  if (subcommand === 'query') {
-    try {
-      queryArgs = parseQueryArgs(rest);
-    } catch (e) {
-      fail(1, e.message);
-      return;
-    }
-  }
-  let factsPruneArgs;
-  if (subcommand === 'facts-prune') {
-    try {
-      factsPruneArgs = parseFactsPruneArgs(rest);
+      args = cmd.parse(rest);
     } catch (e) {
       fail(1, e.message);
       return;
@@ -832,26 +832,10 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  if (subcommand === 'scope') {
-    await runScope(root, config);
-  } else if (subcommand === 'config-check') {
-    runConfigCheck(config);
-  } else if (subcommand === 'build') {
-    await runBuild(root, config);
-  } else if (subcommand === 'status') {
-    await runStatus(root, config);
-  } else if (subcommand === 'facts-write') {
-    await runFactsWrite(root, config);
-  } else if (subcommand === 'verify-evidence') {
-    await runVerifyEvidence(root, config);
-  } else if (subcommand === 'lint') {
-    await runLint(root, config, failOn);
-  } else if (subcommand === 'query') {
-    await runQuery(root, config, queryArgs);
-  } else if (subcommand === 'view') {
-    await runView(root, config);
-  } else if (subcommand === 'facts-prune') {
-    await runFactsPrune(root, config, factsPruneArgs);
+  try {
+    await cmd.run(root, config, args);
+  } catch (e) {
+    failForEngineError(e);
   }
 }
 

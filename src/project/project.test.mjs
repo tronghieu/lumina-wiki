@@ -1,11 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
-  mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes, chmod,
+  mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes, chmod, realpath,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
@@ -1552,7 +1552,11 @@ describe('view', () => {
     try {
       const { status, stdout } = run(root, ['view']);
       assert.equal(status, 0);
-      assert.deepEqual(JSON.parse(stdout), { ok: true, file: '_lumina/graph/view.html' });
+      assert.deepEqual(JSON.parse(stdout), {
+        ok: true,
+        file: '_lumina/graph/view.html',
+        url: pathToFileURL(await realpath(await viewHtmlPath(root))).href,
+      });
       const html = await readFile(await viewHtmlPath(root), 'utf8');
       assert.match(html, /<!doctype html>/i);
       const vendorSrc = await readFile(join(HERE, 'vendor', 'force-graph.min.js'), 'utf8');
@@ -1703,7 +1707,11 @@ describe('view', () => {
       );
       const { status, stdout } = run(root, ['view']);
       assert.equal(status, 0);
-      assert.deepEqual(JSON.parse(stdout), { ok: true, file: '_lumina/graph/view.html' });
+      assert.deepEqual(JSON.parse(stdout), {
+        ok: true,
+        file: '_lumina/graph/view.html',
+        url: pathToFileURL(await realpath(await viewHtmlPath(root))).href,
+      });
       const html = await readFile(await viewHtmlPath(root), 'utf8');
       assert.match(html, /<!doctype html>/i);
       assert.ok(html.includes('No in-scope documents'));

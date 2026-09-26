@@ -54,41 +54,41 @@ export function makeFact({
   provenance,
 } = {}) {
   if (!KINDS.has(kind)) {
-    throw new TypeError(`makeFact: kind must be "edge" or "attr", got ${JSON.stringify(kind)}`);
+    throw new TypeError(`kind must be "edge" or "attr", got ${JSON.stringify(kind)}`);
   }
   if (!isNonEmptyString(subject)) {
-    throw new TypeError('makeFact: subject must be a non-empty string');
+    throw new TypeError('subject must be a non-empty string');
   }
   if (!isNonEmptyString(relation)) {
-    throw new TypeError('makeFact: relation must be a non-empty string');
+    throw new TypeError('relation must be a non-empty string');
   }
   if (!isNonEmptyString(ref)) {
-    throw new TypeError('makeFact: ref must be a non-empty string');
+    throw new TypeError('ref must be a non-empty string');
   }
 
   const hasObject = object !== undefined;
   const hasValue = value !== undefined;
 
   if (hasObject && hasValue) {
-    throw new TypeError('makeFact: fact cannot have both object and value');
+    throw new TypeError('fact cannot have both object and value');
   }
   if (kind === 'edge' && !hasObject) {
-    throw new TypeError('makeFact: edge fact requires object');
+    throw new TypeError('edge fact requires object');
   }
   if (kind === 'attr' && !hasValue) {
-    throw new TypeError('makeFact: attr fact requires value');
+    throw new TypeError('attr fact requires value');
   }
 
   if (!evidence || !Number.isInteger(evidence.line) || evidence.line < 1) {
-    throw new TypeError('makeFact: evidence.line must be an integer >= 1');
+    throw new TypeError('evidence.line must be an integer >= 1');
   }
   if (typeof evidence.quote !== 'string' || evidence.quote.length === 0) {
-    throw new TypeError('makeFact: evidence.quote must not be empty');
+    throw new TypeError('evidence.quote must not be empty');
   }
 
   if (!PROVENANCES.has(provenance)) {
     throw new TypeError(
-      `makeFact: provenance must be "extracted" or "inferred", got ${JSON.stringify(provenance)}`
+      `provenance must be "extracted" or "inferred", got ${JSON.stringify(provenance)}`
     );
   }
 

@@ -18,10 +18,9 @@
  * Reads are defensive: missing file → null; truncated CSV → empty rows + warning.
  */
 
-import { readFile, access } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { constants as fsConstants } from 'node:fs';
-import { atomicWrite, ensureDir } from './fs.js';
+import { atomicWrite, ensureDir, pathExists } from './fs.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -418,13 +417,29 @@ export function statePaths(projectRoot) {
 // Install mode detection (project-docs-overlay, story 7 / AD-2)
 // ---------------------------------------------------------------------------
 
-async function pathExists(path) {
-  try {
-    await access(path, fsConstants.F_OK);
-    return true;
-  } catch (_) {
-    return false;
+/**
+ * Committed files that mark a repo as project-mode even without a (gitignored)
+ * manifest — a teammate's clone has one of these but no local manifest.json.
+ * Single source of truth for both `detectInstallMode` below and
+ * `findEnclosingWorkspace` (commands.js), which used to list these paths
+ * separately and could drift out of step.
+ */
+export const PROJECT_SIGNAL_PATHS = Object.freeze([
+  '_lumina/config/project.yaml',
+  '_lumina/project/install.json',
+]);
+
+/**
+ * True when `projectRoot` carries a committed project-mode signal file.
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<boolean>}
+ */
+export async function hasProjectSignal(projectRoot) {
+  for (const relPath of PROJECT_SIGNAL_PATHS) {
+    if (await pathExists(join(projectRoot, ...relPath.split('/')))) return true;
   }
+  return false;
 }
 
 /**
@@ -455,11 +470,9 @@ export async function detectInstallMode(projectRoot) {
   const migrated = manifest ? migrateManifest(manifest, MANIFEST_SCHEMA_VERSION) : null;
   if (migrated?.mode === 'project') return 'project';
 
-  const hasProjectYaml = await pathExists(join(projectRoot, '_lumina', 'config', 'project.yaml'));
-  const hasInstallJson = await pathExists(join(projectRoot, '_lumina', 'project', 'install.json'));
-  const hasProjectSignal = hasProjectYaml || hasInstallJson;
+  const hasSignal = await hasProjectSignal(projectRoot);
 
-  if (migrated?.mode === 'classic' && hasProjectSignal) {
+  if (migrated?.mode === 'classic' && hasSignal) {
     const e = new Error(
       `MODE_CONFLICT: "${projectRoot}" has a classic manifest (mode: 'classic') but also a committed ` +
       `project-mode signal (_lumina/config/project.yaml or _lumina/project/install.json). To keep this ` +
@@ -469,8 +482,33 @@ export async function detectInstallMode(projectRoot) {
     e.code = 3;
     throw e;
   }
-  if (hasProjectSignal) return 'project';
+  if (hasSignal) return 'project';
 
   if (migrated) return migrated.mode ?? 'classic';
   return null;
+}
+
+/**
+ * True when `projectRoot` is a Lumina project-mode repo (per
+ * `detectInstallMode`, treating any detection failure as "not project" —
+ * refusing to detect must never be the reason a caller wrongly manages a
+ * project-mode repo, or wrongly refuses a classic one).
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<boolean>}
+ */
+export async function isProjectModeRepo(projectRoot) {
+  return (await detectInstallMode(projectRoot).catch(() => null)) === 'project';
+}
+
+/**
+ * Standard refusal message for a lumi-hub operation (fleet registry, `wikis
+ * add`/`inspect`/`doctor`) that hit a project-mode repo — a separate product
+ * lumi-hub never manages.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function projectModeRefusalMessage(path) {
+  return `"${path}" is a Lumina project-mode repo; lumi-hub does not manage project-mode repos.`;
 }

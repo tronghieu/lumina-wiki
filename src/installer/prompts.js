@@ -187,18 +187,7 @@ export async function runInstallPrompts({
 
   // ── Prompt 0: Locale (UI language) ───────────────────────────────────────
   const initialLocale = existingManifest?.locale ?? defaultLocale;
-  const localeRaw = await select({
-    // Locale selector uses a trilingual label; not routed through t() by design
-    message: 'Installer language / Ngôn ngữ / 语言',
-    options: [...LOCALE_LABELS],
-    initialValue: initialLocale,
-  });
-  if (isCancel(localeRaw)) {
-    // t may be EN or may not be loaded yet — use cancel string from t if available
-    cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
-    process.exit(4);
-  }
-  const locale = localeRaw;
+  const locale = await runLocaleOnlyPrompt({ initialLocale, t });
   const langDefault = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
 
   // Rebind t to the just-selected locale so the remaining prompts render in
@@ -486,15 +475,17 @@ export async function runUninstallConfirm({ acceptDefaults = false, t = null } =
 /**
  * Resolve the installer's own UI language, standalone — the same trilingual,
  * not-itself-translated locale select as classic Prompt 0 (see
- * `runInstallPrompts`), extracted so project mode can ask it before any
- * other project prompt without pulling in the whole classic prompt list.
+ * `runInstallPrompts`, which now calls this directly instead of carrying its
+ * own copy of the same `select`).
  *
  * @param {object}  [opts]
  * @param {boolean} [opts.acceptDefaults=false]
  * @param {'en'|'vi'|'zh'} [opts.initialLocale='en']
+ * @param {Function|null} [opts.t] - locale translator for the cancel message;
+ *   EN literal when not supplied (matches classic Prompt 0's pre-locale state).
  * @returns {Promise<'en'|'vi'|'zh'>}
  */
-export async function runLocaleOnlyPrompt({ acceptDefaults = false, initialLocale = 'en' } = {}) {
+export async function runLocaleOnlyPrompt({ acceptDefaults = false, initialLocale = 'en', t = null } = {}) {
   if (acceptDefaults) return initialLocale;
   const { select, isCancel, cancel } = await getClack();
   const localeRaw = await select({
@@ -502,7 +493,10 @@ export async function runLocaleOnlyPrompt({ acceptDefaults = false, initialLocal
     options: [...LOCALE_LABELS],
     initialValue: initialLocale,
   });
-  if (isCancel(localeRaw)) { cancel('Installation cancelled.'); process.exit(4); }
+  if (isCancel(localeRaw)) {
+    cancel(t ? t('prompt.cancelled') : 'Installation cancelled.');
+    process.exit(4);
+  }
   return localeRaw;
 }
 

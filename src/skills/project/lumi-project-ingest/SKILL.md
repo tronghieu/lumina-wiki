@@ -22,7 +22,6 @@ own bytes.
 
 ## Context
 
-- `_lumina/project/PROJECT.md` — engine commands, meta-ontology, exit codes.
 - `## Engine facts` below — behaviour this skill depends on that
   `PROJECT.md` does not spell out; get these wrong and a fact that looks
   right silently commits the wrong thing.
@@ -104,10 +103,9 @@ An attr, fragment status only:
   relation `buildGraph` treats as a status assignment; anything else on an
   `attr` fact is stored but never applied. `value` is the fragment's status
   word, by convention lowercase and, for a `Decision`-typed doc, one of its
-  lifecycle words: `proposed`, `accepted`, `partially-superseded`,
-  `superseded`, `deprecated` (the engine does not enforce this vocabulary on
-  a fragment the way it does on a doc's own parsed status — get it right by
-  convention).
+  lifecycle words (PROJECT.md "Meta-ontology") — the engine does not enforce
+  this vocabulary on a fragment the way it does on a doc's own parsed status;
+  get it right by convention.
 - `object` (edge only) is written the same way you'd cite it in prose: a
   declared ID (`ADR-0009`), a bare path, `path#anchor`, or (fact 11) a
   concept's name unprefixed. The engine resolves and canonicalizes it (e.g.
@@ -134,44 +132,15 @@ An attr, fragment status only:
   `""` (fact 4 for how to choose it).
 
 **4. Gathering what already exists, without reading the whole graph.**
-`query node <ref>` (declared ID or path) returns `{node, out, in}` — each
-edge's `evidence[]` is trimmed to `{file, line, quote}` (no `scope`, no
+`query node <ref>` (declared ID or path) returns `{node, out, in}`. For a
+`doc:` node, `node.frags` lists every `frag:<path>#<anchor>` id already
+known to the graph — the only anchors on that doc you may use as a fragment
+object. Each edge's `evidence[]` is `{file, line, quote, scope?}` (no
 `provenance`, and no marker for whether the edge came from the parse or
-from a fact you or an earlier ingest already committed — see fact 9). `build`
-prints the whole graph (roughly 1 MB on a real repo) — never read that
-output as text. Run it once per batch (not once per doc), pipe it straight
-into one filter covering every target path the batch might cite, and read
-only the small result:
-```bash
-set -o pipefail
-node _lumina/project/project.mjs build | node -e '
-const targets = process.argv.slice(1);
-let data = "";
-process.stdin.on("data", c => data += c);
-process.stdin.on("end", () => {
-  let g;
-  try { g = JSON.parse(data); } catch (e) { console.error("build: bad JSON:", e.message); process.exit(1); }
-  const out = {};
-  for (const path of targets) {
-    const id = `doc:${path}`;
-    out[path] = {
-      frags: g.nodes.filter(n => n.kind === "frag" && n.id.startsWith(`frag:${path}#`)).map(n => n.id),
-      scopes: [...new Set(
-        g.edges.filter(e => [e.to, e.from].includes(id) || e.to.startsWith(`frag:${path}#`) || e.from.startsWith(`frag:${path}#`))
-          .flatMap(e => e.evidence ?? []).filter(e => e.scope).map(e => e.scope)
-      )],
-    };
-  }
-  console.log(JSON.stringify(out));
-});
-' "docs/adr/0009-....md" "docs/adr/0052-....md"
-```
-(`set -o pipefail` makes a `build` failure fail the whole pipeline instead
-of silently feeding empty/error text to the filter; the filter's own
-try/catch is the second check named in the same rule.) This gives you, per
-target: `frags` — fragment ids already known to the graph (from some
-existing link or committed attr fact), the only anchors on another doc you
-may use as a fragment object; `scopes` — every `scope` label already used
+from a fact you or an earlier ingest already committed — see fact 9). Run
+one `query node <path>` per target path the batch might cite (never
+`build`'s whole graph, ~1 MB on a real repo, for this). The `scope` values
+across every `out` and `in` edge's `evidence` are the labels already used
 against that target, for fact 5.
 
 **5. Partial supersession, the two supported shapes.** A `supersedes` fact
@@ -182,10 +151,10 @@ label (safe — matched by exact string, no anchor risk); or target a `frag:`
 object whose id you already confirmed exists via fact 4. A finer span than
 any heading — a status-table row, for instance — has no anchor of its own
 at all, so it can only go through `scope`, never a fabricated `frag:`.
-Choosing the label: if fact 4's filter already shows a `scope` on an edge
-to the same target, copy it verbatim — never invent a synonym for a label
-that already exists. Otherwise write a short new one in the source doc's
-own words, lifted from the quote itself (not from the target doc's text).
+Choosing the label: if fact 4's `query node` already shows a `scope` on an
+edge to the same target, copy it verbatim — never invent a synonym for a
+label that already exists. Otherwise write a short new one in the source
+doc's own words, lifted from the quote itself (not from the target doc's text).
 
 **6. Relation names.** `relation` must be spelled exactly as one of the 8
 meta-relation names above — `facts-write` does not check this. A
@@ -271,9 +240,8 @@ or declared ID; you do not compute or write a `concept:` id yourself.
    continuing.
 
 2. **Gather what exists** (Engine facts §4):
-   - Once per batch: run the `build`-piped filter above, passing every
-     target path the batch might cite, to learn known fragment ids and
-     already-used scope labels for those targets.
+   - Per target path the batch might cite: run `query node <path>` to learn
+     its known fragment ids (`node.frags`) and already-used scope labels.
    - Read the `concepts:` list from `_lumina/config/project.yaml` for
      concept names/aliases you may cite unprefixed.
 
@@ -408,8 +376,8 @@ A fact's `object` is written as
 `docs/adr/0009-accounts-receivable-owned-by-seli.md#some-guessed-anchor`.
 `query node` on that same ref exits 2 first — caught before writing. Had it
 been sent anyway, `facts-write` would reject it (exit 1): the target doc
-has no such anchor. Replace it with a `frag:` object confirmed via the
-`build` filter (fact 4), or with the whole `doc:` object plus a `scope`
+has no such anchor. Replace it with a `frag:` object confirmed via
+`query node` (fact 4), or with the whole `doc:` object plus a `scope`
 label, and retry once.
 </example>
 
@@ -440,7 +408,7 @@ it, and continue the batch.
   misspelling is accepted silently and becomes `references` with no
   warning.
 - Never guess an object's `#anchor` on another doc. Only cite a fragment id
-  already confirmed via the `build` filter; omit the anchor entirely for an
+  already confirmed via `query node` (fact 4); omit the anchor entirely for an
   out-of-scope target (its anchor can never be checked, in or out of
   scope). Confirm every unprefixed object with `query node` before writing
   it — an unresolvable one leaves the doc permanently stale.
@@ -461,8 +429,8 @@ Before reporting done, verify:
 (c) No fact was written whose `subject` doc differs from the doc whose hash
     was sent as `sourceHash`.
 (d) No object anchor was guessed: every `path#anchor` or `frag:...#...`
-    object either names a fragment id already confirmed via the `build`
-    filter, or the fact instead targets the whole `doc:`/declared ID with a
+    object either names a fragment id already confirmed via `query node`
+    (fact 4), or the fact instead targets the whole `doc:`/declared ID with a
     `scope` label; no out-of-scope object carries an anchor at all.
 (e) Every fact resent for a previously-ingested doc includes every
     meta-relation and fragment-status fact its current prose still states,

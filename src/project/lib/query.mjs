@@ -21,12 +21,18 @@
  */
 
 import { cmp, sortEvidence } from './graph.mjs';
+import { splitLines } from './frontmatter.mjs';
 
 const ROOT_CITING_DOC = { path: '', includeRoot: '' };
 
-/** `{file, line, quote}` only -- drops `provenance`/`scope` (spec: an item's `evidence[]` is exactly this shape). */
+/** `{file, line, quote, scope?}` -- drops `provenance` (spec: an item's `evidence[]` carries this shape; `scope` only when the edge evidence has one). */
 function trimEvidence(evidence) {
-  return evidence.map((e) => ({ file: e.file, line: e.line, quote: e.quote }));
+  return evidence.map((e) => ({
+    file: e.file,
+    line: e.line,
+    quote: e.quote,
+    ...(typeof e.scope === 'string' && e.scope.length > 0 ? { scope: e.scope } : {}),
+  }));
 }
 
 /** `graph.nodes[].metaType` when present (doc nodes); otherwise recovered from the resolver -- the same lookup `validatePrefixed` does for a fact's own subject/object. Exported (view.mjs): `view` colors every node by meta-type, not only doc nodes, so it needs this same recovery instead of a second copy. */
@@ -36,14 +42,8 @@ export function nodeMetaType(node, resolve) {
   return result.kind === 'resolved' ? result.metaType : undefined;
 }
 
-/** A leading UTF-8 BOM is not part of any line's text (same strip `parse.mjs#frontmatterLines` does). */
-function stripBom(text) {
-  return String(text ?? '').replace(/^﻿/, '');
-}
-
 function lineText(text, line) {
-  const lines = stripBom(text).split(/\r\n|\r|\n/);
-  return lines[line - 1] ?? '';
+  return splitLines(text)[line - 1] ?? '';
 }
 
 function atForDoc(node, { docsByPath, texts }) {
@@ -81,12 +81,19 @@ export function atFor(node, ctx) {
   return atForResolved(node, ctx);
 }
 
-/** `{id, metaType?, status?, at}`, key order matching the spec exactly. `metaType` is a parameter -- computed once by the caller, not recomputed here. */
+/** Every `frag:<path>#...` node id belonging to the doc at `path` -- a doc node's own fragments (skills need this to cite an existing fragment as an object without guessing one). */
+function fragsOfDoc(path, ctx) {
+  const prefix = `frag:${path}#`;
+  return [...ctx.byId.keys()].filter((id) => id.startsWith(prefix)).sort();
+}
+
+/** `{id, metaType?, status?, frags? (doc: only), at}`, key order matching the spec exactly. `metaType` is a parameter -- computed once by the caller, not recomputed here. */
 function nodeSummary(node, metaType, ctx) {
   return {
     id: node.id,
     ...(metaType !== undefined ? { metaType } : {}),
     ...(node.status !== undefined ? { status: node.status } : {}),
+    ...(node.kind === 'doc' ? { frags: fragsOfDoc(node.id.slice(4), ctx) } : {}),
     at: atFor(node, ctx),
   };
 }
@@ -104,12 +111,10 @@ function indexEdgesByEndpoint(edges) {
   return { byTarget, bySource };
 }
 
-/** Exported (view.mjs): the shared `{graph, edges, byId, docsByPath, texts, resolve}` context `atFor`/`nodeMetaType` need. */
+/** Exported (view.mjs): the shared `{edgesInByTarget, edgesOutBySource, byId, docsByPath, texts, resolve}` context `atFor`/`nodeMetaType` need. */
 export function buildCtx({ graph, parsed, resolve }) {
   const { byTarget, bySource } = indexEdgesByEndpoint(graph.edges);
   return {
-    graph,
-    edges: graph.edges,
     edgesInByTarget: byTarget,
     edgesOutBySource: bySource,
     byId: new Map(graph.nodes.map((n) => [n.id, n])),
@@ -151,13 +156,11 @@ export function queryNode(ref, { graph, parsed, resolve }) {
   const node = findNode(ref, ctx);
   if (!node) return null;
 
-  const out = graph.edges
-    .filter((e) => e.from === node.id)
+  const out = (ctx.edgesOutBySource.get(node.id) ?? [])
     .map((e) => ({ relation: e.relation, to: e.to, evidence: trimEvidence(e.evidence) }))
     .sort((a, b) => cmp(a.relation, b.relation) || cmp(a.to, b.to));
 
-  const inEdges = graph.edges
-    .filter((e) => e.to === node.id)
+  const inEdges = (ctx.edgesInByTarget.get(node.id) ?? [])
     .map((e) => ({ relation: e.relation, from: e.from, evidence: trimEvidence(e.evidence) }))
     .sort((a, b) => cmp(a.relation, b.relation) || cmp(a.from, b.from));
 
@@ -195,11 +198,8 @@ export function queryNeighbors(ref, { direction, relation }, { graph, parsed, re
   const node = findNode(ref, ctx);
   if (!node) return null;
 
-  const matching = graph.edges.filter((e) => {
-    if (direction === 'out' ? e.from !== node.id : e.to !== node.id) return false;
-    if (relation !== undefined && e.relation !== relation) return false;
-    return true;
-  });
+  const candidates = direction === 'out' ? (ctx.edgesOutBySource.get(node.id) ?? []) : (ctx.edgesInByTarget.get(node.id) ?? []);
+  const matching = relation === undefined ? candidates : candidates.filter((e) => e.relation === relation);
 
   return matching
     .map((e) => {

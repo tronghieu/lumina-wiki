@@ -8,29 +8,16 @@
  * of which this module owns.
  */
 
-import { RULES } from '../ontology.mjs';
-import { sortFindings, makeFinding } from './graph.mjs';
-
-for (const id of ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08']) {
-  if (!RULES.some((r) => r.id === id)) throw new Error(`ontology.mjs RULES is missing rule ${id}`);
-}
+import { sortFindings, makeFinding, docPathOfSubject } from './graph.mjs';
 
 /** A non-empty string is a scope; `null`/`""`/anything else from a hand-edited envelope is not. */
 function isScope(v) {
   return typeof v === 'string' && v.length > 0;
 }
 
-/** The underlying doc path of a `doc:`/`frag:` node id; `null` for anything else (`concept:`/`id:`). */
-function docPathOf(nodeId) {
-  if (typeof nodeId !== 'string') return null;
-  if (nodeId.startsWith('doc:')) return nodeId.slice(4);
-  if (nodeId.startsWith('frag:')) return nodeId.slice(5).split('#')[0];
-  return null;
-}
-
 /** `nodeId` normalized to its doc node (a `frag:` collapses to its own `doc:`); anything else is unchanged. */
 function docNodeOf(nodeId) {
-  const path = docPathOf(nodeId);
+  const path = docPathOfSubject(nodeId);
   return path === null ? nodeId : `doc:${path}`;
 }
 
@@ -42,8 +29,7 @@ function statusOf(nodeId, nodesById) {
   const node = nodesById.get(nodeId);
   if (node && node.status !== undefined && node.status !== null) return node.status;
   if (nodeId.startsWith('frag:')) {
-    const docPath = nodeId.slice(5).split('#')[0];
-    return nodesById.get(`doc:${docPath}`)?.status ?? undefined;
+    return nodesById.get(`doc:${docPathOfSubject(nodeId)}`)?.status ?? undefined;
   }
   return undefined;
 }
@@ -144,10 +130,25 @@ function supersedesFindings(edges, nodesById) {
   // *citer*, not a fellow superseder).
   const supersedersByTargetDoc = new Map();
   for (const e of supersedesEdges) {
-    const targetDocPath = docPathOf(e.to);
+    const targetDocPath = docPathOfSubject(e.to);
     if (targetDocPath === null) continue;
     if (!supersedersByTargetDoc.has(targetDocPath)) supersedersByTargetDoc.set(targetDocPath, new Set());
-    supersedersByTargetDoc.get(targetDocPath).add(docPathOf(e.from));
+    supersedersByTargetDoc.get(targetDocPath).add(docPathOfSubject(e.from));
+  }
+
+  // P03's citer lookup, indexed once instead of an O(edges) filter per
+  // supersedes edge: by exact target node id (fragment/scoped-doc case) and
+  // by the target's own doc path (full-doc case).
+  const edgesByTo = new Map();
+  const edgesByToDocPath = new Map();
+  for (const e of edges) {
+    if (!edgesByTo.has(e.to)) edgesByTo.set(e.to, []);
+    edgesByTo.get(e.to).push(e);
+    const toDocPath = docPathOfSubject(e.to);
+    if (toDocPath !== null) {
+      if (!edgesByToDocPath.has(toDocPath)) edgesByToDocPath.set(toDocPath, []);
+      edgesByToDocPath.get(toDocPath).push(e);
+    }
   }
 
   const findings = [];
@@ -177,13 +178,13 @@ function supersedesFindings(edges, nodesById) {
     // doc's own edges (e.g. into its own fragments) nor any doc that itself
     // supersedes this same target (compared by doc path, not node id, so a
     // fragment-level self-citation is caught too).
-    const targetDocPath = docPathOf(edge.to);
+    const targetDocPath = docPathOfSubject(edge.to);
     const excludedDocPaths = new Set([targetDocPath, ...(supersedersByTargetDoc.get(targetDocPath) ?? [])]);
-    const notASelfCiter = (e) => e.relation !== 'supersedes' && !excludedDocPaths.has(docPathOf(e.from));
+    const notASelfCiter = (e) => e.relation !== 'supersedes' && !excludedDocPaths.has(docPathOfSubject(e.from));
 
     if (isPartial) {
       // Fragment or scoped-doc target: only an edge into that exact node counts.
-      const citers = edges.filter((e) => e.to === edge.to && notASelfCiter(e));
+      const citers = (edgesByTo.get(edge.to) ?? []).filter(notASelfCiter);
       if (isFrag) {
         for (const citer of citers) {
           for (const ev of citer.evidence) {
@@ -207,7 +208,7 @@ function supersedesFindings(edges, nodesById) {
       }
     } else {
       // Full-doc supersession: every edge into X or any of X's fragments counts.
-      const citers = edges.filter((e) => docPathOf(e.to) === targetDocPath && notASelfCiter(e));
+      const citers = (edgesByToDocPath.get(targetDocPath) ?? []).filter(notASelfCiter);
       for (const citer of citers) {
         for (const ev of citer.evidence) {
           findings.push(makeFinding('P03', ev.file, ev.line, `doc cites a superseded part: "${edge.to}"`));
@@ -228,7 +229,7 @@ function satisfiesFindings(graph, parsed) {
   // A `satisfies` edge into a fragment of the Requirement doc satisfies the
   // whole doc (there's only one Requirement node per doc, at doc granularity).
   const satisfiedDocPaths = new Set(
-    graph.edges.filter((e) => e.relation === 'satisfies').map((e) => docPathOf(e.to)).filter((p) => p !== null),
+    graph.edges.filter((e) => e.relation === 'satisfies').map((e) => docPathOfSubject(e.to)).filter((p) => p !== null),
   );
 
   const findings = [];

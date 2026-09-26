@@ -17,7 +17,6 @@ page offers.
 
 ## Context
 
-- `_lumina/project/PROJECT.md`: engine commands and exit codes.
 - `view` writes `_lumina/graph/view.html` (gitignored, regenerated every run):
   a self-contained page, no server, opened with `file://`. It lets the user
   drag/zoom/pan an animated force layout colored by meta-type, filter by
@@ -34,15 +33,9 @@ page offers.
 2. On exit 2 or exit 3, the error is on stderr as `{"error": "...", "code": 2|3}`.
    Stop and report it as-is — never retry or work around it. Suggest
    lumi-project-setup only if the error says no config was found.
-3. On success, read the JSON: `{ok: true, file: "_lumina/graph/view.html"}`
-   and resolve it to an absolute path from the project root.
-4. Confirm that path exists on disk before reporting anything.
-5. Convert the absolute path to a percent-encoded `file://` URL (spaces and
-   non-ASCII characters must be encoded, not pasted raw):
-   ```
-   node -e "console.log(require('url').pathToFileURL(process.argv[1]).href)" <abs-path>
-   ```
-   Report that URL.
+3. On success, read the JSON: `{ok: true, file: "_lumina/graph/view.html",
+   url: "file:///abs/percent-encoded/path/..."}`. Report `url` as-is —
+   already an absolute, percent-encoded `file://` URL.
 
 ## Output Format
 
@@ -58,10 +51,9 @@ source-line link.
 
 <example>
 User: "Show me the project graph."
-Run `view`, get `{"ok": true, "file": "_lumina/graph/view.html"}`, resolve it
-to an absolute path, confirm the file exists, encode it with
-`pathToFileURL`, then report the resulting URL plus the one-line orientation
-above.
+Run `view`, get `{"ok": true, "file": "_lumina/graph/view.html", "url":
+"file:///Users/.../_lumina/graph/view.html"}`, then report that `url` plus
+the one-line orientation above.
 </example>
 
 <example>
@@ -80,5 +72,5 @@ yet. Do not attempt to create one yourself.
 
 ## Definition of Done
 
-`view` ran, exited 0, the resolved path was confirmed to exist on disk, and
-the reported URL is the percent-encoded `file://` form of that path.
+`view` ran, exited 0, and the reported URL is exactly the engine's own
+`url` field.

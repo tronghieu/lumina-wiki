@@ -21,7 +21,6 @@ explicitly approves it.
 
 ## Context
 
-- `_lumina/project/PROJECT.md`: engine commands, exit codes, meta-ontology.
 - Engine behaviour this skill depends on, from `verify-evidence`:
   - Every committed fact file is checked against the current parse. Output
     is `{findings}`, each finding `{id, severity, file, line, message}`,
@@ -41,21 +40,10 @@ explicitly approves it.
     committed facts of its own yet — one finding per candidate, line 1:
     `rename candidate: facts committed for "<old source>" match this doc's
     content`.
-  - **`facts-prune [--dry-run] [<fact file>...]`** removes fact files, but
-    only for a doc that was actually deleted — a doc that still exists but
-    is merely excluded from scope is never removed. With no positional
-    args it surveys every fact file project-wide. Positional args restrict
-    a real run to exactly that approved set: anything in it that's no
-    longer removable comes back `skipped`, not deleted. Stdout:
-    `{ok, dryRun, removed: [<fact file paths>], kept: [{file, reason:
-    "rename-candidate"|"out-of-scope"|"newer-schema", candidate?}],
-    skipped: [{file, reason: "not-removable"}], failed: [{file, error}],
-    warnings: [...]}`. `--dry-run` prints the same shape without deleting
-    anything. Exit 1 bad flag, 2 config/root error; exit 3 either for a
-    lock/internal error (stderr `{error, code}`, nothing usable on stdout)
-    or, on a real run, because `failed` came back non-empty — that second
-    case is a completed run, not an engine error, and the full JSON is
-    still on stdout.
+  - **`facts-prune`** (output shape and prune flow: PROJECT.md) is the one
+    write this skill makes, only after the dry run and the user's explicit
+    approval (Instructions §7). It scans the whole project, not just the
+    docs a given report covers.
   - No findings means every remaining fact's quote still matches its doc —
     nothing more. `verify-evidence` never checks a doc's content hash, its
     config/ontology version, or whether a reference still resolves, so it
@@ -107,30 +95,18 @@ explicitly approves it.
    skill now on the docs the remedies name for re-ingest. Do not run it
    yourself — that is the ingest skill's job, never this skill's.
 7. If any remedy points to the prune dry run (a P14 whose doc isn't in
-   scope, or a P15 whose re-ingest the user just ran), run:
+   scope, or a P15 whose re-ingest the user just ran), follow PROJECT.md's
+   prune flow: dry run first —
    ```
    node _lumina/project/project.mjs facts-prune --dry-run
    ```
-   On a stderr `{error, code}`, report it verbatim and stop. Otherwise
-   show `removed`, `kept` (each entry's reason explained per step 5), and
-   `warnings` verbatim.
+   show `kept` reasons per step 5, get the user's approval, then run the
+   real prune with exactly the dry run's `removed` paths as positional
+   arguments, and remind the user to commit. On a stderr `{error, code}`,
+   report it verbatim and stop.
    - `facts-prune` scans the whole project, not just the docs this report
-     covers — if the user asked about specific docs, call out any
-     `removed`/`kept` entries for other docs before asking for approval.
-   - If `warnings` includes a scope-shaped warning (for example an
-     include-pattern-matches-nothing warning), say the doc scope may be
-     misconfigured before asking for approval — an unexpected entry can be
-     a symptom of that, not just of a deleted or renamed doc.
-   Ask the user to approve the real prune. Only after they say yes, run
-   the real prune with exactly the dry run's `removed` paths as
-   positional arguments:
-   ```
-   node _lumina/project/project.mjs facts-prune <removed path> [<removed path> ...]
-   ```
-   Report `skipped` and `failed` verbatim — exit 3 here with a non-empty
-   `failed` is a completed run, not an engine error; the JSON is still on
-   stdout. Then remind the user to commit the removal — `facts-prune`
-   deletes, it does not commit.
+     covers — call out any `removed`/`kept` entries for other docs before
+     asking for approval.
 
 ## Output Format
 

@@ -3,32 +3,52 @@
  * @description Project-mode install/uninstall payload (spec-project-docs-overlay,
  * story 7; architecture AD-2 through AD-5, AD-17, AD-24, AD-26).
  *
- * Everything here is specific to `--mode project`: copying the self-contained
+ * Everything here is specific to `--mode project`: resolving its own install/
+ * uninstall CLI flow (`runProjectInstallCommand`/`runProjectUninstallCommand`,
+ * called from `commands.js`'s mode gate), copying the self-contained
  * `src/project/` engine tree into `_lumina/project/`, copying `lumi-project-*`
  * skills, and editing the `<!-- lumina:project -->` / `# >>> lumina` marker
  * blocks in the user's own `AGENTS.md` / `CLAUDE.md` / `.gitignore`.
  *
  * Deliberately imports from `./commands.js` (skill-ownership fingerprinting,
- * symlink creation, owned-skill cleanup) rather than duplicating that logic.
+ * symlink creation, owned-skill cleanup, the package-version/color/manifest
+ * helpers classic install already built) rather than duplicating that logic.
  * `commands.js` never imports this module at the top level — only via a
  * lazy `await import('./project-mode.js')` inside the project branch of
  * `installCommand`/`uninstallCommand` — so there is no import cycle at
  * module-init time even though the two files depend on each other.
  */
 
-import { readFile, readdir, rm, access } from 'node:fs/promises';
+import { readFile, readdir, rm } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
-import { constants as fsConstants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { atomicWrite, atomicCopyFile, ensureDir, copyDir } from './fs.js';
+import { atomicWrite, atomicCopyFile, ensureDir, copyDir, pathExists } from './fs.js';
 import { upsertMarkerBlock, stripMarkerBlock, render, MarkerBlockError } from './template-engine.js';
 import { isNewerVersion } from './update-check.js';
+import { readManifest, writeManifest, migrateManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
+import { loadLocale } from './locales.js';
+import {
+  runLocaleOnlyPrompt,
+  runProjectTargetsPrompt,
+  runProjectUninstallConfirm,
+  runProjectUninstallFactsPrompt,
+} from './prompts.js';
 import {
   isLuminaOwnedSkillEntry,
   createSkillSymlinks,
   removeOwnedAgentsSkills,
   removeOwnedClaudeSkillLinks,
+  warnForeignSkillEntry,
+  removeSkillEntry,
+  warnSkillDeletionFailed,
+  removeDirIfEmpty,
+  PKG,
+  getColorFns,
+  readManifestForInstall,
+  parseListOption,
+  unique,
+  normalizeLangFlag,
 } from './commands.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -114,32 +134,11 @@ export function validateProjectIdeTargets(values) {
 // Small local helpers
 // ---------------------------------------------------------------------------
 
-async function pathExists(p) {
-  try {
-    await access(p, fsConstants.F_OK);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 async function readJsonQuiet(p) {
   try {
     return JSON.parse(await readFile(p, 'utf8'));
   } catch (_) {
     return null;
-  }
-}
-
-async function removeDirIfEmpty(dirPath) {
-  let entries = [];
-  try {
-    entries = await readdir(dirPath);
-  } catch (_) {
-    return;
-  }
-  if (entries.length === 0) {
-    await rm(dirPath, { recursive: true, force: true });
   }
 }
 
@@ -168,40 +167,6 @@ async function listProjectSkillDefs(skillsSrcDir) {
     }
   }
   return defs;
-}
-
-/**
- * Remove any `lumi-project-*` entry under `dirPath` that Lumina owns (per
- * `isLuminaOwnedSkillEntry`) but that is no longer in `keepIds` — a skill
- * dropped from the skills source dir since the last install. Stateless: run
- * on every install/upgrade, no bookkeeping file needed (Design Notes: "a new
- * skill directory needs no installer edit").
- *
- * @param {string} dirPath
- * @param {Set<string>} keepIds
- * @param {string|null} [expectedTargetDir] - for `.claude/skills`, the
- *   `.agents/skills` directory each surviving symlink should resolve to;
- *   omitted for `.agents/skills` itself, which holds real directories.
- */
-async function pruneStaleProjectSkillEntries(dirPath, keepIds, expectedTargetDir = null) {
-  let entries;
-  try {
-    entries = await readdir(dirPath);
-  } catch (_) {
-    return;
-  }
-  for (const name of entries) {
-    if (!name.startsWith(SKILL_PREFIX) || keepIds.has(name)) continue;
-    const entryPath = join(dirPath, name);
-    const owned = await isLuminaOwnedSkillEntry({
-      entryPath,
-      canonicalId: name,
-      ...(expectedTargetDir ? { expectedTarget: join(expectedTargetDir, name) } : {}),
-    });
-    if (!owned) continue;
-    await rm(entryPath, { recursive: true, force: true });
-  }
-  await removeDirIfEmpty(dirPath);
 }
 
 /**
@@ -257,16 +222,31 @@ async function stripMarkerFile(filePath, open, close) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Read the committed `_lumina/project/install.json` once. Returns `null`
+ * when absent or unparsable (fresh install — no committed record yet).
+ * Both the version-skew check and the ideTargets upgrade fallback read this
+ * same file; callers should read it once and pass the result around rather
+ * than each re-reading it.
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<object|null>}
+ */
+export async function readProjectInstallJson(projectRoot) {
+  return readJsonQuiet(join(projectRoot, '_lumina', 'project', 'install.json'));
+}
+
+/**
  * AD-24 version skew: refuse (nothing written) if the committed
  * `install.json` names a version newer than this installer. Exposed
  * separately so callers can check it before running any prompt.
  *
  * @param {string} projectRoot
  * @param {string} pkgVersion
+ * @param {object|null} [installJson] - already-read install.json (see
+ *   `readProjectInstallJson`); read fresh when omitted.
  */
-export async function checkProjectVersionSkew(projectRoot, pkgVersion) {
-  const installJsonPath = join(projectRoot, '_lumina', 'project', 'install.json');
-  const previousInstallJson = await readJsonQuiet(installJsonPath);
+export async function checkProjectVersionSkew(projectRoot, pkgVersion, installJson) {
+  const previousInstallJson = installJson !== undefined ? installJson : await readProjectInstallJson(projectRoot);
   if (previousInstallJson?.packageVersion && isNewerVersion(previousInstallJson.packageVersion, pkgVersion)) {
     const err = new Error(
       `PROJECT_VERSION_SKEW: this repo's committed _lumina/project/install.json names lumina-wiki ` +
@@ -301,7 +281,10 @@ export async function installProject({
   const engineDestDir = join(projectRoot, '_lumina', 'project');
   const installJsonPath = join(engineDestDir, 'install.json');
 
-  await checkProjectVersionSkew(projectRoot, pkgVersion);
+  // Version-skew refusal is the caller's job (runProjectInstallCommand runs
+  // it before any prompt, so nothing is written for a refused install) —
+  // checking it again here would re-read the same install.json a second
+  // time for every install.
 
   // Copy the engine tree from one explicit list (AD-5). A missing source
   // file is an internal error, not a skip — never reuse classic copyScripts.
@@ -326,27 +309,29 @@ export async function installProject({
     JSON.stringify({ schemaVersion: 1, packageVersion: pkgVersion, ideTargets }, null, 2) + '\n',
   );
 
-  // Skills: `.agents/skills/lumi-project-*` for every target (AD-4).
+  // Skills: `.agents/skills/lumi-project-*` for every target (AD-4). Reuses
+  // classic's foreign-collision/deletion-failure warnings (commands.js)
+  // instead of a second copy of that safety-critical delete path — a
+  // deletion failure here now degrades the same way classic's `copySkills`
+  // does: warn and skip that one skill, rather than aborting the install.
   const skillDefs = await listProjectSkillDefs(skillsSrcDir);
   const skillRows = [];
   for (const { canonicalId, srcDir } of skillDefs) {
     const destDir = join(projectRoot, '.agents', 'skills', canonicalId);
+    const relPath = join('.agents', 'skills', canonicalId);
     const owned = await isLuminaOwnedSkillEntry({ entryPath: destDir, canonicalId });
     if (!owned) {
-      if (colors) {
-        const relPath = join('.agents', 'skills', canonicalId);
-        console.log(colors.yellow(
-          t ? t('project.warn.foreign_skill', { path: relPath })
-            : `  [warn] Found an existing directory at "${relPath}" that Lumina does not recognize as its ` +
-              `own. Lumina will not touch it.`,
-        ));
-      }
+      if (colors) warnForeignSkillEntry(colors, relPath, canonicalId);
       continue;
     }
-    await rm(destDir, { recursive: true, force: true });
+    const removed = await removeSkillEntry(destDir);
+    if (!removed.ok) {
+      if (colors) warnSkillDeletionFailed(colors, relPath, canonicalId, removed.error);
+      continue;
+    }
     await ensureDir(destDir);
     await copyDir(srcDir, destDir);
-    skillRows.push({ canonical_id: canonicalId, relative_path: join('.agents', 'skills', canonicalId) });
+    skillRows.push({ canonical_id: canonicalId, relative_path: relPath });
   }
 
   // Claude Code symlinks, only for the claude_code target; dropped target
@@ -373,18 +358,21 @@ export async function installProject({
   // Prune `.claude/skills` BEFORE `.agents/skills` (same order as classic
   // uninstall): judging a `.claude` symlink's ownership can fall back to
   // resolving it against its `.agents/skills/<id>` target, so that target
-  // must still exist when this runs.
+  // must still exist when this runs. Reuses classic's owned-skill pruning
+  // scoped to the `lumi-project-` prefix (never a classic lumi-* skill) and
+  // to the current skill selection (`keep`), instead of a third
+  // ownership-checked deletion loop.
   if (claudeCode) {
-    await pruneStaleProjectSkillEntries(
-      join(projectRoot, '.claude', 'skills'),
-      new Set(skillRows.map((r) => r.canonical_id)),
-      join(projectRoot, '.agents', 'skills'),
-    );
+    await removeOwnedClaudeSkillLinks(projectRoot, colors, rm, {
+      prefix: SKILL_PREFIX,
+      keep: new Set(skillRows.map((r) => r.canonical_id)),
+    });
+    await removeDirIfEmpty(join(projectRoot, '.claude', 'skills'));
   }
-  await pruneStaleProjectSkillEntries(
-    join(projectRoot, '.agents', 'skills'),
-    new Set(skillDefs.map((s) => s.canonicalId)),
-  );
+  await removeOwnedAgentsSkills(projectRoot, colors, rm, {
+    prefix: SKILL_PREFIX,
+    keep: new Set(skillDefs.map((s) => s.canonicalId)),
+  });
 
   // Marker blocks — only in the files each selected target actually reads.
   const claudeMdPath = join(projectRoot, 'CLAUDE.md');
@@ -448,4 +436,155 @@ export async function uninstallProject({ projectRoot, colors = null, deleteFacts
     if (entry.name === 'facts' || entry.name === 'config') continue;
     await rm(join(luminaDir, entry.name), { recursive: true, force: true });
   }
+}
+
+// ---------------------------------------------------------------------------
+// CLI entry points (CAP-1 / AD-2) — called from commands.js's mode gate
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the installer's own UI language for project mode — same source
+ * order as classic's Prompt 0 (--lang, else the previously installed
+ * locale, else a TTY prompt, else 'en') but never persists a
+ * communication/document-output language: project mode records no
+ * communication language (agents follow the user's language).
+ *
+ * @param {object} opts
+ * @param {object|null} existingManifest
+ * @param {boolean} yes
+ * @returns {Promise<'en'|'vi'|'zh'>}
+ */
+export async function resolveProjectUiLocale(opts, existingManifest, yes) {
+  const langFlag = normalizeLangFlag(opts.lang);
+  if (langFlag !== null) return langFlag;
+  if (existingManifest?.locale) return existingManifest.locale;
+  if (!yes && process.stdin.isTTY && process.stdout.isTTY) {
+    return runLocaleOnlyPrompt({ acceptDefaults: false });
+  }
+  return 'en';
+}
+
+/**
+ * `--mode project` install/upgrade branch. Diverges early, like `--agents`:
+ * never scaffolds `raw/`/`wiki/`, never calls `renderIdeStubs`.
+ *
+ * @param {object} opts          - the original installCommand opts
+ * @param {string} projectRoot
+ * @param {object} [ctx]
+ * @param {string|null} [ctx.presetLocale] - already resolved by the mode gate
+ *   (it needed one to localize the classic-vs-project prompt); reused here
+ *   to avoid asking twice in the same interactive session.
+ * @param {boolean} [ctx.wasDetected] - the repo already carried a mode
+ *   signal (manifest.mode / project.yaml / install.json) before this call —
+ *   never prompt for ideTargets in that case (teammate-clone rows: "no
+ *   prompts"), and always report progress as an upgrade.
+ */
+export async function runProjectInstallCommand(opts, projectRoot, { presetLocale = null, wasDetected = false } = {}) {
+  const colors = await getColorFns();
+
+  // install.json is read once here and threaded through both the
+  // version-skew check and the ideTargets upgrade fallback below, rather
+  // than each re-reading the same committed file.
+  const previousInstallJson = await readProjectInstallJson(projectRoot);
+
+  // Version-skew refusal happens before ANY prompt — nothing written, and
+  // the user isn't asked questions for an install that's about to be refused.
+  await checkProjectVersionSkew(projectRoot, PKG.version, previousInstallJson);
+
+  const existingManifest = await readManifestForInstall(projectRoot);
+  const isUpgrade = existingManifest !== null || wasDetected;
+  const yes = Boolean(opts.yes);
+
+  // A detected repo (teammate clone) never prompts -- matrix row "no prompts".
+  const uiLocale = presetLocale ?? await resolveProjectUiLocale(opts, existingManifest, yes || wasDetected);
+  const { t } = await loadLocale(uiLocale);
+
+  const override = parseListOption(opts.ideTargets ?? opts.ide, '--ide-targets');
+  let ideTargets;
+  if (override) {
+    validateProjectIdeTargets(unique(override));
+    ideTargets = unique(override);
+  } else if (existingManifest?.ideTargets?.length) {
+    ideTargets = existingManifest.ideTargets;
+  } else if (previousInstallJson?.ideTargets?.length) {
+    ideTargets = previousInstallJson.ideTargets;
+  } else if (!yes && !wasDetected && process.stdin.isTTY && process.stdout.isTTY) {
+    ideTargets = await runProjectTargetsPrompt({ acceptDefaults: false, t });
+  } else {
+    // "--yes with no --ide-targets defaults to claude_code" (Boundaries);
+    // same default when the repo was detected and carries no prior targets.
+    ideTargets = ['claude_code'];
+  }
+
+  console.log('');
+  console.log(colors.bold(t(isUpgrade ? 'project.progress.upgrading' : 'project.progress.installing', { dir: projectRoot })));
+
+  const result = await installProject({
+    projectRoot,
+    ideTargets,
+    pkgVersion: PKG.version,
+    existingManifest,
+    colors,
+    reLink: Boolean(opts.reLink),
+  });
+
+  const now = new Date().toISOString();
+  const migrated = existingManifest ? migrateManifest(existingManifest, MANIFEST_SCHEMA_VERSION) : {};
+  const manifest = {
+    ...migrated,
+    schemaVersion:  MANIFEST_SCHEMA_VERSION,
+    packageVersion: PKG.version,
+    mode:           'project',
+    locale:         uiLocale,
+    installedAt:    existingManifest?.installedAt ?? now,
+    updatedAt:      now,
+    ideTargets,
+    symlinkStrategies: result.symlinkStrategies,
+    resolvedPaths: {
+      projectRoot,
+      lumina: join(projectRoot, '_lumina'),
+    },
+  };
+  await writeManifest(projectRoot, manifest);
+
+  console.log('');
+  console.log(colors.green(t('project.success.installed')));
+  console.log(t('project.success.targets', { targets: ideTargets.join(', ') }));
+  console.log(t('project.success.skills', { count: result.skillCount }));
+}
+
+/**
+ * `--mode project` uninstall branch (AD-17). Called from `uninstallCommand`
+ * once it has already detected `mode === 'project'`.
+ *
+ * @param {object} opts
+ * @param {boolean} [opts.yes]
+ * @param {string} projectRoot
+ */
+export async function runProjectUninstallCommand(opts, projectRoot) {
+  const { yes = false } = opts;
+  const colors = await getColorFns();
+
+  let locale = 'en';
+  try {
+    const mf = await readManifest(projectRoot);
+    if (mf?.locale) locale = mf.locale;
+  } catch (_) {}
+  const { t } = await loadLocale(locale);
+
+  const confirmed = yes ? true : await runProjectUninstallConfirm({ acceptDefaults: false, t });
+  if (!confirmed) {
+    console.log(colors.yellow(t('uninstall.cancelled')));
+    // CLI contract: a declined confirmation is a user cancellation (exit 4),
+    // matching every other confirm prompt in commands.js.
+    process.exit(4);
+  }
+  // "--yes keeps them" (facts/ and config/ survive unless explicitly confirmed).
+  const deleteFactsAndConfig = yes ? false : await runProjectUninstallFactsPrompt({ acceptDefaults: false, t });
+  await uninstallProject({ projectRoot, colors, deleteFactsAndConfig });
+  console.log(colors.green(
+    deleteFactsAndConfig
+      ? t('project_uninstall.done.deleted')
+      : t('project_uninstall.done.kept'),
+  ));
 }

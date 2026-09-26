@@ -7,7 +7,9 @@
 (function () {
   'use strict';
 
-  var DATA = window.__LUMINA_VIEW_DATA__ || { nodes: [], edges: [], findings: [], freshness: { docs: [], summary: {} } };
+  var DATA = window.__LUMINA_VIEW_DATA__ || {
+    nodes: [], edges: [], findings: [], freshness: { docs: [], summary: {} }, metaTypes: [],
+  };
   var nodes = DATA.nodes || [];
   var findings = DATA.findings || [];
   var freshness = DATA.freshness || { docs: [], summary: {} };
@@ -36,7 +38,7 @@
   // Derived indices, computed once from the (already sorted) input data.
   // -------------------------------------------------------------------------
 
-  var META_TYPES = ['Decision', 'Requirement', 'Rule', 'Capability', 'Process', 'Structure', 'Concept', 'Actor', 'Issue', 'Evidence', 'Document'];
+  var META_TYPES = DATA.metaTypes || [];
   var PALETTE = {
     // Catppuccin Mocha
     Decision: '#fab387', Requirement: '#a6e3a1', Rule: '#cba6f7',
@@ -61,6 +63,17 @@
   findings.forEach(function (f) {
     if (!findingsByFile[f.file]) findingsByFile[f.file] = [];
     findingsByFile[f.file].push(f);
+  });
+
+  // Precomputed once, not per node per frame: the worst severity is a
+  // property of the file, not of whichever node happens to ask for it.
+  var worstSeverityByFile = Object.create(null);
+  Object.keys(findingsByFile).forEach(function (file) {
+    var fs = findingsByFile[file];
+    var worst = fs.some(function (f) { return f.severity === 'error'; }) ? 'error'
+      : fs.some(function (f) { return f.severity === 'warning'; }) ? 'warning'
+        : fs.length ? 'info' : null;
+    worstSeverityByFile[file] = worst;
   });
 
   var docStateByPath = Object.create(null);
@@ -91,10 +104,8 @@
     return !!f && docStateByPath[f] === 'stale';
   }
   function nodeWorstSeverity(n) {
-    var fs = nodeFindings(n);
-    if (fs.some(function (f) { return f.severity === 'error'; })) return 'error';
-    if (fs.some(function (f) { return f.severity === 'warning'; })) return 'warning';
-    return fs.length ? 'info' : null;
+    var f = docPathOf(n);
+    return (f && worstSeverityByFile[f]) || null;
   }
   // sqrt damps hubs: degree 100 -> radius ~13px, not ~40px.
   function nodeVal(n) { return 1 + Math.sqrt(degree[n.id] || 0); }
@@ -182,6 +193,9 @@
   var hoverNode = null;
   var hoverSet = null;
   var searchMatches = null;
+  // Cached, not read from the DOM on every node on every frame; kept in
+  // sync by the checkbox's own change handler below.
+  var showRings = false;
 
   function nodeColorAccessor(n) {
     var base = colorFor(n);
@@ -276,7 +290,7 @@
     .nodeVisibility(function (n) { return visibleSet.has(n.id); })
     .nodeCanvasObjectMode(function () { return 'after'; })
     .nodeCanvasObject(function (node, ctx) {
-      if (!document.getElementById('show-rings').checked) return;
+      if (!showRings) return;
       var sev = nodeWorstSeverity(node);
       var stale = nodeIsStale(node);
       if (!sev && !stale) return;
@@ -502,7 +516,10 @@
   buildLegend();
   buildSummary();
   document.getElementById('filter-orphans').addEventListener('change', refreshFilters);
-  document.getElementById('show-rings').addEventListener('change', redraw);
+  document.getElementById('show-rings').addEventListener('change', function (e) {
+    showRings = e.target.checked;
+    redraw();
+  });
   document.getElementById('local-hops').addEventListener('input', refreshFilters);
   document.getElementById('local-clear').addEventListener('click', function () {
     document.getElementById('local-hops').value = '';
