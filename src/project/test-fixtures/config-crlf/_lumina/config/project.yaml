@@ -1,0 +1,5 @@
+﻿schemaVersion: 1
+sources:
+  include: [docs]
+concepts:
+  - { name: hạn mức tín dụng, aliases: [credit limit] }

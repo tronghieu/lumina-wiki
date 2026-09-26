@@ -1,0 +1,15 @@
+schemaVersion: 1
+notARealKey: true
+sources:
+  include: [docs, "../escape"]
+  exclude: ["!docs/keep", "docs/{a,b}"]
+types:
+  ADR:
+    metaType: NotAMetaType
+    paths: ["docs/adr/**"]
+    idPattern: '['
+relations:
+  implements: not-a-real-relation
+concepts:
+  - { name: credit limit, aliases: [hạn mức] }
+  - { name: "Hạn Mức" }

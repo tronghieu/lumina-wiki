@@ -1,0 +1,30 @@
+sources:
+  include: []
+types:
+  TypeA:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: { heading: Status, frontmatter: status }
+  TypeB:
+    metaType: Decision
+  TypeC:
+    metaType: Decision
+    paths: ["docs/**"]
+    bogusKey: true
+  TypeD:
+    metaType: toString
+    paths: ["docs/**"]
+  TypeE:
+    metaType: Decision
+    paths: ["docs/a?.md"]
+relatedRules:
+  - { source: BadSource, target: Decision, relation: governs }
+  - { source: Capability, target: BadTarget, relation: governs }
+  - { source: Capability, target: Decision, relation: bad-relation }
+  - { source: Capability, target: Decision, relation: governs, inverse: "yes" }
+externalIds:
+  - { pattern: '(' }
+concepts:
+  - { name: "Foo" }
+  - { name: "Foo" }
+  - { name: "???" }

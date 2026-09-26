@@ -1,0 +1,19 @@
+schemaVersion: 1
+sources:
+  include: [docs]
+  exclude: []
+types:
+  ADR:
+    metaType: Decision
+    paths: ["docs/adr/**"]
+    frontmatter: { type: adr }
+    idPattern: 'ADR-\d{4}'
+    status: { heading: Status }
+relations:
+  implements: satisfies
+relatedRules:
+  - { source: Capability, target: Decision, relation: governs, inverse: true }
+externalIds:
+  - { pattern: 'FR[\w.-]+' }
+concepts:
+  - { name: credit limit, aliases: [hạn mức] }
