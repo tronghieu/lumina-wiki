@@ -165,7 +165,7 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 
 ## 项目模式
 
-项目模式是为软件（或类似）项目自身仓库准备的另一种安装方式：它会在项目已有的文档（决策、需求、规则）之上建立一个类型化图，而不是建立新的 wiki。这里没有 `raw/` 或 `wiki/`。
+项目模式是为软件（或类似）项目自身仓库准备的一次独立安装。它会在项目已有的文档（决策、需求、规则）之上建立一个类型化图，而不是建立新的 wiki。这里没有 `raw/` 或 `wiki/`。
 
 ```bash
 npx lumina-wiki install --mode project

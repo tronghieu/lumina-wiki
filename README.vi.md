@@ -165,7 +165,7 @@ Bạn cũng có thể mở thư mục gốc bằng [Obsidian](https://obsidian.m
 
 ## Project mode
 
-Project mode là một bản cài đặt riêng cho chính repo của một dự án phần mềm (hoặc tương tự): nó xây một đồ thị có kiểu trên các tài liệu đã có sẵn (quyết định, yêu cầu, quy tắc), thay vì tạo một wiki mới. Không có `raw/` hay `wiki/`.
+Project mode là một bản cài đặt riêng cho chính repo của một dự án phần mềm (hoặc tương tự). Nó xây một đồ thị có kiểu trên các tài liệu đã có sẵn (quyết định, yêu cầu, quy tắc), thay vì tạo một wiki mới. Không có `raw/` hay `wiki/`.
 
 ```bash
 npx lumina-wiki install --mode project

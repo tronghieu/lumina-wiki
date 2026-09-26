@@ -165,7 +165,7 @@ You can also open the project root in [Obsidian](https://obsidian.md) to browse 
 
 ## Project mode
 
-Project mode is a separate install for a software (or similar) project's own repo: it builds a typed graph over the docs already there (decisions, requirements, rules), instead of a new wiki. There is no `raw/` or `wiki/`.
+Project mode is a separate install for a software (or similar) project's own repo. It builds a typed graph over the docs already there (decisions, requirements, rules), instead of a new wiki. There is no `raw/` or `wiki/`.
 
 ```bash
 npx lumina-wiki install --mode project
