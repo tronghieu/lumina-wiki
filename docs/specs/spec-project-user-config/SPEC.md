@@ -3,13 +3,16 @@ id: SPEC-project-user-config
 companions:
   - ../spec-project-docs-overlay/SPEC.md
   - ../spec-project-parallel-ingest/SPEC.md
+sources: []
 ---
+
+> **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate.
 
 # Project Mode — Reply Preferences
 
 ## Why
 
-Project mode has no way to record how a user wants Lumina to talk to them. Classic mode renders `communication_language` into README; project mode records nothing, so every session starts from default tone and language.
+Project mode has no way to record how a user wants Lumina to talk to them. Classic mode renders `communication_language` into README; project mode records nothing, so every session starts from the default tone and language.
 
 ## Capabilities
 
@@ -27,9 +30,20 @@ Project mode has no way to record how a user wants Lumina to talk to them. Class
 
 - No engine change: the engine never reads this file. No installer prompt: setup asks.
 - Scope is `lumi-project-*` skills only, not every agent conversation in the repo.
+- Shape: `schemaVersion: 1`, `response.language` and `response.style`, both free text and optional.
 
 ## Non-goals
 
 - Classic mode (it already has `communication_language`).
-- A fixed enum of styles; `style` is free text.
-- Re-asking on a setup re-run when the file exists; the user edits the file or deletes it to be asked again.
+- A fixed enum of styles.
+- Re-asking on a setup re-run when the file exists; the user edits the file, or deletes it to be asked again.
+- Removing `user.config.yaml` on uninstall; it stays with the rest of `_lumina/config/`, and shows in `git status` once the `.gitignore` block is gone.
+
+## Success signal
+
+- On a fresh install, setup asks for reply preferences, writes the file, and a following `lumi-project-ask` replies in the chosen language and style with evidence quotes verbatim.
+
+## Assumptions
+
+- Hosts follow the rule because every `lumi-project-*` skill reads `PROJECT.md` first; no host-specific wiring is needed.
+

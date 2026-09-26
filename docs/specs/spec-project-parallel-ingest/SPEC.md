@@ -5,7 +5,10 @@ companions:
   - ../spec-project-docs-overlay/graph-view.md
   - ../../project-context.md
   - ../../planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md
+sources: []
 ---
+
+> **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate.
 
 # Project Mode — Parallel Ingest, Setup Handoff, Auto View
 
@@ -19,7 +22,7 @@ The engine already supports concurrent writers: each doc's facts live in their o
 
 - **CAP-1 — Doc type in `status`**
   - **intent:** `status` reports each doc's project type and meta-type next to `path`, `hash`, `state`, so skills can group docs without guessing from paths.
-  - **success:** `status` on a fixture with a typed and an untyped doc returns `type` for the typed one, omits it (or `null`) for the untyped one, and `metaType` for both (`Document` when untyped). Existing fields and `summary` are unchanged.
+  - **success:** `status` on a fixture with a typed and an untyped doc returns `type` for the typed one, omits it for the untyped one, and `metaType` for both (`Document` when untyped). Existing fields and `summary` are unchanged.
 - **CAP-2 — Parallel ingest by default**
   - **intent:** When the candidate count exceeds 20 and the host can spawn subagents, `/lumi-project-ingest` acts as an orchestrator: it partitions candidates into clusters, dispatches one subagent per cluster, and merges their reports. At or below 20, or on a host with no subagent tool, it runs sequentially as today.
   - **success:** On Seli's `docs/` (234 files, first run), ingest dispatches clusters, every candidate appears in exactly one cluster brief, and every candidate ends either `fresh` in the final `status` or named in the report as skipped, stopped, or missed.
@@ -34,7 +37,7 @@ The engine already supports concurrent writers: each doc's facts live in their o
   - **success:** With one subagent forced into lock timeout (`LUMINA_PROJECT_LOCK_TIMEOUT_MS` set low while the lock is held), the other clusters complete, and the final report lists the stopped cluster's unprocessed docs and how to re-run them.
 - **CAP-6 — Setup hands off to ingest**
   - **intent:** When setup has written a config and its Definition of Done passes, it reports how many docs need ingesting (never-ingested, changed, stale) and offers to run ingest. A yes starts `/lumi-project-ingest` as "ingest all" and counts as the >20 approval; on a host that cannot invoke another skill, setup gives the command instead. Setup itself still never runs `facts-write`.
-  - **success:** On a fresh Seli install, approving setup and then answering yes to the handoff ends with facts committed, without the user typing a second command. Answering no ends setup with the command to run later.
+  - **success:** On a fresh Seli install, approving setup and then answering yes to the handoff ends with facts committed; on a host that can invoke another skill, without the user typing a second command. Answering no ends setup with the command to run later.
 - **CAP-7 — Ingest regenerates the view**
   - **intent:** After the final `status`, if at least one doc was committed, ingest runs `project.mjs view` once and reports its `url`. A `view` failure is reported but does not change the ingest outcome.
   - **success:** After any ingest that committed at least one doc, `_lumina/graph/view.html` reflects the new facts and the report ends with its `file://` URL.
@@ -65,4 +68,8 @@ The engine already supports concurrent writers: each doc's facts live in their o
 
 - Holding the lock for one read + hash + atomic write keeps contention negligible at 20 concurrent writers; the stress test confirms it.
 - Cross-cluster scope-label synonyms (two subagents naming the same target scope differently) are rare and caught by `/lumi-project-verify`/`/lumi-project-check`, which the report already suggests running in a fresh context.
-- `allowed-tools` stays `[Bash, Read]`: the installer copies it verbatim, Claude Code treats it as pre-approval rather than a restriction, and other hosts ignore it. The Seli run confirms the subagent tool is usable without a prompt.
+- Ingest's `allowed-tools` stays `[Bash, Read]`: the installer copies it verbatim, Claude Code treats it as pre-approval rather than a restriction, and other hosts ignore it. The Seli run confirms the subagent tool is usable without a prompt.
+
+## Open Questions
+
+- Does a manual Seli pilot with real subagents confirm CAP-2, CAP-4, CAP-5 and CAP-6 end to end (234-doc run, forced lock-timeout cluster, sweep with a missing doc, one-approval handoff, wall-clock comparison)?
