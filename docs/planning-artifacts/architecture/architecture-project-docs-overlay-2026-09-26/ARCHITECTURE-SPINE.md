@@ -116,7 +116,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-6, CAP-9, CAP-11
 - **Prevents:** unreadable diffs, merge conflicts beyond the edited doc, churn from re-ingest.
-- **Rule:** One file per source doc at `_lumina/facts/<repo-relative source path>.json`, written only by `facts-write`, which replaces the doc's entire fact set per call (the ingest skill makes one call per doc). Envelope `{schemaVersion, source, sourceHash, ontologyVersion, facts[]}`; pretty JSON, fixed key order, facts sorted by `id`. A fact file whose source is gone but whose `sourceHash` matches a new in-scope doc is a rename-candidate finding, never moved automatically. Facts with an older `ontologyVersion` are marked for re-ingest; nothing is auto-deleted.
+- **Rule:** One file per source doc at `_lumina/facts/<repo-relative source path>.json`, written only by `facts-write`, which replaces the doc's entire fact set per call (the ingest skill makes one call per doc). Envelope `{schemaVersion, source, sourceHash, ontologyVersion, facts[]}`; pretty JSON, fixed key order, facts sorted by `id`. A fact file whose source is gone but whose `sourceHash` matches a new in-scope doc is a rename-candidate finding, never moved automatically. Facts with an older `ontologyVersion` are marked for re-ingest; nothing is auto-deleted. `facts-prune [--dry-run]` removes, on explicit request only, every fact file whose source is not an in-scope doc, except rename candidates.
 
 ### AD-11 — References are kept as written, resolved at build
 
@@ -147,7 +147,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-10, CAP-11, CAP-12, CAP-6
 - **Prevents:** skills parsing fact or graph files and drifting from build-time resolution.
-- **Rule:** Ask, verify, view, and ingest skills use only `project.mjs` subcommand output (`status`, `query`, `verify-evidence`, `view`).
+- **Rule:** Skills read graph state only through `project.mjs` subcommand output (`status`, `query`, `verify-evidence`, `view`), never from `_lumina/facts/` or `_lumina/graph/`. Ask then reads the cited doc sections to answer content, and searches in-scope docs when no node matches; every claim cites `file:line`.
 
 ### AD-16 — Viewer is one inlined HTML file
 
