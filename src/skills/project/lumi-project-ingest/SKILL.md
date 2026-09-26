@@ -2,8 +2,8 @@
 name: lumi-project-ingest
 description: >
   Extracts relations and fragment status from project doc prose and commits
-  them per doc. Use when the user asks to ingest project docs or extract
-  facts, or after adding or editing docs in project-mode scope.
+  them per doc, changed/stale only by default. Use when the user asks to
+  ingest, update, or re-ingest project docs after adding or editing them.
 allowed-tools: [Bash, Read]
 ---
 
@@ -33,14 +33,27 @@ own bytes.
 
 ## Engine facts
 
-**1. Selecting docs.** `status` prints `{docs:[{path, hash, state}], summary}`
-for every in-scope doc. States `never-ingested`, `changed`, and `stale` are
-candidates; `fresh` is skipped unless the user names that path explicitly.
+**1. Update mode is the default.** `status` prints `{docs:[{path, hash,
+state}], summary}` for every in-scope doc. By default, candidates are only
+docs whose `state` is `changed` or `stale` — `never-ingested` docs are
+*not* auto-selected, and `fresh` never is. Include `never-ingested` docs
+too only when one of:
+- the user explicitly asked for them (e.g. "ingest all", "ingest
+  everything", or named specific paths/folders — a named path is always a
+  candidate regardless of its state);
+- this is the first run: `summary` shows zero docs `fresh`, `changed`, and
+  `stale` combined (nothing has ever been ingested), so every doc is
+  `never-ingested` and all are offered.
+
 `status`'s own JSON is small (state per doc) — read it directly, no
-filtering needed. Before starting a batch of more than 20 candidate docs,
-show the count and get the user's approval first. A user-named path that
-does not appear in `status`'s own doc list at all is out of scope — report
-it and skip it; don't attempt to write it.
+filtering needed. Before starting a batch of more than 20 candidate docs
+(whatever the selection rule produced), show the count and get the user's
+approval first. A user-named path that does not appear in `status`'s own
+doc list at all is out of scope — report it and skip it; don't attempt to
+write it. A `never-ingested` doc whose content matches a gone doc's facts
+is a rename candidate — `lumi-project-verify` surfaces it as P15, not this
+skill, but if the user already knows a doc was renamed, name its new path
+explicitly rather than waiting on update mode or the next full run.
 
 **2. `facts-write`'s stdin contract.** It needs piped or redirected JSON,
 never a TTY, and rejects anything else with exit 1: `{source, sourceHash,
@@ -215,8 +228,13 @@ fragment-status fact the doc's prose *currently* states, including ones a
 previous ingest already committed — never skip re-deriving one just because
 `query node` already shows an edge for it (fact 4: that view can't tell you
 whether the edge came from the parse or from your own earlier fact, and if
-it was the latter, leaving it out of this call deletes it). The only facts
-you skip on principle, every run, are the parse-only kinds: links, bare ID
+it was the latter, leaving it out of this call deletes it). This re-derive-
+the-whole-set rule applies only to a doc actually selected this run (fact
+1) — a `fresh` doc outside the batch gets no `facts-write` call at all, so
+its existing committed facts are untouched; re-deriving in full is never
+something you do to an unchanged doc, only to each changed/stale (or
+explicitly-requested) doc you are processing. The only facts you skip on
+principle, every run, are the parse-only kinds: links, bare ID
 mentions, frontmatter-key relations, concept mentions, and heading-based
 status — never write a fact duplicating one of those, regardless of what
 `query node` shows.
@@ -245,10 +263,12 @@ or declared ID; you do not compute or write a `concept:` id yourself.
    ```bash
    node _lumina/project/project.mjs status
    ```
-   Candidates: every doc whose `state` is `never-ingested`, `changed`, or
-   `stale`, plus any path the user named explicitly (report and skip a
-   named path absent from `status`'s own list — fact 1). If the candidate
-   count exceeds 20, show it and wait for approval before continuing.
+   Candidates: every doc whose `state` is `changed` or `stale` (update
+   mode, the default). Add `never-ingested` docs only if the user asked for
+   them explicitly or this is the first run (fact 1); named paths absent
+   from `status`'s own list are reported and skipped, never attempted. If
+   the candidate count exceeds 20, show it and wait for approval before
+   continuing.
 
 2. **Gather what exists** (Engine facts §4):
    - Once per batch: run the `build`-piped filter above, passing every
@@ -285,15 +305,21 @@ or declared ID; you do not compute or write a `concept:` id yourself.
    rejection or exit 2, skip this doc and continue the batch; on exit 3,
    stop the whole batch.
 
-5. **Finish.** Re-run `status`; report its `summary` counts and suggest
-   running lumi-project-check or lumi-project-verify in a fresh session or
-   subagent — this context's own reasoning just built these facts and is
-   biased toward seeing them as correct.
+5. **Finish.** Re-run `status`; report its `summary` counts. Whenever the
+   `never-ingested` count is non-zero — update mode's own exclusion, a
+   first run or "ingest all" where the user declined the >20 gate, or any
+   other reason some stayed unprocessed — state that count and how to
+   include them (`lumi-project-ingest` "ingest all", "ingest everything",
+   or naming their paths/folders). Suggest running lumi-project-check or
+   lumi-project-verify in a fresh session or subagent — this context's own
+   reasoning just built these facts and is biased toward seeing them as
+   correct.
 
 ## Output Format
 
 ```
-Candidates: <N> docs (never-ingested: X, changed: Y, stale: Z)
+Mode: update (changed/stale only) | all (never-ingested included: <why>)
+Candidates: <N> docs (changed: Y, stale: Z[, never-ingested: X])
 [if N > 20: "N exceeds 20 — proceed? [yes/no]"]
 
 docs/adr/0052-....md — 2 facts written (supersedes ADR-0009 scope "...";
@@ -303,6 +329,8 @@ docs/adr/xyz.md — skipped: <engine's error message>
 ...
 
 status after: fresh <N>, changed <N>, stale <N>, never-ingested <N>
+Never-ingested remaining, not processed: <N> — run with "ingest all" or
+  name their paths/folders to include them.
 Uncaptured (stated only from the other side, no config mapping): <list, or none>
 Suggest: run lumi-project-check or lumi-project-verify in a fresh session
 or subagent.
@@ -356,6 +384,23 @@ previously-ingested doc `fresh`. Zero candidates — nothing to process; say
 so and stop. (A `changed` or `stale` doc, by contrast, is one whose content
 or a committed fact's evidence moved — always a candidate again, and always
 re-derived in full per fact 9.)
+</example>
+
+<example>
+Default run, no paths named, not the first run: `summary` shows `{fresh:
+1, changed: 0, stale: 1, neverIngested: 228}`. This is not a first run
+(one doc is already `fresh`), and the user asked for nothing beyond a
+plain "ingest" — so update mode selects only the 1 `stale` doc, ignoring
+the 228 `never-ingested` ones. That one doc gets read, re-derived per fact
+9, and written. The report states 228 never-ingested docs remain, and that
+"ingest all" or naming their paths would include them next time.
+</example>
+
+<example>
+First run: `summary` shows `{fresh: 0, changed: 0, stale: 0,
+neverIngested: 30}` — nothing has ever been ingested, so every doc is a
+candidate even though none was named and the user said only "ingest".
+30 exceeds 20, so show the count and wait for approval before processing.
 </example>
 
 <example>
@@ -422,6 +467,9 @@ Before reporting done, verify:
 (e) Every fact resent for a previously-ingested doc includes every
     meta-relation and fragment-status fact its current prose still states,
     not only newly found ones (fact 9).
-(f) The report names the fresh/changed/stale/never-ingested counts, any
-    skipped docs and uncaptured relations, and suggests a fresh-session or
-    subagent check/verify pass.
+(f) No `never-ingested` doc was selected unless the user asked for it
+    explicitly or this was a first run (fact 1).
+(g) The report names the fresh/changed/stale/never-ingested counts, how
+    many `never-ingested` docs remain unprocessed and how to include them,
+    any skipped docs and uncaptured relations, and suggests a fresh-session
+    or subagent check/verify pass.

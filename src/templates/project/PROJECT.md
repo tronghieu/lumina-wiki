@@ -13,14 +13,16 @@ Installed by lumina-wiki {{package_version}}.
   fixes, or a new file such as a glossary).
 - **Only the engine writes `_lumina/facts/`, `_lumina/graph/`, and
   `_lumina/_state/`.** Nothing else — not a skill, not you by hand — should
-  create or edit files there. One exception: when verify reports a fact file
-  whose source doc is gone, delete that file yourself and commit the deletion.
+  create or edit files there. When verify reports a fact file whose source
+  doc is gone, run `facts-prune` (dry run first) to remove it, then commit
+  the deletion — never delete it by hand.
 - **Skills call the engine through Bash, never by importing it.** Every
   `lumi-project-*` skill runs `node _lumina/project/project.mjs <subcommand>`
   and reads its JSON output; none of them `import` engine code.
 - **Exit codes:** `0` success · `1` bad arguments · `2` invalid config,
   missing root, or a path-safety violation · `3` internal error, lock
-  timeout, or a newer `schemaVersion` than this engine knows.
+  timeout, a newer `schemaVersion` than this engine knows, or (`facts-prune`
+  only) one or more files it could not delete (listed in `failed`).
 
 ## What's committed vs. gitignored
 
@@ -50,6 +52,7 @@ node _lumina/project/project.mjs query node <ref>
 node _lumina/project/project.mjs query list --meta-type <T> [--status <S>]
 node _lumina/project/project.mjs query neighbors <ref> --direction in|out [--relation <R>]
 node _lumina/project/project.mjs view
+node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
 ```
 
 - `scope` — list in-scope docs.
@@ -73,6 +76,21 @@ node _lumina/project/project.mjs view
   `freshness` summary.
 - `view` — writes `_lumina/graph/view.html` (gitignored), a self-contained
   page you open with `file://`, no network, no server.
+- `facts-prune` — removes only the committed fact files whose doc was
+  actually **deleted**. It never removes one for a doc that still exists but
+  fell out of scope (a scope edit or a typo) — that would lose facts you
+  paid tokens for; those are `kept` with reason `out-of-scope` instead, same
+  as a newer-schema file (`newer-schema`, never touched) and a rename
+  candidate (`rename-candidate`, with the new path — re-ingest it first,
+  then prune removes the old file). `--dry-run` reports
+  `{removed, kept, skipped, failed, warnings}` without deleting anything.
+  Pass fact file paths (as printed in a prior `--dry-run`'s `removed`) as
+  positional arguments to delete only that approved set — anything on the
+  list that's no longer removable by the time of the real run is reported in
+  `skipped`, not deleted; anything removable but left off the list is
+  untouched. No positionals deletes the whole removable set. A per-file
+  delete error is reported in `failed` and makes the run exit `3`, without
+  stopping the rest.
 
 ## Meta-ontology
 

@@ -4,7 +4,9 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes } from 'node:fs/promises';
+import {
+  mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes, chmod,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import { contentHash } from './lib/hash.mjs';
@@ -1715,5 +1717,262 @@ describe('view', () => {
     const staticImportRe = /^import\s+.*from\s+['"]\.\/lib\/view\.mjs['"];?\s*$/m;
     assert.ok(!staticImportRe.test(src), 'expected no static "import ... from \'./lib/view.mjs\'" line');
     assert.match(src, /await import\(\s*['"]\.\/lib\/view\.mjs['"]\s*\)/, 'expected the lazy import inside runView');
+  });
+});
+
+describe('facts-prune', () => {
+  /** The steady-state shape for a run that removes/keeps nothing extra: `skipped`/`failed`/`warnings` are all empty on parse-pilot (no scope warnings). */
+  function pruneResult(overrides) {
+    return {
+      ok: true, dryRun: false, removed: [], kept: [], skipped: [], failed: [], warnings: [], ...overrides,
+    };
+  }
+
+  test('doc deleted: removed lists the fact file, the file (and its now-empty directories) are gone, and lint/verify-evidence show no P14 for it, but _lumina/facts/ itself survives', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+      assert.ok(await factFileExists(root, docPath));
+
+      await rm(join(root, docPath));
+
+      const { status, stdout } = run(root, ['facts-prune']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), pruneResult({ removed: [`_lumina/facts/${docPath}.json`] }));
+      assert.ok(!(await factFileExists(root, docPath)));
+      // The rule also removes any directory under _lumina/facts/ left empty
+      // by the delete -- here, both docs/adr/ and docs/ under it -- but
+      // never _lumina/facts/ itself, even though it's now empty too.
+      await assert.rejects(readdir(join(root, '_lumina', 'facts', 'docs', 'adr')));
+      await assert.rejects(readdir(join(root, '_lumina', 'facts', 'docs')));
+      await assert.doesNotReject(readdir(join(root, '_lumina', 'facts')));
+
+      const lint = run(root, ['lint']);
+      assert.equal(lint.status, 0);
+      assert.ok(!JSON.parse(lint.stdout).findings.some((f) => f.id === 'P14' && f.file === docPath));
+
+      const verify = run(root, ['verify-evidence']);
+      assert.equal(verify.status, 0);
+      assert.deepEqual(JSON.parse(verify.stdout).findings, []);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('rename: the old fact file is kept as a rename candidate, nothing removed', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+
+      const renamedPath = 'docs/adr/0052-renamed.md';
+      await cp(join(root, docPath), join(root, renamedPath));
+      await rm(join(root, docPath));
+
+      const { status, stdout } = run(root, ['facts-prune']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), pruneResult({
+        kept: [{ file: `_lumina/facts/${docPath}.json`, reason: 'rename-candidate', candidate: renamedPath }],
+      }));
+      assert.ok(await factFileExists(root, docPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('rename after re-ingest: the old fact file is removed once the new path has its own committed envelope', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+
+      const renamedPath = 'docs/adr/0052-renamed.md';
+      await cp(join(root, docPath), join(root, renamedPath));
+      await rm(join(root, docPath));
+      assert.equal(runFactsWrite(root, { source: renamedPath, sourceHash, facts: [] }).status, 0);
+
+      const { status, stdout } = run(root, ['facts-prune']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), pruneResult({ removed: [`_lumina/facts/${docPath}.json`] }));
+      assert.ok(!(await factFileExists(root, docPath)));
+      assert.ok(await factFileExists(root, renamedPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('dry run: same lists, nothing changed on disk', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+      await rm(join(root, docPath));
+
+      const dry = run(root, ['facts-prune', '--dry-run']);
+      assert.equal(dry.status, 0);
+      const dryResult = JSON.parse(dry.stdout);
+      assert.deepEqual(dryResult, pruneResult({ dryRun: true, removed: [`_lumina/facts/${docPath}.json`] }));
+      assert.ok(await factFileExists(root, docPath));
+
+      const real = run(root, ['facts-prune']);
+      const realResult = JSON.parse(real.stdout);
+      assert.deepEqual(realResult.removed, dryResult.removed);
+      assert.deepEqual(realResult.kept, dryResult.kept);
+      assert.ok(!(await factFileExists(root, docPath)));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad flag: --force exits 1 with nothing on stdout, nothing removed', () => {
+    const { status, stdout, stderr } = run(join(FIXTURES, 'scope-basic'), ['facts-prune', '--force']);
+    assert.equal(status, 1);
+    assert.equal(stdout, '');
+    assert.equal(JSON.parse(stderr).code, 1);
+  });
+
+  test('out of scope but still on disk: kept, not removed (a scope edit or typo must not lose paid-for facts)', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/misc/unmapped.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+
+      const configPath = join(root, '_lumina', 'config', 'project.yaml');
+      const yaml = await readFile(configPath, 'utf8');
+      assert.match(yaml, /exclude: \[\]/);
+      await writeFile(configPath, yaml.replace('exclude: []', `exclude: ["${docPath}"]`));
+
+      const { status, stdout } = run(root, ['facts-prune']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), pruneResult({
+        kept: [{ file: `_lumina/facts/${docPath}.json`, reason: 'out-of-scope' }],
+      }));
+      assert.ok(await factFileExists(root, docPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a sibling fact file in the same directory keeps its directory', async () => {
+    const root = await copyParsePilot();
+    try {
+      const gone = 'docs/adr/0052-new.md';
+      const sibling = 'docs/adr/0009-partial.md';
+      assert.equal(runFactsWrite(root, {
+        source: gone, sourceHash: await hashOfFile(root, gone), facts: [],
+      }).status, 0);
+      assert.equal(runFactsWrite(root, {
+        source: sibling, sourceHash: await hashOfFile(root, sibling), facts: [],
+      }).status, 0);
+
+      await rm(join(root, gone));
+
+      const { status } = run(root, ['facts-prune']);
+      assert.equal(status, 0);
+      assert.ok(!(await factFileExists(root, gone)));
+      assert.ok(await factFileExists(root, sibling));
+      const adrDir = await readdir(join(root, '_lumina', 'facts', 'docs', 'adr'));
+      assert.deepEqual(adrDir, ['0009-partial.md.json']);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('positionals: only the approved, still-removable files are deleted; a stale approval is skipped', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docA = 'docs/adr/0009-partial.md';
+      const docB = 'docs/adr/0011-inline-status.md';
+      assert.equal(runFactsWrite(root, {
+        source: docA, sourceHash: await hashOfFile(root, docA), facts: [],
+      }).status, 0);
+      assert.equal(runFactsWrite(root, {
+        source: docB, sourceHash: await hashOfFile(root, docB), facts: [],
+      }).status, 0);
+
+      const bytesA = await readFile(join(root, docA));
+      await rm(join(root, docA));
+      await rm(join(root, docB));
+
+      const dry = run(root, ['facts-prune', '--dry-run']);
+      const dryResult = JSON.parse(dry.stdout);
+      assert.deepEqual([...dryResult.removed].sort(), [
+        `_lumina/facts/${docA}.json`, `_lumina/facts/${docB}.json`,
+      ].sort());
+
+      // Doc A comes back before the real (approved) run -- its approval is stale.
+      await writeFile(join(root, docA), bytesA);
+
+      const real = run(root, ['facts-prune', ...dryResult.removed]);
+      assert.equal(real.status, 0);
+      const result = JSON.parse(real.stdout);
+      assert.deepEqual(result.removed, [`_lumina/facts/${docB}.json`]);
+      assert.deepEqual(result.skipped, [{ file: `_lumina/facts/${docA}.json`, reason: 'not-removable' }]);
+      assert.ok(await factFileExists(root, docA)); // untouched, not deleted
+      assert.ok(!(await factFileExists(root, docB)));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('an invalid positional exits 1: outside _lumina/facts/, and a path-traversal segment', async () => {
+    const root = await copyParsePilot();
+    try {
+      for (const bad of ['docs/adr/0052-new.md', '_lumina/facts/../../etc/passwd', '_lumina/config/project.yaml']) {
+        const { status, stdout, stderr } = run(root, ['facts-prune', bad]);
+        assert.equal(status, 1, `expected exit 1 for ${bad}`);
+        assert.equal(stdout, '');
+        assert.equal(JSON.parse(stderr).code, 1);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a failed unlink is recorded in failed and the run exits 3', async (t) => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      t.skip('running as root bypasses directory permission bits');
+      return;
+    }
+    if (process.platform === 'win32') {
+      t.skip('chmod cannot reliably block unlink via POSIX mode bits on Windows');
+      return;
+    }
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      assert.equal(runFactsWrite(root, {
+        source: docPath, sourceHash: await hashOfFile(root, docPath), facts: [],
+      }).status, 0);
+      await rm(join(root, docPath));
+
+      // 0o500 (r-x, no write): readdir/classification still sees the file
+      // (needs only read+execute), but unlink on it fails with EACCES
+      // (needs write on the containing directory too). 0o000 would also
+      // block readdir, which loadFacts treats as an empty directory --
+      // hiding the file from classification entirely, never reaching unlink.
+      const parentDir = join(root, '_lumina', 'facts', 'docs', 'adr');
+      await chmod(parentDir, 0o500);
+      try {
+        const { status, stdout } = run(root, ['facts-prune']);
+        assert.equal(status, 3);
+        const result = JSON.parse(stdout);
+        assert.deepEqual(result.removed, []);
+        assert.equal(result.failed.length, 1);
+        assert.equal(result.failed[0].file, `_lumina/facts/${docPath}.json`);
+        assert.match(result.failed[0].error, /EACCES|EPERM/);
+      } finally {
+        await chmod(parentDir, 0o755);
+      }
+      assert.ok(await factFileExists(root, docPath)); // still there -- the unlink never succeeded
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

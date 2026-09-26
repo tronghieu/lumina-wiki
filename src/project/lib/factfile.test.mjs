@@ -1,7 +1,9 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './factfile.mjs';
+import {
+  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates,
+} from './factfile.mjs';
 import { makeResolverContext, resolveFactRef } from './graph.mjs';
 import { CURRENT_SCHEMA_VERSION } from './config.mjs';
 
@@ -573,6 +575,18 @@ describe('verifyEvidence', () => {
     assert.match(findings[0].message, /_lumina\/facts\/docs\/adr\/0052-new\.md\.json/);
   });
 
+  test('case-only rename: envelope.source differing from its own key only by case is not a mismatch (AD-10: a re-ingest after a case-only rename keeps the old on-disk file name on APFS/NTFS)', () => {
+    const upperKey = 'docs/adr/0052-New.md'; // on-disk fact file name, from before the case-only rename
+    const docA = doc(); // path: SOURCE ('docs/adr/0052-new.md'), matches envelope.source exactly
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([[upperKey, {
+      schemaVersion: 1, source: SOURCE, sourceHash: docA.hash, ontologyVersion: 'v', facts: [],
+    }]]);
+    // No perpetual P14 mismatch, and the doc's facts verify clean (no
+    // broken-evidence findings either, since `source` resolves the real doc).
+    assert.deepEqual(verifyEvidence({ parsed, texts: parsed.texts, facts }), []);
+  });
+
   test('P15 is suppressed once the renamed doc has its own committed envelope', () => {
     const renamedPath = 'docs/adr/0052-renamed.md';
     const renamedDoc = doc({ path: renamedPath, hash: 'same-hash' });
@@ -608,5 +622,150 @@ describe('verifyEvidence', () => {
     ]);
     const findings = verifyEvidence({ parsed, texts, facts });
     assert.deepEqual(findings.map((f) => f.file), ['docs/a.md', 'docs/b.md']);
+  });
+});
+
+describe('findPruneCandidates', () => {
+  function parsedWith(docs, texts, warnings = []) {
+    return { docs, texts, warnings };
+  }
+
+  // None of these simulate a doc that's still physically present but out of
+  // scope -- that's its own describe block below.
+  const NOTHING_EXISTS = () => false;
+
+  test('source gone: the fact file is removed, nothing kept', () => {
+    const parsed = parsedWith([], new Map());
+    const facts = new Map([[SOURCE, {
+      schemaVersion: 1, source: SOURCE, sourceHash: 'gone-hash', ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [`_lumina/facts/${SOURCE}.json`],
+      kept: [],
+      warnings: [],
+    });
+  });
+
+  test('rename candidate: the old fact file is kept, not removed', () => {
+    const renamedPath = 'docs/adr/0052-renamed.md';
+    const renamedDoc = doc({ path: renamedPath, hash: 'same-hash' });
+    const parsed = parsedWith([renamedDoc], new Map([[renamedPath, SOURCE_TEXT]]));
+    const facts = new Map([[SOURCE, {
+      schemaVersion: 1, source: SOURCE, sourceHash: 'same-hash', ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [],
+      kept: [{ file: `_lumina/facts/${SOURCE}.json`, reason: 'rename-candidate', candidate: renamedPath }],
+      warnings: [],
+    });
+  });
+
+  test('rename after re-ingest: the renamed doc already has its own envelope, so the old one is removed instead of kept', () => {
+    const renamedPath = 'docs/adr/0052-renamed.md';
+    const renamedDoc = doc({ path: renamedPath, hash: 'same-hash' });
+    const parsed = parsedWith([renamedDoc], new Map([[renamedPath, SOURCE_TEXT]]));
+    const facts = new Map([
+      [SOURCE, { schemaVersion: 1, source: SOURCE, sourceHash: 'same-hash', ontologyVersion: 'v', facts: [] }],
+      [renamedPath, { schemaVersion: 1, source: renamedPath, sourceHash: 'same-hash', ontologyVersion: 'v', facts: [] }],
+    ]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [`_lumina/facts/${SOURCE}.json`],
+      kept: [],
+      warnings: [],
+    });
+  });
+
+  test('a malformed fact file whose path-derived source is gone is removed', () => {
+    const parsed = parsedWith([], new Map());
+    const facts = new Map([[SOURCE, { error: 'Unexpected token' }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [`_lumina/facts/${SOURCE}.json`],
+      kept: [],
+      warnings: [],
+    });
+  });
+
+  test('a doc still in scope under its committed source is never a candidate', () => {
+    const docA = doc();
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([[SOURCE, {
+      schemaVersion: 1, source: SOURCE, sourceHash: docA.hash, ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [], kept: [], warnings: [],
+    });
+  });
+
+  test('a live doc slot with a mismatched envelope is never removed: the key decides, not envelope.source', () => {
+    // The fact file sits at SOURCE (an in-scope doc), but its envelope
+    // claims a different, gone source -- e.g. left over from a bug, or a
+    // hand-edited file. The old (pre-fix) classifier used `envelope.source`
+    // here and would have offered this live doc's own facts for deletion.
+    const docA = doc(); // path: SOURCE
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([[SOURCE, {
+      schemaVersion: 1, source: 'docs/adr/somewhere-else-gone.md', sourceHash: 'irrelevant', ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [], kept: [], warnings: [],
+    });
+  });
+
+  test('newer schemaVersion than the engine understands is kept, never deleted', () => {
+    const parsed = parsedWith([], new Map());
+    const facts = new Map([[SOURCE, {
+      schemaVersion: CURRENT_SCHEMA_VERSION + 1, source: SOURCE, sourceHash: 'h', ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [],
+      kept: [{ file: `_lumina/facts/${SOURCE}.json`, reason: 'newer-schema' }],
+      warnings: [],
+    });
+  });
+
+  test('out of scope but still on disk: kept, not removed (a scope edit or typo must not lose paid-for facts)', () => {
+    const parsed = parsedWith([], new Map());
+    const facts = new Map([[SOURCE, {
+      schemaVersion: 1, source: SOURCE, sourceHash: 'h', ontologyVersion: 'v', facts: [],
+    }]]);
+    const exists = (p) => p === SOURCE;
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists }), {
+      removed: [],
+      kept: [{ file: `_lumina/facts/${SOURCE}.json`, reason: 'out-of-scope' }],
+      warnings: [],
+    });
+  });
+
+  test('case-only rename: the key differs from the in-scope doc only by case -- still that doc\'s own slot, not removed', () => {
+    const upperPath = 'docs/adr/0052-New.md'; // on-disk fact file name, from before the case-only rename
+    const docA = doc({ path: SOURCE }); // now tracked (and parsed) in lowercase
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([[upperPath, {
+      schemaVersion: 1, source: SOURCE, sourceHash: docA.hash, ontologyVersion: 'v', facts: [],
+    }]]);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }), {
+      removed: [], kept: [], warnings: [],
+    });
+  });
+
+  test('both lists are sorted', () => {
+    const facts = new Map([
+      ['docs/z.md', { schemaVersion: 1, source: 'docs/z.md', sourceHash: 'hz', ontologyVersion: 'v', facts: [] }],
+      ['docs/a.md', { schemaVersion: 1, source: 'docs/a.md', sourceHash: 'ha', ontologyVersion: 'v', facts: [] }],
+    ]);
+    const parsed = parsedWith([], new Map());
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS }).removed, [
+      '_lumina/facts/docs/a.md.json',
+      '_lumina/facts/docs/z.md.json',
+    ]);
+  });
+
+  test('P16 scope warnings from parsed.warnings are folded into warnings', () => {
+    const parsed = parsedWith([], new Map(), [{ message: 'include pattern matched nothing: docs-that-do-not-exist' }]);
+    const facts = new Map();
+    const { warnings } = findPruneCandidates({ parsed, facts, exists: NOTHING_EXISTS });
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].id, 'P16');
+    assert.match(warnings[0].message, /docs-that-do-not-exist/);
   });
 });

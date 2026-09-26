@@ -26,6 +26,52 @@ function cmp(a, b) {
 }
 
 // ---------------------------------------------------------------------------
+// Case-only rename (AD-10): on APFS/NTFS (case-insensitive, case-preserving
+// filesystems), re-ingesting a doc renamed only by case keeps the fact
+// file's on-disk name from before the rename -- `atomicWrite`'s rename onto
+// an existing, case-differing entry overwrites its content but not its
+// name. So a fact file's own path-derived key (from `loadFacts`'s directory
+// walk) can differ from its envelope's declared `source`, or from a doc's
+// own path, by case alone. One shared place for that comparison --
+// `verifyEvidence`, `computeDocStatuses` (project.mjs), and
+// `findPruneCandidates` below all use it, instead of three copies silently
+// disagreeing.
+// ---------------------------------------------------------------------------
+
+/** True when `a` and `b` name the same path, ignoring case (after NFC normalization) -- an equivalence test for two strings already known to be repo-relative paths, never a security check. */
+export function sameSourcePath(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  return a.normalize('NFC').toLowerCase() === b.normalize('NFC').toLowerCase();
+}
+
+/** Exact key match first, then -- case-only rename -- the first entry whose key matches `key` case-insensitively. Any `Map<string, *>`. */
+export function lookupCaseInsensitive(map, key) {
+  if (map.has(key)) return map.get(key);
+  for (const [k, v] of map) {
+    if (sameSourcePath(k, key)) return v;
+  }
+  return undefined;
+}
+
+/**
+ * Look up a doc's committed envelope in `facts` (`loadFacts()`'s output, or
+ * an equivalent plain object in tests): exact key match first, then --
+ * case-only rename -- the first key that matches `docPath` case-insensitively.
+ * @param {Map<string, object>|Record<string, object>} facts
+ * @param {string} docPath
+ * @returns {object|undefined}
+ */
+export function lookupEnvelope(facts, docPath) {
+  if (facts instanceof Map) return lookupCaseInsensitive(facts, docPath);
+  const obj = facts ?? {};
+  if (Object.hasOwn(obj, docPath)) return obj[docPath];
+  for (const key of Object.keys(obj)) {
+    if (sameSourcePath(key, docPath)) return obj[key];
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Subject validation: `doc:<source>` or `frag:<source>#<anchor>`, anchor
 // retried once through `slug()` (AD-20's slugger, shared -- not a second one).
 // ---------------------------------------------------------------------------
@@ -224,7 +270,7 @@ export function serializeEnvelope(envelope) {
 // live docs. Report-only -- never edits a fact file.
 // ---------------------------------------------------------------------------
 
-function isV1Envelope(envelope) {
+export function isV1Envelope(envelope) {
   return !!envelope && typeof envelope === 'object' && !envelope.error
     && envelope.schemaVersion === CURRENT_SCHEMA_VERSION
     && Array.isArray(envelope.facts)
@@ -263,7 +309,7 @@ export function verifyEvidence({ parsed, texts, facts }) {
       findings.push(makeFinding('P14', key, 1, `malformed fact file ${factFile}: ${reason}`));
       continue;
     }
-    if (envelope.source !== key) {
+    if (!sameSourcePath(envelope.source, key)) {
       findings.push(makeFinding('P14', key, 1, `fact file ${factFile}: source "${envelope.source}" does not match its own path "${key}"`));
       continue;
     }
@@ -297,4 +343,89 @@ export function verifyEvidence({ parsed, texts, facts }) {
   }
 
   return sortFindings(findings);
+}
+
+// ---------------------------------------------------------------------------
+// findPruneCandidates (AD-10, `facts-prune`): classifies every committed
+// fact file by its own path-derived key -- never by `envelope.source`. A
+// fact file that sits at an in-scope doc's own path is always that doc's
+// slot (re-ingest overwrites it), no matter what a stale or mismatched
+// envelope inside it claims; that is what keeps a live doc's facts safe
+// even when its envelope names a gone or different source. Reuses
+// `isV1Envelope` and the same rename-candidate detection as `verifyEvidence`
+// above, instead of re-deriving it. Pure -- `project.mjs` supplies `exists`
+// (filesystem access) and does the actual delete.
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify every committed fact file. Order matters: a newer schema is
+ * never touched regardless of scope; a live doc's own slot is never even
+ * reported; only then do "out of scope but still present" and
+ * "rename candidate" apply; everything else means the doc is gone.
+ * @param {object} params
+ * @param {{docs: object[], warnings?: {message: string}[]}} params.parsed `parseAll()`'s output.
+ * @param {Map<string, object>|Record<string, object>} params.facts `loadFacts()`'s output.
+ * @param {(path: string) => boolean} params.exists true when `path` (the fact
+ *   file's own repo-relative key) is a file on disk right now, in or out of
+ *   scope -- `project.mjs`'s `existsUnderRoot(root)`.
+ * @returns {{removed: string[], kept: {file: string, reason: string, candidate?: string}[], warnings: object[]}}
+ *   `removed` is fact file paths (`_lumina/facts/<key>.json`); `removed` and
+ *   `kept` are both sorted; `warnings` are P16 findings from `parsed.warnings`.
+ */
+export function findPruneCandidates({ parsed, facts, exists }) {
+  const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
+  const entries = facts instanceof Map ? [...facts.entries()] : Object.entries(facts ?? {});
+  // Same rule as `verifyEvidence`: a source that already has its own
+  // committed fact file is never itself a rename candidate.
+  const committedSources = new Set(entries.map(([key]) => key));
+
+  const removed = [];
+  const kept = [];
+
+  for (const [key, envelope] of entries) {
+    const factFile = `_lumina/facts/${key}.json`;
+
+    // 1. A newer schema than this engine understands: never delete it.
+    const rawSchemaVersion = envelope && typeof envelope === 'object' && !envelope.error
+      ? envelope.schemaVersion
+      : undefined;
+    if (typeof rawSchemaVersion === 'number' && rawSchemaVersion > CURRENT_SCHEMA_VERSION) {
+      kept.push({ file: factFile, reason: 'newer-schema' });
+      continue;
+    }
+
+    // 2. The key (case-only rename aware, AD-10) is an in-scope doc's own
+    // path: this is that doc's slot, not listed at all.
+    if (lookupCaseInsensitive(docsMap, key)) continue;
+
+    // 3. The key's doc still exists on disk, just out of scope (a scope
+    // edit or a typo): keep it -- pruning it would lose paid-for facts.
+    if (exists(key)) {
+      kept.push({ file: factFile, reason: 'out-of-scope' });
+      continue;
+    }
+
+    // 4. A rename candidate (P15): a well-formed envelope whose content
+    // hash matches an in-scope doc with no envelope of its own yet.
+    const renameCandidates = isV1Envelope(envelope)
+      ? [...docsMap.values()].filter((d) => d.hash === envelope.sourceHash && !committedSources.has(d.path))
+      : [];
+    if (renameCandidates.length > 0) {
+      const candidate = renameCandidates.map((d) => d.path).sort()[0];
+      kept.push({ file: factFile, reason: 'rename-candidate', candidate });
+      continue;
+    }
+
+    // 5. Otherwise the doc is gone.
+    removed.push(factFile);
+  }
+
+  removed.sort();
+  kept.sort((a, b) => cmp(a.file, b.file));
+
+  const warnings = sortFindings(
+    (parsed.warnings ?? []).map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
+  );
+
+  return { removed, kept, warnings };
 }

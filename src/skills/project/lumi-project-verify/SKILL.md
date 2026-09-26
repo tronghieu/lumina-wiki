@@ -14,8 +14,10 @@ Read `_lumina/project/PROJECT.md` at the project root before this SKILL.md.
 You are project mode's evidence auditor. You run `verify-evidence`,
 translate its findings into a plain report grouped by doc with a remedy
 for each, and offer to run the ingest skill on the docs that need it. You
-never write anything yourself: not a fact file, not a doc, not the graph
-or engine state.
+never edit a doc, the config, or the graph, and you never write a fact
+file by hand — the one exception is `facts-prune`, which you may run
+yourself: dry-run first, always, and the real prune only after the user
+explicitly approves it.
 
 ## Context
 
@@ -39,6 +41,21 @@ or engine state.
     committed facts of its own yet — one finding per candidate, line 1:
     `rename candidate: facts committed for "<old source>" match this doc's
     content`.
+  - **`facts-prune [--dry-run] [<fact file>...]`** removes fact files, but
+    only for a doc that was actually deleted — a doc that still exists but
+    is merely excluded from scope is never removed. With no positional
+    args it surveys every fact file project-wide. Positional args restrict
+    a real run to exactly that approved set: anything in it that's no
+    longer removable comes back `skipped`, not deleted. Stdout:
+    `{ok, dryRun, removed: [<fact file paths>], kept: [{file, reason:
+    "rename-candidate"|"out-of-scope"|"newer-schema", candidate?}],
+    skipped: [{file, reason: "not-removable"}], failed: [{file, error}],
+    warnings: [...]}`. `--dry-run` prints the same shape without deleting
+    anything. Exit 1 bad flag, 2 config/root error; exit 3 either for a
+    lock/internal error (stderr `{error, code}`, nothing usable on stdout)
+    or, on a real run, because `failed` came back non-empty — that second
+    case is a completed run, not an engine error, and the full JSON is
+    still on stdout.
   - No findings means every remaining fact's quote still matches its doc —
     nothing more. `verify-evidence` never checks a doc's content hash, its
     config/ontology version, or whether a reference still resolves, so it
@@ -49,8 +66,9 @@ or engine state.
     internal or lock error), never a plain "exit 1 for findings".
   - The engine writes fact files only through ingest, and only for a doc
     still in scope: writing facts for a path no longer in scope is
-    refused. There is no engine command that deletes a stale fact file —
-    that is a manual, git-tracked step (see remedies below).
+    refused. `facts-prune` is the only engine command that deletes a fact
+    file, and only one whose doc was actually deleted (see remedies
+    below).
 
 ## Instructions
 
@@ -71,24 +89,48 @@ or engine state.
 5. Give each finding its remedy:
    - **P14 broken evidence** (quote gone, doc still in scope): the doc's
      facts are stale. Remedy: re-ingest this doc.
-   - **P14 malformed fact file / mismatched source**: if the named doc is
-     still in scope, re-ingest it — ingest overwrites the malformed file
-     with a valid one. If it is not (check via `status` if unsure), treat
-     it like "source gone" below.
-   - **P14 source gone**: the engine cannot write facts for a path that's
-     no longer in scope, so there is no ingest remedy. Tell the user to
-     delete the stale fact file themselves (the path named after
-     `_lumina/facts/`, with a `.json` suffix) and commit that deletion —
-     this is the one case where a person, not the engine, removes a fact
-     file.
+   - **P14 malformed fact file / mismatched source, or source gone**: if
+     the named doc is still in scope (check via `status` if unsure),
+     re-ingest it — ingest overwrites a malformed file with a valid one
+     and refreshes a mismatched source. If it is not in scope, there is no
+     ingest remedy — the prune dry run decides (step 7): whatever it lists
+     under `removed` is prunable; anything under `kept` gets its reason
+     explained instead — `out-of-scope` means the doc still exists but is
+     excluded by config (bring it back into scope, or leave the file);
+     `rename-candidate` means see P15 below; `newer-schema` means the
+     file's schema is newer than this engine build understands.
    - **P15 rename candidate**: re-ingest the new (candidate) doc first, so
-     its facts are committed under the new path, then delete the old fact
-     file the same manual, git-tracked way.
+     its facts are committed under the new path — once that lands, the old
+     fact file stops being a rename candidate, and the next prune dry run
+     reports it (`removed` if the old path is truly gone, step 7).
 6. After showing the full report, ask the user whether to run the ingest
    skill now on the docs the remedies name for re-ingest. Do not run it
-   yourself and do not delete any fact file yourself — both are the
-   user's call (the deletion) or the ingest skill's job (the re-ingest),
-   never this skill's.
+   yourself — that is the ingest skill's job, never this skill's.
+7. If any remedy points to the prune dry run (a P14 whose doc isn't in
+   scope, or a P15 whose re-ingest the user just ran), run:
+   ```
+   node _lumina/project/project.mjs facts-prune --dry-run
+   ```
+   On a stderr `{error, code}`, report it verbatim and stop. Otherwise
+   show `removed`, `kept` (each entry's reason explained per step 5), and
+   `warnings` verbatim.
+   - `facts-prune` scans the whole project, not just the docs this report
+     covers — if the user asked about specific docs, call out any
+     `removed`/`kept` entries for other docs before asking for approval.
+   - If `warnings` includes a scope-shaped warning (for example an
+     include-pattern-matches-nothing warning), say the doc scope may be
+     misconfigured before asking for approval — an unexpected entry can be
+     a symptom of that, not just of a deleted or renamed doc.
+   Ask the user to approve the real prune. Only after they say yes, run
+   the real prune with exactly the dry run's `removed` paths as
+   positional arguments:
+   ```
+   node _lumina/project/project.mjs facts-prune <removed path> [<removed path> ...]
+   ```
+   Report `skipped` and `failed` verbatim — exit 3 here with a non-empty
+   `failed` is a completed run, not an engine error; the JSON is still on
+   stdout. Then remind the user to commit the removal — `facts-prune`
+   deletes, it does not commit.
 
 ## Output Format
 
@@ -97,11 +139,25 @@ Verify — <N> findings (<E> error, <I> info)
 
 <doc path>
   [P14 error] line <n>: <message>
-  remedy: <re-ingest this doc | delete _lumina/facts/<path>.json and commit>
+  remedy: <re-ingest this doc | the prune dry run decides>
   [P15 info]  line 1: <message>
-  remedy: re-ingest <candidate path>, then delete _lumina/facts/<old path>.json
+  remedy: re-ingest <candidate path>; the next prune dry run then reports the old file
 
 Re-ingest now for: <doc path>, <doc path>, ...? (yes/no)
+
+Facts-prune dry run (project-wide):
+  removed: <file>, ...
+  kept: <file> (out-of-scope: doc still exists, excluded by config), <file> (rename-candidate: <candidate>), ...
+  warnings: <warning>, ...
+Run facts-prune now on the removed files? (yes/no)
+```
+
+After approval:
+```
+Facts-prune: removed <N> files.
+  skipped: <file> (not-removable), ...
+  failed: <file>: <error>, ...
+Commit the removed fact files.
 ```
 
 When there are no findings:
@@ -148,33 +204,71 @@ Verify — 1 finding (0 error, 1 info)
 docs/adr/0052-renamed.md
   [P15 info]  line 1: rename candidate: facts committed for
   "docs/adr/0052-new.md" match this doc's content
-  remedy: re-ingest docs/adr/0052-renamed.md, then delete
-  _lumina/facts/docs/adr/0052-new.md.json and commit that deletion
+  remedy: re-ingest docs/adr/0052-renamed.md; the next prune dry run then
+  reports _lumina/facts/docs/adr/0052-new.md.json
 
 Re-ingest now for: docs/adr/0052-renamed.md? (yes/no)
 ```
+After the user re-ingests, `facts-prune --dry-run` lists the old file
+under `removed` (its doc path is genuinely gone, having moved to the new
+one). On approval, the real prune runs with that path as its positional
+argument and deletes it; the user then commits the removal.
 </example>
 
 <example>
 A doc is deleted outright with no replacement (no content-alike doc left
 in scope): `verify-evidence` reports `P14 source gone: "docs/adr/old.md"
 is no longer in scope`. The report names no ingest remedy — there is
-nothing left to ingest — and instead tells the user to delete
-`_lumina/facts/docs/adr/old.md.json` and commit that deletion.
+nothing left to ingest — remedy is the prune dry run.
+
+```
+$ node _lumina/project/project.mjs facts-prune --dry-run
+{"ok":true,"dryRun":true,"removed":["_lumina/facts/docs/adr/old.md.json"],"kept":[],"skipped":[],"failed":[],"warnings":[]}
+```
+
+Report: "Facts-prune dry run: removed=[_lumina/facts/docs/adr/old.md.json].
+Run facts-prune now to delete it? (yes/no)" On yes, run
+`node _lumina/project/project.mjs facts-prune _lumina/facts/docs/adr/old.md.json`,
+report the result, and remind the user to commit the removal.
+</example>
+
+<example>
+A doc is excluded from scope by a config change (for example a narrowed
+`sources.include`), but the file still exists on disk. `verify-evidence`
+reports the same `P14 source gone: "docs/notes/draft.md" is no longer in
+scope`, but the doc isn't actually deleted.
+
+```
+$ node _lumina/project/project.mjs facts-prune --dry-run
+{"ok":true,"dryRun":true,"removed":[],"kept":[{"file":"_lumina/facts/docs/notes/draft.md.json","reason":"out-of-scope"}],"skipped":[],"failed":[],"warnings":[]}
+```
+
+Report: "Facts-prune dry run: nothing removable — kept:
+_lumina/facts/docs/notes/draft.md.json (out-of-scope: the doc still
+exists but is excluded by config). Bring it back into scope if you want
+its facts current, or leave the file as is; there's nothing to prune
+here." Do not offer the real prune — there is nothing in `removed`.
 </example>
 
 ## Guardrails
 
-- Report-only. Never run `facts-write`, never edit a doc, never touch
-  fact files, the graph, or engine state directly.
-- Never delete, move, or rename a fact file yourself, even for a "source
-  gone" or rename-candidate remedy — that deletion is always the user's
-  own, git-tracked action; this skill only names the path.
+- Report-only except for one write: `facts-prune`. Never run
+  `facts-write`, never edit a doc, never touch a fact file by hand, the
+  graph, or engine state directly.
+- Always dry-run `facts-prune` first and show `removed`, `kept` (with
+  reasons), and `warnings` verbatim; run the real prune only after the
+  user explicitly approves it — never on your own initiative.
+- The real prune's positional arguments are always exactly the dry run's
+  `removed` list — never pass a `kept` file, and never invent a path that
+  wasn't in `removed`.
+- `facts-prune` is project-wide; when the user only asked about specific
+  docs, say so before asking for approval on entries outside that set.
 - Never run the ingest skill yourself — offer it, and only after the user
   agrees.
-- No git operations.
-- Read only `verify-evidence`'s JSON output; never parse fact files by
-  hand to "double-check" a finding.
+- No git operations. After a real prune, remind the user to commit the
+  removal themselves — do not run `git` for them.
+- Read only `verify-evidence`'s and `facts-prune`'s JSON output; never
+  parse fact files by hand to "double-check" a finding.
 - On an engine error, report it verbatim and stop — never edit the config
   or retry with a guessed fix.
 
@@ -184,7 +278,14 @@ nothing left to ingest — and instead tells the user to delete
   an engine error was reported verbatim and the skill stopped.
 - The "no findings" report, if given, says this covers evidence only, not
   full freshness.
-- Every P14/P15 finding carries the correct remedy (re-ingest, or a manual
-  fact-file deletion with a commit), and the user was asked whether to
-  run the ingest skill on the docs that need it.
-- Nothing was written: no fact file, no doc, no config.
+- Every P14/P15 finding carries the correct remedy (re-ingest when the doc
+  is in scope, otherwise the prune dry run), and the user was asked
+  whether to run the ingest skill on the docs that need it.
+- If the prune dry run applied, it ran and its `removed`/`kept`/`warnings`
+  were shown before any real prune; any entries outside the docs the user
+  asked about were called out; the real prune, if run, used exactly the
+  dry run's `removed` paths as its positional arguments, ran only on
+  explicit approval, reported `skipped`/`failed` verbatim, and the user
+  was reminded to commit the removal.
+- Nothing was written except an approved `facts-prune`: no fact file
+  touched by hand, no doc, no config.

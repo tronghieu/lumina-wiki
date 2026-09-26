@@ -2,9 +2,9 @@
 title: 'facts-prune, ask reads content, ingest update mode'
 type: 'feature'
 created: '2026-09-26'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
   - '{project-root}/src/templates/project/PROJECT.md'
@@ -102,4 +102,61 @@ deferred: []
 
 ## Spec Change Log
 
+- 2026-09-26: Review showed that selecting by "not an in-scope doc" deleted the facts of docs that still exist but fell out of scope, which contradicts the user's intent (only deleted docs). The contract changed:
+  - Classify by the path-derived key.
+  - Keep `out-of-scope` (the doc still exists on disk) and `newer-schema` files. A live doc's own slot is never listed.
+  - Positionals are the approved list; the real run deletes only those that are still removable.
+  - Stdout adds `skipped`, `failed` and `warnings`, and a failed unlink exits 3.
+  - KEEP: a rename candidate is kept until its new path is ingested.
+
 ## Review Triage Log
+
+### 2026-09-26 — Review pass (stories 10 and 11 together)
+- verdicts: about 55 raw findings merged into 24 rows — high 5, medium 9, low 8, false 2, maybe-false 0
+- findings:
+  - `[high]` `patch` prune deletes facts of docs that exist but are out of scope (Blind, Edge) — kept `out-of-scope`
+  - `[high]` `patch` prune classifies by `envelope.source`, so it deletes a live doc's slot or strands a mismatch (Blind, Edge, Intent) — classify by path key; a live slot is never listed
+  - `[high]` `patch` the real run deletes a different set than the one approved (Blind, Edge) — positionals are the approved list; `skipped`
+  - `[high]` `patch` case-only rename leaves a permanent P14 mismatch on APFS/NTFS (Edge) — shared case-fold comparison
+  - `[high]` `patch` ask stops without a doc search for an unconfigured term, which fails the matrix row (Blind, Edge, Intent) — search whenever the graph does not answer
+  - `[medium]` `patch` a mid-loop failure leaves a partial delete unreported (Blind, Edge) — validate all paths first; `failed` plus exit 3
+  - `[medium]` `patch` lexical-only containment check; symlinked `_lumina` (Blind, Edge) — realpath check
+  - `[medium]` `patch` newer-schema files deleted by an older engine (Edge) — kept
+  - `[medium]` `patch` P16 scope warnings hidden from the prune approval (Edge) — `warnings`
+  - `[medium]` `patch` ask search not bounded to scope; guessed line numbers; no injection guardrail (Blind) — `scope` list plus `grep -n`; data-not-instructions rule
+  - `[medium]` `patch` ask infers per-doc state from project-wide counts (Blind) — only `staleDocs`; `status` allowed
+  - `[medium]` `patch` check gives an impossible re-ingest remedy for an out-of-scope P14 (Intent, Edge) — the prune dry run decides
+  - `[medium]` `patch` CHANGELOG lists only the docs (Blind, Intent) — project mode, facts-prune, ask and ingest entries
+  - `[medium]` `patch` missing prune tests (Blind) — 11 cases added
+  - `[low]` `patch` the `..`-prefixed filename is refused (Blind, Edge) — segment check
+  - `[low]` `patch` ingest remaining-count rule is conditional (Intent) — always reported
+  - `[low]` `patch` verify prune scope is global, not per-doc (Blind) — out-of-request entries called out
+  - `[low]` `patch` guide: engine commands not shown; incomplete stale definition; `--profile` missing; examples not requests; uninstall contradiction (Intent, Blind) — fixed in en, synced to vi and zh
+  - `[low]` `patch` zh translated the `ingest all` trigger and blurred setup with install (Blind, Intent) — literal phrase; 项目设置
+  - `[low]` `patch` "CAP-10:" id in a shipped prompt (Intent) — removed
+  - `[low]` `reject` single `candidate` when several docs share a hash — pathological
+  - `[low]` `reject` first-run re-trigger after every doc is pruned — the >20 gate covers it
+  - `[false]` `reject` unreadable docs silently dropped, then pruned — `parseAll` throws (Edge checked)
+  - `[false]` `reject` symlinked fact files pruned — `loadFacts` never follows links (Edge checked)
+
+## Auto Run Result
+
+- **Change:**
+  - `facts-prune [--dry-run] [<fact file>...]` removes only the facts of deleted docs, and only the files the user approved.
+  - ask answers content from the cited doc sections, and falls back to a scoped doc search.
+  - ingest defaults to update mode (changed and stale docs only).
+  - verify and check run the dry run, then approval, then prune.
+- **Files:**
+  - `src/project/project.mjs`, `src/project/lib/factfile.mjs` and their tests
+  - `src/templates/project/PROJECT.md`
+  - `src/skills/project/lumi-project-{ask,ingest,verify,check}/SKILL.md`
+- **Review:** 24 rows. 20 patched (5 high, 9 medium, 6 low); 2 low rejected; 2 false.
+- **Follow-up review:** recommended. 5 high and 9 medium entries were patched, and the prune contract changed after the first review.
+- **Verification:**
+  - `npm run test:all`: exit 0, including project 538 pass.
+  - `ci:package`: 146 files. `ci:idempotency`: 6 `[ok]`.
+  - Seli copy: deleting 0052 then running `facts-prune --dry-run` listed its file. Pruning with the approved list removed it and the empty dirs, after which `verify-evidence` reported no findings. A bad flag exits 1.
+  - ask was re-verified on Seli for a content question and for a doc-search question.
+- **Residual risks:**
+  - The patched ingest, verify and check were not re-run by a fresh host agent end to end.
+  - The case-only rename was tested in unit tests only.

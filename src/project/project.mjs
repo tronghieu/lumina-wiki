@@ -4,8 +4,8 @@
  * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
  * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
  * `verify-evidence` (story 3), `lint` (story 4), `query` (story 5), `view`
- * (story 6); every other subcommand exits 1. JSON to stdout; `{error, code}`
- * to stderr.
+ * (story 6), `facts-prune` (story 11); every other subcommand exits 1. JSON
+ * to stdout; `{error, code}` to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
@@ -13,7 +13,7 @@
  *   0  success (for `lint`: no finding at or above --fail-on)
  *   1  bad arguments or unknown subcommand (for `lint`: also a finding at or above --fail-on)
  *   2  invalid config, no project root, unsafe/colliding scope, or (for `query`) a ref with no node
- *   3  internal error or newer schemaVersion, or Node < 24
+ *   3  internal error or newer schemaVersion, Node < 24, or (for `facts-prune`) one or more files it could not delete
  *
  * `view` (story 6, CAP-12): writes `_lumina/graph/view.html`, the one
  * self-contained graph viewer page. `./lib/view.mjs` (and, through it, the
@@ -23,8 +23,12 @@
  */
 
 import { realpathSync, statSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import {
+  readFile, unlink, readdir, rmdir, realpath,
+} from 'node:fs/promises';
+import {
+  join, dirname, relative, isAbsolute, sep,
+} from 'node:path';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import {
@@ -37,7 +41,9 @@ import {
   buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef, sortFindings, makeFinding,
 } from './lib/graph.mjs';
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
-import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './lib/factfile.mjs';
+import {
+  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates, lookupEnvelope,
+} from './lib/factfile.mjs';
 import { lintGraph } from './lib/lint.mjs';
 import {
   queryNode, queryList, queryNeighbors, buildCtx, atFor, nodeMetaType,
@@ -46,8 +52,11 @@ import { RULES, META_TYPES, META_RELATIONS } from './ontology.mjs';
 
 const MIN_NODE_MAJOR = 24;
 const SUBCOMMANDS = new Set([
-  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query', 'view',
+  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query', 'view', 'facts-prune',
 ]);
+// Subcommands that parse their own flags/positionals below, instead of
+// `main`'s blanket "nothing after the subcommand name" check.
+const SELF_PARSING_SUBCOMMANDS = new Set(['lint', 'query', 'facts-prune']);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
 // these to exit 2, not 3.
@@ -178,7 +187,7 @@ function computeDocStatuses({
   const docs = [];
   const summary = { fresh: 0, changed: 0, stale: 0, neverIngested: 0 };
   for (const doc of parsed.docs) {
-    const envelope = facts.get(doc.path);
+    const envelope = lookupEnvelope(facts, doc.path);
     const sourceText = parsed.texts.get(doc.path) ?? '';
     const refResolves = makeRefResolves(graph, doc.path);
     const state = computeDocStatus({
@@ -603,13 +612,170 @@ async function runQuery(root, config, queryArgs) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// facts-prune (AD-10): removes committed fact files whose doc was actually
+// deleted, never one that merely fell out of scope (a scope edit or a typo)
+// -- that would lose paid-for facts. Classification is `findPruneCandidates`
+// (lib/factfile.mjs), reused from `verifyEvidence`'s own detection logic;
+// this function only does the I/O -- read, lock, validate, delete, remove
+// now-empty directories.
+//
+// `[<fact file>...]` positionals are the approval list from a prior
+// `--dry-run`: the real run deletes only listed files still removable after
+// re-classifying under the lock, an approved-but-stale file is `skipped`,
+// and any removable file *not* listed is left untouched. No positionals ->
+// the whole removable set (plain CLI use).
+// ---------------------------------------------------------------------------
+
+/** @throws {Error} on an unknown flag, or a positional that isn't a safe path inside `_lumina/facts/`. */
+function parseFactsPruneArgs(rest) {
+  const { values, positionals } = parseArgs({ args: rest, options: { 'dry-run': { type: 'boolean' } }, allowPositionals: true });
+  for (const p of positionals) {
+    assertSafeRelPath(p); // throws RangeError on '..'/absolute/drive-letter/backslash
+    if (!p.startsWith('_lumina/facts/')) {
+      throw new Error(`facts-prune: positional must be a path inside _lumina/facts/, got ${JSON.stringify(p)}`);
+    }
+  }
+  return { dryRun: values['dry-run'] === true, positionals };
+}
+
+/**
+ * `path` at or below `dir` (equal counts -- a fact file can sit directly in
+ * `_lumina/facts/` itself). Used for the pre-unlink realpath safety check.
+ * A name that merely starts with ".." (e.g. "..notes.md.json") is a real
+ * directory entry, not a traversal -- only an actual ".." segment escapes.
+ */
+function isWithin(path, dir) {
+  const rel = relative(dir, path);
+  return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`));
+}
+
+/** Strictly *inside* `dir` (`dir` itself does not count) -- stops `pruneEmptyDirUpTo` at `_lumina/facts/` without ever removing it. */
+function isStrictlyInside(path, dir) {
+  const rel = relative(dir, path);
+  return rel !== '' && !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`);
+}
+
+/** Remove `dir` if left empty, then recurse upward toward (but never past) `stopAt`. */
+async function pruneEmptyDirUpTo(dir, stopAt) {
+  if (!isStrictlyInside(dir, stopAt)) return;
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return; // already gone
+  }
+  if (entries.length > 0) return;
+  try {
+    await rmdir(dir);
+  } catch {
+    return; // race or already gone; not fatal to facts-prune
+  }
+  await pruneEmptyDirUpTo(join(dir, '..'), stopAt);
+}
+
+function sortByFile(items) {
+  return [...items].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+async function runFactsPrune(root, config, { dryRun, positionals }) {
+  try {
+    const exists = existsUnderRoot(root);
+    const classify = async () => findPruneCandidates({
+      parsed: await parseAll(root, config), facts: await loadFacts(root), exists,
+    });
+
+    let result = await classify();
+    const requested = positionals.length > 0 ? positionals : null;
+
+    const removed = [];
+    const skipped = [];
+    const failed = [];
+
+    if (dryRun) {
+      // Report-only: no lock, nothing on disk changes. With an approval
+      // list, report exactly what a real run would do with it.
+      if (requested) {
+        const removable = new Set(result.removed);
+        for (const file of requested) {
+          if (removable.has(file)) removed.push(file);
+          else skipped.push({ file, reason: 'not-removable' });
+        }
+      } else {
+        removed.push(...result.removed);
+      }
+    } else {
+      const lockPath = join(root, '_lumina', '_state', 'lock');
+      const factsRoot = join(root, '_lumina', 'facts');
+      const staleMs = envPositiveInt('LUMINA_PROJECT_LOCK_STALE_MS', 30000);
+      const timeoutMs = envPositiveInt('LUMINA_PROJECT_LOCK_TIMEOUT_MS', 10000);
+
+      await withLock(lockPath, async () => {
+        // Re-classify under the lock: a concurrent facts-write/ingest could
+        // have changed what's removable since the caller's own dry run.
+        result = await classify();
+        const removable = new Set(result.removed);
+        const toDelete = requested
+          ? requested.filter((file) => {
+            if (removable.has(file)) return true;
+            skipped.push({ file, reason: 'not-removable' });
+            return false;
+          })
+          : result.removed;
+
+        if (toDelete.length === 0) return;
+
+        // Validate before the first unlink: factsRoot's own realpath, then
+        // (per file, right before that file's unlink) its parent dir's --
+        // must resolve at or under it. Guards a symlinked `_lumina/facts/`
+        // entry pointing outside the tree.
+        const factsRootReal = await realpath(factsRoot);
+        for (const relFile of toDelete) {
+          const absFile = join(root, relFile);
+          try {
+            const parentReal = await realpath(dirname(absFile));
+            if (!isWithin(parentReal, factsRootReal)) {
+              throw new Error(`refusing to remove outside _lumina/facts/: ${relFile}`);
+            }
+            await unlink(absFile);
+            removed.push(relFile);
+          } catch (e) {
+            if (e.code === 'ENOENT') continue; // already gone; not a failure, not re-reported
+            failed.push({ file: relFile, error: e.message });
+          }
+        }
+        for (const relFile of removed) {
+          await pruneEmptyDirUpTo(dirname(join(root, relFile)), factsRoot);
+        }
+      }, { staleMs, timeoutMs });
+    }
+
+    console.log(JSON.stringify({
+      ok: true,
+      dryRun,
+      removed: removed.sort(),
+      kept: result.kept,
+      skipped: sortByFile(skipped),
+      failed: sortByFile(failed),
+      warnings: result.warnings,
+    }));
+    process.exitCode = failed.length > 0 ? 3 : 0;
+  } catch (e) {
+    if (e instanceof LockTimeoutError) {
+      fail(3, e.message);
+      return;
+    }
+    failForEngineError(e);
+  }
+}
+
 export async function main(argv = process.argv.slice(2)) {
   if (!checkNodeVersion()) return;
 
   const [subcommand, ...rest] = argv;
-  // `lint` and `query` parse their own flags/op below; every other
-  // subcommand still rejects anything after its own name.
-  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (subcommand !== 'lint' && subcommand !== 'query' && rest.length > 0)) {
+  // `lint`, `query`, and `facts-prune` parse their own flags/op below; every
+  // other subcommand still rejects anything after its own name.
+  if (!subcommand || !SUBCOMMANDS.has(subcommand) || (!SELF_PARSING_SUBCOMMANDS.has(subcommand) && rest.length > 0)) {
     fail(1, `unknown subcommand or bad arguments: ${JSON.stringify(argv)}`);
     return;
   }
@@ -629,6 +795,15 @@ export async function main(argv = process.argv.slice(2)) {
   if (subcommand === 'query') {
     try {
       queryArgs = parseQueryArgs(rest);
+    } catch (e) {
+      fail(1, e.message);
+      return;
+    }
+  }
+  let factsPruneArgs;
+  if (subcommand === 'facts-prune') {
+    try {
+      factsPruneArgs = parseFactsPruneArgs(rest);
     } catch (e) {
       fail(1, e.message);
       return;
@@ -675,6 +850,8 @@ export async function main(argv = process.argv.slice(2)) {
     await runQuery(root, config, queryArgs);
   } else if (subcommand === 'view') {
     await runView(root, config);
+  } else if (subcommand === 'facts-prune') {
+    await runFactsPrune(root, config, factsPruneArgs);
   }
 }
 
