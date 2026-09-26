@@ -109,7 +109,7 @@ deferred: []
 Mode resolution runs in this order:
 1. `detectInstallMode` returns `'project'` when `manifest.mode === 'project'`, `_lumina/config/project.yaml` exists, or `_lumina/project/install.json` exists. It returns `'classic'` for any other manifest, and `null` otherwise.
 2. `--mode` must agree with that result.
-3. When the result is `null`, use `--mode`, then the TTY prompt, then `classic`.
+3. When the result is `null`, use `--mode`, then the TTY prompt, then `classic`. The TTY path resolves the UI locale first, since the mode prompt needs it, and reuses that locale for the rest of the run.
 4. A classic manifest together with a project signal exits 3.
 
 `install.json` is needed because the manifest is gitignored. Without it, the repo has no committed record of the version and targets (AD-24 skew, AD-2 teammate re-install), and `project.yaml` does not exist until setup runs:

@@ -116,7 +116,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-6, CAP-9, CAP-11
 - **Prevents:** unreadable diffs, merge conflicts beyond the edited doc, churn from re-ingest.
-- **Rule:** One file per source doc at `_lumina/facts/<repo-relative source path>.json`, written only by `facts-write`, which replaces the doc's entire fact set per call (the ingest skill makes one call per doc). Envelope `{schemaVersion, source, sourceHash, ontologyVersion, facts[]}`; pretty JSON, fixed key order, facts sorted by `id`. A fact file whose source is gone but whose `sourceHash` matches a new in-scope doc is a rename-candidate finding, never moved automatically. Facts with an older `ontologyVersion` are marked for re-ingest; nothing is auto-deleted. `facts-prune [--dry-run]` removes, on explicit request only, every fact file whose source is not an in-scope doc, except rename candidates.
+- **Rule:** One file per source doc at `_lumina/facts/<repo-relative source path>.json`, written only by `facts-write`, which replaces the doc's entire fact set per call (the ingest skill makes one call per doc). Envelope `{schemaVersion, source, sourceHash, ontologyVersion, facts[]}`; pretty JSON, fixed key order, facts sorted by `id`. A fact file whose source is gone but whose `sourceHash` matches a new in-scope doc is a rename-candidate finding, never moved automatically. Facts with an older `ontologyVersion` are marked for re-ingest; nothing is auto-deleted. `facts-prune [--dry-run]` removes, on explicit request only, every fact file whose source doc is gone from disk, except rename candidates; a fact file whose doc is on disk but out of scope (a lint P14 warning) or has a newer `schemaVersion` is kept.
 
 ### AD-11 — References are kept as written, resolved at build
 
@@ -128,7 +128,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-5, CAP-8
 - **Prevents:** a stored stale list disagreeing with a live check; docs re-ingested forever; near-total re-ingest when docs churn.
-- **Rule:** Content hash = sha256 of file bytes after stripping a leading BOM and normalizing CRLF and lone CR to LF (`lib/hash.mjs`); it is a hint, not the validity test. Each in-scope doc is `fresh` (hash equals `sourceHash`), `changed` (hash differs, every fact still passes the AD-22 evidence match and its ref still resolves), `stale` (a fact fails either check, or `ontologyVersion` differs), or `never-ingested`, always computed live; skills select docs through `status --json`. A doc with nothing to extract gets `facts: []` and counts as ingested.
+- **Rule:** Content hash = sha256 of file bytes after stripping a leading BOM and normalizing CRLF and lone CR to LF (`lib/hash.mjs`); it is a hint, not the validity test. Each in-scope doc is `fresh` (hash equals `sourceHash`), `changed` (hash differs, every fact still passes the AD-22 evidence match and its ref still resolves), `stale` (a fact fails either check, or `ontologyVersion` differs), or `never-ingested`, always computed live; skills select docs through `status`, which always prints JSON. A doc with nothing to extract gets `facts: []` and counts as ingested.
 
 ### AD-13 — No host hook in v1 `[RETIRED]`
 
@@ -153,7 +153,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-12
 - **Prevents:** network loads, `file://` fetch failures, React or build steps entering the package.
-- **Rule:** Only `project.mjs view` writes `_lumina/graph/view.html`, with `force-graph` 1.51.4 UMD and graph data both inlined. Inlined JSON escapes `<`, `>`, `&`, U+2028, U+2029 as `\uXXXX`. Data stays repo-relative; editor links derive the absolute root from `location.pathname` at view time. The library is vendored at `src/project/vendor/force-graph.min.js` with a combined third-party notice (force-graph MIT plus its bundled d3 licenses, and js-yaml MIT) and installed with the engine. Viewer code is lazily imported.
+- **Rule:** Only `project.mjs view` writes `_lumina/graph/view.html`, with `force-graph` 1.51.4 UMD and graph data both inlined. Inlined JSON escapes `<`, `>`, `&`, U+2028, U+2029 as `\uXXXX`. Data stays repo-relative; editor links derive the absolute root from `location.pathname` at view time. `view` prints `{ok, file, url}`; the page is dark-only. The library is vendored at `src/project/vendor/force-graph.min.js` with a combined third-party notice (force-graph MIT plus its bundled d3 licenses, and js-yaml MIT) and installed with the engine. Viewer code is lazily imported.
 
 ### AD-17 — Uninstall keeps committed knowledge `[ADOPTED]`
 

@@ -32,11 +32,12 @@ deferred: []
   1. What project mode is: a typed graph over your own docs, with no `wiki/` or `raw/`.
   2. When to use it instead of the classic wiki.
   3. Install with `npx lumina-wiki install --mode project` and targets `claude_code`, `codex` or `antigravity`.
-  4. What the install writes, and what is committed versus gitignored.
-  5. The six skills in workflow order: setup, ingest, ask, check, verify, view. Give each one line and one example request.
+  4. Set it up: run setup, then confirm with `status`.
+  5. Ingest and ask.
   6. Keeping it fresh: no hook; `status` states; re-ingest.
   7. Common fixes: an orphaned fact file, a stale doc, a `config-check` error, a mode conflict.
   8. Uninstall: `facts/` and `config/` are kept.
+  9. Reference: what the install writes (committed versus gitignored), the six skills in workflow order (setup, ingest, ask, check, verify, view) with one line and one example request each, and the doc states.
 - **Facts come from the shipped files,** not the specs:
   - `src/templates/project/PROJECT.md`
   - `src/skills/project/*/SKILL.md`
