@@ -8,10 +8,10 @@
  * supply filesystem access. Also `loadFacts(root)` (reads committed agent
  * fact envelopes, AD-10) and `computeDocStatus()` (the per-doc freshness
  * decision table, AD-12) -- both used by `project.mjs`'s `build`/`status`
- * subcommands, neither owned by this story beyond these two functions.
+ * subcommands.
  *
- * Resolver assumption, spelled out because the frozen contract does not (a
- * companion `parse.mjs`, built in parallel, must match): every fact's
+ * Resolver assumption, spelled out because the frozen contract does not
+ * (`parse.mjs` must match): every fact's
  * `object` (or `value`) is either a raw, unresolved string exactly as
  * written -- a path, a declared/external ID, or concept-mention text -- or
  * already a prefixed node id (`doc:`/`frag:`/`concept:`/`id:`), which
@@ -44,13 +44,15 @@ function severityOf(id) {
 }
 
 /**
- * Build one finding, severity looked up from `RULES` by `id`. Exported (next
- * to `sortFindings`): the one implementation, used by `graph.mjs`,
- * `factfile.mjs`, `lint.mjs`, and `project.mjs` alike, instead of each
- * keeping its own copy.
+ * Build one finding, severity looked up from `RULES` by `id` unless
+ * `severity` overrides it (e.g. P14 for a doc that is only out of scope).
+ * Exported (next to `sortFindings`): the one implementation, used by
+ * `graph.mjs`, `factfile.mjs`, `lint.mjs`, and `project.mjs` alike, instead
+ * of each keeping its own copy.
  */
-export function makeFinding(id, file, line, message) {
-  return { id, severity: severityOf(id), file, line, message };
+export function makeFinding(id, file, line, message, severity) {
+  const ruleSeverity = severityOf(id); // always looked up: an unknown id still throws
+  return { id, severity: severity ?? ruleSeverity, file, line, message };
 }
 
 /**
@@ -149,6 +151,35 @@ function normalizeVirtualPath(p) {
     parts.push(seg);
   }
   return escaped ? null : parts.join('/');
+}
+
+/** `p` NFC-normalized and lowercased: the one case-insensitive path key (case-only rename, AD-10) every fact-file lookup compares by. */
+export function foldPath(p) {
+  return p.normalize('NFC').toLowerCase();
+}
+
+/**
+ * `key => doc|undefined`: the in-scope doc a fact file's own path-derived
+ * key (from `loadFacts`) belongs to. Exact match first; else (case-only
+ * rename, AD-10) the doc matching it case-insensitively -- unless that doc
+ * already has its own exact-key fact file, which makes `key` a leftover
+ * owned by no doc (a case-sensitive filesystem keeps both files). The one
+ * rule `buildGraph`, `verifyEvidence`, and `findPruneCandidates` share.
+ * @param {object[]} docs `parsed.docs`.
+ * @param {Map<string, object>} facts `loadFacts()`'s output.
+ */
+export function makeFactKeyOwner(docs, facts) {
+  const docsMap = new Map(docs.map((d) => [d.path, d]));
+  const folded = new Map();
+  for (const d of docs) {
+    const k = foldPath(d.path);
+    if (!folded.has(k)) folded.set(k, d);
+  }
+  return (key) => {
+    if (docsMap.has(key)) return docsMap.get(key);
+    const d = folded.get(foldPath(key));
+    return d && !facts.has(d.path) ? d : undefined;
+  };
 }
 
 /** The underlying doc path of a `doc:`/`frag:` node id or fact subject; `null` for anything else (`concept:`/`id:`). Exported (lint.mjs): the one implementation, instead of a second copy. */
@@ -443,6 +474,18 @@ export function resolveFactRef(raw, citingDoc, ctx) {
   return resolveRef(raw, citingDoc, ctx);
 }
 
+/**
+ * True when `resolveFactRef` resolved a `raw` carrying `#anchor`
+ * to a whole in-scope `doc:` -- the anchor doesn't exist, so the reference
+ * silently widened to the doc. `facts-write` rejects such an object and
+ * `buildGraph` treats it as dangling (except for a plain body link). An
+ * out-of-scope target is never parsed, so its anchors can't be checked; it
+ * stays a `doc:` reference.
+ */
+export function widensToDoc(raw, result) {
+  return result.kind === 'resolved' && raw.includes('#') && result.targetId.startsWith('doc:') && result.inScope !== false;
+}
+
 function metaTypeOfResolvedId(id, ctx) {
   if (id.startsWith('doc:')) return ctx.docsMap.get(id.slice(4))?.metaType;
   if (id.startsWith('frag:')) return ctx.docsMap.get(id.slice(5).split('#')[0])?.metaType;
@@ -457,17 +500,6 @@ function nodeIsInScope(id, ctx) {
   return undefined;
 }
 
-/**
- * Validate an already-prefixed reference (`doc:`/`frag:`/`concept:`/`id:` --
- * an agent fact's `object`/`subject`, canonicalized at write time per
- * AD-18) against the current parse and config, instead of trusting it as
- * pre-resolved: the doc/anchor/concept it names may since have been
- * deleted, renamed, or never existed. `id:` is always a valid open-ended
- * placeholder (external IDs and undeclared-but-ID-shaped references are
- * inherently unverifiable beyond their own pattern, already checked when
- * the placeholder was minted) and needs no further check here.
- * @returns {{valid: boolean, metaType?: string, inScope?: boolean}}
- */
 /** True when `path` is already its own normalized, repo-relative form -- no `..`/absolute/drive-letter escape, no redundant `.`/`//` segments to normalize away. */
 function isSafeDocPath(path) {
   if (normalizeVirtualPath(path) !== path) return false;
@@ -479,6 +511,17 @@ function isSafeDocPath(path) {
   return true;
 }
 
+/**
+ * Validate an already-prefixed reference (`doc:`/`frag:`/`concept:`/`id:` --
+ * an agent fact's `object`/`subject`, canonicalized at write time per
+ * AD-18) against the current parse and config, instead of trusting it as
+ * pre-resolved: the doc/anchor/concept it names may since have been
+ * deleted, renamed, or never existed. `id:` is always a valid open-ended
+ * placeholder (external IDs and undeclared-but-ID-shaped references are
+ * inherently unverifiable beyond their own pattern, already checked when
+ * the placeholder was minted) and needs no further check here.
+ * @returns {{valid: boolean, metaType?: string, inScope?: boolean}}
+ */
 function validatePrefixed(raw, ctx) {
   if (raw.startsWith('doc:')) {
     const path = raw.slice(4);
@@ -586,14 +629,17 @@ function resolutionKey(subjPath, factId) {
  * is the only filesystem access, injected as a synchronous predicate.
  * @param {object} params
  * @param {object} params.config - a validated `project.yaml` (see config.mjs).
- * @param {{docs: object[]}} params.parsed - `parseAll()`'s output (or, until
- *   `parse.mjs` exists, a hand-built equivalent following the Parse-to-graph
- *   contract): docs sorted by path, each `{path, hash, includeRoot,
+ * @param {{docs: object[]}} params.parsed - `parseAll()`'s output (or a
+ *   hand-built equivalent following the Parse-to-graph contract): docs
+ *   sorted by path, each `{path, hash, includeRoot,
  *   frontmatterType, type, metaType, declares, declaresLine, status, headings, facts, findings}`.
- * @param {Map<string, object>|Record<string, object>} params.facts -
- *   `loadFacts()`'s output: per-doc committed fact envelopes, keyed by
- *   source path. A malformed entry (`{error}`, or `null`) is skipped for
- *   graph-building (it still drives `computeDocStatus` -> 'stale' elsewhere).
+ * @param {Map<string, object>} params.facts - `loadFacts()`'s output:
+ *   per-doc committed fact envelopes, keyed by source path. Only an envelope
+ *   whose key belongs to an in-scope doc (`makeFactKeyOwner`) feeds the
+ *   graph; one for a deleted/out-of-scope doc is reported by
+ *   `verifyEvidence` (P14/P15) instead. A malformed entry (`{error}`, or
+ *   `null`) is skipped for graph-building (it still drives
+ *   `computeDocStatus` -> 'stale' elsewhere).
  * @param {(path: string) => boolean} params.exists - true when `path`
  *   (repo-relative) exists on disk, in or out of scope.
  * @returns {{nodes: object[], edges: object[], findings: object[]}} plus a
@@ -628,8 +674,10 @@ export function buildGraph({ config, parsed, facts, exists }) {
   // Sorted by source path (not readdir/Map-insertion order) so anything
   // order-sensitive downstream -- fragment status "first wins" -- is
   // deterministic regardless of how `loadFacts` walked the directory.
+  const ownerOf = makeFactKeyOwner(parsed.docs, facts);
   const envelopeEntries = [...facts].sort((a, b) => cmp(a[0], b[0]));
   const validEnvelopes = envelopeEntries
+    .filter(([key]) => ownerOf(key) !== undefined)
     .map(([, e]) => e)
     .filter((e) => e && !e.error && Array.isArray(e.facts));
 
@@ -642,6 +690,8 @@ export function buildGraph({ config, parsed, facts, exists }) {
   for (const fact of edgeFacts) {
     const subjPath = docPathOfSubject(fact.subject);
     if (subjPath === null) continue; // malformed subject; nothing to attribute the fact to
+    // A `frag:` subject whose anchor (or doc) is gone would mint a phantom node.
+    if (fact.subject.startsWith('frag:') && !validatePrefixed(fact.subject, ctx).valid) continue;
     const citingDoc = ctx.docsMap.get(subjPath) ?? { path: subjPath, includeRoot: virtualDirname(subjPath), metaType: undefined };
     // An edge's subject node must exist even when the citing doc is no
     // longer in scope (a committed fact citing a since-deleted/renamed doc).
@@ -664,6 +714,9 @@ export function buildGraph({ config, parsed, facts, exists }) {
     }
 
     let result = resolveFactRef(raw, citingDoc, ctx);
+    // A relation naming an anchor its in-scope target lacks is dangling, not
+    // silently widened to the whole doc; a plain body link keeps the doc.
+    if (fact.relation !== 'link' && widensToDoc(raw, result)) result = { kind: 'dangling', placeholder: null };
 
     if (result.kind === 'ignored') {
       resolution.set(resolutionKey(subjPath, fact.id), 'ignored'); // URL / directory-like link target: never a finding
@@ -729,7 +782,8 @@ export function buildGraph({ config, parsed, facts, exists }) {
             `agent fact sets status on document "${fact.subject}"; document status stays from the parse`,
           ),
         );
-      } else if (fact.subject.startsWith('frag:')) {
+      } else if (typeof fact.value === 'string' && validatePrefixed(fact.subject, ctx).valid) {
+        // `frag:` (docPathOfSubject accepts only doc:/frag:), anchor still present
         const node = ensureNode(nodesById, fact.subject);
         if (node.status === undefined) node.status = fact.value;
       }

@@ -48,13 +48,14 @@ function normalizePattern(pattern) {
 
 /**
  * Strip a leading `./` and any trailing `/` so `docs/` and `./docs` behave
- * like `docs`. Exported: `parse.mjs`'s include-root resolution shares this
- * normalization instead of keeping its own copy (AD-9).
+ * like `docs`; the repo root itself (`.`, `./`, `''`) means `**`. Exported:
+ * `parse.mjs`'s include-root resolution shares this normalization instead of
+ * keeping its own copy (AD-9).
  */
 export function normalizeSlashes(pattern) {
   let p = pattern.startsWith('./') ? pattern.slice(2) : pattern;
   while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-  return p;
+  return p === '' || p === '.' ? '**' : p;
 }
 
 function firstSegment(pattern) {
@@ -170,8 +171,17 @@ export function findCaseFoldCollisions(paths) {
   return pairs;
 }
 
-async function walk(root, dir, overriddenRootDirs, out) {
-  const entries = await readdir(join(root, dir), { withFileTypes: true });
+async function walk(root, dir, overriddenRootDirs, out, warnings) {
+  let entries;
+  try {
+    entries = await readdir(join(root, dir), { withFileTypes: true });
+  } catch (e) {
+    // An unreadable dir below the root (e.g. a root-owned bind mount) is
+    // skipped with a warning instead of failing every subcommand.
+    if (dir === '' || (e.code !== 'EACCES' && e.code !== 'EPERM')) throw e;
+    warnings.push({ rule: 'P16', pattern: dir, message: `directory not readable, skipped: ${dir}` });
+    return;
+  }
   for (const entry of entries) {
     if (entry.isSymbolicLink()) continue; // ponytail: skip symlinks, follow if a pilot needs vaulted docs
     const relPath = dir ? `${dir}/${entry.name}` : entry.name;
@@ -180,7 +190,7 @@ async function walk(root, dir, overriddenRootDirs, out) {
       if (atRoot && (ALWAYS_EXCLUDED_DIRS.has(entry.name) || ALWAYS_EXCLUDED_ROOT_DIRS.has(entry.name))) continue;
       if (atRoot && DEFAULT_EXCLUDED_ROOT_DIRS.has(entry.name) && !overriddenRootDirs.has(entry.name)) continue;
       if (!atRoot && ALWAYS_EXCLUDED_DIRS.has(entry.name)) continue;
-      await walk(root, relPath, overriddenRootDirs, out);
+      await walk(root, relPath, overriddenRootDirs, out, warnings);
     } else if (entry.isFile()) {
       if (MARKDOWN_EXT.has(extname(entry.name).toLowerCase())) out.push(relPath);
     }
@@ -210,7 +220,9 @@ export async function selectScope(root, sources) {
   const excludeRes = rawExclude.map((pattern) => compilePatternMatcher(pattern));
 
   const allFiles = [];
-  await walk(root, '', overriddenRootDirs, allFiles);
+  const warnings = [];
+  await walk(root, '', overriddenRootDirs, allFiles, warnings);
+  warnings.sort((a, b) => (a.pattern < b.pattern ? -1 : 1)); // readdir order is not stable across filesystems
 
   const matchedPatterns = new Set();
   const files = [];
@@ -228,7 +240,6 @@ export async function selectScope(root, sources) {
   }
   files.sort();
 
-  const warnings = [];
   for (const pattern of rawInclude) {
     if (!matchedPatterns.has(pattern)) {
       warnings.push({ rule: 'P16', pattern, message: `include pattern matches no files: ${pattern}` });

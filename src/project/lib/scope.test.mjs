@@ -2,7 +2,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtemp, mkdir, writeFile, readdir, cp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readdir, cp, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import {
@@ -274,5 +274,50 @@ describe('selectScope', () => {
   test('config-crlf fixture: lists the BOM+CRLF Vietnamese doc', async () => {
     const { files } = await selectScope(CONFIG_CRLF, { include: ['docs'] });
     assert.deepEqual(files, ['docs/quyet-dinh.md']);
+  });
+
+  test('selects .markdown, .mdx, and upper-case .MD; skips other extensions', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'lumina-scope-ext-'));
+    try {
+      await mkdir(join(dir, 'docs'));
+      for (const name of ['a.markdown', 'b.mdx', 'C.MD', 'd.txt']) await writeFile(join(dir, 'docs', name), '# x\n');
+      const { files } = await selectScope(dir, { include: ['docs'] });
+      assert.deepEqual(files, ['docs/C.MD', 'docs/a.markdown', 'docs/b.mdx']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('"." and "./" include the whole repo, like "**"', async () => {
+    const all = await selectScope(SCOPE_BASIC, { include: ['**'] });
+    assert.ok(all.files.length > 0);
+    for (const include of [['.'], ['./']]) {
+      const res = await selectScope(SCOPE_BASIC, { include });
+      assert.deepEqual(res.files, all.files, JSON.stringify(include));
+      assert.deepEqual(res.warnings, []);
+    }
+  });
+
+  test('an unreadable dir below the root is skipped with a warning, not thrown', async (t) => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      t.skip('chmod 000 does not deny reads here (Windows, or running as root)');
+      return;
+    }
+    const dir = await mkdtemp(join(tmpdir(), 'lumina-scope-eacces-'));
+    const locked = join(dir, 'mnt', 'locked');
+    try {
+      await mkdir(join(dir, 'docs'));
+      await writeFile(join(dir, 'docs', 'a.md'), '# a\n');
+      await mkdir(locked, { recursive: true });
+      await chmod(locked, 0o000);
+      const { files, warnings } = await selectScope(dir, { include: ['docs'] });
+      assert.deepEqual(files, ['docs/a.md']);
+      assert.deepEqual(warnings, [
+        { rule: 'P16', pattern: 'mnt/locked', message: 'directory not readable, skipped: mnt/locked' },
+      ]);
+    } finally {
+      await chmod(locked, 0o755).catch(() => {});
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

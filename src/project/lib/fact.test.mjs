@@ -65,6 +65,11 @@ test('makeFact includes scope only when provided', () => {
   assert.ok(!('scope' in withoutScope));
 });
 
+test('factId includes scope: two facts differing only by scope get different ids', () => {
+  assert.notEqual(makeFact(edgeInput({ scope: 'row:1' })).id, makeFact(edgeInput({ scope: 'row:2' })).id);
+  assert.notEqual(makeFact(edgeInput({ scope: 'row:1' })).id, makeFact(edgeInput()).id);
+});
+
 test('makeFact omits scope when it is explicitly null', () => {
   const fact = makeFact(edgeInput({ scope: null }));
   assert.ok(!('scope' in fact));

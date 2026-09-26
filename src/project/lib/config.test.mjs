@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import {
@@ -157,7 +157,7 @@ describe('loadConfig: invalid', () => {
 
   test('both "!" negation and "{a,b}" patterns are rejected', async () => {
     const errs = await invalidErrors('config-invalid');
-    assert.equal(errs.filter((e) => /negation and \{a,b\}/.test(e)).length, 2);
+    assert.equal(errs.filter((e) => /negation, "\?" and \{a,b\}/.test(e)).length, 2);
   });
 
   test('config-invalid-2 rejects with a ConfigError, code 2', async () => {
@@ -304,6 +304,72 @@ describe('loadConfig: invalid', () => {
   });
 });
 
+/** `loadConfig` over a throwaway root whose `project.yaml` is `yaml`. */
+async function loadYamlText(yaml) {
+  const root = await mkdtemp(join(tmpdir(), 'lumina-project-config-'));
+  try {
+    await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'config', 'project.yaml'), yaml);
+    return await loadConfig(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+describe('loadConfig: wrong-type values', () => {
+  const T = 'types: { A: { metaType: Rule, paths: [d], ';
+  const cases = [
+    ['', 'project.yaml'],
+    ['- a\n', 'project.yaml'],
+    ['sources: x', 'sources'],
+    ['sources: { include: x }', 'sources.include'],
+    ['sources: { include: [1] }', 'sources.include[0]'],
+    ['types: []', 'types'],
+    ['types: { A: 1 }', 'types.A'],
+    ['types: { A: { metaType: Rule, paths: x } }', 'types.A.paths'],
+    ['types: { A: { metaType: Rule, frontmatter: x } }', 'types.A.frontmatter'],
+    [`${T}idPattern: 1 } }`, 'types.A.idPattern'],
+    [`${T}status: x } }`, 'types.A.status'],
+    [`${T}status: [x] } }`, 'types.A.status[0]'],
+    [`${T}status: { heading: S, map: x } } }`, 'types.A.status.map'],
+    ['relations: 1', 'relations'],
+    ['relations: { r: 1 }', 'relations.r'],
+    ['relatedRules: x', 'relatedRules'],
+    ['relatedRules: [x]', 'relatedRules[0]'],
+    ['externalIds: x', 'externalIds'],
+    ['externalIds: [x]', 'externalIds[0]'],
+    ['externalIds: [{ pattern: 1 }]', 'externalIds[0].pattern'],
+    ['concepts: x', 'concepts'],
+    ['concepts: [x]', 'concepts[0]'],
+    ['concepts: [{ name: 1 }]', 'concepts[0].name'],
+    ['concepts: [{ name: a, aliases: x }]', 'concepts[0].aliases'],
+  ];
+  for (const [body, path] of cases) {
+    test(`${JSON.stringify(body)} -> ConfigError naming ${path}`, async () => {
+      const yaml = path === 'project.yaml' ? body : `schemaVersion: 1\n${body}\n`;
+      await assert.rejects(loadYamlText(yaml), (err) => {
+        assert.ok(err instanceof ConfigError, `${err?.name}: ${err?.message}`);
+        assert.ok(err.errors.some((e) => e.startsWith(`${path}:`)), err.errors.join('; '));
+        return true;
+      });
+    });
+  }
+
+  for (const pattern of ['^ADR-\\d{4}', 'ADR-\\d{4}$', '\\\\$']) {
+    test(`anchored idPattern ${JSON.stringify(pattern)} is rejected`, async () => {
+      await assert.rejects(loadYamlText(`schemaVersion: 1\n${T}idPattern: '${pattern}' } }\n`), (err) => {
+        assert.ok(err.errors.some((e) => /types\.A\.idPattern: must not start with "\^" or end with "\$"/.test(e)), err.errors.join('; '));
+        return true;
+      });
+    });
+  }
+
+  test('an escaped trailing "\\$" idPattern is accepted', async () => {
+    const config = await loadYamlText(`schemaVersion: 1\n${T}idPattern: 'USD\\d+\\$' } }\n`);
+    assert.equal(config.types.A.idPattern, 'USD\\d+\\$');
+  });
+});
+
 describe('loadConfig: newer schemaVersion', () => {
   test('throws SchemaVersionError with code 3', async () => {
     const root = join(FIXTURES, 'config-newer-schema');
@@ -368,6 +434,20 @@ describe('ontologyVersion', () => {
       types: { ...config.types, ADR: { ...config.types.ADR, status: { ...config.types.ADR.status, map: {} } } },
     };
     assert.notEqual(ontologyVersion(config), ontologyVersion(changed));
+  });
+
+  test('does not change when a default is written out (inverse: false, aliases: [])', async () => {
+    const omitted = {
+      relatedRules: [{ source: 'Decision', target: 'Requirement', relation: 'satisfies' }],
+      concepts: [{ name: 'credit limit' }],
+    };
+    const explicit = {
+      relatedRules: [{ source: 'Decision', target: 'Requirement', relation: 'satisfies', inverse: false }],
+      concepts: [{ name: 'credit limit', aliases: [] }],
+    };
+    assert.equal(ontologyVersion(omitted), ontologyVersion(explicit));
+    const inverted = { ...omitted, relatedRules: [{ ...omitted.relatedRules[0], inverse: true }] };
+    assert.notEqual(ontologyVersion(omitted), ontologyVersion(inverted));
   });
 
   test('does not depend on sources (not an ontology-relevant section)', async () => {

@@ -15,7 +15,7 @@ import { makeQuoteMatcher, makeQuoteLocator } from './evidence.mjs';
 import { slug } from './markdown.mjs';
 import { CURRENT_SCHEMA_VERSION } from './config.mjs';
 import {
-  PREFIXED_ID_RE, sortFindings, makeFinding, cmp, isNewerSchema,
+  PREFIXED_ID_RE, sortFindings, makeFinding, cmp, isNewerSchema, foldPath, makeFactKeyOwner, widensToDoc,
 } from './graph.mjs';
 
 // ---------------------------------------------------------------------------
@@ -25,25 +25,17 @@ import {
 // an existing, case-differing entry overwrites its content but not its
 // name. So a fact file's own path-derived key (from `loadFacts`'s directory
 // walk) can differ from its envelope's declared `source`, or from a doc's
-// own path, by case alone. One shared place for that comparison --
-// `verifyEvidence`, `computeDocStatuses` (project.mjs), and
-// `findPruneCandidates` below all use it, instead of three copies silently
-// disagreeing.
+// own path, by case alone. Every such comparison folds through
+// `graph.mjs#foldPath`: `sameSourcePath` below (envelope source vs. its own
+// key), `graph.mjs#makeFactKeyOwner` (which doc a key belongs to --
+// `buildGraph`, `verifyEvidence`, `findPruneCandidates`), and
+// `makeEnvelopeLookup` (project.mjs, `computeDocStatuses`).
 // ---------------------------------------------------------------------------
 
 /** True when `a` and `b` name the same path, ignoring case (after NFC normalization) -- an equivalence test for two strings already known to be repo-relative paths, never a security check. */
 export function sameSourcePath(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  return a.normalize('NFC').toLowerCase() === b.normalize('NFC').toLowerCase();
-}
-
-/** Exact key match first, then -- case-only rename -- the first entry whose key matches `key` case-insensitively. Any `Map<string, *>`. */
-export function lookupCaseInsensitive(map, key) {
-  if (map.has(key)) return map.get(key);
-  for (const [k, v] of map) {
-    if (sameSourcePath(k, key)) return v;
-  }
-  return undefined;
+  return foldPath(a) === foldPath(b);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,23 +65,27 @@ function checkSubject(subject, source, doc) {
 // ---------------------------------------------------------------------------
 // Object canonicalization through the shared resolver (AD-11): resolved ->
 // its node id; unresolved and unprefixed -> kept as written (build reports
-// P09); a prefixed doc:/frag:/concept: object that fails to resolve ->
-// rejected (`id:` never rejects: `resolve` always reports it as resolved).
+// P09); a prefixed doc:/frag:/concept: object that fails to resolve, or an
+// anchor an in-scope target lacks (`widensToDoc`) -> rejected (`id:` never
+// rejects: `resolve` always reports it as resolved).
 // ---------------------------------------------------------------------------
 
-function canonicalizeObject(raw, citingDoc, resolve) {
-  const already = PREFIXED_ID_RE.test(raw);
+/**
+ * Canonicalize one fact object exactly as `facts-write` commits it -- also
+ * `query resolve`'s whole answer, so the two never disagree.
+ * @returns {{resolution: 'resolved'|'dangling'|'ignored', object: string, inScope?: boolean}}
+ *   `object` is the value to commit (the node id when resolved, else `raw`).
+ * @throws {Error} when the object is rejected.
+ */
+export function canonicalizeObject(raw, citingDoc, resolve) {
   const result = resolve(raw, citingDoc);
   if (result.kind === 'resolved') {
-    // An anchor an in-scope target lacks falls back to the whole doc; for a fact that is a silent widening, so reject it.
-    // An out-of-scope target is never parsed, so its anchors can't be checked; it stays a doc: reference.
-    if (raw.includes('#') && result.targetId.startsWith('doc:') && result.inScope !== false) throw new Error(`object "${raw}" names an anchor the target doc does not have`);
-    return result.targetId;
+    if (widensToDoc(raw, result)) throw new Error(`object "${raw}" names an anchor the target doc does not have`);
+    return { resolution: 'resolved', object: result.targetId, inScope: result.inScope };
   }
-  if (result.kind === 'ignored') return raw;
-  // 'dangling'
-  if (already) throw new Error(`object "${raw}" does not resolve`);
-  return raw;
+  if (result.kind === 'ignored') return { resolution: 'ignored', object: raw };
+  if (PREFIXED_ID_RE.test(raw)) throw new Error(`object "${raw}" does not resolve`);
+  return { resolution: 'dangling', object: raw };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +129,7 @@ function prepareOneFact(raw, {
     if (typeof object !== 'string' || object.length === 0) {
       throw new Error('object must be a non-empty string');
     }
-    canonicalObject = canonicalizeObject(object, doc, resolve);
+    canonicalObject = canonicalizeObject(object, doc, resolve).object;
   }
 
   const ref = inputRef ?? (kind === 'edge' ? object : subject);
@@ -261,10 +257,14 @@ export function renameCandidates(envelope, docs, committedSources) {
  * @param {object} params
  * @param {{docs: object[], texts: Map<string, string>}} params.parsed `parseAll()`'s output.
  * @param {Map<string, object>} params.facts `loadFacts()`'s output.
+ * @param {(path: string) => boolean} [params.exists] true when `path` (a fact
+ *   file's own key) is a file on disk; defaults to "never". A doc out of
+ *   scope but still on disk is a P14 warning (its facts are kept, same as
+ *   `findPruneCandidates`), not an error.
  * @returns {object[]} findings, sorted.
  */
-export function verifyEvidence({ parsed, facts }) {
-  const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
+export function verifyEvidence({ parsed, facts, exists = () => false }) {
+  const ownerOf = makeFactKeyOwner(parsed.docs, facts);
   const entries = [...facts];
   // Every source path that already has its own committed fact file --
   // a doc in this set is never itself a rename candidate.
@@ -286,10 +286,14 @@ export function verifyEvidence({ parsed, facts }) {
     }
 
     const source = envelope.source;
-    const doc = docsMap.get(source);
+    // Same owner rule and order as `findPruneCandidates`: the key's own
+    // doc, else out of scope but on disk, else a rename candidate, else gone.
+    const doc = ownerOf(key);
     if (!doc) {
       const candidates = renameCandidates(envelope, parsed.docs, committedSources);
-      if (candidates.length > 0) {
+      if (exists(key)) {
+        findings.push(makeFinding('P14', source, 1, `source out of scope: "${source}" is still on disk but no longer in scope; its facts are kept`, 'warning'));
+      } else if (candidates.length > 0) {
         for (const candidate of candidates) {
           findings.push(makeFinding('P15', candidate.path, 1, `rename candidate: facts committed for "${source}" match this doc's content`));
         }
@@ -299,12 +303,12 @@ export function verifyEvidence({ parsed, facts }) {
       continue;
     }
 
-    const sourceText = parsed.texts.get(source) ?? '';
+    const sourceText = parsed.texts.get(doc.path) ?? '';
     const matches = makeQuoteMatcher(sourceText);
     for (const fact of envelope.facts) {
       const quote = fact?.evidence?.quote;
       if (typeof quote !== 'string' || !matches(quote)) {
-        findings.push(makeFinding('P14', source, evidenceLineOf(fact), `broken evidence for fact ${fact?.id ?? '?'}: quote no longer found: ${JSON.stringify(quote)}`));
+        findings.push(makeFinding('P14', doc.path, evidenceLineOf(fact), `broken evidence for fact ${fact?.id ?? '?'}: quote no longer found: ${JSON.stringify(quote)}`));
       }
     }
   }
@@ -331,7 +335,7 @@ export function verifyEvidence({ parsed, facts }) {
  * "rename candidate" apply; everything else means the doc is gone.
  * @param {object} params
  * @param {{docs: object[], warnings?: {message: string}[]}} params.parsed `parseAll()`'s output.
- * @param {Map<string, object>|Record<string, object>} params.facts `loadFacts()`'s output.
+ * @param {Map<string, object>} params.facts `loadFacts()`'s output.
  * @param {(path: string) => boolean} params.exists true when `path` (the fact
  *   file's own repo-relative key) is a file on disk right now, in or out of
  *   scope -- `project.mjs`'s `existsUnderRoot(root)`.
@@ -340,7 +344,7 @@ export function verifyEvidence({ parsed, facts }) {
  *   `kept` are both sorted; `warnings` are P16 findings from `parsed.warnings`.
  */
 export function findPruneCandidates({ parsed, facts, exists }) {
-  const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
+  const ownerOf = makeFactKeyOwner(parsed.docs, facts);
   const entries = [...facts];
   // Same rule as `verifyEvidence`: a source that already has its own
   // committed fact file is never itself a rename candidate.
@@ -362,8 +366,9 @@ export function findPruneCandidates({ parsed, facts, exists }) {
     }
 
     // 2. The key (case-only rename aware, AD-10) is an in-scope doc's own
-    // path: this is that doc's slot, not listed at all.
-    if (lookupCaseInsensitive(docsMap, key)) continue;
+    // path: this is that doc's slot, not listed at all. A case-only leftover
+    // beside the doc's own exact-key file belongs to no doc and falls through.
+    if (ownerOf(key)) continue;
 
     // 3. The key's doc still exists on disk, just out of scope (a scope
     // edit or a typo): keep it -- pruning it would lose paid-for facts.
@@ -375,7 +380,7 @@ export function findPruneCandidates({ parsed, facts, exists }) {
     // 4. A rename candidate (P15): a well-formed envelope whose content
     // hash matches an in-scope doc with no envelope of its own yet.
     const candidates = isV1Envelope(envelope)
-      ? renameCandidates(envelope, [...docsMap.values()], committedSources)
+      ? renameCandidates(envelope, parsed.docs, committedSources)
       : [];
     if (candidates.length > 0) {
       const candidate = candidates.map((d) => d.path).sort()[0];

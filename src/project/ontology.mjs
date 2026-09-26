@@ -11,7 +11,9 @@
 // META_TYPES
 // Fixed list of eleven meta-types every project type maps onto. `governance:
 // true` on the three lint depends on (Decision, Requirement, Rule); the rest
-// carry no lint of their own. `lifecycle` is set only on Decision.
+// carry no lint of their own. `lifecycle` is set only on Decision: `proposed`
+// ends `accepted` or `rejected`; an accepted decision may then be
+// (partially) superseded or deprecated.
 // ---------------------------------------------------------------------------
 
 /**
@@ -24,7 +26,7 @@
 export const META_TYPES = Object.freeze({
   Decision: Object.freeze({
     governance: true,
-    lifecycle: Object.freeze(['proposed', 'accepted', 'partially-superseded', 'superseded', 'deprecated']),
+    lifecycle: Object.freeze(['proposed', 'accepted', 'rejected', 'partially-superseded', 'superseded', 'deprecated']),
   }),
   Requirement: Object.freeze({ governance: true }),
   Rule: Object.freeze({ governance: true }),
@@ -93,9 +95,9 @@ export const RULES = Object.freeze([
   Object.freeze({ id: 'P14', owner: 'engine',      severity: 'error',   finding: 'broken evidence' }),
   Object.freeze({ id: 'P15', owner: 'engine',      severity: 'info',    finding: 'rename candidate' }),
   Object.freeze({ id: 'P16', owner: 'engine',      severity: 'warning', finding: 'include pattern matches no files' }),
-  // P17-P20 added in story 2 (deterministic parse): frontmatter and status.
   Object.freeze({ id: 'P17', owner: 'engine',      severity: 'warning', finding: 'frontmatter does not parse' }),
   Object.freeze({ id: 'P18', owner: 'engine',      severity: 'warning', finding: 'agent fact sets document status' }),
   Object.freeze({ id: 'P19', owner: 'engine',      severity: 'warning', finding: 'status sources disagree' }),
   Object.freeze({ id: 'P20', owner: 'engine',      severity: 'warning', finding: 'Decision status outside lifecycle' }),
+  Object.freeze({ id: 'P21', owner: 'engine',      severity: 'warning', finding: 'frontmatter value is not a string' }),
 ]);

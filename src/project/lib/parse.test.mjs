@@ -246,6 +246,7 @@ describe('parseDoc: frontmatter relations', () => {
     const doc = parseDoc('docs/x.md', text, config);
     const related = doc.facts.filter((f) => f.relation === 'related');
     assert.deepEqual(related.map((f) => f.object), ['ADR-0001', 'docs/other.md']);
+    assert.deepEqual(doc.findings.map((f) => [f.id, f.line]), [['P21', 2]]);
     for (const f of related) {
       assert.equal(f.ref, f.object);
       assert.equal(f.subject, 'doc:docs/x.md');
@@ -381,6 +382,36 @@ describe('parseDoc: anchors', () => {
 // Bad frontmatter
 // ---------------------------------------------------------------------------
 
+describe('parseDoc: non-string frontmatter values (P21)', () => {
+  const config = baseConfig({
+    types: { ADR: { metaType: 'Decision', paths: ['docs/**'], idPattern: 'ADR-\\d{4}' } },
+  });
+
+  test('a numeric id is not declared (never coerced) and fires P21 at the key line', () => {
+    const doc = parseDoc('docs/x.md', '---\ntitle: X\nid: 0007\n---\nBody\n', config);
+    assert.equal(doc.declares, null);
+    const p21 = doc.findings.filter((f) => f.id === 'P21');
+    assert.equal(p21.length, 1);
+    assert.equal(p21[0].severity, 'warning');
+    assert.equal(p21[0].file, 'docs/x.md');
+    assert.equal(p21[0].line, 3);
+  });
+
+  test('each non-string relation item fires its own P21; string items still become edges', () => {
+    const text = '---\nsupersedes: 7\ndepends-on: [12, ADR-0002, 13]\n---\n# T\n';
+    const doc = parseDoc('docs/x.md', text, config);
+    assert.deepEqual(doc.findings.filter((f) => f.id === 'P21').map((f) => f.line), [2, 3, 3]);
+    assert.deepEqual(doc.facts.filter((f) => f.relation === 'depends-on').map((f) => f.object), ['ADR-0002']);
+    assert.equal(doc.facts.some((f) => f.relation === 'supersedes'), false);
+  });
+
+  test('string and empty values fire no P21', () => {
+    const doc = parseDoc('docs/x.md', '---\nid: ADR-0001\nsupersedes:\nrelated: [ADR-0002]\n---\n# T\n', config);
+    assert.equal(doc.findings.some((f) => f.id === 'P21'), false);
+    assert.equal(doc.declares, 'ADR-0001');
+  });
+});
+
 describe('parseDoc: bad frontmatter', () => {
   test('a YAML syntax error yields P17; the doc is parsed without frontmatter', () => {
     const config = baseConfig({
@@ -421,7 +452,7 @@ describe('parseDoc: status', () => {
   test('map: the longest matching prefix wins', () => {
     const config = makeConfig({
       sources: [{ frontmatter: 'status' }],
-      map: { 'Đã duyệt': 'accepted', Đã: 'something-else' },
+      map: { Đã: 'something-else', 'Đã duyệt': 'accepted' },
     });
     const doc = parseDoc('docs/x.md', '---\nstatus: "Đã duyệt vào 2026"\n---\n# T\n', config);
     assert.equal(doc.status, 'accepted');
@@ -515,6 +546,21 @@ describe('parseDoc: status', () => {
     const p20 = doc.findings.find((f) => f.id === 'P20');
     assert.ok(p20);
     assert.equal(p20.line, 3);
+  });
+
+  test('heading source: an NFD heading in the doc matches the NFC heading name in config', () => {
+    const config = makeConfig({ sources: [{ heading: 'Trạng thái' }], map: {} });
+    const nfd = 'Trạng thái'.normalize('NFD');
+    const doc = parseDoc('docs/x.md', `# T\n\n## ${nfd}\n\nAccepted\n`, config);
+    assert.equal(doc.status, 'accepted');
+    const inline = parseDoc('docs/x.md', `# T\n\n**${nfd}:** Accepted\n`, config);
+    assert.equal(inline.status, 'accepted');
+  });
+
+  test('heading source: an empty section ends at the next same-level heading, not past it', () => {
+    const config = makeConfig({ sources: [{ heading: 'Status' }], map: {} });
+    const doc = parseDoc('docs/x.md', '## Status\n\n## Context\n\nfoo\n', config);
+    assert.equal(doc.status, null);
   });
 
   test('P20 reports the inline "**Status:** X" line when that fallback wins', () => {

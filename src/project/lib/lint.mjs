@@ -3,7 +3,7 @@
  * @description Cross-doc lint (CAP-9, AD-14, AD-27): the relation-rule
  * findings P01-P08, computed over an already-built graph. Pure -- no I/O.
  * `project.mjs`'s `lint` subcommand folds these in with `buildGraph`'s own
- * engine findings (P09-P12, P17-P20, already in `graph.findings`) plus P13
+ * engine findings (P09-P12, P17-P21, already in `graph.findings`) plus P13
  * (stale facts), P14/P15 (`verifyEvidence`), and P16 (scope warnings), none
  * of which this module owns.
  */

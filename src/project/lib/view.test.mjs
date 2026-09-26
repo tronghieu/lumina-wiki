@@ -122,9 +122,52 @@ describe('viewer.js: XSS hygiene', () => {
     assert.ok(!/[<>"']/.test(escaped), 'no unescaped HTML-special character survives');
   });
 
-  test('.nodeLabel/.linkLabel accessors both route their string through escapeHtml', () => {
-    const src = readFileSync(VIEWER_JS_PATH, 'utf8');
-    assert.match(src, /\.nodeLabel\(function \(n\) \{ return escapeHtml\(/);
-    assert.match(src, /\.linkLabel\(function \(l\) \{ return escapeHtml\(/);
+  test('the .nodeLabel/.linkLabel callbacks (viewer.js run via vm) return escaped HTML', () => {
+    // Every DOM lookup resolves to one inert, chainable stub; ForceGraph's
+    // chain records each setter's argument so the label callbacks can be
+    // called directly.
+    const stub = new Proxy(function () {}, {
+      get: (_, prop) => {
+        if (prop === Symbol.toPrimitive) return () => '';
+        if (prop === Symbol.iterator) return function* () {};
+        return stub;
+      },
+      set: () => true,
+      apply: () => stub,
+    });
+    const captured = {};
+    const graph = new Proxy({}, {
+      get: (_, prop) => (...args) => {
+        if (args.length > 0) captured[prop] = args[0];
+        return graph;
+      },
+    });
+    const data = {
+      nodes: [
+        { id: 'doc:docs/<b>.md', kind: 'doc', metaType: 'Decision', status: '<img onerror=x>', at: { file: 'docs/<b>.md', line: 1 } },
+        { id: 'id:X', kind: 'id' },
+      ],
+      edges: [{ from: 'doc:docs/<b>.md', to: 'id:X', relation: '<script>"\'&', evidence: [] }],
+      findings: [],
+      freshness: { docs: [], summary: {} },
+      metaTypes: ['Decision'],
+    };
+    const sandbox = {
+      window: { __LUMINA_VIEW_DATA__: data, addEventListener() {} },
+      document: stub,
+      location: { pathname: '/repo/_lumina/graph/view.html' },
+      getComputedStyle: () => stub,
+      ForceGraph: () => () => graph,
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(readFileSync(VIEWER_JS_PATH, 'utf8'), sandbox);
+
+    assert.equal(typeof captured.nodeLabel, 'function');
+    assert.equal(typeof captured.linkLabel, 'function');
+    assert.equal(
+      captured.nodeLabel(data.nodes[0]),
+      'doc:docs/&lt;b&gt;.md (Decision) [&lt;img onerror=x&gt;]',
+    );
+    assert.equal(captured.linkLabel({ relation: data.edges[0].relation }), '&lt;script&gt;&quot;&#39;&amp;');
   });
 });

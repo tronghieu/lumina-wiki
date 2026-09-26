@@ -10,7 +10,7 @@
  * (headings/links/scannable-lines over a doc body, skipping fenced code,
  * HTML comments, and `<!-- lumina:project -->` blocks), and the two regex
  * helpers (`escapeRegex`, `matchAll`) every ID- and concept-mention matcher
- * in the parse layer builds on (story boundary: Unicode lookarounds, `u`
+ * in the parse layer builds on (contract: Unicode lookarounds, `u`
  * flag, `\b` forbidden, trailing `.,;:-` stripped from a body match).
  */
 
@@ -27,31 +27,46 @@ export function slug(text) {
 
 /**
  * Strip inline markup from heading/link text before slugging or display:
- * `[t](u)` -> `t`, HTML tags removed, emphasis `*`/`_` delimiters removed
- * (keeping their content), backticks removed. Pure text transform, not a
+ * code spans -> their content verbatim, `[t](u)` -> `t`, HTML tags removed,
+ * emphasis `*`/`_` delimiters removed (keeping their content). `_` delimits
+ * only at a word edge, so `snake_case_name` and `` `user_id` `` keep their
+ * underscores, as GitHub's anchors do (AD-20). Pure text transform, not a
  * markdown renderer -- good enough for anchor text and quotes.
  * @param {string} markdown
  * @returns {string}
  */
 export function renderedText(markdown) {
   let text = String(markdown);
+  // Code spans set aside first (as NUL-delimited placeholders) so no later
+  // step touches their content; restored at the end.
+  const codes = [];
+  let out = '';
+  let pos = 0;
+  for (const { start, end } of findCodeSpans(text)) {
+    const ticks = /^`+/.exec(text.slice(start))[0].length;
+    codes.push(text.slice(start + ticks, end - ticks));
+    out += `${text.slice(pos, start)}\u0000${codes.length - 1}\u0000`;
+    pos = end;
+  }
+  text = out + text.slice(pos);
+  // An unmatched backtick run is not a span; drop it.
+  text = text.replace(/`+/g, '');
   // `[text](url "title")` -> `text`.
   text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
   // HTML tags removed, content kept.
   text = text.replace(/<[^>]+>/g, '');
-  // Backticks are pure delimiters here; drop them.
-  text = text.replace(/`+/g, '');
   // Paired emphasis delimiters (`*`, `**`, `***`, `_`, `__`, `___`) -> content.
   // Re-applied until stable so nested pairs (`**_x_**`) fully unwrap.
   let prev;
   do {
     prev = text;
-    text = text.replace(/(\*{1,3}|_{1,3})([^*_]+?)\1/g, '$2');
+    text = text.replace(/(\*{1,3})([^*]+?)\1/g, '$2');
+    text = text.replace(/(?<![\p{L}\p{N}_])(_{1,3})([^_]+?)\1(?![\p{L}\p{N}_])/gu, '$2');
   } while (text !== prev);
-  // Any leftover unpaired delimiter (e.g. `_(BMAD)_` matched above already,
-  // but a stray one from malformed input) is just noise -- drop it.
-  text = text.replace(/[*_]/g, '');
-  return text;
+  // A leftover `*` from malformed input is noise; a leftover `_` is a literal
+  // (intraword) underscore and stays.
+  text = text.replace(/\*/g, '');
+  return text.replace(/\u0000(\d+)\u0000/g, (m, i) => codes[Number(i)] ?? m);
 }
 
 /**

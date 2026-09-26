@@ -169,6 +169,16 @@ describe('prepareEnvelope: happy path', () => {
     assert.equal(envelope.facts[0].evidence.quote, 'Supersedes ADR-0009 in part.');
   });
 
+  test('two facts differing only by scope get different ids and are both kept', () => {
+    const base = {
+      kind: 'edge', subject: `doc:${SOURCE}`, relation: 'references', object: 'ADR-0009',
+      evidence: { quote: 'Supersedes ADR-0009 in part.' }, provenance: 'extracted',
+    };
+    const envelope = prepareEnvelope(basicInput({ facts: [{ ...base, scope: 'row:1' }, { ...base, scope: 'row:2' }] }), makeDeps());
+    assert.equal(envelope.facts.length, 2);
+    assert.deepEqual(envelope.facts.map((f) => f.scope).sort(), ['row:1', 'row:2']);
+  });
+
   test('ref defaults to the written subject for an attr fact', () => {
     const deps = makeDeps();
     const input = basicInput({
@@ -585,6 +595,46 @@ describe('verifyEvidence', () => {
     // No perpetual P14 mismatch, and the doc's facts verify clean (no
     // broken-evidence findings either, since `source` resolves the real doc).
     assert.deepEqual(verifyEvidence({ parsed, texts: parsed.texts, facts }), []);
+  });
+
+  test('case-only rename, not yet re-ingested: the old-case key is still the doc\'s slot, so its evidence is checked (no P14 "source gone", same as findPruneCandidates)', () => {
+    const upperKey = 'docs/adr/0052-New.md';
+    const docA = doc(); // path: SOURCE, now lowercase
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([[upperKey, {
+      schemaVersion: 1, source: upperKey, sourceHash: 'pre-rename-hash', ontologyVersion: 'v',
+      facts: [{ id: 'a', kind: 'edge', subject: `doc:${upperKey}`, relation: 'references', object: 'x', ref: 'x', evidence: { line: 7, quote: 'Supersedes ADR-0009 in part.' }, provenance: 'extracted' }],
+    }]]);
+    assert.deepEqual(verifyEvidence({ parsed, texts: parsed.texts, facts }), []);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: () => false }), { removed: [], kept: [], warnings: [] });
+  });
+
+  test('case-sensitive leftover: an old-case key beside the doc\'s own exact-key file is "source gone" (P14 error) and prune removes it', () => {
+    const upperKey = 'docs/adr/0052-New.md';
+    const docA = doc();
+    const parsed = parsedWith([docA], new Map([[SOURCE, SOURCE_TEXT]]));
+    const facts = new Map([
+      [upperKey, { schemaVersion: 1, source: upperKey, sourceHash: 'old', ontologyVersion: 'v', facts: [] }],
+      [SOURCE, { schemaVersion: 1, source: SOURCE, sourceHash: docA.hash, ontologyVersion: 'v', facts: [] }],
+    ]);
+    const findings = verifyEvidence({ parsed, texts: parsed.texts, facts });
+    assert.deepEqual(findings.map((f) => [f.id, f.severity, f.file]), [['P14', 'error', upperKey]]);
+    assert.match(findings[0].message, /source gone/);
+    assert.deepEqual(findPruneCandidates({ parsed, facts, exists: () => false }), {
+      removed: [`_lumina/facts/${upperKey}.json`], kept: [], warnings: [],
+    });
+  });
+
+  test('out of scope but still on disk: P14 at warning (facts kept, same as findPruneCandidates); deleted stays an error', () => {
+    const parsed = parsedWith([], new Map());
+    const facts = new Map([[SOURCE, { schemaVersion: 1, source: SOURCE, sourceHash: 'h', ontologyVersion: 'v', facts: [] }]]);
+    const [onDisk] = verifyEvidence({ parsed, facts, exists: (p) => p === SOURCE });
+    assert.equal(onDisk.id, 'P14');
+    assert.equal(onDisk.severity, 'warning');
+    assert.match(onDisk.message, /out of scope.*still on disk.*facts are kept/);
+    const [gone] = verifyEvidence({ parsed, facts, exists: () => false });
+    assert.equal(gone.severity, 'error');
+    assert.match(gone.message, /source gone/);
   });
 
   test('P15 is suppressed once the renamed doc has its own committed envelope', () => {

@@ -64,4 +64,14 @@ describe('findQuoteLine', () => {
     const source = '# Tiêu đề\n\nHạn mức tín dụng đã tăng.\n\nGhi chú thêm.';
     assert.equal(findQuoteLine(source, 'Hạn mức tín dụng đã tăng.'), 3);
   });
+
+  test('counts an astral char (emoji) as two UTF-16 units, not one', () => {
+    assert.equal(findQuoteLine('a \u{1F600}\u{1F600}\u{1F600}\nb\nc\nd target', 'c'), 3);
+  });
+
+  test('locates every quote quoteMatches accepts, past emoji', () => {
+    const source = '\u{1F600}\u{1F600}\u{1F600}\u{1F600} x\nyz';
+    assert.equal(quoteMatches(source, 'yz'), true);
+    assert.equal(findQuoteLine(source, 'yz'), 2);
+  });
 });

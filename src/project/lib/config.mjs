@@ -92,7 +92,7 @@ function checkSafePattern(errors, label, pattern) {
     return;
   }
   if (pattern.startsWith('!') || /[{}?]/.test(pattern)) {
-    errors.push(`${label}: "!" negation and {a,b} are not supported; list separate patterns`);
+    errors.push(`${label}: "!" negation, "?" and {a,b} are not supported; list separate patterns`);
     return;
   }
   try {
@@ -111,6 +111,13 @@ function checkRegex(errors, label, pattern) {
     new RegExp(pattern, 'u');
   } catch (e) {
     errors.push(`${label}: bad regex: ${e.message}`);
+    return;
+  }
+  // IDs are matched inside running text, so a `^`/`$` anchor would silently
+  // limit matches to whole lines. An even run of backslashes before `$`
+  // leaves it unescaped.
+  if (pattern.startsWith('^') || /(?:^|[^\\])(?:\\\\)*\$$/.test(pattern)) {
+    errors.push(`${label}: must not start with "^" or end with "$"; IDs are matched inside text, not as whole lines`);
   }
 }
 
@@ -476,12 +483,16 @@ export async function loadConfig(root) {
 
 /**
  * `ontologyVersion` (AD-21): a hash of the ontology-relevant `project.yaml`
- * sections. Extended in story 2 to cover `externalIds` (its `metaType`
- * mapping is ontology-relevant, same as `relatedRules`).
+ * sections, `externalIds` included (its `metaType` mapping is
+ * ontology-relevant, same as `relatedRules`). Defaults are filled in before
+ * hashing (as `validateRelations` already does for relations), so writing
+ * `inverse: false` or `aliases: []` versus omitting it does not stale docs.
  * @param {{types?: object, relations?: object, relatedRules?: unknown[], externalIds?: unknown[], concepts?: unknown[]}} config
  * @returns {string} 64-char lowercase hex sha256 digest.
  */
 export function ontologyVersion(config) {
-  const { types = {}, relations = {}, relatedRules = [], externalIds = [], concepts = [] } = config;
+  const { types = {}, relations = {}, externalIds = [] } = config;
+  const relatedRules = (config.relatedRules ?? []).map((r) => ({ ...r, inverse: r.inverse === true }));
+  const concepts = (config.concepts ?? []).map((c) => ({ ...c, aliases: c.aliases ?? [] }));
   return sha256Hex(canonicalJson({ types, relations, relatedRules, externalIds, concepts }));
 }

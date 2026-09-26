@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes, chmod, realpath,
 } from 'node:fs/promises';
@@ -282,6 +282,9 @@ describe('build', () => {
       // The document's own status still comes from the parse, unaffected.
       const node = graph.nodes.find((n) => n.id === `doc:${docPath}`);
       assert.equal(node.status, 'accepted');
+      // An attr fact has no reference to resolve: the doc stays fresh.
+      const entry = JSON.parse(run(root, ['status']).stdout).docs.find((d) => d.path === docPath);
+      assert.equal(entry.state, 'fresh');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -460,7 +463,7 @@ describe('status', () => {
         kind: 'edge',
         subject: `doc:${docPath}`,
         relation: 'related',
-        object: 'docs/adr/0009-partial.md',
+        object: 'doc:docs/adr/0009-partial.md', // canonicalized, as facts-write stores it
         ref: 'docs/adr/0009-partial.md',
         evidence: { line: 12, quote: 'Supersedes ADR-0009 in part.' },
         provenance: 'inferred',
@@ -482,7 +485,7 @@ describe('status', () => {
     }
   });
 
-  test('stale: an undeclared ID-shaped agent object no longer resolves', async () => {
+  test('an unprefixed agent object that never resolved (undeclared ADR-9999) does not make the doc stale', async () => {
     const root = await copyParsePilot();
     try {
       const ver = await currentOntologyVersion(root);
@@ -505,7 +508,8 @@ describe('status', () => {
       assert.equal(status, 0);
       const result = JSON.parse(stdout);
       const entry = result.docs.find((d) => d.path === docPath);
-      assert.equal(entry.state, 'stale');
+      // Kept as written because it never resolved, so it can't have stopped resolving (CAP-8/AD-12).
+      assert.equal(entry.state, 'fresh');
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -540,7 +544,23 @@ describe('status', () => {
     }
   });
 
-  test('a case-fold collision makes build/status exit 2 with the colliding pair (real fs)', async (t) => {
+  test('a fact file whose name differs from its doc only by case (case-only rename) still backs that doc: fresh', async () => {
+    const root = await copyParsePilot();
+    try {
+      const ver = await currentOntologyVersion(root);
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      await writeFactsEnvelope(root, 'docs/adr/0052-New.md', {
+        schemaVersion: 1, source: docPath, sourceHash, ontologyVersion: ver, facts: [],
+      });
+      const entry = JSON.parse(run(root, ['status']).stdout).docs.find((d) => d.path === docPath);
+      assert.equal(entry.state, 'fresh');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a case-fold collision makes build/status/config-check exit 2 with the colliding pair (real fs)', async (t) => {
     const dir = await mkdtemp(join(tmpdir(), 'lumina-project-cli-collision-'));
     try {
       await mkdir(join(dir, '_lumina', 'config'), { recursive: true });
@@ -554,7 +574,7 @@ describe('status', () => {
         return;
       }
 
-      for (const subcommand of ['build', 'status']) {
+      for (const subcommand of ['build', 'status', 'config-check']) {
         const { status, stderr } = run(dir, [subcommand]);
         assert.equal(status, 2);
         const parsed = JSON.parse(stderr);
@@ -754,6 +774,13 @@ describe('facts-write', () => {
       const build = run(root, ['build']);
       const graph = JSON.parse(build.stdout);
       assert.ok(graph.findings.some((f) => f.id === 'P09' && f.file === docPath));
+
+      // Never resolved, so never "no longer resolves": fresh, no P13; the P09 stays.
+      const entry = JSON.parse(run(root, ['status']).stdout).docs.find((d) => d.path === docPath);
+      assert.equal(entry.state, 'fresh');
+      const lint = JSON.parse(run(root, ['lint']).stdout);
+      assert.ok(lint.findings.some((f) => f.id === 'P09' && f.file === docPath));
+      assert.ok(!lint.findings.some((f) => f.id === 'P13' && f.file === docPath));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -888,6 +915,38 @@ describe('facts-write', () => {
       );
       assert.equal(write.status, 0);
       assert.equal(await factFileExists(root, docPath), true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('lock: the doc changing while facts-write waits for the lock is caught by the re-hash under it (exit 1, nothing written)', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const lockPath = join(root, '_lumina', '_state', 'lock');
+      await mkdir(dirname(lockPath), { recursive: true });
+      await writeFile(lockPath, 'held-by-another-process');
+
+      const child = spawn(process.execPath, [PROJECT_MJS, 'facts-write'], {
+        cwd: root,
+        env: { ...process.env, LUMINA_PROJECT_LOCK_TIMEOUT_MS: '30000', LUMINA_PROJECT_LOCK_STALE_MS: '60000' },
+      });
+      let stderr = '';
+      child.stderr.on('data', (d) => { stderr += d; });
+      const exited = new Promise((resolve) => { child.on('close', resolve); });
+      child.stdin.end(JSON.stringify({ source: docPath, sourceHash, facts: [] }));
+
+      // Long enough to pass the pre-lock hash check and start waiting on the lock.
+      await new Promise((resolve) => { setTimeout(resolve, 1500); });
+      const filePath = join(root, docPath);
+      await writeFile(filePath, `${await readFile(filePath, 'utf8')}\nEdited while facts-write waited.\n`);
+      await rm(lockPath);
+
+      assert.equal(await exited, 1);
+      assert.match(stderr, /sourceHash does not match/);
+      assert.equal(await factFileExists(root, docPath), false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -1186,6 +1245,38 @@ describe('lint', () => {
       const p13 = result.findings.find((f) => f.id === 'P13' && f.file === docPath);
       assert.ok(p13, 'expected a P13 finding for the now-stale doc');
       assert.equal(p13.line, 1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a doc excluded from scope but still on disk: P14 at warning, its facts feed no edge, default lint exits 0', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      assert.equal(runFactsWrite(root, {
+        source: docPath,
+        sourceHash: await hashOfFile(root, docPath),
+        facts: [{
+          kind: 'edge', subject: `doc:${docPath}`, relation: 'depends-on', object: 'id:ADR-9999',
+          evidence: { quote: 'Supersedes ADR-0009 in part.' }, provenance: 'extracted',
+        }],
+      }).status, 0);
+      const configPath = join(root, '_lumina', 'config', 'project.yaml');
+      const yaml = await readFile(configPath, 'utf8');
+      await writeFile(configPath, yaml.replace('exclude: []', `exclude: ["${docPath}"]`));
+
+      const { status, stdout } = run(root, ['lint']);
+      assert.equal(status, 0);
+      const p14 = JSON.parse(stdout).findings.filter((f) => f.id === 'P14');
+      assert.equal(p14.length, 1);
+      assert.equal(p14[0].file, docPath);
+      assert.equal(p14[0].severity, 'warning');
+      assert.match(p14[0].message, /out of scope/);
+
+      const graph = JSON.parse(run(root, ['build']).stdout);
+      assert.ok(!graph.edges.some((e) => e.from === `doc:${docPath}`), 'an out-of-scope envelope must not feed edges');
+      assert.ok(!graph.nodes.some((n) => n.id === 'id:ADR-9999'));
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -1523,6 +1614,68 @@ describe('query', () => {
     assert.ok(capability, 'expected the Decision to govern the Capability (Capability.related -> Decision, inverse)');
     assertWellFormedAt(capability.node.at);
     assertWellFormedEvidence(capability.evidence);
+  }));
+
+  // `query resolve <citing-doc> <object>`: what facts-write would do with `object`.
+  const CITING = 'docs/adr/0009-partial.md';
+  function resolveOut(root, object) {
+    const { status, stdout, stderr } = run(root, ['query', 'resolve', CITING, object]);
+    assert.equal(status, 0, stderr);
+    return JSON.parse(stdout);
+  }
+
+  test('resolve: a doc-relative path from the citing doc resolves to its in-scope doc', () => withParsePilotCopy(async (root) => {
+    assert.deepEqual(resolveOut(root, '0052-new.md'), {
+      ok: true, from: CITING, object: '0052-new.md', resolution: 'resolved', target: 'doc:docs/adr/0052-new.md', inScope: true,
+    });
+  }));
+
+  test('resolve: an unlinked, out-of-scope file on disk resolves with inScope false', () => withParsePilotCopy(async (root) => {
+    await mkdir(join(root, 'notes'), { recursive: true });
+    await writeFile(join(root, 'notes', 'outside.md'), '# Outside\n');
+    assert.deepEqual(resolveOut(root, 'notes/outside.md'), {
+      ok: true, from: CITING, object: 'notes/outside.md', resolution: 'resolved', target: 'doc:notes/outside.md', inScope: false,
+    });
+  }));
+
+  test('resolve: a configured concept nothing mentions still resolves', () => withParsePilotCopy(async (root) => {
+    const configPath = join(root, '_lumina', 'config', 'project.yaml');
+    const yaml = await readFile(configPath, 'utf8');
+    await writeFile(configPath, yaml.replace('  - { name: credit limit, aliases: [hạn mức] }', '  - { name: credit limit, aliases: [hạn mức] }\n  - { name: ledger freeze }'));
+    assert.deepEqual(resolveOut(root, 'ledger freeze'), {
+      ok: true, from: CITING, object: 'ledger freeze', resolution: 'resolved', target: 'concept:ledger-freeze',
+    });
+  }));
+
+  test('resolve: an undeclared ID (only an id: placeholder) is dangling', () => withParsePilotCopy(async (root) => {
+    assert.deepEqual(resolveOut(root, 'ADR-9999'), {
+      ok: true, from: CITING, object: 'ADR-9999', resolution: 'dangling',
+    });
+  }));
+
+  test('resolve: an anchor the in-scope target lacks, or a prefixed id that does not resolve, is rejected with facts-write\'s reason', () => withParsePilotCopy(async (root) => {
+    const anchor = resolveOut(root, '0052-new.md#gone');
+    assert.equal(anchor.resolution, 'rejected');
+    assert.match(anchor.error, /names an anchor the target doc does not have/);
+    assert.ok(!Object.hasOwn(anchor, 'target'));
+    const prefixed = resolveOut(root, 'doc:docs/nope.md');
+    assert.equal(prefixed.resolution, 'rejected');
+    assert.match(prefixed.error, /does not resolve/);
+  }));
+
+  test('resolve: bad args exit 1; a citing doc not in scope or an unsafe path exits 2; nothing on stdout', () => withParsePilotCopy(async (root) => {
+    for (const [args, code] of [
+      [['query', 'resolve', CITING], 1],
+      [['query', 'resolve', CITING, ''], 1],
+      [['query', 'resolve', CITING, 'a', 'b'], 1],
+      [['query', 'resolve', 'docs/nope.md', 'ADR-0009'], 2],
+      [['query', 'resolve', '../outside.md', 'ADR-0009'], 2],
+    ]) {
+      const { status, stdout, stderr } = run(root, args);
+      assert.equal(status, code, `expected exit ${code} for ${JSON.stringify(args)}`);
+      assert.equal(stdout, '');
+      assert.equal(JSON.parse(stderr).code, code);
+    }
   }));
 });
 
@@ -1929,14 +2082,16 @@ describe('facts-prune', () => {
     }
   });
 
-  test('an invalid positional exits 1: outside _lumina/facts/, and a path-traversal segment', async () => {
+  test('an invalid positional: outside _lumina/facts/ exits 1; a path-traversal segment exits 2 (AD-14 path safety)', async () => {
     const root = await copyParsePilot();
     try {
-      for (const bad of ['docs/adr/0052-new.md', '_lumina/facts/../../etc/passwd', '_lumina/config/project.yaml']) {
+      for (const [bad, code] of [
+        ['docs/adr/0052-new.md', 1], ['_lumina/facts/../../etc/passwd', 2], ['_lumina/config/project.yaml', 1],
+      ]) {
         const { status, stdout, stderr } = run(root, ['facts-prune', bad]);
-        assert.equal(status, 1, `expected exit 1 for ${bad}`);
+        assert.equal(status, code, `expected exit ${code} for ${bad}`);
         assert.equal(stdout, '');
-        assert.equal(JSON.parse(stderr).code, 1);
+        assert.equal(JSON.parse(stderr).code, code);
       }
     } finally {
       await rm(root, { recursive: true, force: true });

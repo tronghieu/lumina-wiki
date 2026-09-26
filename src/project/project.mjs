@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
  * @module project
- * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
- * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
- * `verify-evidence` (story 3), `lint` (story 4), `query` (story 5), `view`
- * (story 6), `facts-prune` (story 11); every other subcommand exits 1. JSON
- * to stdout; `{error, code}` to stderr.
+ * @description Project engine CLI (AD-5). Subcommands: `scope`,
+ * `config-check`, `build`, `status`, `facts-write`, `verify-evidence`,
+ * `lint`, `query`, `view`, `facts-prune`; every other subcommand exits 1.
+ * JSON to stdout; `{error, code}` to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
  * Exit codes (AD-14):
  *   0  success (for `lint`: no finding at or above --fail-on)
  *   1  bad arguments or unknown subcommand (for `lint`: also a finding at or above --fail-on)
- *   2  invalid config, no project root, unsafe/colliding scope, or (for `query`) a ref with no node
+ *   2  invalid config, no project root, unsafe/colliding scope, an unsafe path argument, or (for
+ *      `query`) a ref with no node / a citing doc not in scope
  *   3  internal error or newer schemaVersion, Node < 24, or (for `facts-prune`) one or more files it could not delete
  *
- * `view` (story 6, CAP-12): writes `_lumina/graph/view.html`, the one
+ * `view` (CAP-12): writes `_lumina/graph/view.html`, the one
  * self-contained graph viewer page. `./lib/view.mjs` (and, through it, the
  * vendored `force-graph` bundle) is imported lazily inside `runView`, never
  * at module top level, so `status`/`lint`/etc. never load it (cold-start
@@ -39,10 +39,11 @@ import { selectScope, ScopeCollisionError } from './lib/scope.mjs';
 import { parseAll } from './lib/parse.mjs';
 import {
   buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef, sortFindings, makeFinding, cmp, isNewerSchema,
+  PREFIXED_ID_RE, foldPath,
 } from './lib/graph.mjs';
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
 import {
-  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates,
+  prepareEnvelope, serializeEnvelope, verifyEvidence, findPruneCandidates, canonicalizeObject,
 } from './lib/factfile.mjs';
 import { lintGraph } from './lib/lint.mjs';
 import {
@@ -80,7 +81,8 @@ async function runScope(root, config) {
   console.log(JSON.stringify({ files, warnings }));
 }
 
-function runConfigCheck(root, config) {
+async function runConfigCheck(root, config) {
+  await selectScope(root, config.sources); // AD-8: a case-fold collision fails config-check too (exit 2)
   console.log(JSON.stringify({
     ok: true,
     schemaVersion: config.schemaVersion,
@@ -139,11 +141,14 @@ function failForEngineError(e) {
  * Only `dangling` counts as not resolving -- a self-loop, an ignored link
  * (URL/directory), or a plain resolved reference are all fine; a fact with
  * no recorded outcome (an attr fact, or one `buildGraph` never reached) is
- * not a broken reference either.
+ * not a broken reference either. Nor is an unprefixed object: `facts-write`
+ * keeps an object as written only when it never resolved, so it can't have
+ * stopped resolving (it still gets its P09).
  */
 function makeRefResolves(graph, docPath) {
   return (fact) => {
     if (fact.kind !== 'edge') return true; // an attr fact (e.g. status) has no target reference to resolve
+    if (typeof fact.object === 'string' && !PREFIXED_ID_RE.test(fact.object)) return true;
     return graph.resolution.get(`${docPath}\u0000${fact.id}`) !== 'dangling';
   };
 }
@@ -182,20 +187,20 @@ const STATUS_SUMMARY_KEY = {
 };
 
 /**
- * Case-insensitive envelope lookup, built once per command instead of once
- * per doc: `lookupCaseInsensitive` (factfile.mjs) falls back to an O(facts)
- * scan on a miss, and every `never-ingested` doc is a miss -- O(docs x facts)
- * for `status`/`lint`/`query`/`view` on a real corpus otherwise.
+ * Case-insensitive envelope lookup (case-only rename, AD-10), exact key
+ * first, built once per command instead of once per doc: a per-doc scan on
+ * a miss -- every `never-ingested` doc is one -- is O(docs x facts) for
+ * `status`/`lint`/`query`/`view` on a real corpus.
  */
 function makeEnvelopeLookup(facts) {
-  const folded = new Map(); // NFC-lowercased key -> first-seen original key
+  const folded = new Map(); // folded key -> first-seen original key
   for (const key of facts.keys()) {
-    const norm = key.normalize('NFC').toLowerCase();
+    const norm = foldPath(key);
     if (!folded.has(norm)) folded.set(norm, key);
   }
   return (docPath) => {
     if (facts.has(docPath)) return facts.get(docPath);
-    const origKey = folded.get(docPath.normalize('NFC').toLowerCase());
+    const origKey = folded.get(foldPath(docPath));
     return origKey === undefined ? undefined : facts.get(origKey);
   };
 }
@@ -397,13 +402,13 @@ async function runFactsWrite(root, config) {
 
 async function runVerifyEvidence(root, config) {
   const [parsed, facts] = await Promise.all([parseAll(root, config), loadFacts(root)]);
-  const findings = verifyEvidence({ parsed, facts });
+  const findings = verifyEvidence({ parsed, facts, exists: existsUnderRoot(root) });
   console.log(JSON.stringify({ findings }));
 }
 
 // ---------------------------------------------------------------------------
 // lint (CAP-9, AD-14, AD-27): agent-free, report-only. Folds P01-P08
-// (lib/lint.mjs) with buildGraph's own P09/P10/P11/P12/P17-P20, P13 (stale
+// (lib/lint.mjs) with buildGraph's own P09/P10/P11/P12/P17-P21, P13 (stale
 // facts, from the shared status loop), P14/P15 (verifyEvidence), and P16
 // (scope warnings). `--fail-on error|warning` (default error).
 // ---------------------------------------------------------------------------
@@ -426,33 +431,34 @@ function parseLintArgs(rest) {
 
 /**
  * The full lint finding set (CAP-9's `lint` output, folded with CAP-12's
- * `view` highlighting): P09-P12/P17-P20 from `buildGraph()`, P01-P08 from
+ * `view` highlighting): P09-P12/P17-P21 from `buildGraph()`, P01-P08 from
  * `lintGraph`, P13 (stale facts, from the shared status loop), P14/P15 from
  * `verifyEvidence`, and P16 (scope warnings). One assembly, called by both
  * `runLint` and `runView` -- not a second copy (code map: "reuse runLint's
  * findings assembly").
  */
 function assembleFindings({
-  parsed, facts, graph, statusDocs,
+  parsed, facts, graph, statusDocs, exists,
 }) {
   return sortFindings([
-    ...graph.findings, // P09, P10, P11, P12, P17-P20
+    ...graph.findings, // P09, P10, P11, P12, P17-P21
     ...lintGraph({ graph, parsed }), // P01-P08
     ...statusDocs
       .filter((d) => d.state === 'stale')
       .map((d) => makeFinding('P13', d.path, 1, `stale facts: ${d.path}`)),
-    ...verifyEvidence({ parsed, facts }), // P14, P15
+    ...verifyEvidence({ parsed, facts, exists }), // P14, P15
     ...parsed.warnings.map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
   ]);
 }
 
 async function runLint(root, config, failOn) {
+  const exists = existsUnderRoot(root);
   const {
     parsed, facts, graph, statusDocs,
-  } = await loadGraphWithStatus(root, config);
+  } = await loadGraphWithStatus(root, config, exists);
 
   const sorted = assembleFindings({
-    parsed, facts, graph, statusDocs,
+    parsed, facts, graph, statusDocs, exists,
   });
   const summary = { errors: 0, warnings: 0, infos: 0 };
   for (const f of sorted) {
@@ -488,7 +494,7 @@ async function runView(root, config) {
     parsed, facts, graph, statusDocs, summary,
   } = await loadGraphWithStatus(root, config, exists);
   const findings = assembleFindings({
-    parsed, facts, graph, statusDocs,
+    parsed, facts, graph, statusDocs, exists,
   });
 
   // Enrich every node with the `metaType`/`at` that `query.mjs` already
@@ -514,16 +520,27 @@ async function runView(root, config) {
 // query (CAP-7, CAP-10, AD-28): `node <ref>`, `list --meta-type T [--status
 // S]`, `neighbors <ref> --direction in|out [--relation R]`. Read-only,
 // computed live from `buildGraph`; every response carries `freshness`.
+// `resolve <citing-doc> <object>` answers what `facts-write` would do with
+// that object (no graph, no freshness, no lock).
 // ---------------------------------------------------------------------------
 
-const QUERY_OPS = new Set(['node', 'list', 'neighbors']);
+const QUERY_OPS = new Set(['node', 'list', 'neighbors', 'resolve']);
 const DIRECTIONS = new Set(['in', 'out']);
 
-/** @throws {Error} on a missing/unknown op, bad flags, a missing `<ref>`, or an extra positional. */
+/** @throws {Error} on a missing/unknown op, bad flags, a missing `<ref>`, or an extra positional; RangeError on an unsafe `resolve` citing-doc path. */
 function parseQueryArgs(rest) {
   const [op, ...opArgs] = rest;
   if (!op || !QUERY_OPS.has(op)) {
-    throw new Error(`query: op must be "node", "list", or "neighbors", got ${JSON.stringify(op ?? null)}`);
+    throw new Error(`query: op must be "node", "list", "neighbors", or "resolve", got ${JSON.stringify(op ?? null)}`);
+  }
+
+  if (op === 'resolve') {
+    const { positionals } = parseArgs({ args: opArgs, options: {}, allowPositionals: true });
+    if (positionals.length !== 2 || positionals[1] === '') {
+      throw new Error('query resolve: expected <citing-doc> and a non-empty <object>');
+    }
+    assertSafeRelPath(positionals[0]);
+    return { op, from: positionals[0], object: positionals[1] };
   }
 
   if (op === 'node') {
@@ -568,7 +585,40 @@ function parseQueryArgs(rest) {
   };
 }
 
+/**
+ * `query resolve`: `object` canonicalized from `from` exactly as
+ * `facts-write` would (`canonicalizeObject`, same resolver). Prints
+ * `{ok, from, object, resolution, target?, inScope?, error?}`; `target` only
+ * when resolved, `inScope` only for a resolved doc:/frag: target, `error`
+ * (the rejection reason) only when rejected.
+ */
+async function runQueryResolve(root, config, { from, object }) {
+  const parsed = await parseAll(root, config);
+  const citingDoc = parsed.docs.find((d) => d.path === from);
+  if (!citingDoc) {
+    fail(2, `citing doc not in scope: ${from}`);
+    return;
+  }
+  const out = { ok: true, from, object };
+  try {
+    const c = canonicalizeObject(object, citingDoc, makeResolve(root, config, parsed));
+    out.resolution = c.resolution;
+    if (c.resolution === 'resolved') {
+      out.target = c.object;
+      if (typeof c.inScope === 'boolean') out.inScope = c.inScope;
+    }
+  } catch (e) {
+    out.resolution = 'rejected';
+    out.error = e.message;
+  }
+  console.log(JSON.stringify(out));
+}
+
 async function runQuery(root, config, queryArgs) {
+  if (queryArgs.op === 'resolve') {
+    await runQueryResolve(root, config, queryArgs);
+    return;
+  }
   const exists = existsUnderRoot(root);
   const {
     parsed, graph, statusDocs, summary,
@@ -770,7 +820,7 @@ async function runFactsPrune(root, config, { dryRun, positionals }) {
 // One table instead of a `SUBCOMMANDS` set, a `SELF_PARSING_SUBCOMMANDS`
 // set, and a 10-branch if/else chain: `main` looks up the subcommand,
 // rejects extra args when there's no `parse`, runs `parse` (when present)
-// inside one try/catch mapped to exit 1, then runs `run` inside one
+// inside one try/catch mapped to exit 1 (2 for an unsafe path), then runs `run` inside one
 // try/catch mapped to `failForEngineError`. `run(root, config, args)` --
 // `args` is `undefined` for a subcommand with no `parse` step.
 const COMMANDS = {
@@ -805,7 +855,7 @@ export async function main(argv = process.argv.slice(2)) {
     try {
       args = cmd.parse(rest);
     } catch (e) {
-      fail(1, e.message);
+      fail(e instanceof RangeError ? 2 : 1, e.message); // AD-14: an unsafe path argument is exit 2
       return;
     }
   }

@@ -55,6 +55,20 @@ test('renderedText strips HTML tags, keeping content', () => {
   assert.equal(renderedText('<sub>note</sub>'), 'note');
 });
 
+test('renderedText keeps intraword underscores and code-span content (GitHub anchors, AD-20)', () => {
+  assert.equal(renderedText('snake_case_name'), 'snake_case_name');
+  assert.equal(renderedText('`user_id` field'), 'user_id field');
+  assert.equal(renderedText('`_x_` and `a*b*c`'), '_x_ and a*b*c');
+  assert.equal(renderedText('*a_b*'), 'a_b');
+  assert.equal(slug(renderedText('snake_case_name')), 'snake_case_name');
+  assert.equal(slug(renderedText('`user_id` field')), 'user_id-field');
+});
+
+test('scanBody anchors a heading with underscores the way GitHub does', () => {
+  const result = scanBody('# snake_case_name\n\n## `user_id` field\n', 1);
+  assert.deepEqual(result.headings.map((h) => h.anchor), ['snake_case_name', 'user_id-field']);
+});
+
 test('renderedText handles a mix in one pass', () => {
   assert.equal(
     renderedText('**Bold** and `code` and [t](u) and <b>html</b>'),
@@ -205,6 +219,26 @@ test('a comment that closes and reopens on the same line keeps the text between,
   assert.ok(!allText.includes('hidden line'));
   assert.ok(!allText.includes('still hidden'));
   assert.ok(!allText.includes('reopened'));
+});
+
+test('a shorter or other-char fence run inside a ```` fence does not close it', () => {
+  const body = [
+    '````md',
+    '```',
+    '~~~~',
+    '## Not a heading',
+    'See [inner](inner.md) and ADR-0009.',
+    '```',
+    '````',
+    '',
+    'After [outer](outer.md).',
+  ].join('\n');
+  const result = scanBody(body, 1);
+  assert.deepEqual(result.headings, []);
+  assert.deepEqual(result.links, [{ target: 'outer.md', line: 9, quote: '[outer](outer.md)' }]);
+  const allText = result.lines.map((l) => l.text).join('\n');
+  assert.ok(!allText.includes('ADR-0009'));
+  assert.ok(!allText.includes('inner'));
 });
 
 test('scanBody dedupes heading anchors across a chain, never reusing an anchor GitHub already assigned', () => {

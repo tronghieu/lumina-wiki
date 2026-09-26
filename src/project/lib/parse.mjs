@@ -9,7 +9,8 @@
  * `ref`/`object` exactly as written; `buildGraph()` (lib/graph.mjs) owns
  * resolution, typing, merging, and P09/P10/P18. Parse owns only P12
  * (unmapped doc type), P17 (frontmatter does not parse), P19 (status sources
- * disagree), and P20 (Decision status outside its lifecycle).
+ * disagree), P20 (Decision status outside its lifecycle), and P21
+ * (frontmatter value is not a string).
  */
 
 import { readFile } from 'node:fs/promises';
@@ -143,15 +144,29 @@ function findFrontmatterValueLine(lines, bodyStartLine, keyLine, quote) {
 }
 
 // ---------------------------------------------------------------------------
+// P21: CORE_SCHEMA reads `id: 42` or `supersedes: [7]` as numbers. Declared-ID
+// and relation extraction skip a non-string value; this says so instead of
+// dropping it silently. Never coerced: `0007` would read back as `7`.
+// ---------------------------------------------------------------------------
+
+function nonStringFinding(path, key, value, fmLines, bodyStartLine) {
+  const line = findFrontmatterKeyLine(fmLines, bodyStartLine, key) ?? 1;
+  return makeFinding('P21', path, line, `frontmatter value is not a string: ${key}: ${JSON.stringify(value)}`);
+}
+
+// ---------------------------------------------------------------------------
 // Declared ID (I/O matrix row "Declared ID").
 // ---------------------------------------------------------------------------
 
 /** @returns {{value: string|null, line: number|null}} */
-function resolveDeclaredId(frontmatterData, headings, idPattern, fmLines, bodyStartLine) {
+function resolveDeclaredId(path, frontmatterData, headings, idPattern, fmLines, bodyStartLine, findings) {
   let raw = null;
   let line = null;
   let fromFrontmatter = false;
   const fmId = frontmatterData?.id;
+  if (fmId !== undefined && fmId !== null && typeof fmId !== 'string') {
+    findings.push(nonStringFinding(path, 'id', fmId, fmLines, bodyStartLine));
+  }
   if (typeof fmId === 'string' && fmId.trim() !== '') {
     raw = fmId.trim();
     line = findFrontmatterKeyLine(fmLines, bodyStartLine, 'id') ?? 1;
@@ -200,7 +215,7 @@ function docEdge(path, relation, object, ref, line, quote) {
   });
 }
 
-function frontmatterRelationFacts(path, frontmatterData, relations, fmLines, bodyStartLine) {
+function frontmatterRelationFacts(path, frontmatterData, relations, fmLines, bodyStartLine, findings) {
   const facts = [];
   if (!frontmatterData) return facts;
   for (const [key, rawValue] of Object.entries(frontmatterData)) {
@@ -209,7 +224,11 @@ function frontmatterRelationFacts(path, frontmatterData, relations, fmLines, bod
     const items = Array.isArray(rawValue) ? rawValue : [rawValue];
     const keyLine = findFrontmatterKeyLine(fmLines, bodyStartLine, key);
     for (const item of items) {
-      if (typeof item !== 'string' || item.length === 0) continue;
+      if (item !== null && typeof item !== 'string') {
+        findings.push(nonStringFinding(path, key, item, fmLines, bodyStartLine));
+        continue;
+      }
+      if (item === null || item.length === 0) continue;
       const line = findFrontmatterValueLine(fmLines, bodyStartLine, keyLine, item) ?? keyLine ?? 1;
       facts.push(docEdge(path, key, item, item, line, item));
     }
@@ -270,9 +289,11 @@ function conceptMentionFacts(path, lines, concepts) {
 
 const LIST_MARKER_RE = /^(?:[-*+>]|\d+[.)])\s+/;
 
+// Heading names compare NFC-normalized: an NFD `## Trạng thái` in a doc must
+// still match the NFC name in `project.yaml`.
 function findHeadingSection(headings, name) {
-  const target = name.trim().toLowerCase();
-  const idx = headings.findIndex((h) => renderedText(h.text).trim().toLowerCase() === target);
+  const target = name.normalize('NFC').trim().toLowerCase();
+  const idx = headings.findIndex((h) => renderedText(h.text).normalize('NFC').trim().toLowerCase() === target);
   if (idx === -1) return null;
   const heading = headings[idx];
   let endLine = Infinity;
@@ -306,9 +327,9 @@ function firstNonEmptyLineInSection(lines, headings, startLine, endLine) {
 }
 
 function findInlineStatusLine(lines, name) {
-  const re = new RegExp(`^${escapeRegex(name.trim())}\\s*:\\s*(.*)$`, 'i');
+  const re = new RegExp(`^${escapeRegex(name.normalize('NFC').trim())}\\s*:\\s*(.*)$`, 'i');
   for (const { line, text } of lines) {
-    const m = re.exec(renderedText(text).trim());
+    const m = re.exec(renderedText(text).normalize('NFC').trim());
     if (m && m[1].trim() !== '') return { text: m[1].trim(), line };
   }
   return null;
@@ -419,13 +440,13 @@ export function parseDoc(path, text, config, hash) {
     findings.push(makeFinding('P12', path, line, `unmapped doc type: ${frontmatterType}`));
   }
 
-  const declaredId = resolveDeclaredId(frontmatterData, headings, entry?.idPattern, fmLines, bodyStartLine);
+  const declaredId = resolveDeclaredId(path, frontmatterData, headings, entry?.idPattern, fmLines, bodyStartLine, findings);
   const declares = declaredId.value;
   const declaresLine = declaredId.line;
   const includeRoot = resolveIncludeRoot(config.sources.include, path);
 
   const facts = [
-    ...frontmatterRelationFacts(path, frontmatterData, config.relations, fmLines, bodyStartLine),
+    ...frontmatterRelationFacts(path, frontmatterData, config.relations, fmLines, bodyStartLine, findings),
     ...linkFacts(path, links),
     ...idMentionFacts(path, nfcLines, cache.idMatchers),
     ...conceptMentionFacts(path, nfcLines, cache.concepts),

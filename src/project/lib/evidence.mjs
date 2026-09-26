@@ -2,8 +2,8 @@
  * @file evidence.mjs
  * @description The one evidence-quote matcher (AD-22): a quote is a match
  * when it is a substring of the source after NFC normalization and
- * whitespace-run collapsing. `facts-write` (story 3) and `verify-evidence`
- * both build on `quoteMatches`; `parse.mjs` (story 2) uses `findQuoteLine`
+ * whitespace-run collapsing. `facts-write` and `verify-evidence`
+ * both build on `quoteMatches`; `parse.mjs` uses `findQuoteLine`
  * to recompute a mention's line the same way. Pure -- no I/O.
  */
 
@@ -62,7 +62,9 @@ export function makeQuoteLocator(source) {
       }
     } else {
       collapsedChars.push(ch);
-      charLines.push(charLine);
+      // One entry per UTF-16 unit, not per code point: `indexOf` below
+      // returns a UTF-16 index, and an astral char (emoji) is two units.
+      for (let k = 0; k < ch.length; k++) charLines.push(charLine);
       lastWasSpace = false;
     }
   }

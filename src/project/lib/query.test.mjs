@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import { buildGraph, makeResolverContext, resolveFactRef } from './graph.mjs';
 import { makeFact } from './fact.mjs';
-import { queryNode, queryList, queryNeighbors } from './query.mjs';
+import {
+  queryNode, queryList, queryNeighbors, atFor, buildCtx,
+} from './query.mjs';
 
 // ---------------------------------------------------------------------------
 // Same hand-built parsed-doc helpers as graph.test.mjs (story 2): these are
@@ -257,6 +259,26 @@ describe('queryNode', () => {
     assert.ok(!Object.hasOwn(fragResult.node, 'frags'));
   });
 
+  test('`frags` lists every parsed heading, including one nothing links to (so it has no graph node)', () => {
+    const a = doc({
+      path: 'docs/adr/0009.md',
+      headings: [
+        { level: 2, text: 'Status', anchor: 'status', line: 8 },
+        { level: 2, text: 'Context', anchor: 'context', line: 12 },
+      ],
+    });
+    const { graph, parsed, resolve } = setup({ docs: [a] });
+    assert.ok(!graph.nodes.some((n) => n.kind === 'frag'));
+    const result = queryNode('docs/adr/0009.md', { graph, parsed, resolve });
+    assert.deepEqual(result.node.frags, ['frag:docs/adr/0009.md#context', 'frag:docs/adr/0009.md#status']);
+  });
+
+  test('a frag: id with no "#" keeps its whole path in `at.file`', () => {
+    const { graph, parsed, resolve } = setup({ docs: [doc({ path: 'docs/a.md' })] });
+    const ctx = buildCtx({ graph, parsed, resolve });
+    assert.deepEqual(atFor({ id: 'frag:docs/a.md', kind: 'frag' }, ctx), { file: 'docs/a.md', line: 1, quote: '' });
+  });
+
   test('evidence keeps a non-empty `scope`, dropped when absent', () => {
     const a = doc({ path: 'docs/adr/0009.md', declares: 'ADR-0009' });
     const b = doc({
@@ -380,7 +402,14 @@ describe('queryNeighbors', () => {
         subject: 'doc:docs/adr/0052.md', relation: 'supersedes', object: 'ADR-0009', line: 6, quote: 'Supersedes ADR-0009',
       })],
     });
-    const { graph, parsed, resolve } = setup({ docs: [a, b] });
+    // A second, differently-typed in-edge the --relation filter must drop.
+    const c = doc({
+      path: 'docs/adr/0011.md',
+      facts: [edgeFact({
+        subject: 'doc:docs/adr/0011.md', relation: 'mentions', object: 'ADR-0009', line: 7, quote: 'ADR-0009',
+      })],
+    });
+    const { graph, parsed, resolve } = setup({ docs: [a, b, c] });
 
     const items = queryNeighbors('ADR-0009', { direction: 'in', relation: 'supersedes' }, { graph, parsed, resolve });
     assert.equal(items.length, 1);

@@ -1,7 +1,7 @@
 /**
  * @file imports.test.mjs
- * @description Acceptance criterion (story 1): every `from '...'` /
- * `import('...')` specifier in non-test `src/project/**\/*.mjs` starts with
+ * @description Every `from '...'` / `import('...')` / side-effect
+ * `import '...'` specifier in non-test `src/project/**\/*.mjs` starts with
  * `node:` or `./`/`../`, and none resolves outside `src/project/`. Skips
  * `vendor/` (third-party code, not subject to this engine's own import
  * discipline) and `test-fixtures/` (synthetic repos, not engine code).
@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
 const SKIP_DIRS = new Set(['vendor', 'test-fixtures', 'node_modules']);
@@ -27,15 +27,20 @@ function collectMjsFiles(dir, out = []) {
   return out;
 }
 
-const IMPORT_SPECIFIER_RE = /\bfrom\s+['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]\s*\)/g;
+const IMPORT_SPECIFIER_RE = /\bfrom\s+['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]\s*\)|^\s*import\s+['"]([^'"]+)['"]/gm;
 
 function extractSpecifiers(source) {
   const specs = [];
   for (const m of source.matchAll(IMPORT_SPECIFIER_RE)) {
-    specs.push(m[1] ?? m[2]);
+    specs.push(m[1] ?? m[2] ?? m[3]);
   }
   return specs;
 }
+
+test('extractSpecifiers sees from, dynamic, and side-effect imports', () => {
+  const source = "import { a } from './a.mjs';\nimport './b.mjs';\nawait import('../c.mjs');\n";
+  assert.deepEqual(extractSpecifiers(source), ['./a.mjs', './b.mjs', '../c.mjs']);
+});
 
 test('every non-test src/project/**/*.mjs import specifier is node: or relative and resolves inside src/project/', () => {
   const files = collectMjsFiles(PROJECT_ROOT);
@@ -51,9 +56,10 @@ test('every non-test src/project/**/*.mjs import specifier is node: or relative 
         `${relative(PROJECT_ROOT, file)}: import specifier "${spec}" must start with "node:" or "./"/"../"`,
       );
       if (isRelative) {
-        const resolved = resolve(dirname(file), spec);
+        // `relative`, not a `'/'`-prefix check: path separators differ on Windows.
+        const rel = relative(PROJECT_ROOT, resolve(dirname(file), spec));
         assert.ok(
-          resolved === PROJECT_ROOT || resolved.startsWith(PROJECT_ROOT + '/'),
+          !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`),
           `${relative(PROJECT_ROOT, file)}: import "${spec}" resolves outside src/project/`,
         );
       }

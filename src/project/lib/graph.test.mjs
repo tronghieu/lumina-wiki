@@ -328,12 +328,31 @@ describe('buildGraph: resolution', () => {
       includeRoot: 'docs',
       facts: [edgeFact({ subject: 'doc:docs/adr/a.md', relation: 'related', object: '/docs/x.md' })],
     });
-    // A doc-relative candidate ("docs/adr/x.md") that would otherwise win if tried.
-    const decoy = doc({ path: 'docs/adr/x.md' });
+    // The doc-relative candidate ("docs/adr" + "/docs/x.md" -> "docs/adr/docs/x.md") that would otherwise win if tried.
+    const decoy = doc({ path: 'docs/adr/docs/x.md' });
     const target = doc({ path: 'docs/x.md' });
     const graph = build({ docs: [a, decoy, target] });
     assert.ok(findEdge(graph, 'doc:docs/adr/a.md', 'doc:docs/x.md'), 'expected the repo-root-absolute target');
-    assert.equal(findEdge(graph, 'doc:docs/adr/a.md', 'doc:docs/adr/x.md'), undefined, 'doc-relative must not be tried');
+    assert.equal(findEdge(graph, 'doc:docs/adr/a.md', 'doc:docs/adr/docs/x.md'), undefined, 'doc-relative must not be tried');
+  });
+
+  test('a relation naming an anchor its in-scope target lacks is dangling (P09), not widened to the doc; a body link still is', () => {
+    const b = doc({ path: 'docs/b.md', headings: [{ level: 2, text: 'Status', anchor: 'status', line: 3 }] });
+    const a = doc({
+      path: 'docs/a.md',
+      facts: [edgeFact({ subject: 'doc:docs/a.md', relation: 'supersedes', object: 'b.md#gone', line: 2 })],
+    });
+    const graph = build({ docs: [a, b] });
+    assert.equal(findEdge(graph, 'doc:docs/a.md', 'doc:docs/b.md'), undefined);
+    assert.ok(graph.findings.some((f) => f.id === 'P09' && f.file === 'docs/a.md' && f.line === 2));
+
+    const linkDoc = doc({
+      path: 'docs/a.md',
+      facts: [edgeFact({ subject: 'doc:docs/a.md', relation: 'link', object: 'b.md#gone' })],
+    });
+    const linkGraph = build({ docs: [linkDoc, b] });
+    assert.equal(findEdge(linkGraph, 'doc:docs/a.md', 'doc:docs/b.md').relation, 'references');
+    assert.ok(!linkGraph.findings.some((f) => f.id === 'P09'));
   });
 });
 
@@ -764,7 +783,8 @@ describe('buildGraph: findings', () => {
       ['docs/z-later.md', envelopeFor('docs/z-later.md', 'from-z')],
       ['docs/a-first.md', envelopeFor('docs/a-first.md', 'from-a')],
     ]);
-    const graph = build({ docs: [a], facts });
+    // Both envelopes' docs are in scope: only an in-scope doc's envelope feeds the graph.
+    const graph = build({ docs: [doc({ path: 'docs/a-first.md' }), a, doc({ path: 'docs/z-later.md' })], facts });
     assert.equal(findNode(graph, 'frag:docs/a.md#row').status, 'from-a');
   });
 });
@@ -807,6 +827,49 @@ describe('buildGraph: invalid facts are skipped', () => {
     const bad = { id: 'x', kind: 'attr', subject: 'frag:docs/a.md#row', relation: 'status', provenance: 'inferred' }; // no evidence
     const graph = build({ docs: [a], facts: envelopeWithFacts('docs/a.md', [bad]) });
     assert.equal(findNode(graph, 'frag:docs/a.md#row'), undefined);
+  });
+
+  test('a frag: subject whose anchor is gone mints no phantom node or edge (edge and attr facts)', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({ path: 'docs/b.md' });
+    const facts = envelopeWithFacts('docs/a.md', [
+      edgeFact({ subject: 'frag:docs/a.md#gone', relation: 'related', object: 'doc:docs/b.md' }),
+      attrFact({ subject: 'frag:docs/a.md#gone', relation: 'status', value: 'accepted' }),
+    ]);
+    const graph = build({ docs: [a, b], facts });
+    assert.equal(findNode(graph, 'frag:docs/a.md#gone'), undefined);
+    assert.equal(graph.edges.length, 0);
+  });
+
+  test('a non-string status value is not applied to a fragment', () => {
+    const a = doc({ path: 'docs/a.md', headings: [{ level: 2, text: 'Row', anchor: 'row', line: 4 }] });
+    const facts = envelopeWithFacts('docs/a.md', [attrFact({ subject: 'frag:docs/a.md#row', relation: 'status', value: { x: 1 } })]);
+    const graph = build({ docs: [a], facts });
+    assert.equal(findNode(graph, 'frag:docs/a.md#row'), undefined);
+  });
+});
+
+describe('buildGraph: only an in-scope doc\'s envelope feeds the graph', () => {
+  test('an envelope for a deleted/out-of-scope doc adds no node or edge', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const facts = new Map([['docs/gone.md', {
+      schemaVersion: 1, source: 'docs/gone.md', sourceHash: 'h', ontologyVersion: 'v',
+      facts: [edgeFact({ subject: 'doc:docs/gone.md', relation: 'depends-on', object: 'id:ADR-9999' })],
+    }]]);
+    const graph = build({ docs: [a], facts });
+    assert.deepEqual(graph.nodes.map((n) => n.id), ['doc:docs/a.md']);
+    assert.equal(graph.edges.length, 0);
+  });
+
+  test('a case-only-renamed key still feeds its doc (case-insensitive match)', () => {
+    const a = doc({ path: 'docs/adr.md' });
+    const b = doc({ path: 'docs/b.md' });
+    const facts = new Map([['docs/ADR.md', {
+      schemaVersion: 1, source: 'docs/adr.md', sourceHash: 'h', ontologyVersion: 'v',
+      facts: [edgeFact({ subject: 'doc:docs/adr.md', relation: 'related', object: 'doc:docs/b.md' })],
+    }]]);
+    const graph = build({ docs: [a, b], facts });
+    assert.ok(findEdge(graph, 'doc:docs/adr.md', 'doc:docs/b.md'));
   });
 });
 
@@ -916,7 +979,8 @@ describe('computeDocStatus', () => {
   });
 
   test('stale when the envelope schemaVersion is newer than the engine understands', () => {
-    const envelope = { schemaVersion: 2, sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
+    // Otherwise fresh (source, ontologyVersion, hash all match): only the schema check makes it stale.
+    const envelope = { schemaVersion: 2, source: 'docs/a.md', sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
     assert.equal(
       computeDocStatus({
         path: 'docs/a.md', hash: 'h1', envelope, ontologyVersion: 'v1', schemaVersion: 1, sourceText: 't', refResolves: () => true,

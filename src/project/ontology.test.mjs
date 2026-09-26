@@ -16,8 +16,8 @@ test('META_TYPES has the eleven fixed meta-types with governance on the first th
   }
 });
 
-test('Decision carries the five-state lifecycle; no other meta-type does', () => {
-  assert.deepEqual(META_TYPES.Decision.lifecycle, ['proposed', 'accepted', 'partially-superseded', 'superseded', 'deprecated']);
+test('Decision carries the six-state lifecycle; no other meta-type does', () => {
+  assert.deepEqual(META_TYPES.Decision.lifecycle, ['proposed', 'accepted', 'rejected', 'partially-superseded', 'superseded', 'deprecated']);
   for (const [name, entry] of Object.entries(META_TYPES)) {
     if (name === 'Decision') continue;
     assert.equal(entry.lifecycle, undefined, `${name} must not carry a lifecycle`);
@@ -62,9 +62,9 @@ test('every relation-owned rule id P01-P08 maps to the relation named in ontolog
   }
 });
 
-test('engine rules P09-P20 are all owned by "engine"', () => {
+test('engine rules P09-P21 are all owned by "engine"', () => {
   const byId = Object.fromEntries(RULES.map((r) => [r.id, r]));
-  for (const id of ['P09', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'P17', 'P18', 'P19', 'P20']) {
+  for (const id of ['P09', 'P10', 'P11', 'P12', 'P13', 'P14', 'P15', 'P16', 'P17', 'P18', 'P19', 'P20', 'P21']) {
     assert.equal(byId[id].owner, 'engine', `${id} must be owned by engine`);
   }
 });

@@ -55,8 +55,8 @@ function atForDoc(node, { docsByPath, texts }) {
 
 function atForFrag(node, { docsByPath }) {
   const hashIdx = node.id.indexOf('#');
-  const path = node.id.slice(5, hashIdx);
-  const anchor = node.id.slice(hashIdx + 1);
+  const path = hashIdx === -1 ? node.id.slice(5) : node.id.slice(5, hashIdx);
+  const anchor = hashIdx === -1 ? '' : node.id.slice(hashIdx + 1);
   const heading = docsByPath.get(path)?.headings?.find((h) => h.anchor === anchor);
   return { file: path, line: heading?.line ?? 1, quote: heading?.text ?? '' };
 }
@@ -81,10 +81,10 @@ export function atFor(node, ctx) {
   return atForResolved(node, ctx);
 }
 
-/** Every `frag:<path>#...` node id belonging to the doc at `path` -- a doc node's own fragments (skills need this to cite an existing fragment as an object without guessing one). */
+/** Every `frag:<path>#<anchor>` id the doc at `path` has -- one per parsed heading, linked or not (skills need this to cite an existing fragment as an object without guessing one). Empty for an out-of-scope doc. */
 function fragsOfDoc(path, ctx) {
-  const prefix = `frag:${path}#`;
-  return [...ctx.byId.keys()].filter((id) => id.startsWith(prefix)).sort();
+  const headings = ctx.docsByPath.get(path)?.headings ?? [];
+  return [...new Set(headings.map((h) => `frag:${path}#${h.anchor}`))].sort();
 }
 
 /** `{id, metaType?, status?, frags? (doc: only), at}`, key order matching the spec exactly. `metaType` is a parameter -- computed once by the caller, not recomputed here. */
