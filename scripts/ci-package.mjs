@@ -110,6 +110,8 @@ const requiredFiles = [
   'src/tools/verify_quotes.py',
   'src/tools/requirements.txt',
   'src/installer/project-mode.js',
+  'src/templates/project/PROJECT.md',
+  'src/skills/project/lumi-project-setup/SKILL.md',
   ...PROJECT_ENGINE_FILES.map((f) => `src/project/${f}`),
   'README.md',
   'LICENSE',

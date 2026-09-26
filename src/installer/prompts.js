@@ -154,6 +154,7 @@ export function buildPromptList(existingManifest, defaultLocale = 'en') {
  * @param {string}  [opts.cwd]                  - Project root for defaults.
  * @param {Function} [opts.t]                   - Locale translator function.
  * @param {Function} [opts.resolveDestination]  - Detect an existing install after directory selection.
+ * @param {string|null} [opts.presetLocale]     - Locale already chosen this session (mode gate); skips Prompt 0.
  * @param {InstallAnswers|null} [opts.modifyAnswers] - Non-null switches to "modify installation"
  *   mode (upgrade menu): directory and research-purpose prompts are skipped
  *   (the install location is fixed and README purpose is never rewritten on
@@ -168,6 +169,7 @@ export async function runInstallPrompts({
   t: initialT = null,
   resolveDestination = null,
   modifyAnswers = null,
+  presetLocale = null,
 } = {}) {
   if (acceptDefaults) {
     const loc = existingManifest?.locale ?? defaultLocale;
@@ -187,7 +189,7 @@ export async function runInstallPrompts({
 
   // ── Prompt 0: Locale (UI language) ───────────────────────────────────────
   const initialLocale = existingManifest?.locale ?? defaultLocale;
-  const locale = await runLocaleOnlyPrompt({ initialLocale, t });
+  const locale = presetLocale ?? await runLocaleOnlyPrompt({ initialLocale, t });
   const langDefault = LOCALE_LANGUAGE_NAME[locale] ?? 'English';
 
   // Rebind t to the just-selected locale so the remaining prompts render in
@@ -579,7 +581,7 @@ export async function runProjectUninstallConfirm({ acceptDefaults = false, t = n
     message: t
       ? t('prompt.project_uninstall.confirm')
       : 'Uninstall Lumina project mode? This removes _lumina/project/, _lumina/graph/, _lumina/_state/, ' +
-        'lumi-project-* skills, and the lumina:project block from CLAUDE.md/AGENTS.md/.gitignore. ' +
+        'lumi-project-* skills, and the lumina:project block from CLAUDE.md/AGENTS.md and the lumina block from .gitignore. ' +
         '_lumina/facts/ and _lumina/config/ are kept unless you say otherwise next.',
     initialValue: false,
   });
@@ -600,14 +602,16 @@ export async function runProjectUninstallConfirm({ acceptDefaults = false, t = n
  */
 export async function runProjectUninstallFactsPrompt({ acceptDefaults = false, t = null } = {}) {
   if (acceptDefaults) return false;
-  const { confirm, isCancel } = await getClack();
+  const { confirm, isCancel, cancel } = await getClack();
   const proceed = await confirm({
     message: t
       ? t('prompt.project_uninstall.facts.message')
       : 'Also delete _lumina/facts/ and _lumina/config/ (committed ingest results and scope config)?',
     initialValue: false,
   });
-  if (isCancel(proceed)) return false;
+  // Ctrl-C here cancels the whole uninstall (exit 4, nothing removed) —
+  // never "No, keep them" followed by an uninstall the user just aborted.
+  if (isCancel(proceed)) { cancel(t ? t('uninstall.cancelled') : 'Uninstall cancelled.'); process.exit(4); }
   return Boolean(proceed);
 }
 

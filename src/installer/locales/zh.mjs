@@ -84,7 +84,6 @@ export default {
   'project.success.installed':                 '[完成] Lumina 项目模式安装成功。',
   'project.success.targets':                   '  目标:     {targets}',
   'project.success.skills':                    '  技能:     已安装 {count} 个',
-  'project.warn.foreign_skill':                '  [警告] 在 "{path}" 发现一个 Lumina 不认识的现有目录。Lumina 不会动它。',
   'project_uninstall.done.kept':                '[完成] 已卸载 Lumina 项目模式。_lumina/facts/ 和 _lumina/config/ 已保留 — 只要 _lumina/config/project.yaml 存在,这个仓库仍会被识别为项目模式;删除它即可切回经典模式。',
   'project_uninstall.done.deleted':             '[完成] 已卸载 Lumina 项目模式。_lumina/facts/ 和 _lumina/config/ 已删除。',
 
@@ -142,5 +141,7 @@ export default {
 
   // ── Symlink error ──────────────────────────────────────────────────────────
   'error.symlink':                             '  [错误] 无法链接 {skill}: {message}',
+  'error.mode_conflict.project':               '"{dir}" 已按项目模式安装,因此拒绝 {mode} 安装。不带 --mode 重新运行即可按原模式升级。如需切回经典模式,请先删除 _lumina/config/project.yaml、_lumina/project/install.json 和 _lumina/manifest.json。',
+  'error.mode_conflict.classic':               '"{dir}" 是经典 Lumina 安装,因此拒绝 {mode} 安装。不带 --mode 重新运行即可按原模式升级;如需切换到项目模式,请先运行 lumina uninstall。',
 
 };

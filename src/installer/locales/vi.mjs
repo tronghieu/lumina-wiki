@@ -78,7 +78,6 @@ export default {
   'project.success.installed':                 '[xong] Đã cài đặt chế độ dự án Lumina.',
   'project.success.targets':                   '  Trợ lý:   {targets}',
   'project.success.skills':                    '  Kỹ năng:  {count} đã cài',
-  'project.warn.foreign_skill':                '  [cảnh báo] Tìm thấy thư mục sẵn có tại "{path}" mà Lumina không nhận ra là của mình. Lumina sẽ không đụng vào.',
   'project_uninstall.done.kept':                '[xong] Đã gỡ cài đặt chế độ dự án Lumina. _lumina/facts/ và _lumina/config/ được giữ lại — khi còn _lumina/config/project.yaml, repo này vẫn được nhận diện là chế độ dự án; xóa file đó để chuyển về cổ điển.',
   'project_uninstall.done.deleted':             '[xong] Đã gỡ cài đặt chế độ dự án Lumina. _lumina/facts/ và _lumina/config/ đã bị xóa.',
 
@@ -136,5 +135,7 @@ export default {
 
   // ── Symlink error ──────────────────────────────────────────────────────────
   'error.symlink':                             '  [lỗi] Không thể liên kết {skill}: {message}',
+  'error.mode_conflict.project':               '"{dir}" đã được cài ở chế độ dự án, nên không thể cài theo chế độ {mode}. Chạy lại không kèm --mode để nâng cấp giữ nguyên chế độ. Muốn chuyển về cổ điển, trước tiên hãy xóa _lumina/config/project.yaml, _lumina/project/install.json và _lumina/manifest.json.',
+  'error.mode_conflict.classic':               '"{dir}" là bản cài Lumina cổ điển, nên không thể cài theo chế độ {mode}. Chạy lại không kèm --mode để nâng cấp giữ nguyên chế độ, hoặc chạy lumina uninstall trước để chuyển sang chế độ dự án.',
 
 };

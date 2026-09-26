@@ -19,7 +19,7 @@
  * module-init time even though the two files depend on each other.
  */
 
-import { readFile, readdir, rm } from 'node:fs/promises';
+import { readFile, readdir, rm, lstat, realpath } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -107,7 +107,7 @@ const SKILL_PREFIX = 'lumi-project-';
 function projectMarkerBody(pkgVersion) {
   return [
     `This repo uses Lumina project mode (lumina-wiki >= ${pkgVersion}). Read \`_lumina/project/PROJECT.md\`.`,
-    'If `_lumina/config/project.yaml` is missing, run `/lumi-project-setup`.',
+    'If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup` skill.',
   ].join('\n');
 }
 
@@ -134,11 +134,13 @@ export function validateProjectIdeTargets(values) {
 // Small local helpers
 // ---------------------------------------------------------------------------
 
-async function readJsonQuiet(p) {
+/** Realpath of an entry file, or the path itself when absent (ENOENT). */
+async function resolveEntryFile(p) {
   try {
-    return JSON.parse(await readFile(p, 'utf8'));
-  } catch (_) {
-    return null;
+    return await realpath(p);
+  } catch (err) {
+    if (err.code === 'ENOENT') return p;
+    throw err;
   }
 }
 
@@ -155,8 +157,9 @@ async function listProjectSkillDefs(skillsSrcDir) {
   let entries;
   try {
     entries = await readdir(skillsSrcDir, { withFileTypes: true });
-  } catch (_) {
-    return [];
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
   }
   const defs = [];
   for (const entry of entries) {
@@ -180,12 +183,17 @@ function asMarkerFileError(filePath, err) {
   return e;
 }
 
+// Both helpers read/write through a symlinked entry file (e.g. CLAUDE.md ->
+// AGENTS.md) so atomicWrite's rename never replaces the link with a file.
+// Only ENOENT means "absent"; any other read error (EACCES, EISDIR, ...)
+// propagates, so an unreadable file is never overwritten with just the block.
 async function upsertMarkerFile(filePath, open, close, body) {
+  const realPath = await resolveEntryFile(filePath);
   let content = '';
   try {
-    content = await readFile(filePath, 'utf8');
-  } catch (_) {
-    // Absent file — created holding only the block.
+    content = await readFile(realPath, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
   }
   let next;
   try {
@@ -193,15 +201,17 @@ async function upsertMarkerFile(filePath, open, close, body) {
   } catch (err) {
     throw asMarkerFileError(filePath, err);
   }
-  if (next !== content) await atomicWrite(filePath, next);
+  if (next !== content) await atomicWrite(realPath, next);
 }
 
 async function stripMarkerFile(filePath, open, close) {
+  const realPath = await resolveEntryFile(filePath);
   let content;
   try {
-    content = await readFile(filePath, 'utf8');
-  } catch (_) {
-    return; // nothing to strip
+    content = await readFile(realPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return; // nothing to strip
+    throw err;
   }
   let next;
   try {
@@ -210,10 +220,11 @@ async function stripMarkerFile(filePath, open, close) {
     throw asMarkerFileError(filePath, err);
   }
   if (next === content) return;
-  if (next.trim() === '') {
+  // Never delete through a symlink: that would leave the link dangling.
+  if (next.trim() === '' && !(await lstat(filePath)).isSymbolicLink()) {
     await rm(filePath, { force: true });
   } else {
-    await atomicWrite(filePath, next);
+    await atomicWrite(realPath, next);
   }
 }
 
@@ -223,7 +234,9 @@ async function stripMarkerFile(filePath, open, close) {
 
 /**
  * Read the committed `_lumina/project/install.json` once. Returns `null`
- * when absent or unparsable (fresh install — no committed record yet).
+ * when absent (fresh install — no committed record yet). An unparsable file
+ * is refused (code 3) rather than treated as absent: that would skip the
+ * version-skew check and overwrite a teammate's committed record.
  * Both the version-skew check and the ideTargets upgrade fallback read this
  * same file; callers should read it once and pass the result around rather
  * than each re-reading it.
@@ -232,7 +245,21 @@ async function stripMarkerFile(filePath, open, close) {
  * @returns {Promise<object|null>}
  */
 export async function readProjectInstallJson(projectRoot) {
-  return readJsonQuiet(join(projectRoot, '_lumina', 'project', 'install.json'));
+  const p = join(projectRoot, '_lumina', 'project', 'install.json');
+  let raw;
+  try {
+    raw = await readFile(p, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    const e = new Error(`PROJECT_INSTALL_JSON_INVALID: ${p} is not valid JSON (${err.message}). Fix or delete it, then re-run.`);
+    e.code = 3;
+    throw e;
+  }
 }
 
 /**
@@ -268,13 +295,11 @@ export async function checkProjectVersionSkew(projectRoot, pkgVersion, installJs
  *   strategy, same as classic install's `--re-link`.
  * @param {string} [opts.skillsSrcDir] - override for `src/skills/project/`
  *   (test seam only; production callers never pass this).
- * @param {Function|null} [opts.t] - locale translator; falls back to EN
- *   literals when not supplied.
  * @returns {Promise<{ skillCount: number, symlinkStrategies: object }>}
  */
 export async function installProject({
   projectRoot, ideTargets, pkgVersion, existingManifest = null, colors,
-  reLink = false, skillsSrcDir = PROJECT_SKILLS_SRC_DIR, t = null,
+  reLink = false, skillsSrcDir = PROJECT_SKILLS_SRC_DIR,
 }) {
   validateProjectIdeTargets(ideTargets);
 
@@ -352,7 +377,7 @@ export async function installProject({
       throw err;
     }
   } else {
-    await removeOwnedClaudeSkillLinks(projectRoot, colors);
+    await removeOwnedClaudeSkillLinks(projectRoot, colors, rm, { prefix: SKILL_PREFIX });
   }
 
   // Prune `.claude/skills` BEFORE `.agents/skills` (same order as classic
@@ -375,19 +400,20 @@ export async function installProject({
   });
 
   // Marker blocks — only in the files each selected target actually reads.
-  const claudeMdPath = join(projectRoot, 'CLAUDE.md');
-  if (claudeCode) {
-    await upsertMarkerFile(claudeMdPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE, projectMarkerBody(pkgVersion));
-  } else {
-    await stripMarkerFile(claudeMdPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE);
-  }
-
-  const agentsMdPath = join(projectRoot, 'AGENTS.md');
+  // CLAUDE.md and AGENTS.md resolving to one file (a symlink) get one edit:
+  // block present when either target needs it.
   const agentsNeeded = ideTargets.includes('codex') || ideTargets.includes('antigravity');
-  if (agentsNeeded) {
-    await upsertMarkerFile(agentsMdPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE, projectMarkerBody(pkgVersion));
-  } else {
-    await stripMarkerFile(agentsMdPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE);
+  const entries = [[join(projectRoot, 'CLAUDE.md'), claudeCode], [join(projectRoot, 'AGENTS.md'), agentsNeeded]];
+  if (await resolveEntryFile(entries[0][0]) === await resolveEntryFile(entries[1][0])) {
+    entries.splice(1, 1);
+    entries[0][1] = claudeCode || agentsNeeded;
+  }
+  for (const [entryPath, needed] of entries) {
+    if (needed) {
+      await upsertMarkerFile(entryPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE, projectMarkerBody(pkgVersion));
+    } else {
+      await stripMarkerFile(entryPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE);
+    }
   }
 
   await upsertMarkerFile(
@@ -418,8 +444,10 @@ export async function uninstallProject({ projectRoot, colors = null, deleteFacts
   await stripMarkerFile(join(projectRoot, 'AGENTS.md'), CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE);
   await stripMarkerFile(join(projectRoot, '.gitignore'), GITIGNORE_MARKER_OPEN, GITIGNORE_MARKER_CLOSE);
 
-  await removeOwnedClaudeSkillLinks(projectRoot, colors);
-  await removeOwnedAgentsSkills(projectRoot, colors);
+  await removeOwnedClaudeSkillLinks(projectRoot, colors, rm, { prefix: SKILL_PREFIX });
+  await removeDirIfEmpty(join(projectRoot, '.claude', 'skills'));
+  await removeDirIfEmpty(join(projectRoot, '.claude'));
+  await removeOwnedAgentsSkills(projectRoot, colors, rm, { prefix: SKILL_PREFIX });
 
   const luminaDir = join(projectRoot, '_lumina');
   if (deleteFactsAndConfig) {
@@ -436,6 +464,7 @@ export async function uninstallProject({ projectRoot, colors = null, deleteFacts
     if (entry.name === 'facts' || entry.name === 'config') continue;
     await rm(join(luminaDir, entry.name), { recursive: true, force: true });
   }
+  await removeDirIfEmpty(luminaDir);
 }
 
 // ---------------------------------------------------------------------------
@@ -504,10 +533,12 @@ export async function runProjectInstallCommand(opts, projectRoot, { presetLocale
   if (override) {
     validateProjectIdeTargets(unique(override));
     ideTargets = unique(override);
+  } else if (previousInstallJson?.ideTargets?.length) {
+    // Committed install.json wins over the local (gitignored) manifest, so a
+    // teammate's committed target change is never reverted by a stale clone.
+    ideTargets = previousInstallJson.ideTargets;
   } else if (existingManifest?.ideTargets?.length) {
     ideTargets = existingManifest.ideTargets;
-  } else if (previousInstallJson?.ideTargets?.length) {
-    ideTargets = previousInstallJson.ideTargets;
   } else if (!yes && !wasDetected && process.stdin.isTTY && process.stdout.isTTY) {
     ideTargets = await runProjectTargetsPrompt({ acceptDefaults: false, t });
   } else {

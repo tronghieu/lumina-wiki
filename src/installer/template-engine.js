@@ -240,11 +240,19 @@ function splitKeepingEol(content) {
   return lines;
 }
 
-/** The more common of '\n'/'\r\n' among existing lines; '\n' on a tie or no lines. */
+/**
+ * The more common of '\n'/'\r\n' among terminated lines (an unterminated
+ * last line has no EOL to count); '\n' on a tie or no terminated lines.
+ */
 function dominantEol(lines) {
   let crlf = 0;
-  for (const l of lines) if (l.eol === '\r\n') crlf += 1;
-  return crlf * 2 > lines.length ? '\r\n' : '\n';
+  let terminated = 0;
+  for (const l of lines) {
+    if (l.eol === '') continue;
+    terminated += 1;
+    if (l.eol === '\r\n') crlf += 1;
+  }
+  return crlf * 2 > terminated ? '\r\n' : '\n';
 }
 
 /**

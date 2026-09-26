@@ -9,14 +9,15 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, rm, readdir, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, rm, readdir, chmod, symlink, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
-import { PROJECT_ENGINE_FILES, PROJECT_IDE_TARGETS, installProject } from './project-mode.js';
+import { PROJECT_ENGINE_FILES, PROJECT_IDE_TARGETS, installProject, uninstallProject } from './project-mode.js';
+import { pathExists } from './fs.js';
 import { META_TYPES, META_RELATIONS } from '../project/ontology.mjs';
 
 const require = createRequire(import.meta.url);
@@ -36,10 +37,6 @@ function runCli(args, opts = {}) {
   return spawnSync(process.execPath, [CLI, ...args], {
     encoding: 'utf8', timeout: 30000, ...opts,
   });
-}
-
-async function pathExists(p) {
-  try { await access(p); return true; } catch { return false; }
 }
 
 async function gitInit(dir) {
@@ -120,7 +117,9 @@ describe('install --mode project', () => {
       for (const rel of PROJECT_ENGINE_FILES) {
         assert.ok(await pathExists(join(tmp, '_lumina', 'project', rel)), `missing engine file ${rel}`);
       }
-      assert.ok(await pathExists(join(tmp, '_lumina', 'project', 'PROJECT.md')));
+      const projectMd = await readFile(join(tmp, '_lumina', 'project', 'PROJECT.md'), 'utf8');
+      assert.ok(projectMd.includes(`Installed by lumina-wiki ${PKG.version}.`), 'PROJECT.md names the installing version');
+      assert.ok(!projectMd.includes('{{'), 'PROJECT.md has no unrendered placeholders');
       const installJson = JSON.parse(await readFile(join(tmp, '_lumina', 'project', 'install.json'), 'utf8'));
       assert.equal(installJson.schemaVersion, 1);
       assert.equal(installJson.packageVersion, PKG.version);
@@ -131,7 +130,7 @@ describe('install --mode project', () => {
         claudeMd,
         '<!-- lumina:project -->\n' +
         `This repo uses Lumina project mode (lumina-wiki >= ${PKG.version}). Read \`_lumina/project/PROJECT.md\`.\n` +
-        'If `_lumina/config/project.yaml` is missing, run `/lumi-project-setup`.\n' +
+        'If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup` skill.\n' +
         '<!-- /lumina:project -->\n',
       );
 
@@ -315,6 +314,7 @@ describe('install --mode project', () => {
       const result = runCli(['install', '--mode', 'classic', '--yes', '--no-update', '--directory', tmp]);
       assert.equal(result.status, 3);
       assert.match(result.stderr, /MODE_CONFLICT/);
+      assert.match(result.stderr, /project\.yaml.*install\.json.*manifest\.json/, 'names every file to delete to switch back');
       const after = await readFile(join(tmp, '_lumina', 'manifest.json'), 'utf8');
       assert.equal(after, before);
       assert.ok(!(await pathExists(join(tmp, 'raw'))));
@@ -334,6 +334,8 @@ describe('install --mode project', () => {
       const result = runCli(['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp]);
       assert.equal(result.status, 3);
       assert.match(result.stderr, /MODE_CONFLICT/);
+      assert.match(result.stderr, /classic Lumina install.*uninstall/, 'says it is classic and to uninstall first');
+      assert.doesNotMatch(result.stderr, /project\.yaml/);
       const after = await readFile(join(tmp, '_lumina', 'manifest.json'), 'utf8');
       assert.equal(after, before);
       assert.ok(!(await pathExists(join(tmp, '_lumina', 'project'))));
@@ -475,6 +477,103 @@ describe('install --mode project', () => {
   });
 });
 
+describe('install --mode project — review fixes', () => {
+  test('bad flags: an auto-detected project repo (no --mode) with --packs exits 1, nothing written', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeFile(join(tmp, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+
+      const result = runCli(['install', '--packs', 'research', '--yes', '--no-update', '--directory', tmp]);
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, /cannot be combined with --packs/);
+      assert.ok(!(await pathExists(join(tmp, '_lumina', 'project'))));
+      assert.ok(!(await pathExists(join(tmp, 'CLAUDE.md'))));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('corrupt committed install.json exits 3 naming the file, left untouched', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await mkdir(join(tmp, '_lumina', 'project'), { recursive: true });
+      await writeFile(join(tmp, '_lumina', 'project', 'install.json'), '{broken');
+
+      const result = runCli(['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp]);
+      assert.equal(result.status, 3, result.stderr);
+      assert.match(result.stderr, /install\.json/);
+      assert.equal(await readFile(join(tmp, '_lumina', 'project', 'install.json'), 'utf8'), '{broken');
+      assert.ok(!(await pathExists(join(tmp, 'CLAUDE.md'))));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('a committed install.json target change wins over the stale local manifest', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      const args = ['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp];
+      assert.equal(runCli(args).status, 0);
+      assert.ok(await pathExists(join(tmp, 'CLAUDE.md')));
+      // Teammate commits a switch to codex; this clone's manifest still says claude_code.
+      const installJsonPath = join(tmp, '_lumina', 'project', 'install.json');
+      const installJson = JSON.parse(await readFile(installJsonPath, 'utf8'));
+      installJson.ideTargets = ['codex'];
+      await writeFile(installJsonPath, JSON.stringify(installJson, null, 2) + '\n');
+
+      const result = runCli(args);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(await readFile(installJsonPath, 'utf8')).ideTargets, ['codex']);
+      assert.ok(!(await pathExists(join(tmp, 'CLAUDE.md'))), 'claude_code block stripped');
+      assert.ok((await readFile(join(tmp, 'AGENTS.md'), 'utf8')).includes('<!-- lumina:project -->'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('an unreadable AGENTS.md is refused (exit 2), never replaced by the block',
+    { skip: process.platform === 'win32' || process.getuid?.() === 0 }, async () => {
+      const tmp = await makeTmpDir();
+      const agentsMd = join(tmp, 'AGENTS.md');
+      try {
+        await writeFile(agentsMd, 'user notes\n');
+        await chmod(agentsMd, 0o000);
+        const result = runCli(['install', '--mode', 'project', '--yes', '--no-update', '--ide-targets', 'codex', '--directory', tmp]);
+        assert.equal(result.status, 2, result.stderr);
+        await chmod(agentsMd, 0o644);
+        assert.equal(await readFile(agentsMd, 'utf8'), 'user notes\n');
+      } finally {
+        await chmod(agentsMd, 0o644).catch(() => {});
+        await cleanTmp(tmp);
+      }
+    });
+
+  test('CLAUDE.md symlinked to AGENTS.md stays a symlink; one block, stripped on uninstall',
+    { skip: process.platform === 'win32' }, async () => {
+      const tmp = await makeTmpDir();
+      try {
+        await writeFile(join(tmp, 'AGENTS.md'), 'user notes\n');
+        await symlink('AGENTS.md', join(tmp, 'CLAUDE.md'));
+
+        for (const targets of ['claude_code,codex', 'claude_code']) {
+          const result = runCli(['install', '--mode', 'project', '--yes', '--no-update', '--ide-targets', targets, '--directory', tmp]);
+          assert.equal(result.status, 0, result.stderr);
+          assert.ok((await lstat(join(tmp, 'CLAUDE.md'))).isSymbolicLink(), `CLAUDE.md is still a symlink (${targets})`);
+          const content = await readFile(join(tmp, 'AGENTS.md'), 'utf8');
+          assert.equal(content.split('<!-- lumina:project -->').length - 1, 1, `exactly one block (${targets})`);
+          assert.ok(content.startsWith('user notes\n'));
+        }
+
+        assert.equal(runCli(['uninstall', '--yes', '--directory', tmp]).status, 0);
+        assert.ok((await lstat(join(tmp, 'CLAUDE.md'))).isSymbolicLink());
+        assert.equal(await readFile(join(tmp, 'AGENTS.md'), 'utf8'), 'user notes\n');
+      } finally {
+        await cleanTmp(tmp);
+      }
+    });
+});
+
 describe('uninstall project mode', () => {
   test('strips blocks, deletes blank entry files, empties _lumina/ except facts/ and config/, ' +
        '--yes keeps facts/config', async () => {
@@ -505,6 +604,59 @@ describe('uninstall project mode', () => {
 
       const gitignore = await readFile(join(tmp, '.gitignore'), 'utf8');
       assert.ok(!gitignore.includes('lumina:project') && !gitignore.includes('>>> lumina'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('leaves no empty _lumina/, .claude/, or .agents/ behind', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      assert.equal(runCli(['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp]).status, 0);
+      const result = runCli(['uninstall', '--yes', '--directory', tmp]);
+      assert.equal(result.status, 0, result.stderr);
+      for (const dir of ['_lumina', '.claude', '.agents']) {
+        assert.ok(!(await pathExists(join(tmp, dir))), `${dir}/ should be removed once empty`);
+      }
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('corrupt manifest in a project repo still runs the project uninstall: facts/ and config/ survive', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      assert.equal(runCli(['install', '--mode', 'project', '--yes', '--no-update', '--directory', tmp]).status, 0);
+      await mkdir(join(tmp, '_lumina', 'facts'), { recursive: true });
+      await writeFile(join(tmp, '_lumina', 'facts', 'doc.json'), '{}\n');
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeFile(join(tmp, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+      await writeFile(join(tmp, '_lumina', 'manifest.json'), '{broken');
+
+      const result = runCli(['uninstall', '--yes', '--directory', tmp]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.ok(await pathExists(join(tmp, '_lumina', 'facts', 'doc.json')));
+      assert.ok(await pathExists(join(tmp, '_lumina', 'config', 'project.yaml')));
+      assert.ok(!(await pathExists(join(tmp, '_lumina', 'project'))));
+      assert.ok(!(await pathExists(join(tmp, 'CLAUDE.md'))), 'lumina:project block stripped');
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('classic manifest plus a committed project.yaml (MODE_CONFLICT): uninstall exits 3, removes nothing', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      assert.equal(runCli(['install', '--yes', '--no-update', '--directory', tmp]).status, 0);
+      await mkdir(join(tmp, '_lumina', 'config'), { recursive: true });
+      await writeFile(join(tmp, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+
+      const result = runCli(['uninstall', '--yes', '--directory', tmp]);
+      assert.equal(result.status, 3);
+      assert.match(result.stderr, /MODE_CONFLICT/);
+      assert.ok(await pathExists(join(tmp, '_lumina', 'manifest.json')));
+      assert.ok(await pathExists(join(tmp, '_lumina', 'config', 'project.yaml')));
+      assert.ok(await pathExists(join(tmp, '.agents', 'skills', 'lumi-init')));
     } finally {
       await cleanTmp(tmp);
     }
@@ -586,6 +738,33 @@ describe('installProject — skill copy/link/prune (direct call, fixture skills 
     } finally {
       await cleanTmp(tmp);
       await cleanTmp(skillsSrcDir);
+    }
+  });
+});
+
+describe('project skill cleanup never touches classic lumi-* skills', () => {
+  const colors = { yellow: (s) => s, red: (s) => s, green: (s) => s, bold: (s) => s, dim: (s) => s };
+
+  test('an owned classic lumi-ingest (dir + .claude link) survives a claude_code drop and uninstall', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      const classicDir = join(tmp, '.agents', 'skills', 'lumi-ingest');
+      const classicLink = join(tmp, '.claude', 'skills', 'lumi-ingest');
+      await mkdir(classicDir, { recursive: true });
+      await writeFile(join(classicDir, 'SKILL.md'), '---\nname: lumi-ingest\n---\n');
+      await mkdir(join(tmp, '.claude', 'skills'), { recursive: true });
+      await symlink(classicDir, classicLink, 'junction');
+
+      await installProject({ projectRoot: tmp, ideTargets: ['claude_code'], pkgVersion: PKG.version, colors });
+      await installProject({ projectRoot: tmp, ideTargets: ['codex'], pkgVersion: PKG.version, colors });
+      assert.ok(await pathExists(join(classicLink, 'SKILL.md')), 'classic .claude link survives the target drop');
+
+      await uninstallProject({ projectRoot: tmp, colors });
+      assert.ok(await pathExists(join(classicDir, 'SKILL.md')), 'classic .agents skill survives uninstall');
+      assert.ok(await pathExists(join(classicLink, 'SKILL.md')), 'classic .claude link survives uninstall');
+      assert.ok(!(await pathExists(join(tmp, '.agents', 'skills', 'lumi-project-setup'))));
+    } finally {
+      await cleanTmp(tmp);
     }
   });
 });

@@ -15,7 +15,7 @@ import { join, resolve as resolvePath } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { fileHash } from './fs.js';
+import { fileHash, pathExists } from './fs.js';
 import { normalizeKey, readRegistry, writeRegistry } from './registry.js';
 // Direct import — used ONLY for the console-restoration test below, where the
 // assertion is about in-process global state (console.log identity) that a
@@ -829,10 +829,6 @@ describe('lumina wikis add --provision — console-suppression safety', () => {
   });
 });
 
-async function pathExistsHelper(p) {
-  try { await access(p); return true; } catch { return false; }
-}
-
 describe('lumina wikis — project-mode repos are refused', () => {
   test('inspect on a project-mode repo exits 2, refused, writes nothing', async () => {
     const workspace = await installSandboxWiki('proj-inspect', ['--mode', 'project']);
@@ -920,6 +916,7 @@ describe('lumina wikis — project-mode repos are refused', () => {
     const entry = report.wikis.find((w) => w.path === workspace);
     assert.ok(entry, 'doctor must still report the entry, not drop it');
     assert.ok(entry.issues.some((issue) => /project-mode/.test(issue)));
+    assert.equal(entry.hasManifest, true);
   });
 
   test('doctor skips a registered entry with no manifest but a committed project.yaml (teammate clone), and --fix never seeds raw//wiki/', async () => {
@@ -945,8 +942,9 @@ describe('lumina wikis — project-mode repos are refused', () => {
     const entry = report.wikis.find((w) => w.path === workspace);
     assert.ok(entry, 'doctor must still report the entry, not drop it');
     assert.ok(entry.issues.some((issue) => /project-mode/.test(issue)));
-    assert.ok(!(await pathExistsHelper(join(workspace, 'raw'))), '--fix must never seed raw/ into a project-mode repo');
-    assert.ok(!(await pathExistsHelper(join(workspace, 'wiki'))), '--fix must never seed wiki/ into a project-mode repo');
+    assert.equal(entry.hasManifest, false, 'a teammate clone has no local manifest');
+    assert.ok(!(await pathExists(join(workspace, 'raw'))), '--fix must never seed raw/ into a project-mode repo');
+    assert.ok(!(await pathExists(join(workspace, 'wiki'))), '--fix must never seed wiki/ into a project-mode repo');
   });
 });
 

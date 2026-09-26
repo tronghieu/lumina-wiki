@@ -44,7 +44,7 @@ import { createRequire } from 'node:module';
 
 import { addWiki, removeWiki, listWikis, resolveWiki, refreshPacks, normalizeKey, sameDirectory } from './registry.js';
 import { checkLayout } from './layout.js';
-import { ensureDir } from './fs.js';
+import { ensureDir, pathExists } from './fs.js';
 import { isProjectModeRepo, projectModeRefusalMessage } from './manifest.js';
 
 const require = createRequire(import.meta.url);
@@ -664,10 +664,14 @@ async function doctorOne(key, entry, fix) {
   // a teammate clone with no local manifest but a committed project.yaml/
   // install.json — `--fix` must never seed raw//wiki/ into a project repo.
   if (await isProjectModeRepo(wikiPath)) {
-    return {
-      key, path: wikiPath, reachable: true, hasManifest: true, structureOk: true, lintOk: true,
+    const report = {
+      key, path: wikiPath, reachable: true,
+      hasManifest: await pathExists(join(wikiPath, '_lumina', 'manifest.json')),
+      structureOk: true, lintOk: true,
       issues: ['This is now a Lumina project-mode repo; skipped (not managed by lumi-hub)'],
     };
+    SKIPPED_PROJECT_REPORTS.add(report);
+    return report;
   }
 
   const manifestPath = join(wikiPath, '_lumina', 'manifest.json');
@@ -746,9 +750,17 @@ async function doctorOne(key, entry, fix) {
   return { key, path: wikiPath, reachable: true, hasManifest, structureOk, lintOk, issues };
 }
 
+// doctorOne reports for skipped project-mode repos: never an issue, whatever
+// their real hasManifest value (kept out of the JSON shape on purpose).
+const SKIPPED_PROJECT_REPORTS = new WeakSet();
+
+function isHealthy(w) {
+  return SKIPPED_PROJECT_REPORTS.has(w) || (w.reachable && w.hasManifest && w.structureOk && w.lintOk);
+}
+
 function printDoctorHuman(result) {
   for (const w of result.wikis) {
-    const healthy = w.reachable && w.hasManifest && w.structureOk && w.lintOk;
+    const healthy = isHealthy(w);
     console.log(`${w.key}  [${healthy ? 'ok' : 'issues'}]`);
     console.log(`  path: ${w.path}`);
     for (const issue of w.issues) console.log(`  - ${issue}`);
@@ -779,7 +791,7 @@ async function runDoctor(args, options, json) {
   }
 
   const result = { schemaVersion: 1, wikis: wikiReports };
-  const anyIssue = wikiReports.some((w) => !w.reachable || !w.hasManifest || !w.structureOk || !w.lintOk);
+  const anyIssue = wikiReports.some((w) => !isHealthy(w));
   const code = anyIssue ? 1 : 0;
 
   if (json) {

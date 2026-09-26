@@ -80,7 +80,6 @@ export default {
   'project.success.installed':                 '[done] Lumina project mode installed.',
   'project.success.targets':                   '  Targets:  {targets}',
   'project.success.skills':                    '  Skills:   {count} installed',
-  'project.warn.foreign_skill':                '  [warn] Found an existing directory at "{path}" that Lumina does not recognize as its own. Lumina will not touch it.',
   'project_uninstall.done.kept':                '[done] Lumina project mode uninstalled. _lumina/facts/ and _lumina/config/ were kept — while _lumina/config/project.yaml exists, this repo is still detected as project mode; delete it to switch back to classic.',
   'project_uninstall.done.deleted':             '[done] Lumina project mode uninstalled. _lumina/facts/ and _lumina/config/ were removed.',
 
@@ -138,5 +137,7 @@ export default {
 
   // ── Symlink error ──────────────────────────────────────────────────────────
   'error.symlink':                             '  [error] Failed to link {skill}: {message}',
+  'error.mode_conflict.project':               '"{dir}" is already set up in project mode, so a {mode} install is refused. Re-run with no --mode to upgrade it as-is. To switch it to classic, first delete _lumina/config/project.yaml, _lumina/project/install.json, and _lumina/manifest.json.',
+  'error.mode_conflict.classic':               '"{dir}" is a classic Lumina install, so a {mode} install is refused. Re-run with no --mode to upgrade it as-is, or run lumina uninstall first to switch it to project mode.',
 
 };

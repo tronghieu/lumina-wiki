@@ -27,6 +27,7 @@ import {
   migrateManifest,
   cleanupObsoleteCatalog,
   detectInstallMode,
+  isProjectModeRepo,
 } from './manifest.js';
 
 async function makeTmpDir() {
@@ -575,6 +576,25 @@ describe('detectInstallMode', () => {
       assert.match(err.message, /MANIFEST_READ_FAILED/);
       return true;
     });
+  });
+});
+
+describe('isProjectModeRepo', () => {
+  test('MODE_CONFLICT (classic manifest + project.yaml) counts as project', async () => {
+    const root = await setupProjectRoot(await makeTmpDir());
+    await writeManifest(root, { schemaVersion: MANIFEST_SCHEMA_VERSION, packageVersion: '1.14.0', mode: 'classic' });
+    await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'config', 'project.yaml'), 'schemaVersion: 1\n');
+    assert.equal(await isProjectModeRepo(root), true);
+  });
+
+  test('corrupt manifest: project only when a project signal exists', async () => {
+    const root = await setupProjectRoot(await makeTmpDir());
+    await writeFile(join(root, '_lumina', 'manifest.json'), '{broken', 'utf8');
+    assert.equal(await isProjectModeRepo(root), false);
+    await mkdir(join(root, '_lumina', 'project'), { recursive: true });
+    await writeFile(join(root, '_lumina', 'project', 'install.json'), '{}\n');
+    assert.equal(await isProjectModeRepo(root), true);
   });
 });
 

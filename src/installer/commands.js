@@ -249,19 +249,16 @@ export async function installCommand(opts = {}) {
   // above. Detection is fixed per repo (AD-2): a repo already set up one way
   // ignores --mode entirely unless it conflicts, in which case nothing is
   // written and the process exits 3.
+  // Locale picked for the mode prompt; reused by either flow so an
+  // interactive session asks for it once.
+  let presetLocale = null;
   {
     // detectInstallMode itself throws (code 3) for a classic manifest sitting
     // alongside a committed project signal (Design Notes rule 4) — let that
     // propagate as-is, nothing written.
     const detectedMode = await detectInstallMode(projectRoot);
     if (opts.mode && detectedMode && detectedMode !== opts.mode) {
-      const e = new Error(
-        `MODE_CONFLICT: "${projectRoot}" is already set up in '${detectedMode}' mode; ` +
-        `--mode ${opts.mode} is refused. Re-run with no --mode to upgrade it as-is. To switch this repo ` +
-        `back to classic, first delete _lumina/config/project.yaml and _lumina/project/install.json.`,
-      );
-      e.code = 3;
-      throw e;
+      throw await modeConflictError(projectRoot, detectedMode, opts.mode, opts.lang);
     }
 
     let resolvedMode = detectedMode ?? opts.mode ?? null;
@@ -269,7 +266,6 @@ export async function installCommand(opts = {}) {
     // install.json) before this call — never re-prompt for it, and default
     // silently rather than ask again (teammate-clone rows: "no prompts").
     const wasDetected = detectedMode !== null;
-    let presetLocale = null;
     if (!resolvedMode) {
       if (Boolean(opts.yes) || opts.profile === 'minimal') {
         // Minimal profile is always hub-driven, never a human at a terminal.
@@ -348,7 +344,15 @@ export async function installCommand(opts = {}) {
       cwd: projectRoot,
       existingManifest,
       defaultLocale: opts.lang ?? 'en',
+      presetLocale,
       resolveDestination: async (directory) => {
+        // The typed directory was never mode-checked: refuse a project repo
+        // (manifest mode, or only a committed project.yaml/install.json)
+        // before any further prompt, nothing written.
+        const typedMode = await detectInstallMode(resolve(directory));
+        if (typedMode === 'project') {
+          throw await modeConflictError(resolve(directory), 'project', 'classic', opts.lang);
+        }
         const manifest = await readManifestForInstall(directory);
         if (!manifest) return null;
         return {
@@ -647,12 +651,18 @@ export async function uninstallCommand(opts = {}) {
   const projectRoot = resolve(cwd);
   const colors = await getColorFns();
 
-  // Project mode branches before ANY classic step (AD-17). A detection
-  // failure (corrupt manifest, or a classic-manifest/project-signal
-  // conflict) is not a reason to refuse an uninstall — treat it as "not
-  // project" and fall through to the classic path below, which is exactly
-  // what ran here before project mode existed.
-  const mode = await detectInstallMode(projectRoot).catch(() => null);
+  // Project mode branches before ANY classic step (AD-17). A classic
+  // manifest next to a committed project signal (MODE_CONFLICT) is refused,
+  // nothing removed (AD-2). Any other detection failure (corrupt manifest)
+  // still routes a repo with a project signal to the project uninstall —
+  // the classic path's `rm -rf _lumina` would destroy its facts/ and config/.
+  let mode;
+  try {
+    mode = await detectInstallMode(projectRoot);
+  } catch (err) {
+    if (String(err.message).startsWith('MODE_CONFLICT')) throw err;
+    mode = (await hasProjectSignal(projectRoot)) ? 'project' : null;
+  }
   if (mode === 'project') {
     const { runProjectUninstallCommand } = await import('./project-mode.js');
     await runProjectUninstallCommand(opts, projectRoot);
@@ -1038,18 +1048,33 @@ function validateValues(values, validSet, label) {
   }
 }
 
-// `--mode project` refuses classic-only flags — checked both against a
+// Project mode refuses classic-only flags — checked both against a
 // literal `--mode project` and against the mode gate's resolved mode (a repo
 // auto-detected as project must refuse the same flags even when the user
 // never typed --mode). One message, one check, called from both points.
 function assertNoClassicOnlyFlags(opts) {
   if (opts.packs || opts.agents || opts.profile) {
     const e = new Error(
-      '--mode project cannot be combined with --packs, --agents, or a profile.',
+      'Project mode (detected or --mode project) cannot be combined with --packs, --agents, or a profile.',
     );
     e.code = 1;
     throw e;
   }
+}
+
+// MODE_CONFLICT (exit 3): the repo is already set up in `detectedMode` and a
+// `requestedMode` install was asked for. Localized via --lang, else the
+// installed locale, else EN; the MODE_CONFLICT prefix stays machine-readable.
+async function modeConflictError(projectRoot, detectedMode, requestedMode, lang) {
+  let locale = 'en';
+  try {
+    locale = normalizeLangFlag(lang) ?? (await readManifest(projectRoot))?.locale ?? 'en';
+  } catch { /* EN fallback */ }
+  const { t } = await loadLocale(locale);
+  const key = detectedMode === 'project' ? 'error.mode_conflict.project' : 'error.mode_conflict.classic';
+  const e = new Error(`MODE_CONFLICT: ${t(key, { dir: projectRoot, mode: requestedMode })}`);
+  e.code = 3;
+  return e;
 }
 
 // Normalize/validate a raw `--lang` flag value. Returns the normalized

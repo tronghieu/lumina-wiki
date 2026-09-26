@@ -44,6 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import { normalizeKey } from './registry.js';
+import { pathExists } from './fs.js';
 
 const CLI = fileURLToPath(new URL('../../bin/lumina.js', import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -99,15 +100,6 @@ function diffSnapshots(before, after) {
     .filter((k) => afterKeys.has(k) && before.get(k) !== after.get(k))
     .sort();
   return { added, removed, changed };
-}
-
-async function pathExists(path) {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**

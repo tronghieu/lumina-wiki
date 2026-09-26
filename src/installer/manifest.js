@@ -490,15 +490,19 @@ export async function detectInstallMode(projectRoot) {
 
 /**
  * True when `projectRoot` is a Lumina project-mode repo (per
- * `detectInstallMode`, treating any detection failure as "not project" —
- * refusing to detect must never be the reason a caller wrongly manages a
- * project-mode repo, or wrongly refuses a classic one).
+ * `detectInstallMode`). On a detection failure (corrupt manifest, or a
+ * MODE_CONFLICT) any committed project signal still counts as project —
+ * lumi-hub must never manage (e.g. `doctor --fix` seeding raw/) such a repo.
  *
  * @param {string} projectRoot
  * @returns {Promise<boolean>}
  */
 export async function isProjectModeRepo(projectRoot) {
-  return (await detectInstallMode(projectRoot).catch(() => null)) === 'project';
+  try {
+    return (await detectInstallMode(projectRoot)) === 'project';
+  } catch {
+    return hasProjectSignal(projectRoot);
+  }
 }
 
 /**

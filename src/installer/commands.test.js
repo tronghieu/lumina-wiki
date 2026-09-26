@@ -1351,7 +1351,15 @@ describe('installCommand — mode gate applies bad-flags against the resolved mo
     const tmp = await makeTmpDir();
     const workspace = join(tmp, 'proj-minimal-default');
     await mkdir(workspace, { recursive: true });
+    // Fake a TTY so the non-TTY fallback can't pass this on its own: only
+    // the minimal guard keeps the mode prompt from running.
+    const ttyDesc = {
+      stdin: Object.getOwnPropertyDescriptor(process.stdin, 'isTTY'),
+      stdout: Object.getOwnPropertyDescriptor(process.stdout, 'isTTY'),
+    };
     try {
+      process.stdin.isTTY = true;
+      process.stdout.isTTY = true;
       // No `yes: true` here on purpose: if the "never prompt for minimal"
       // guard regressed, this would hang waiting on a TTY prompt instead of
       // completing — the 30s test timeout would catch it either way, but
@@ -1360,6 +1368,10 @@ describe('installCommand — mode gate applies bad-flags against the resolved mo
       await access(join(workspace, '_lumina', 'manifest.json'));
       await assert.rejects(() => access(join(workspace, '_lumina', 'project')));
     } finally {
+      for (const [name, desc] of Object.entries(ttyDesc)) {
+        if (desc) Object.defineProperty(process[name], 'isTTY', desc);
+        else delete process[name].isTTY;
+      }
       await cleanTmp(tmp);
     }
   });

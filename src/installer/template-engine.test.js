@@ -271,6 +271,11 @@ describe('upsertMarkerBlock', () => {
     assert.ok(result.split('\r\n').every(line => !line.includes('\n')));
   });
 
+  test('unterminated last line is not counted: one CRLF line picks CRLF', () => {
+    const result = upsertMarkerBlock('a\r\nb', OPEN, CLOSE, 'body');
+    assert.equal(result, `a\r\nb\r\n\r\n${OPEN}\r\nbody\r\n${CLOSE}\r\n`);
+  });
+
   test('replaces only the region between existing markers, keeps bytes outside untouched', () => {
     const existing = 'before\n\n' + OPEN + '\nold body\n' + CLOSE + '\n\nafter\n';
     const result = upsertMarkerBlock(existing, OPEN, CLOSE, 'new body');
