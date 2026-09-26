@@ -285,6 +285,20 @@ describe('prepareEnvelope: all-or-nothing validation', () => {
     });
   });
 
+  test('an unprefixed path#anchor object with an unknown anchor is rejected, not widened to the doc', () => {
+    const deps = makeDeps();
+    const input = basicInput({
+      facts: [{
+        kind: 'edge', subject: `doc:${SOURCE}`, relation: 'supersedes', object: `${TARGET}#no-such-anchor`,
+        evidence: { quote: 'Accepted' }, provenance: 'extracted',
+      }],
+    });
+    assert.throws(() => prepareEnvelope(input, deps), (err) => {
+      assert.match(err.errors[0].message, /anchor the target doc does not have/);
+      return true;
+    });
+  });
+
   test('an unknown concept object is rejected (prefixed and does not resolve)', () => {
     const deps = makeDeps();
     const input = basicInput({

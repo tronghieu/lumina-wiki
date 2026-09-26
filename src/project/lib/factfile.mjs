@@ -59,7 +59,11 @@ function checkSubject(subject, source, doc) {
 function canonicalizeObject(raw, citingDoc, resolve) {
   const already = PREFIXED_ID_RE.test(raw);
   const result = resolve(raw, citingDoc);
-  if (result.kind === 'resolved') return result.targetId;
+  if (result.kind === 'resolved') {
+    // An anchor the target doc lacks falls back to the whole doc; for a fact that is a silent widening, so reject it.
+    if (raw.includes('#') && result.targetId.startsWith('doc:')) throw new Error(`object "${raw}" names an anchor the target doc does not have`);
+    return result.targetId;
+  }
   if (result.kind === 'ignored') return raw;
   // 'dangling'
   if (already) throw new Error(`object "${raw}" does not resolve`);
