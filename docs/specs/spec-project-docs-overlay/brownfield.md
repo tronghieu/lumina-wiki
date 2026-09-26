@@ -13,9 +13,9 @@ These invariants stay fully in force for classic installs.
 
 ## Reused
 
-- Schema-as-pure-data pattern (`schemas.mjs`), extended with the meta-ontology.
-- Graph engine and lint engine.
-- `src/scripts/lib/globs.mjs` matcher.
+- Schema-as-pure-data pattern (`schemas.mjs`), applied to a separate meta-ontology module.
+- Patterns from the classic graph and lint engines (JSON-over-Bash CLI, exit codes, `--json` report shape). The project engine is a self-contained tree (`src/project/`) and imports nothing from `src/scripts/`; see the architecture spine.
+- Glob semantics of `src/scripts/lib/globs.mjs`, reimplemented with a parity test.
 - `/lumi-ask`, `/lumi-verify` patterns. `lumi-hub` registration is out of scope.
 - Installer machinery: atomic writes, manifests, skills install, `.gitignore` handling, and the `<!-- lumina:schema -->` marker-region rewrite, reused for the `<!-- lumina:project -->` block in existing `AGENTS.md`/`CLAUDE.md`.
 

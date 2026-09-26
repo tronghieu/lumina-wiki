@@ -3,7 +3,7 @@
 ## Selection rules
 
 - A file is in scope when it matches at least one include pattern and no exclude pattern. Exclude always wins; order does not matter. No `!` negation.
-- Syntax is `*` (within one path segment) and `**` (any depth) only, via `matchGlob` in `src/scripts/lib/globs.mjs`. No `{a,b}`; list two patterns instead.
+- Syntax is `*` (within one path segment) and `**` (any depth) only, with the same semantics as classic `matchGlob` in `src/scripts/lib/globs.mjs` (the project engine carries its own compiler, checked by a parity test). No `{a,b}`; list two patterns instead.
 - A bare directory name means everything under it: `docs` = `docs/**`.
 - Patterns are repo-relative and pass `safePath()`; `..`, absolute paths, and drive letters are rejected.
 - Scanner, hook, and lint share one matcher, so they never disagree on scope.

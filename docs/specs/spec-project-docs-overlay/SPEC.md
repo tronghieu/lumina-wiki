@@ -7,6 +7,7 @@ companions:
   - brownfield.md
   - pilot-evidence.md
   - ../../project-context.md
+  - ../../planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md
 sources:
   - ../../brainstorming/brainstorm-lumina-project-docs-overlay-2026-09-26/brainstorm-intent.md
 ---
@@ -64,7 +65,9 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 - Lumina calls no LLM API. All inference is done by the host coding agent through skills; hooks never invoke an agent.
 - The meta-ontology is pure data in code (the `schemas.mjs` discipline: no I/O). Lint and cross-wiki queries key on meta-types and meta-relations, never on project type names.
 - Domain neutrality: lint attaches only to governance meta-types (Decision, Requirement/Goal, Rule) and generic relation rules (cycles, `contradicts`). Setup-skill guidance must not assume software doc types, ID schemes, or folder names as the only frame.
-- Source selection follows `source-scope.md`: one matcher shared by scanner, hook, and lint, built on `src/scripts/lib/globs.mjs`.
+- Source selection follows `source-scope.md`: one matcher shared by every engine subcommand, with the same `*`/`**` semantics as classic `matchGlob`.
+- Project config is YAML at `_lumina/config/project.yaml`.
+- Project-mode host targets in this iteration: Claude Code, Codex, Antigravity.
 - The parsed graph and the viewer file are gitignored; agent-extracted facts are committed, one record per source doc.
 - The viewer is one self-contained HTML file that works from `file://`, loads nothing from the network (zero-telemetry rule 10), and uses no React (see `graph-view.md`).
 - Classic IDE installs and AI-agent installs stay byte-identical to today; all repo policies in `project-context.md` hold (atomicWrite, safePath, no postinstall, no native modules, empty devDependencies, cold start under 300 ms with lazy imports, exit codes 0–4, no emoji, en/vi/zh doc sync).
