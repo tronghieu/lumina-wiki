@@ -250,7 +250,8 @@ export async function sameDirectory(a, b) {
   let statA;
   let statB;
   try {
-    [statA, statB] = await Promise.all([stat(a), stat(b)]);
+    // bigint: Windows file IDs are 64-bit; as Numbers, two nearby IDs can round to one value.
+    [statA, statB] = await Promise.all([stat(a, { bigint: true }), stat(b, { bigint: true })]);
   } catch (err) {
     if (err.code === 'ENOENT') return stringsEqual;
     // Non-ENOENT (permissions, ENOTDIR, ...): identity unknown — fall back
