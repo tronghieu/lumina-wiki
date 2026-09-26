@@ -34,11 +34,11 @@ mis-scans.
 schemaVersion: 1
 sources:
   include: ["**"]              # "." and "./" match nothing — use "**" for the whole repo
-  exclude: ["docs/templates/**"]
+  exclude: ["templates/**"]    # paths aren't assumed to sit under a "docs/" root — a software repo's might be "docs/templates/**"
 types:
   Record:                       # your own type name; declaration order matters (see "Type resolution")
     metaType: Decision           # one of the 11 meta-types PROJECT.md lists
-    paths: ["docs/records/**"]   # paths and frontmatter, given together, are ANDed
+    paths: ["records/**"]        # paths and frontmatter, given together, are ANDed — a software repo's equivalent might be "docs/adr/**"
     frontmatter: { type: record }
     idPattern: 'REC-\d{3}'       # always single-quoted; needs a distinctive literal prefix
     status: { heading: Status }  # or {frontmatter: <key>}, a bare list of both, or the wrapped form below
@@ -48,7 +48,7 @@ relations:
 relatedRules:
   - { source: Capability, target: Decision, relation: governs, inverse: true }  # meta-TYPE names, not project type names
 externalIds:
-  - { pattern: 'FR-\d+', metaType: Requirement }
+  - { pattern: 'REQ-\d+', metaType: Requirement }  # a software repo's equivalent might instead be 'FR-\d+'
 concepts:
   - { name: credit limit, aliases: [hạn mức] }
 ```
@@ -120,8 +120,9 @@ whose frontmatter `type` has no `types` entry mapped to it. `P11` (a cited
 ID matching no `idPattern`/`externalIds`) is fixed with an `externalIds`
 entry, not a `types` change — cross-check every `P09` (dangling reference)
 target against the scan's ID shapes; one missing from `externalIds` (e.g.
-`NFR1`) is a likely fix. `P16` covers only `sources.include`; check each
-type's matched file count against the scan separately.
+`POL-9`, or in a software repo `NFR1`) is a likely fix. `P16` covers only
+`sources.include`; check each type's matched file count against the scan
+separately.
 
 **10. Exit codes:** `config-check` exit 2 with no `errors[]` means no config
 file or no project root — not a validation failure. Exit 3 on any
@@ -183,13 +184,16 @@ findings at or above `--fail-on` — not a failed run.
    default. **If nothing is approved, stop here: write nothing, run no
    validation, and report that no changes were made.**
 
-7. **Write only what was approved.** `_lumina/config/project.yaml`
-   (`schemaVersion: 1`) if the config, or an approved subset of its keys,
-   was approved; approved frontmatter fixes, one doc at a time; an approved
-   glossary file. On a re-run, edit only the approved keys in place — every
-   other key, and every comment, stays byte-identical. Never write
-   `_lumina/facts/`, `_lumina/graph/`, or `_lumina/_state/`, and never run
-   `facts-write`.
+7. **Write only what was approved.** Before this step's first write, capture
+   a baseline with `git status --porcelain` (read-only) — the installer's
+   own output (e.g. manifest bookkeeping) can already show changes here, so
+   Definition of Done (d) diffs against this baseline, not against a clean
+   tree. Then write: `_lumina/config/project.yaml` (`schemaVersion: 1`) if
+   the config, or an approved subset of its keys, was approved; approved
+   frontmatter fixes, one doc at a time; an approved glossary file. On a
+   re-run, edit only the approved keys in place — every other key, and every
+   comment, stays byte-identical. Never write `_lumina/facts/`,
+   `_lumina/graph/`, or `_lumina/_state/`, and never run `facts-write`.
 
 8. **Validate through the engine, in order** (`node _lumina/project/project.mjs <subcommand>`; only when a config was written):
    1. `config-check`. On exit 2 with `errors[]`, fix the YAML and retry, up
@@ -256,13 +260,15 @@ family's status is not tracked.
 </example>
 
 <example>
-An ID shape (e.g. `FR-142`) is cited across several docs but never declared
-as the ID of any in-scope doc. The proposal adds it to `externalIds`, not
-`types`:
+An ID shape (e.g. `POL-142`) is cited across several docs but never
+declared as the ID of any in-scope doc. The proposal adds it to
+`externalIds`, not `types`:
 ```yaml
 externalIds:
-  - { pattern: 'FR-\d+', metaType: Requirement }  # docs/features/checkout.md:12 "see FR-142"
+  - { pattern: 'POL-\d+', metaType: Requirement }  # handbook/onboarding.md:12 "see POL-142"
 ```
+(A software repo's equivalent might be `'FR-\d+'` cited from a feature
+spec instead.)
 </example>
 
 <example>
@@ -287,7 +293,8 @@ changes and can be re-run any time.
   fits a software project's doc names or ID schemes. Map by what a family of
   docs does, not by its label or folder.
 - No `git commit`, `add`/`stage`, or `push`, and no hooks. A read-only `git
-  status --porcelain` is fine, only to confirm the Definition of Done.
+  status --porcelain` is fine — once before step 7's first write, to capture
+  a baseline, and once after, to confirm the Definition of Done against it.
 
 ## Definition of Done
 
@@ -297,5 +304,7 @@ If a config (or an approved subset) was written, verify before reporting done:
 (a) `config-check` exits 0 (after at most 3 fix-and-re-approve attempts);
 (b) `scope`'s file count matches the scan, or every mismatch is explained;
 (c) `lint` ran and its findings are summarized by rule id;
-(d) `git status --porcelain` (read-only) shows changes only under
-    `_lumina/config/project.yaml` and any approved frontmatter/glossary paths.
+(d) `git status --porcelain` (read-only), compared against the baseline
+    captured before step 7's first write, shows new changes only under
+    `_lumina/config/project.yaml` and any approved frontmatter/glossary
+    paths.

@@ -69,11 +69,11 @@ JSON
 ```json
 {
   "kind": "edge",
-  "subject": "doc:docs/adr/0052-seli-owns-purchasing-supplier-ap-and-the-cost-book.md",
+  "subject": "doc:docs/adr/0052-acme-owns-purchasing-supplier-ap-and-the-cost-book.md",
   "relation": "supersedes",
   "object": "ADR-0009",
   "scope": "AP clause and supplier-payment seam",
-  "evidence": { "quote": "Partially supersedes [ADR-0009](0009-accounts-receivable-owned-by-seli.md): its\nAP clause and its supplier-payment seam are replaced, its AR decision stands." },
+  "evidence": { "quote": "Partially supersedes [ADR-0009](0009-accounts-receivable-owned-by-acme.md): its\nAP clause and its supplier-payment seam are replaced, its AR decision stands." },
   "provenance": "extracted"
 }
 ```
@@ -81,7 +81,7 @@ An attr, fragment status only:
 ```json
 {
   "kind": "attr",
-  "subject": "frag:docs/adr/0052-seli-owns-purchasing-supplier-ap-and-the-cost-book.md#3-the-cost-book-superseded-by-adr-0053",
+  "subject": "frag:docs/adr/0052-acme-owns-purchasing-supplier-ap-and-the-cost-book.md#3-the-cost-book-superseded-by-adr-0053",
   "relation": "status",
   "value": "superseded",
   "evidence": { "quote": "### 3. The cost book (superseded by ADR-0053)" },
@@ -141,7 +141,9 @@ from a fact you or an earlier ingest already committed — see fact 9). Run
 one `query node <path>` per target path the batch might cite (never
 `build`'s whole graph, ~1 MB on a real repo, for this). The `scope` values
 across every `out` and `in` edge's `evidence` are the labels already used
-against that target, for fact 5.
+against that target, for fact 5. A target with no node yet makes
+`query node` exit 2 (`no node resolves for ref: ...`) — treat that as no
+known frags and no existing scope labels for it, not a reason to stop.
 
 **5. Partial supersession, the two supported shapes.** A `supersedes` fact
 with a `doc:` object and no `scope` means "replaces the whole target" —
@@ -182,8 +184,11 @@ the other doc's own ingest pass if and when it runs.
 - A second exit 1 for the same doc, or exit 2 (bad/unsafe/out-of-scope
   source path): skip that doc, note why in the report, and continue with
   the rest of the batch.
-- Exit 3 (lock timeout, internal error): stop the whole batch and report —
-  this is not doc-specific.
+- Exit 3 whose error starts "refusing to replace" (the committed fact file
+  is a newer schema than this engine writes) is doc-specific: skip that
+  doc, note why, and continue with the rest of the batch.
+- Any other exit 3 (lock timeout, internal error): stop the whole batch and
+  report — this is not doc-specific.
 
 **8. Nothing to add is still a write.** A doc whose prose adds nothing
 beyond the parse gets `facts: []` — `status` then reports it `fresh`, same
@@ -215,16 +220,31 @@ differ only in wording or evidence collapse into one, silently, with the
 first one's evidence kept. Report this number, not the count of fact
 objects you sent.
 
-**11. Dangling objects never resolve themselves.** An edge fact whose
-`object` cannot be resolved at all (no declared-ID/path/concept match) is
-still accepted — it becomes a dangling reference, and a doc with one stays
-`stale` forever (checked every run, hash or no hash), meaning it is
-re-selected on every future ingest until the fact is fixed or dropped.
-Before writing an edge fact whose object is unprefixed, confirm it resolves
-first: `query node <object>` must exit 0. Write a concept object as the
-concept's bare name from `project.yaml` (unprefixed) — the engine matches
-it against the configured names and aliases the same way it matches a path
-or declared ID; you do not compute or write a `concept:` id yourself.
+**11. Confirm every edge object's resolution with `query resolve`.** Before
+writing an edge fact, run
+`node _lumina/project/project.mjs query resolve <citing-doc> <object>` —
+`<citing-doc>` is this doc's own source path (the same string you send
+`facts-write` as `source`), `<object>` exactly as you'd write it into the
+fact. It resolves the object exactly as `facts-write` would — a
+doc-relative path from the citing doc, an existing out-of-scope doc, a
+configured concept, a declared ID, or a heading anchor — and reports
+`resolution`:
+- `resolved` — keep the fact as drafted.
+- `rejected` — `facts-write` would reject the whole batch over this one
+  fact (e.g. an anchor the in-scope target doesn't have); fix the object
+  per the reported `error`, or drop the fact if there's no fix.
+- `dangling` or `ignored` — drop the fact. A dropped dangling plain
+  reference still surfaces on its own as a P09 lint finding from the
+  parse — writing a meta-relation fact for an object that won't resolve
+  adds nothing.
+Exit 1 is a bad `<citing-doc>`/`<object>` argument, not a resolution
+outcome — fix the call. Exit 2 means `<citing-doc>` itself isn't in
+scope, which should never happen for a doc `status` just offered as a
+candidate — treat it as a signal to double-check the doc's path.
+Write a concept object as the concept's bare name from `project.yaml`
+(unprefixed) — the engine matches it against the configured names and
+aliases the same way it matches a path or declared ID; you do not compute
+or write a `concept:` id yourself.
 
 ## Instructions
 
@@ -234,14 +254,21 @@ or declared ID; you do not compute or write a `concept:` id yourself.
    ```
    Candidates: every doc whose `state` is `changed` or `stale` (update
    mode, the default). Add `never-ingested` docs only if the user asked for
-   them explicitly or this is the first run (fact 1); named paths absent
-   from `status`'s own list are reported and skipped, never attempted. If
-   the candidate count exceeds 20, show it and wait for approval before
-   continuing.
+   them explicitly or this is the first run (fact 1). A user-named folder is
+   not itself a `status` entry — expand it to every path under it that
+   `status` does list, and treat each of those as a named candidate; report
+   the folder as out of scope only when none of `status`'s paths fall under
+   it. A user-named file absent from `status`'s own list is reported and
+   skipped, never attempted. If the candidate count exceeds 20, show it and
+   wait for approval before continuing; on "no", stop the run here, write
+   nothing, and report zero candidates processed — unless the user instead
+   names a smaller subset to proceed with.
 
 2. **Gather what exists** (Engine facts §4):
    - Per target path the batch might cite: run `query node <path>` to learn
-     its known fragment ids (`node.frags`) and already-used scope labels.
+     its known fragment ids (`node.frags`) and already-used scope labels. An
+     exit 2 (no node yet for that target) means no known frags or scope
+     labels for it — proceed with none, not an error to stop on.
    - Read the `concepts:` list from `_lumina/config/project.yaml` for
      concept names/aliases you may cite unprefixed.
 
@@ -262,33 +289,38 @@ or declared ID; you do not compute or write a `concept:` id yourself.
    - For each fact's `relation`, use one of the 8 canonical names exactly,
      or a project-mapped key (fact 6); note any relation statable only from
      the other side as uncaptured instead of guessing a name.
-   - For each edge fact's unprefixed `object`, confirm it resolves first:
-     `query node <object>` must exit 0 (fact 11). Drop or fix any that
-     doesn't before moving on.
+   - For each edge fact's `object`, confirm its resolution first: `query
+     resolve <this doc's source> <object>` (fact 11). Keep the fact only
+     when `resolution` is `resolved`; when `rejected`, fix the object per
+     `error` and retry, or drop the fact if there's no fix; when `dangling`
+     or `ignored`, drop the fact.
 
 4. **Write.** One `facts-write` call per doc (Engine facts §2, §7, §8, §9,
-   §10): the full current fact set for that doc, piped via a heredoc,
-   `sourceHash` the hash `status` reported. On an all-or-nothing rejection,
-   fix or drop the named facts and resend the whole array once. On a second
-   rejection or exit 2, skip this doc and continue the batch; on exit 3,
-   stop the whole batch.
+   §10), plus at most one retry for that same doc: the full current fact
+   set, piped via a heredoc, `sourceHash` the hash `status` reported. On an
+   all-or-nothing rejection, fix or drop the named facts and resend the
+   whole array once. On a second rejection, exit 2, or an exit 3 whose error
+   starts "refusing to replace", skip this doc and continue the batch; on
+   any other exit 3, stop the whole batch.
 
-5. **Finish.** Re-run `status`; report its `summary` counts. Whenever the
-   `never-ingested` count is non-zero — update mode's own exclusion, a
-   first run or "ingest all" where the user declined the >20 gate, or any
-   other reason some stayed unprocessed — state that count and how to
-   include them (`lumi-project-ingest` "ingest all", "ingest everything",
-   or naming their paths/folders). Suggest running lumi-project-check or
-   lumi-project-verify in a fresh session or subagent — this context's own
-   reasoning just built these facts and is biased toward seeing them as
-   correct.
+5. **Finish.** Re-run `status`; report its `summary` counts, always
+   including the `never-ingested` count — zero or not. When it's non-zero —
+   update mode's own exclusion, a first run or "ingest all" where the user
+   declined the >20 gate, or any other reason some stayed unprocessed —
+   state how to include them (`lumi-project-ingest` "ingest all", "ingest
+   everything", or naming their paths/folders). Suggest running
+   lumi-project-check or lumi-project-verify in a fresh session or
+   subagent — this context's own reasoning just built these facts and is
+   biased toward seeing them as correct.
 
 ## Output Format
 
 ```
 Mode: update (changed/stale only) | all (never-ingested included: <why>)
 Candidates: <N> docs (changed: Y, stale: Z[, never-ingested: X])
-[if N > 20: "N exceeds 20 — proceed? [yes/no]"]
+[if N > 20: "N exceeds 20 — proceed? [yes/no]"; "no" ends the run here,
+  writes nothing, and reports zero candidates processed, unless the user
+  names a smaller subset instead]
 
 docs/adr/0052-....md — 2 facts written (supersedes ADR-0009 scope "...";
   frag status superseded)
@@ -297,8 +329,9 @@ docs/adr/xyz.md — skipped: <engine's error message>
 ...
 
 status after: fresh <N>, changed <N>, stale <N>, never-ingested <N>
-Never-ingested remaining, not processed: <N> — run with "ingest all" or
-  name their paths/folders to include them.
+Never-ingested remaining, not processed: <N> — always stated, even when 0;
+  when non-zero, run with "ingest all" or name their paths/folders to
+  include them.
 Uncaptured (stated only from the other side, no config mapping): <list, or none>
 Suggest: run lumi-project-check or lumi-project-verify in a fresh session
 or subagent.
@@ -311,15 +344,17 @@ skipped.
 ## Examples
 
 <example>
-Seli, `docs/adr/0052-seli-owns-purchasing-supplier-ap-and-the-cost-book.md`
-and `docs/adr/0009-accounts-receivable-owned-by-seli.md` named by the user.
+Acme, `docs/adr/0052-acme-owns-purchasing-supplier-ap-and-the-cost-book.md`
+and `docs/adr/0009-accounts-receivable-owned-by-acme.md` named by the user.
 `status` shows both `never-ingested`. Reading 0052 finds: "Partially
-supersedes [ADR-0009](0009-accounts-receivable-owned-by-seli.md): its
+supersedes [ADR-0009](0009-accounts-receivable-owned-by-acme.md): its
 AP clause and its supplier-payment seam are replaced, its AR decision
 stands." — a meta-relation the parse cannot see (it only saw a plain
 `references` link to 0009) — and its own heading "### 3. The cost book
-(superseded by ADR-0053)". `query node ADR-0009` exits 0, so the object is
-safe. Two facts committed for 0052: the `supersedes` edge (object
+(superseded by ADR-0053)". `query resolve
+docs/adr/0052-acme-owns-purchasing-supplier-ap-and-the-cost-book.md
+ADR-0009` returns `resolution: "resolved"`, so the object is safe. Two
+facts committed for 0052: the `supersedes` edge (object
 `ADR-0009`, scope `"AP clause and supplier-payment seam"`, lifted from the
 quote) and the fragment-status attr (`frag:...#3-the-cost-book-superseded-by-adr-0053`,
 value `superseded`). Reading 0009 finds nothing beyond what the parse and
@@ -339,11 +374,15 @@ supersedes text and the heading are untouched, but the hash changed, so
 the previous example — the `supersedes` edge and the frag-status attr —
 because `facts-write` replaces the whole set regardless of what changed.
 Sending only new material (or nothing, reasoning "the edge already shows in
-`query node`") would silently delete both facts on this call; `status`
-would go straight to `changed` → next run's `facts: []` → the supersedes
-edge gone from the graph. Resending both keeps `query neighbors ADR-0009
---direction in --relation supersedes` returning the item and `status`
-`fresh` for 0052.
+`query node`") would silently drop both facts on this call — and the write
+still succeeds: `facts-write` commits `facts: []` cleanly, no error, no
+warning. `status` right after reports 0052 `fresh`, the same as a full
+resend, because `fresh` only means the hash matches what was last
+committed — it says nothing about which facts that commit carried. The
+supersedes edge and the frag-status attr are simply gone from the graph,
+silently, and nothing re-selects 0052 for another look. Resending both is
+what actually keeps `query neighbors ADR-0009 --direction in --relation
+supersedes` returning the item.
 </example>
 
 <example>
@@ -369,16 +408,21 @@ First run: `summary` shows `{fresh: 0, changed: 0, stale: 0,
 neverIngested: 30}` — nothing has ever been ingested, so every doc is a
 candidate even though none was named and the user said only "ingest".
 30 exceeds 20, so show the count and wait for approval before processing.
+If the user declines, stop here: write nothing, and report that 0 of the
+30 candidates were processed — unless the user names a smaller subset to
+run instead.
 </example>
 
 <example>
 A fact's `object` is written as
-`docs/adr/0009-accounts-receivable-owned-by-seli.md#some-guessed-anchor`.
-`query node` on that same ref exits 2 first — caught before writing. Had it
-been sent anyway, `facts-write` would reject it (exit 1): the target doc
-has no such anchor. Replace it with a `frag:` object confirmed via
-`query node` (fact 4), or with the whole `doc:` object plus a `scope`
-label, and retry once.
+`docs/adr/0009-accounts-receivable-owned-by-acme.md#some-guessed-anchor`.
+`query resolve <this doc's source>
+docs/adr/0009-accounts-receivable-owned-by-acme.md#some-guessed-anchor`
+returns `resolution: "rejected"` with an `error` naming the missing
+anchor — caught before writing. Had it been sent anyway, `facts-write`
+would reject it too (exit 1): the target doc has no such anchor. Replace it
+with a `frag:` object confirmed via `query node` (fact 4), or with the
+whole `doc:` object plus a `scope` label, and retry once.
 </example>
 
 <example>
@@ -408,10 +452,12 @@ it, and continue the batch.
   misspelling is accepted silently and becomes `references` with no
   warning.
 - Never guess an object's `#anchor` on another doc. Only cite a fragment id
-  already confirmed via `query node` (fact 4); omit the anchor entirely for an
-  out-of-scope target (its anchor can never be checked, in or out of
-  scope). Confirm every unprefixed object with `query node` before writing
-  it — an unresolvable one leaves the doc permanently stale.
+  already confirmed via `query node` (fact 4); omit the anchor entirely for
+  an out-of-scope target — resolution silently widens it to the whole
+  document, so the anchor adds nothing. Confirm every edge fact's object
+  with `query resolve <citing-doc> <object>` before writing it (fact 11) —
+  keep only a `resolved` object, fix or drop a `rejected` one, and drop a
+  `dangling` or `ignored` one.
 - Never invent a scope label that is a synonym for one already used against
   the same target — copy it verbatim instead.
 - Never send a partial fact set meaning to "patch" a doc's facts — every
@@ -422,22 +468,31 @@ it, and continue the batch.
 
 Before reporting done, verify:
 
-(a) Every candidate doc got exactly one `facts-write` call that ended in
-    one of: committed (exit 0), skipped after one retry or exit 2 (noted in
-    the report, batch continued), or the whole batch stopped on exit 3.
+(a) Every candidate doc got one `facts-write` call, plus at most one retry,
+    that ended in one of: committed (exit 0), skipped (a second rejection,
+    exit 2, or an exit 3 starting "refusing to replace" — noted in the
+    report, batch continued), or the whole batch stopped on any other
+    exit 3. If the >20 gate was declined, zero candidates were written and
+    the report says so, unless the user named a smaller subset instead.
 (b) A final `status` run shows every successfully-committed doc `fresh`.
 (c) No fact was written whose `subject` doc differs from the doc whose hash
     was sent as `sourceHash`.
-(d) No object anchor was guessed: every `path#anchor` or `frag:...#...`
-    object either names a fragment id already confirmed via `query node`
-    (fact 4), or the fact instead targets the whole `doc:`/declared ID with a
-    `scope` label; no out-of-scope object carries an anchor at all.
+(d) Every edge fact's `object` was confirmed via `query resolve
+    <citing-doc> <object>` before writing (fact 11): kept only when
+    `resolved`, fixed or dropped when `rejected`, dropped when `dangling` or
+    `ignored`. No object anchor was guessed: every `path#anchor` or
+    `frag:...#...` object either names a fragment id already confirmed via
+    `query node` (fact 4), or the fact instead targets the whole
+    `doc:`/declared ID with a `scope` label.
 (e) Every fact resent for a previously-ingested doc includes every
     meta-relation and fragment-status fact its current prose still states,
     not only newly found ones (fact 9).
 (f) No `never-ingested` doc was selected unless the user asked for it
-    explicitly or this was a first run (fact 1).
-(g) The report names the fresh/changed/stale/never-ingested counts, how
-    many `never-ingested` docs remain unprocessed and how to include them,
-    any skipped docs and uncaptured relations, and suggests a fresh-session
-    or subagent check/verify pass.
+    explicitly or this was a first run (fact 1); a user-named folder was
+    expanded to `status`'s own paths under it before being treated as out
+    of scope.
+(g) The report names the fresh/changed/stale/never-ingested counts (the
+    never-ingested count stated even when zero), how many `never-ingested`
+    docs remain unprocessed and how to include them, any skipped docs and
+    uncaptured relations, and suggests a fresh-session or subagent
+    check/verify pass.

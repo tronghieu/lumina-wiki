@@ -53,13 +53,14 @@ behalf.
 | P11 | warning | engine | external ID pattern mismatch | config change (adjust the `externalIds` pattern) or doc edit (fix the typo'd ID), then re-ingest |
 | P12 | warning | engine | unmapped doc type | config change — add or adjust a `types` entry for this doc's type |
 | P13 | warning | engine | stale facts | re-ingest that doc |
-| P14 | error | engine | broken evidence (several distinct causes) | depends on the message — see below |
+| P14 | error or warning | engine | broken evidence (several distinct causes; a doc still on disk but out of scope is warning, not error) | depends on the message — see below |
 | P15 | info | engine | rename candidate | re-ingest that doc at its new path, then see P14 below for what the next prune dry run reports for the old fact file |
 | P16 | warning | engine | include pattern matches no files | config change — fix the typo'd glob in `sources.include` |
 | P17 | warning | engine | frontmatter does not parse | doc edit — fix the malformed YAML frontmatter block |
 | P18 | warning | engine | agent fact sets document status | re-ingest that doc so status lands only on a fragment, never the document |
 | P19 | warning | engine | status sources disagree | config change — stop stacking unrelated status sources, or doc edit to align the two indicators |
-| P20 | warning | engine | Decision status outside lifecycle | doc edit — fix the status text to a lifecycle value, or config change — add a `map` entry translating the project's word to one |
+| P20 | warning | engine | Decision status outside lifecycle (`proposed`, `accepted`, `partially-superseded`, `superseded`, `deprecated`, `rejected`) | doc edit — fix the status text to a lifecycle value, or config change — add a `map` entry translating the project's word to one |
+| P21 | warning | engine | non-string id/relation value in frontmatter | doc edit — quote the value so it parses as a string (e.g. `id: "42"`, not `id: 42`) |
 
 **Why P01–P09 and P11 all end in "then re-ingest":** the relation or
 reference a finding names can come from a fact the ingest skill already
@@ -69,22 +70,23 @@ doc is re-ingested. Naming re-ingest every time costs nothing when the
 finding was parse-only (re-ingest is idempotent there); it is the actual fix
 when it wasn't.
 
-**P14 (`broken evidence`) — the fix depends on the finding's `message` and
-whether the named doc is still in scope:**
-- `broken evidence for fact <id>: quote no longer found: ...` — the doc is
-  still in scope (its facts are simply stale). Re-ingest that doc.
-- `malformed fact file ...`, a `source "<x>" does not match its own path
-  "<y>"`, or `source gone: "<path>" is no longer in scope` — if the named
-  doc is still in scope (check via `status` if unsure), re-ingest it —
-  ingest overwrites a malformed file with a valid one and refreshes a
-  mismatched source. If it is not in scope, there is no ingest remedy: the
-  prune dry run decides (step 5). Run
-  `node _lumina/project/project.mjs facts-prune --dry-run` and read this
-  file's outcome — `removed` means it's prunable (approve the real prune
-  to delete it); `kept` with reason `out-of-scope` means the doc still
-  exists but is excluded by config (bring it back into scope, or leave the
-  file); `rename-candidate` means see P15 below; `newer-schema` means the
-  file's schema is newer than this engine build understands.
+**P14 (`broken evidence`) — severity and fix depend on the finding's
+`message` and whether the named doc is still in scope:**
+- `broken evidence for fact <id>: quote no longer found: ...` — error; the
+  doc is still in scope (its facts are simply stale). Re-ingest that doc.
+- `malformed fact file ...`, or a `source "<x>" does not match its own path
+  "<y>"` — error; if the named doc is still in scope (`status` allowed to
+  check), re-ingest it — ingest overwrites a malformed file with a valid
+  one and refreshes a mismatched source.
+- `source gone: "<path>" is no longer in scope` — **error** when the doc
+  was actually deleted; **warning** when the doc still exists on disk but
+  was excluded from scope by a config change (lint still passes on this
+  finding alone). Either way there is no ingest remedy — PROJECT.md's
+  `facts-prune` flow decides (step 5): `removed` means it's prunable,
+  `kept` with reason `out-of-scope` means leave the file as is (or bring
+  the doc back into scope), `rename-candidate` means see P15 below,
+  `newer-schema` means the file's schema is newer than this engine build
+  understands.
 
 **P15 (`rename candidate`)** — a fact file's `sourceHash` matches an
 in-scope doc that has no envelope of its own yet. Re-ingest that doc at its
@@ -92,8 +94,8 @@ new path; once it has its own committed envelope the old fact file stops
 qualifying as a rename candidate, and the next prune dry run reports it —
 `removed` if the old path is truly gone, same as P14 above.
 
-`checks_run` always lists all twenty ids, P01 through P20; a rule with zero
-findings still appears there, so its length is always 20. The
+`checks_run` always lists all twenty-one ids, P01 through P21; a rule with
+zero findings still appears there, so its length is always 21. The
 `lumi-project-verify` skill's primary focus is P14/P15 by doc, with an offer
 to ingest — this skill still reports them if `lint` emits them, using the
 message-based fixes above.
@@ -128,20 +130,15 @@ message-based fixes above.
    `summary.infos` up front.
 
 5. **Run `facts-prune` for any P14 finding whose doc isn't in scope (or a
-   P15 whose re-ingest already ran).** Follow PROJECT.md's prune flow:
-   dry run first —
-   ```
-   node _lumina/project/project.mjs facts-prune --dry-run
-   ```
-   show `removed`/`kept`/`warnings` alongside the P14 group they explain,
-   get the user's approval, then run the real prune with exactly the dry
-   run's `removed` paths as positional arguments and remind the user to
-   commit. On a stderr `{error, code}`, report it verbatim and stop.
+   P15 whose re-ingest already ran).** Follow PROJECT.md's prune flow
+   exactly (dry run, approval, then the real prune using exactly the dry
+   run's `removed` paths); show its output alongside the P14 group it
+   explains. On a stderr `{error, code}`, report it verbatim and stop.
 
 ## Output Format
 
 ```
-Project lint: 20 rules checked (P01-P20).
+Project lint: 21 rules checked (P01-P21).
 
 <errors> errors, <warnings> warnings, <infos> infos.
 
@@ -159,21 +156,10 @@ P09 (dangling reference) — warning — likely fix: config change or doc edit, 
 ```
 
 When a P14 group names a doc that isn't in scope (or a P15 whose
-re-ingest just ran), follow it with the `facts-prune` dry run:
-```
-Facts-prune dry run:
-  removed: <file>, ...
-  kept: <file> (out-of-scope: doc still exists, excluded by config), ...
-  warnings: <warning>, ...
-Run facts-prune now on the removed files? (yes/no)
-```
-After approval:
-```
-Facts-prune: removed <N> files.
-  skipped: <file> (not-removable), ...
-  failed: <file>: <error>, ...
-Commit the removed fact files.
-```
+re-ingest just ran), follow it with the `facts-prune` dry run and, after
+approval, the real prune — PROJECT.md's own output shapes for both, shown
+directly beneath the P14 group they explain, with no reformatting of your
+own.
 
 If `lint` exits 2 or 3, report the stderr `{error, code}` payload verbatim
 and stop — do not attempt a partial report.
@@ -185,9 +171,9 @@ User wants a lint/health check of the project docs graph.
 
 ```bash
 node _lumina/project/project.mjs lint
-# stdout → {"schemaVersion":1,"checks_run":["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10","P11","P12","P13","P14","P15","P16","P17","P18","P19","P20"],"findings":[...],"summary":{"errors":0,"warnings":142,"infos":0}}
+# stdout → {"schemaVersion":1,"checks_run":["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10","P11","P12","P13","P14","P15","P16","P17","P18","P19","P20","P21"],"findings":[...],"summary":{"errors":0,"warnings":142,"infos":0}}
 ```
-Report: "20 rules checked. 0 errors, 142 warnings, 0 infos. Two groups
+Report: "21 rules checked. 0 errors, 142 warnings, 0 infos. Two groups
 dominate: P09 (dangling reference, 90+ findings — mostly `ADR-040`; config
 change if it's a real external ID, or doc edit if every citer has a typo,
 then re-ingest) and P03 (doc cites a superseded part, ~15 findings — doc
@@ -228,8 +214,9 @@ scope by a config change, not deleted — the file still exists on disk.
 node _lumina/project/project.mjs facts-prune --dry-run
 # stdout → {"ok":true,"dryRun":true,"removed":[],"kept":[{"file":"_lumina/facts/docs/notes/draft.md.json","reason":"out-of-scope"}],"skipped":[],"failed":[],"warnings":[]}
 ```
-Report: "P14 (broken evidence) — error — likely fix: the prune dry run
-decides; nothing removable here — kept:
+Report: "P14 (broken evidence) — **warning** (the doc still exists on
+disk; only a truly deleted doc's P14 is an error) — likely fix: the prune
+dry run decides; nothing removable here — kept:
 _lumina/facts/docs/notes/draft.md.json (out-of-scope: the doc still
 exists but is excluded by config). Bring it back into scope, or leave the
 file." Do not offer the real prune — there is nothing in `removed`.
@@ -255,14 +242,13 @@ config itself is missing. Do not invent a findings report.
 - Never read or write `_lumina/facts/` by hand, `_lumina/graph/`, or
   `_lumina/_state/` directly; only `lint`'s and `facts-prune`'s stdout.
 - Never call `facts-write`, `build`, `query`, `verify-evidence`, or `view`
-  from this skill — it runs `lint` and, when a P14 finding needs it,
+  from this skill — it runs `lint`, `status` (only to check whether a P14's
+  named doc is still in scope), and, when a P14 finding needs it,
   `facts-prune`, and nothing else.
-- Always dry-run `facts-prune` first and show `removed`, `kept` (with
-  reasons), and `warnings` verbatim; run the real prune only after the
-  user explicitly approves it.
-- The real prune's positional arguments are always exactly the dry run's
-  `removed` list — never pass a `kept` file, and never invent a path that
-  wasn't in `removed`.
+- Follow PROJECT.md's `facts-prune` flow exactly (dry run, approval, then
+  the real prune using exactly the dry run's `removed` paths) — run it
+  only for a P14 finding whose doc isn't in scope, or a P15 whose re-ingest
+  already ran.
 - Don't drop P14/P15 findings just because `lumi-project-verify` also covers
   them — report what `lint` emitted; let verify own the "offer ingest"
   action.

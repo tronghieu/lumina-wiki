@@ -1,7 +1,7 @@
 # Dùng project mode cho tài liệu sẵn có của dự án
 
 Project mode xây một đồ thị (graph) có kiểu trên các tài liệu dự án bạn đã có sẵn — quyết định, yêu cầu, quy tắc, quy trình — thay vì xây một wiki mới.
-Lumina không viết trang markdown nào và không bao giờ sửa tài liệu của bạn, ngoại trừ các chỗ sửa frontmatter bạn tự duyệt trong lúc thiết lập.
+Lumina không viết trang markdown nào và không bao giờ sửa tài liệu của bạn, ngoại trừ hai việc bạn duyệt trong lúc thiết lập: sửa frontmatter, và một tệp glossary.
 Không có `raw/` và không có `wiki/`: tài liệu của bạn vẫn ở nguyên chỗ cũ, và đồ thị được dựng lại từ chúng mỗi lần đọc.
 
 Dùng wiki cổ điển khi bạn đang gom tài liệu bên ngoài: bài báo, sách, bài viết, ghi chú nghiên cứu.
@@ -93,7 +93,7 @@ Các fact đã commit của nó không còn khớp với văn bản hiện tại
 
 ### Một xung đột mode
 
-`--mode project cannot be combined with --packs, --agents, or a profile` nghĩa là bạn đã truyền một cờ chỉ dành cho classic mode cùng với `--mode project`. Bỏ cờ đó, hoặc bỏ `--mode project` nếu bạn muốn dùng wiki cổ điển.
+`Project mode (detected or --mode project) cannot be combined with --packs, --agents, or a profile` nghĩa là bạn đã truyền một cờ chỉ dành cho classic mode cùng với `--mode project`, hoặc trong một repo đã được thiết lập project mode. Bỏ cờ đó, hoặc bỏ `--mode project` nếu bạn muốn dùng wiki cổ điển.
 
 ## Gỡ cài đặt
 
@@ -101,7 +101,7 @@ Các fact đã commit của nó không còn khớp với văn bản hiện tại
 npx lumina-wiki uninstall
 ```
 
-Lệnh này gỡ engine, sáu skill, và các khối mốc khỏi `CLAUDE.md`, `AGENTS.md`, và `.gitignore`. `_lumina/facts/` và `_lumina/config/` được xử lý riêng: `uninstall --yes` luôn giữ chúng lại; không kèm `--yes`, nó hỏi trước và chỉ xóa nếu bạn xác nhận.
+Lệnh này gỡ mọi thứ bên trong `_lumina/` ngoại trừ `_lumina/facts/` và `_lumina/config/`, cùng với sáu skill, các symlink trong `.claude/skills`, và các khối mốc khỏi `CLAUDE.md`, `AGENTS.md`, và `.gitignore`. `_lumina/facts/` và `_lumina/config/` được xử lý riêng: `uninstall --yes` luôn giữ chúng lại; không kèm `--yes`, nó hỏi trước và chỉ xóa nếu bạn xác nhận.
 
 ## Tham khảo
 

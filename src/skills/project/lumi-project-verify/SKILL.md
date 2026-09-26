@@ -25,16 +25,18 @@ explicitly approves it.
   - Every committed fact file is checked against the current parse. Output
     is `{findings}`, each finding `{id, severity, file, line, message}`,
     sorted by file, then line, then id.
-  - **P14 (error), broken evidence** fires three ways:
+  - **P14, broken evidence** fires three ways:
     - a fact's evidence quote no longer matches the doc's current text —
-      reported at the fact's stored line, message
+      **error**, reported at the fact's stored line, message
       `broken evidence for fact <id>: quote no longer found: "<quote>"`.
       The doc named is still in scope (its facts are simply stale).
     - the fact file itself is malformed, or its recorded source doesn't
-      match its own path — reported at line 1. The named doc may or may
-      not still be in scope.
+      match its own path — **error**, reported at line 1. The named doc may
+      or may not still be in scope.
     - the doc named is no longer in scope at all and no rename candidate
-      matches it — `source gone: "<source>" is no longer in scope`, line 1.
+      matches it — `source gone: "<source>" is no longer in scope`, line 1;
+      **error** when the doc was actually deleted, **warning** when it
+      still exists on disk but was excluded from scope by a config change.
   - **P15 (info), rename candidate** fires when a doc is gone but another
     in-scope doc's content matches that fact file exactly and has no
     committed facts of its own yet — one finding per candidate, line 1:
@@ -75,18 +77,21 @@ explicitly approves it.
 4. Group `findings` by `file`. Within each doc, list P14 findings before
    any P15 finding naming it.
 5. Give each finding its remedy:
-   - **P14 broken evidence** (quote gone, doc still in scope): the doc's
-     facts are stale. Remedy: re-ingest this doc.
-   - **P14 malformed fact file / mismatched source, or source gone**: if
-     the named doc is still in scope (check via `status` if unsure),
-     re-ingest it — ingest overwrites a malformed file with a valid one
-     and refreshes a mismatched source. If it is not in scope, there is no
-     ingest remedy — the prune dry run decides (step 7): whatever it lists
-     under `removed` is prunable; anything under `kept` gets its reason
-     explained instead — `out-of-scope` means the doc still exists but is
-     excluded by config (bring it back into scope, or leave the file);
-     `rename-candidate` means see P15 below; `newer-schema` means the
-     file's schema is newer than this engine build understands.
+   - **P14 broken evidence** (quote gone, doc still in scope): error; the
+     doc's facts are stale. Remedy: re-ingest this doc.
+   - **P14 malformed fact file / mismatched source**: error; if the named
+     doc is still in scope (`status` allowed to check), re-ingest it —
+     ingest overwrites a malformed file with a valid one and refreshes a
+     mismatched source.
+   - **P14 source gone**: error when the doc was actually deleted; warning
+     when the doc still exists on disk but was excluded from scope by a
+     config change. Either way there is no ingest remedy — the prune dry
+     run decides (step 7): whatever it lists under `removed` is prunable;
+     anything under `kept` gets its reason explained instead —
+     `out-of-scope` means the doc still exists but is excluded by config
+     (bring it back into scope, or leave the file); `rename-candidate`
+     means see P15 below; `newer-schema` means the file's schema is newer
+     than this engine build understands.
    - **P15 rename candidate**: re-ingest the new (candidate) doc first, so
      its facts are committed under the new path — once that lands, the old
      fact file stops being a rename candidate, and the next prune dry run
@@ -96,45 +101,29 @@ explicitly approves it.
    yourself — that is the ingest skill's job, never this skill's.
 7. If any remedy points to the prune dry run (a P14 whose doc isn't in
    scope, or a P15 whose re-ingest the user just ran), follow PROJECT.md's
-   prune flow: dry run first —
-   ```
-   node _lumina/project/project.mjs facts-prune --dry-run
-   ```
-   show `kept` reasons per step 5, get the user's approval, then run the
-   real prune with exactly the dry run's `removed` paths as positional
-   arguments, and remind the user to commit. On a stderr `{error, code}`,
-   report it verbatim and stop.
-   - `facts-prune` scans the whole project, not just the docs this report
-     covers — call out any `removed`/`kept` entries for other docs before
-     asking for approval.
+   `facts-prune` flow exactly (dry run, approval, then the real prune using
+   exactly the dry run's `removed` paths). `facts-prune` scans the whole
+   project, not just the docs this report covers — call out any
+   `removed`/`kept` entries for other docs before asking for approval. On a
+   stderr `{error, code}`, report it verbatim and stop.
 
 ## Output Format
 
 ```
-Verify — <N> findings (<E> error, <I> info)
+Verify — <N> findings (<E> error, <W> warning, <I> info)
 
 <doc path>
-  [P14 error] line <n>: <message>
+  [P14 error|warning] line <n>: <message>
   remedy: <re-ingest this doc | the prune dry run decides>
   [P15 info]  line 1: <message>
   remedy: re-ingest <candidate path>; the next prune dry run then reports the old file
 
 Re-ingest now for: <doc path>, <doc path>, ...? (yes/no)
-
-Facts-prune dry run (project-wide):
-  removed: <file>, ...
-  kept: <file> (out-of-scope: doc still exists, excluded by config), <file> (rename-candidate: <candidate>), ...
-  warnings: <warning>, ...
-Run facts-prune now on the removed files? (yes/no)
 ```
 
-After approval:
-```
-Facts-prune: removed <N> files.
-  skipped: <file> (not-removable), ...
-  failed: <file>: <error>, ...
-Commit the removed fact files.
-```
+When a remedy points to the prune dry run, show it and, after approval, the
+real prune — PROJECT.md's own output shapes for both, project-wide (not
+only the docs above), with no reformatting of your own.
 
 When there are no findings:
 `Verify — 0 findings. Every fact's evidence still checks out (this does
@@ -153,7 +142,7 @@ $ node _lumina/project/project.mjs verify-evidence
 
 Report:
 ```
-Verify — 1 finding (1 error, 0 info)
+Verify — 1 finding (1 error, 0 warning, 0 info)
 
 docs/adr/0052-new.md
   [P14 error] line 12: broken evidence for fact 7a08c1fc2aae0239: quote no
@@ -175,7 +164,7 @@ $ node _lumina/project/project.mjs verify-evidence
 
 Report:
 ```
-Verify — 1 finding (0 error, 1 info)
+Verify — 1 finding (0 error, 0 warning, 1 info)
 
 docs/adr/0052-renamed.md
   [P15 info]  line 1: rename candidate: facts committed for
@@ -211,8 +200,9 @@ report the result, and remind the user to commit the removal.
 <example>
 A doc is excluded from scope by a config change (for example a narrowed
 `sources.include`), but the file still exists on disk. `verify-evidence`
-reports the same `P14 source gone: "docs/notes/draft.md" is no longer in
-scope`, but the doc isn't actually deleted.
+reports the same message, `P14 source gone: "docs/notes/draft.md" is no
+longer in scope`, but at **severity `warning`**, not `error` — the doc
+isn't actually deleted.
 
 ```
 $ node _lumina/project/project.mjs facts-prune --dry-run
@@ -231,20 +221,18 @@ here." Do not offer the real prune — there is nothing in `removed`.
 - Report-only except for one write: `facts-prune`. Never run
   `facts-write`, never edit a doc, never touch a fact file by hand, the
   graph, or engine state directly.
-- Always dry-run `facts-prune` first and show `removed`, `kept` (with
-  reasons), and `warnings` verbatim; run the real prune only after the
-  user explicitly approves it — never on your own initiative.
-- The real prune's positional arguments are always exactly the dry run's
-  `removed` list — never pass a `kept` file, and never invent a path that
-  wasn't in `removed`.
+- Follow PROJECT.md's `facts-prune` flow exactly (dry run, approval, then
+  the real prune using exactly the dry run's `removed` paths) — never on
+  your own initiative.
 - `facts-prune` is project-wide; when the user only asked about specific
   docs, say so before asking for approval on entries outside that set.
 - Never run the ingest skill yourself — offer it, and only after the user
   agrees.
 - No git operations. After a real prune, remind the user to commit the
   removal themselves — do not run `git` for them.
-- Read only `verify-evidence`'s and `facts-prune`'s JSON output; never
-  parse fact files by hand to "double-check" a finding.
+- Read only `verify-evidence`'s, `facts-prune`'s, and `status`'s JSON
+  output (`status` only to check whether a P14's named doc is still in
+  scope); never parse fact files by hand to "double-check" a finding.
 - On an engine error, report it verbatim and stop — never edit the config
   or retry with a guessed fix.
 

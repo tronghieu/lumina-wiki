@@ -1,7 +1,7 @@
 # Use project mode on your project's docs
 
 Project mode builds a typed graph over the docs your project already has — decisions, requirements, rules, processes — instead of building a new wiki.
-Lumina writes no markdown pages and never edits your docs, except frontmatter fixes you approve during setup.
+Lumina writes no markdown pages and never edits your docs, except two things you approve during setup: frontmatter fixes, and a glossary file.
 There is no `raw/` and no `wiki/`: your docs stay where they are, and the graph rebuilds from them on every read.
 
 Use the classic wiki when you're collecting outside material: papers, books, articles, research notes.
@@ -93,7 +93,7 @@ Its committed facts no longer match the current text. Run `lumi-project-ingest` 
 
 ### A mode conflict
 
-`--mode project cannot be combined with --packs, --agents, or a profile` means you passed a classic-mode-only flag alongside `--mode project`. Drop that flag, or drop `--mode project` if you wanted the classic wiki.
+`Project mode (detected or --mode project) cannot be combined with --packs, --agents, or a profile` means you passed a classic-mode-only flag alongside `--mode project`, or in a repo already set up in project mode. Drop that flag, or drop `--mode project` if you wanted the classic wiki.
 
 ## Uninstall
 
@@ -101,7 +101,7 @@ Its committed facts no longer match the current text. Run `lumi-project-ingest` 
 npx lumina-wiki uninstall
 ```
 
-This removes the engine, the six skills, and the marker blocks from `CLAUDE.md`, `AGENTS.md`, and `.gitignore`. `_lumina/facts/` and `_lumina/config/` are handled separately: `uninstall --yes` always keeps them; without `--yes`, it asks first and deletes them only if you confirm.
+This removes everything under `_lumina/` except `_lumina/facts/` and `_lumina/config/`, plus the six skills, the `.claude/skills` links, and the marker blocks from `CLAUDE.md`, `AGENTS.md`, and `.gitignore`. `_lumina/facts/` and `_lumina/config/` are handled separately: `uninstall --yes` always keeps them; without `--yes`, it asks first and deletes them only if you confirm.
 
 ## Reference
 

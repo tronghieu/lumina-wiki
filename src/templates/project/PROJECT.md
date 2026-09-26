@@ -2,7 +2,8 @@
 
 This repo uses Lumina **project mode**: a typed graph over this project's
 own docs, not a second wiki. Lumina writes no markdown pages and never edits
-your docs, except frontmatter fixes you explicitly approve during setup.
+your docs, except frontmatter fixes, or a new glossary file, you explicitly
+approve during setup.
 
 Installed by lumina-wiki {{package_version}}.
 
@@ -23,8 +24,10 @@ Installed by lumina-wiki {{package_version}}.
   missing root, or a path-safety violation · `3` internal error, lock
   timeout, a newer `schemaVersion` than this engine knows, or (`facts-prune`
   only) one or more files it could not delete (listed in `failed`). Every
-  nonzero exit other than that last `facts-prune` case prints `{error,
-  code}` to stderr, with nothing usable on stdout.
+  nonzero exit other than that last `facts-prune` case, and except `lint`
+  exit 1, prints `{error, code}` to stderr, with nothing usable on stdout.
+  `lint` exit 1 means findings at or above `--fail-on` — not a run
+  failure — and its full findings report is still printed on stdout.
 
 ## What's committed vs. gitignored
 
@@ -33,8 +36,9 @@ Installed by lumina-wiki {{package_version}}.
   doc — the agent-extracted facts your team paid tokens for).
 - **Gitignored:** `_lumina/graph/` (the viewer file `view` writes),
   `_lumina/_state/` (the write lock), `_lumina/manifest.json` (local install
-  bookkeeping). Never hand-edit any of the three; the engine is their only
-  writer, and they are rebuilt or reacquired on demand.
+  bookkeeping). Never hand-edit any of the three; Lumina (engine or
+  installer) is their only writer, and they are rebuilt or reacquired on
+  demand.
 
 ## Engine commands
 
@@ -47,12 +51,15 @@ node _lumina/project/project.mjs scope
 node _lumina/project/project.mjs config-check
 node _lumina/project/project.mjs build
 node _lumina/project/project.mjs status
-node _lumina/project/project.mjs facts-write < facts.json
+node _lumina/project/project.mjs facts-write <<'JSON'
+{ "source": "...", "sourceHash": "...", "facts": [] }
+JSON
 node _lumina/project/project.mjs verify-evidence
 node _lumina/project/project.mjs lint [--fail-on error|warning]
 node _lumina/project/project.mjs query node <ref>
 node _lumina/project/project.mjs query list --meta-type <T> [--status <S>]
 node _lumina/project/project.mjs query neighbors <ref> --direction in|out [--relation <R>]
+node _lumina/project/project.mjs query resolve <citing-doc> <object>
 node _lumina/project/project.mjs view
 node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
 ```
@@ -67,16 +74,22 @@ node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
   quote before writing `_lumina/facts/<source>.json`.
 - `verify-evidence` — re-checks every committed fact's quote against the
   current doc text; report-only, always exits 0 unless config/root itself
-  is invalid.
-- `lint` — cross-doc checks P01-P20, report-only, agent-free. `--fail-on`
+  is invalid, or an internal/lock error exits 3.
+- `lint` — cross-doc checks P01-P21, report-only, agent-free. `--fail-on`
   (default `error`) sets the severity that makes it exit 1.
-- `query` — three fixed operations, no path search or full-text: `node
+- `query` — four fixed operations, no path search or full-text: `node
   <ref>` resolves an ID/path/concept alias and returns it with its edges —
-  for a doc node, also its `frags` (that doc's fragment ids); `list
-  --meta-type <T> [--status <S>]` filters nodes; `neighbors <ref>
-  --direction in|out [--relation <R>]` walks one hop. Every returned item
-  carries `file:line` and its evidence quote (including the evidence's
-  `scope`); every response carries a `freshness` summary.
+  for a doc node, also its `frags` (every heading anchor in that doc,
+  whether or not any edge cites it yet); `list --meta-type <T> [--status
+  <S>]` filters nodes; `neighbors <ref> --direction in|out [--relation
+  <R>]` walks one hop; `resolve <citing-doc> <object>` resolves `<object>`
+  exactly as `facts-write` would (a doc-relative path from the citing doc,
+  an existing out-of-scope doc, a configured concept, a declared ID, or a
+  heading anchor) and reports `resolution`: `resolved`, `dangling`,
+  `ignored`, or `rejected` (carrying `facts-write`'s own error, e.g. an
+  anchor the in-scope target lacks). Every returned item carries
+  `file:line` and its evidence quote (including the evidence's `scope`);
+  every response carries a `freshness` summary.
 - `view` — writes `_lumina/graph/view.html` (gitignored), a self-contained
   page you open with `file://`, no network, no server; stdout includes
   `url`, that page's `file://` URL.
@@ -112,7 +125,8 @@ Every project type and relation resolves to one of these — lint and queries
 key only on these names, never on your project's own type or relation names.
 
 **Meta-types** (`Decision` also carries a status lifecycle: `proposed` ->
-`accepted` -> `partially-superseded` / `superseded` / `deprecated`):
+`accepted` -> `partially-superseded` / `superseded` / `deprecated`, or
+`proposed` -> `rejected`):
 
 - `Decision` (governance)
 - `Requirement` (governance)
@@ -142,6 +156,6 @@ mapping):
 
 ## Setup
 
-If `_lumina/config/project.yaml` is missing, run `/lumi-project-setup` — it
-scans your in-scope docs and proposes scope, a type/relation mapping, and a
-concept vocabulary. Nothing is written until you approve it.
+If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup`
+skill — it scans your in-scope docs and proposes scope, a type/relation
+mapping, and a concept vocabulary. Nothing is written until you approve it.

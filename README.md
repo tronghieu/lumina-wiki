@@ -149,7 +149,7 @@ These are enough for most people:
 | `/lumi-verify` | Check that notes match the sources they cite. |
 | `/lumi-check` | Check the wiki for broken links and other problems. |
 
-See the [command reference](docs/user-guide/commands.en.md) for every available command.
+See the [command reference](docs/user-guide/commands.en.md) for every classic-mode command. Project mode has its own skills — see Project mode below.
 
 ## Guides
 
@@ -159,7 +159,6 @@ See the [command reference](docs/user-guide/commands.en.md) for every available 
 - [Find research regularly](docs/user-guide/advanced-scheduled-discovery.en.md) — advanced
 - [Use QMD for local search](docs/user-guide/advanced-qmd.en.md) — advanced
 - [Connect OpenClaw or Hermes](docs/user-guide/openclaw-hermes-integration.en.md) — advanced
-- [Project mode](docs/user-guide/project-mode.en.md) — advanced
 
 You can also open the project root in [Obsidian](https://obsidian.md) to browse the Markdown notes visually.
 

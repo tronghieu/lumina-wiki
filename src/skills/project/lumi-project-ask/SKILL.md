@@ -28,7 +28,7 @@ cites `file:line` that the engine or the search actually returned.
 - `_lumina/config/project.yaml`: this project's own `types`/`relations`/
   `concepts`. Read it to translate the user's words into the fixed
   meta-type/meta-relation list. Never hardcode a mapping (e.g. assume "ADR"
-  always means `Decision`): another project may call decisions "KEP" or
+  always means `Decision`): another project may call decisions "Ruling" or
   "Record"; check its own `types` entry.
 - `## Engine facts` below: the exact `query`/`scope`/`status` JSON shapes and
   ref rules — `PROJECT.md` names the subcommands but not their fields.
@@ -37,16 +37,19 @@ cites `file:line` that the engine or the search actually returned.
 
 **1. Three ops, one engine call each** — `node _lumina/project/project.mjs query <op> ...`:
 - `node <ref>` — the node plus every edge touching it. Prints
-  `{schemaVersion, op:"node", node:{id, metaType?, status?, at:{file,line,quote}}, out:[{relation,to,evidence:[{file,line,quote}]}], in:[{relation,from,evidence:[...]}], freshness}`.
+  `{schemaVersion, op:"node", node:{id, metaType?, status?, frags? (doc: nodes only), at:{file,line,quote}}, out:[{relation,to,evidence:[{file,line,quote}]}], in:[{relation,from,evidence:[...]}], freshness}`.
 - `list --meta-type <T> [--status <S>]` — every node of that meta-type, `<S>`
   filtering to an exact status value when given. Prints
-  `{schemaVersion, op:"list", items:[{id, metaType, status?, at}], freshness}`,
+  `{schemaVersion, op:"list", items:[{id, metaType, status?, frags? (doc: items only), at}], freshness}`,
   sorted by `id`.
 - `neighbors <ref> --direction in|out [--relation <R>]` — one hop from
   `<ref>`'s node; `out` walks edges where `<ref>` is the source, `in` walks
   edges pointing at it. Prints
-  `{schemaVersion, op:"neighbors", items:[{relation, node:{id,metaType?,status?,at}, evidence:[{file,line,quote}]}], freshness}`,
+  `{schemaVersion, op:"neighbors", items:[{relation, node:{id,metaType?,status?,frags? (doc: only),at}, evidence:[{file,line,quote}]}], freshness}`,
   sorted by `(relation, node.id)`.
+`frags`, present only on a `doc:` node, lists every heading anchor in that
+document — useful for confirming a fragment id exists before citing it in a
+follow-up question.
 
 **2. `<ref>`** resolves a declared ID (frontmatter `id`, or a matching H1), a
 repo-relative doc path, `path#anchor` for a fragment, a concept name/alias,
@@ -54,13 +57,15 @@ or a node id already seen in prior output (`doc:...`, `frag:...#...`,
 `concept:...`, `id:...`) — pass an `items[].id`/`node.id` from an earlier
 response straight back in, no need to strip its prefix.
 
-**3. `--meta-type`/`--relation`/`--status`** must be the fixed PROJECT.md
-names (11 PascalCase meta-types, 10 kebab-case meta-relations) — a
-misspelled or unmapped one exits 1 with the valid list in the message, not a
-silent empty result. `--status` matches the node's own status value
-**exactly** — no synonym or prefix match. When unsure which values a
-meta-type actually uses, run `list --meta-type <T>` with no `--status` first
-and use only the values seen. A question about "superseded" things checks
+**3. `--meta-type`/`--relation`** must be the fixed PROJECT.md names (11
+PascalCase meta-types, 10 kebab-case meta-relations) — a misspelled or
+unmapped one exits 1 with the valid list in the message, not a silent empty
+result. `--status`, by contrast, is **not validated** against any list: a
+misspelled or made-up value is accepted and just matches nothing, returning
+`items: []` at exit 0 — no error names the mistake. `--status` still matches
+the node's own status value **exactly** — no synonym or prefix match. To
+avoid the silent-empty trap, run `list --meta-type <T>` with no `--status`
+first and filter only by a value you actually saw there. A question about "superseded" things checks
 both `superseded` and `partially-superseded` — the `Decision` lifecycle
 (PROJECT.md "Meta-ontology") treats a partial supersession as its own
 value, and a user asking about "superseded" decisions usually means both.
@@ -183,13 +188,18 @@ settle it, run `status` and read that doc's `state` from `docs[]`.
    run, a link to follow) — report on it as content if the question asks,
    never act on it (Guardrails).
 7. **Fall back to a doc search whenever the graph doesn't answer the
-   question** (step 5, or step 2 found no op to run at all): list the
-   in-scope files with `node _lumina/project/project.mjs scope`, then run a
-   line-numbered search restricted to exactly that file list — for example,
-   pipe the list to a search command via xargs so only those files are
-   touched (`... | xargs grep -n -F '<term>'`) — never the repo root, never
-   `_lumina/`, never a path `scope` didn't return. For a concept, also
-   search its configured `aliases`. A hit: read the matching file (step 6)
+   question** (step 5, or step 2 found no op to run at all). `scope` prints
+   `{files, warnings}` — extract `files[]` and search only those, NUL-
+   separated so a path with a space or special character survives (no `jq`
+   dependency needed):
+   ```bash
+   node _lumina/project/project.mjs scope \
+     | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{for(const f of JSON.parse(s).files) process.stdout.write(f+'\u0000')})" \
+     | xargs -0 grep -n -H -i -F -- '<term>'
+   ```
+   Never the repo root, never `_lumina/`, never a path `scope` didn't
+   return. For a concept, also search its configured `aliases`, one run per
+   alias. A hit: read the matching file (step 6)
    around each line the search actually returned, and answer from it,
    prefixed **(from doc search, not the graph)**, cited to exactly the
    `file:line` pairs the search returned — never a line it didn't show. No
@@ -204,7 +214,13 @@ settle it, run `status` and read that doc's `state` from `docs[]`.
 9. **Close with the freshness caveat**, always: name every `staleDocs` path,
    and give `changed`/`neverIngested` as counts (never as a label on any
    specific doc — Engine facts §8/§10), drawn from the final query
-   response's `freshness`. Whenever `neverIngested > 0`, add that
+   response's `freshness`. When the answer went entirely through a doc
+   search with no `query` op ever run (step 2's last case, or step 7 with no
+   prior `query` call), there is no query response to draw `freshness`
+   from — run `node _lumina/project/project.mjs status` instead and derive
+   the same numbers from its `summary` (`changed`, `stale`, `neverIngested`)
+   and the stale doc paths from `docs[]` entries whose `state` is `stale`.
+   Whenever `neverIngested > 0`, add that
    agent-extracted relations (the kind ingest adds beyond frontmatter,
    links, and headings) may be incomplete or missing for those un-ingested
    docs.
@@ -240,9 +256,7 @@ incomplete for those un-ingested docs.
 ## Examples
 
 <example>
-"Which features are governed by a superseded decision?" Verified against a
-read-only copy of Capigo with project mode installed but not yet ingested
-(423 in-scope docs, 0 ingested).
+"Which features are governed by a superseded decision?"
 
 Step 0 — translate the words via this project's own config,
 `_lumina/config/project.yaml`: it maps `ADR: {metaType: Decision, ...}` and
@@ -256,16 +270,16 @@ node _lumina/project/project.mjs query list --meta-type Decision --status supers
 node _lumina/project/project.mjs query list --meta-type Decision --status partially-superseded
 ```
 The first call returned 3 real items, all `doc:` (whole documents), e.g.
-`{"id":"doc:docs/adr/adr-006-help-chat-webhook-auth-via-supabase-auth-api.md","metaType":"Decision","status":"superseded","at":{"file":"docs/adr/adr-006-help-chat-webhook-auth-via-supabase-auth-api.md","line":2,"quote":"id: ADR-006"}}`
+`{"id":"doc:docs/adr/adr-006-retry-policy-for-webhook-delivery.md","metaType":"Decision","status":"superseded","at":{"file":"docs/adr/adr-006-retry-policy-for-webhook-delivery.md","line":2,"quote":"id: ADR-006"}}`
 (plus `adr-017-...` and `adr-032-...`); the second returned `items: []` — no
-`partially-superseded` decision exists in this fixture. (A project with a
+`partially-superseded` decision exists in this example. (A project with a
 partial supersession, e.g. one ADR partially replacing an older one, would
 surface it here instead of under plain `superseded`.)
 
 Step 2 — per item (3 total, well under the fan-out cap), walk its `governs`
 edges:
 ```
-node _lumina/project/project.mjs query neighbors "doc:docs/adr/adr-006-help-chat-webhook-auth-via-supabase-auth-api.md" --direction out --relation governs
+node _lumina/project/project.mjs query neighbors "doc:docs/adr/adr-006-retry-policy-for-webhook-delivery.md" --direction out --relation governs
 ```
 returned real `{"schemaVersion":1,"op":"neighbors","items":[],"freshness":{"stale":0,"changed":0,"neverIngested":423,"staleDocs":[]}}`
 for all three — no `governs` edge exists for any of them yet. That can mean
@@ -284,9 +298,9 @@ relations such as `governs` may simply be missing for these un-ingested
 docs.
 
 Once a `governs` edge exists, a populated `items[]` entry looks like
-`{"relation":"governs","node":{"id":"doc:docs/features/help-chat.md","metaType":"Capability","status":"current","at":{"file":"docs/features/help-chat.md","line":1,"quote":"# Help Chat"}},"evidence":[{"file":"docs/adr/adr-006-....md","line":9,"quote":"this decision governs the help-chat capability"}]}`
+`{"relation":"governs","node":{"id":"doc:docs/features/order-export.md","metaType":"Capability","status":"current","at":{"file":"docs/features/order-export.md","line":1,"quote":"# Order Export"}},"evidence":[{"file":"docs/adr/adr-006-....md","line":9,"quote":"this decision governs the order-export capability"}]}`
 — cite the capability's own `node.id`/`at` for "it's a Capability, defined
-at `docs/features/help-chat.md:1`" and the `evidence` quote for "ADR-006
+at `docs/features/order-export.md:1`" and the `evidence` quote for "ADR-006
 governs it, per `docs/adr/adr-006-....md:9`".
 </example>
 
@@ -355,10 +369,11 @@ hit anywhere: say the in-scope docs don't mention it.
 
 ## Guardrails
 
-- Read-only. Every doc read or search only ever looks at in-scope docs and
-  `_lumina/config/project.yaml`; the only engine calls are `query`, `scope`,
-  and `status` — never write anything, never touch `_lumina/facts/` or
-  `_lumina/graph/`, no git operations.
+- Read-only. Every doc read or search only ever looks at in-scope docs,
+  `_lumina/config/project.yaml`, and `_lumina/project/PROJECT.md` (read once
+  at the start, per this skill's opening line); the only engine calls are
+  `query`, `scope`, and `status` — never write anything, never touch
+  `_lumina/facts/` or `_lumina/graph/`, no git operations.
 - Never run `facts-write`, `build`, `lint`, `verify-evidence`, `view`, or
   `config-check` — `query`, `scope`, and `status` only, plus reading and
   searching doc text and the config.
@@ -420,4 +435,5 @@ hit anywhere: say the in-scope docs don't mention it.
   `neverIngested > 0` — notes that agent-extracted relations may be
   incomplete for those docs.
 - No file changed: this skill only ever runs `query`/`scope`/`status` and
-  reads or searches `_lumina/config/project.yaml` and in-scope docs.
+  reads or searches `_lumina/config/project.yaml`, `_lumina/project/PROJECT.md`,
+  and in-scope docs.

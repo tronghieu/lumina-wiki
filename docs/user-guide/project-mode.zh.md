@@ -1,7 +1,7 @@
 # 在你项目的文档上使用项目模式
 
 项目模式会在你项目已有的文档——决策、需求、规则、流程——之上建立一个类型化图，而不是建立新的 wiki。
-Lumina 不会写任何 markdown 页面，也不会修改你的文档，除非是你在项目设置时明确批准的 frontmatter 修正。
+Lumina 不会写任何 markdown 页面，也不会修改你的文档，除了你在设置时批准的两件事：frontmatter 修正，以及一个术语表文件。
 这里没有 `raw/`，也没有 `wiki/`：你的文档留在原处，图会在每次读取时从它们重新建立。
 
 如果你在收集外部资料——论文、书籍、文章、研究笔记——请使用经典 wiki。
@@ -93,7 +93,7 @@ node _lumina/project/project.mjs status
 
 ### 模式冲突
 
-`--mode project cannot be combined with --packs, --agents, or a profile` 表示你把一个只属于经典模式的参数和 `--mode project` 一起使用了。去掉那个参数；如果你本来就是想用经典 wiki，就去掉 `--mode project`。
+`Project mode (detected or --mode project) cannot be combined with --packs, --agents, or a profile` 表示你把一个只属于经典模式的参数和 `--mode project` 一起使用了，或者用在了已经设置为项目模式的仓库里。去掉那个参数；如果你本来就是想用经典 wiki，就去掉 `--mode project`。
 
 ## 卸载
 
@@ -101,7 +101,7 @@ node _lumina/project/project.mjs status
 npx lumina-wiki uninstall
 ```
 
-这会移除引擎、六个技能，以及 `CLAUDE.md`、`AGENTS.md` 和 `.gitignore` 中的标记内容块。`_lumina/facts/` 和 `_lumina/config/` 会分开处理：`uninstall --yes` 始终会保留它们；不加 `--yes` 运行时会先询问，只有在你确认后才会删除。
+这会移除 `_lumina/` 下除 `_lumina/facts/` 和 `_lumina/config/` 之外的所有内容，加上六个技能、`.claude/skills` 中的链接，以及 `CLAUDE.md`、`AGENTS.md` 和 `.gitignore` 中的标记内容块。`_lumina/facts/` 和 `_lumina/config/` 会分开处理：`uninstall --yes` 始终会保留它们；不加 `--yes` 运行时会先询问，只有在你确认后才会删除。
 
 ## 参考
 

@@ -149,7 +149,7 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 | `/lumi-verify` | 检查笔记是否与引用的来源一致。 |
 | `/lumi-check` | 检查失效链接和其他问题。 |
 
-所有命令请查看[命令参考](docs/user-guide/commands.zh.md)。
+查看[命令参考](docs/user-guide/commands.zh.md)获取经典模式的全部命令。项目模式有自己的技能——见下方“项目模式”一节。
 
 ## 其他指南
 
@@ -159,7 +159,6 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 - [定期查找研究资料](docs/user-guide/advanced-scheduled-discovery.zh.md) — 高级
 - [使用 QMD 进行本机搜索](docs/user-guide/advanced-qmd.zh.md) — 高级
 - [连接 OpenClaw 或 Hermes](docs/user-guide/openclaw-hermes-integration.zh.md) — 高级
-- [项目模式](docs/user-guide/project-mode.zh.md) — 高级
 
 你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹，以图形界面浏览 Markdown 笔记。
 

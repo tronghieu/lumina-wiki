@@ -1,5 +1,10 @@
 # Deferred Work
 
+## Deferred from: code review of spec-project-docs-overlay (2026-09-26)
+
+- **Project skills missing from agent-context files** — repo `CLAUDE.md` skills list and `docs/project-context.md` §6 do not mention the `lumi-project-*` skills. Deferred because the fix edits agent-context files.
+- **`facts-prune` realpath guard untested** — the check before unlink (`src/project/project.mjs:741`) is reachable only if a directory is swapped for a symlink between classify and unlink; a deterministic test needs a seam there.
+
 ## Deferred from: code review of spec-paper-ranking (2026-06-16)
 
 - **404 "no data" results are not cached** — `_cache.py` only caches HTTP 200, so re-ranking a paper Scite/Altmetric do not index re-hits the API every run. By design across all fetchers; revisit only if it becomes a rate-limit problem.

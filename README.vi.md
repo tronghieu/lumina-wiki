@@ -149,7 +149,7 @@ Những lệnh sau là đủ cho phần lớn người dùng:
 | `/lumi-verify` | Kiểm tra ghi chú có khớp với nguồn được dẫn hay không. |
 | `/lumi-check` | Kiểm tra liên kết hỏng và các vấn đề khác trong wiki. |
 
-Xem [bảng tra cứu lệnh](docs/user-guide/commands.vi.md) để biết toàn bộ lệnh đang có.
+Xem [bảng tra cứu lệnh](docs/user-guide/commands.vi.md) để biết toàn bộ lệnh của classic mode. Project mode có skill riêng — xem phần Project mode bên dưới.
 
 ## Các hướng dẫn khác
 
@@ -159,7 +159,6 @@ Xem [bảng tra cứu lệnh](docs/user-guide/commands.vi.md) để biết toàn
 - [Tìm tài liệu định kỳ](docs/user-guide/advanced-scheduled-discovery.vi.md) — nâng cao
 - [Dùng QMD để tìm kiếm trên máy](docs/user-guide/advanced-qmd.vi.md) — nâng cao
 - [Kết nối OpenClaw hoặc Hermes](docs/user-guide/openclaw-hermes-integration.vi.md) — nâng cao
-- [Project mode](docs/user-guide/project-mode.vi.md) — nâng cao
 
 Bạn cũng có thể mở thư mục gốc bằng [Obsidian](https://obsidian.md) để xem các ghi chú Markdown bằng giao diện trực quan.
 
