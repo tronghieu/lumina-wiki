@@ -22,8 +22,8 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 ## Capabilities
 
 - **CAP-1**
-  - **intent:** User can install Lumina into an existing project repo through a separate install mode, distinct from `--ide` and `--agents`, that adds the engine, skills, and config but creates no `raw/` or `wiki/` and overwrites no existing entry file (`README.md`, `CLAUDE.md`, `AGENTS.md`).
-  - **success:** Installing into a copy of Seli leaves every pre-existing file byte-identical except `.gitignore` entries; a second install produces no diff.
+  - **intent:** User can install Lumina into an existing project repo through a separate install mode, distinct from `--ide` and `--agents`, that adds the engine, skills, and config but creates no `raw/` or `wiki/`. Existing entry files (`AGENTS.md`, `CLAUDE.md`) only gain a short block between `<!-- lumina:project -->` markers pointing host agents to the setup skill.
+  - **success:** Installing into a copy of Seli changes pre-existing files only inside the `lumina:project` marker region and `.gitignore`; a second install produces no diff.
 - **CAP-2**
   - **intent:** User can set which docs are in scope with multiple include and exclude globs, defaulting to `docs/`.
   - **success:** With `include: [docs, "packages/*/docs"]` and `exclude: [docs/user-guide]`, the scanner, hook, and lint select the same file set; an include pattern matching zero files produces a warning.
@@ -78,6 +78,7 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 - Per-file checks that existing project tooling already owns (frontmatter presence, dead links, ADR numbering), beyond setup's one-time report.
 - User-defined lint rules, or relations with no meta-relation mapping getting their own lint.
 - Lumina-driven background ingest; scheduling is left to the host (e.g. an OpenClaw/Hermes job running the ingest skill).
+- Registering project-mode repos in `lumi-hub` or querying across them.
 
 ## Success signal
 
@@ -90,9 +91,5 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 
 ## Open Questions
 
-- Keep the (source meta-type, target meta-type) rule for typing untyped `related:` fields? Recommended: keep, because the parsed part needs typing without an agent.
 - Is the fixed meta-type list complete? The software pilots answer this for software; `Capability` and `Structure` naming is revisited after a later non-software pilot (see `pilot-evidence.md`).
-- Relations that map to no meta-relation fall back to `references` and lose lint. Acceptable long-term?
-- What is the install flag name, and does project mode add a marked block to existing `AGENTS.md`/`CLAUDE.md` so host agents discover Lumina? A yes amends CAP-1's byte-identical criterion.
-- Can a project-mode repo register in `lumi-hub`?
-- Viewer library: vendor `force-graph` (package size, `ci-package` allowlist) or hand-write a canvas force layout?
+- Install flag name: decided in architecture.

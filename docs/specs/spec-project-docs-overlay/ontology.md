@@ -32,6 +32,8 @@ Domain fit: eight meta-types map naturally onto construction, marketing, and res
 | `justified-by`, `owned-by`, `mentions` | None |
 | `references` | None; the default and the fallback for unmapped relations |
 
+A relation that maps to no meta-relation falls back to `references`. A new meta-relation is added to Lumina only when pilots show an important relation keeps falling back; there is no user-defined lint.
+
 ## Project mapping examples
 
 - `ADR is-a Decision`, `KEP is-a Decision`, `Runbook is-a Process`, `Postmortem is-a Issue`, `Convention is-a Rule`.
@@ -58,7 +60,7 @@ Every fact, parsed or agent-extracted, carries:
 2. Document structure (headings, tables, lists, diagrams) — agent, guided by the ontology.
 3. Prose — agent.
 
-An untyped `related:` link in the parsed part is typed by a configured (source meta-type, target meta-type) rule, e.g. a Capability's `related:` entry naming a Decision yields Decision `governs` Capability; a Decision naming a Requirement yields Decision `satisfies` Requirement; anything else yields `references`.
+Without this rule every parsed `related:` link would be `references` and parsed-part lint would be nearly useless. An untyped `related:` link in the parsed part is typed by a configured (source meta-type, target meta-type) rule, e.g. a Capability's `related:` entry naming a Decision yields Decision `governs` Capability; a Decision naming a Requirement yields Decision `satisfies` Requirement; anything else yields `references`.
 
 ## External IDs
 

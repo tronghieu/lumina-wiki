@@ -8,7 +8,7 @@ An Obsidian-like graph view in Lumina's own HTML page. This is the look and inte
 - Graph data embedded inline so the page works from `file://` (browsers block `fetch` of local JSON there).
 - Rendered on canvas, not SVG: a full project graph reaches thousands of nodes.
 - Built on `force-graph` (2D, canvas) used directly, with no React. `3d-force-graph` is a later option only.
-- No network loads. The library ships inside the package as a static asset (zero-telemetry rule 10).
+- No network loads. `force-graph` is vendored into the package as a static asset (zero-telemetry rule 10), after measuring its size and adding it to the `ci-package` allowlist. A hand-written force layout is rejected: matching Obsidian-like interaction would be a sub-project.
 - Viewer generation is lazily imported to keep CLI cold start under 300 ms.
 
 ## Interaction

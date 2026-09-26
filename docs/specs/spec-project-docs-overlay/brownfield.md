@@ -16,8 +16,8 @@ These invariants stay fully in force for classic installs.
 - Schema-as-pure-data pattern (`schemas.mjs`), extended with the meta-ontology.
 - Graph engine and lint engine.
 - `src/scripts/lib/globs.mjs` matcher.
-- `/lumi-ask`, `/lumi-verify` patterns; `lumi-hub` if a project repo can register (open question).
-- Installer machinery: atomic writes, manifests, skills install, `.gitignore` handling.
+- `/lumi-ask`, `/lumi-verify` patterns. `lumi-hub` registration is out of scope.
+- Installer machinery: atomic writes, manifests, skills install, `.gitignore` handling, and the `<!-- lumina:schema -->` marker-region rewrite, reused for the `<!-- lumina:project -->` block in existing `AGENTS.md`/`CLAUDE.md`.
 
 ## Graph storage split
 
