@@ -2,8 +2,9 @@
 /**
  * @module project
  * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
- * `config-check` (story 1), `build`, `status` (story 2); every other
- * subcommand exits 1. JSON to stdout; `{error, code}` to stderr.
+ * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
+ * `verify-evidence` (story 3); every other subcommand exits 1. JSON to
+ * stdout; `{error, code}` to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
@@ -15,17 +16,23 @@
  */
 
 import { realpathSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   findRoot, loadConfig, ontologyVersion, ConfigError, SchemaVersionError, CURRENT_SCHEMA_VERSION,
 } from './lib/config.mjs';
+import { contentHash } from './lib/hash.mjs';
 import { selectScope, ScopeCollisionError } from './lib/scope.mjs';
 import { parseAll } from './lib/parse.mjs';
-import { buildGraph, loadFacts, computeDocStatus } from './lib/graph.mjs';
+import {
+  buildGraph, loadFacts, computeDocStatus, makeResolverContext, resolveFactRef,
+} from './lib/graph.mjs';
+import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
+import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './lib/factfile.mjs';
 
 const MIN_NODE_MAJOR = 24;
-const SUBCOMMANDS = new Set(['scope', 'config-check', 'build', 'status']);
+const SUBCOMMANDS = new Set(['scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence']);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
 // these to exit 2, not 3.
@@ -157,10 +164,179 @@ async function runStatus(root, config) {
         sourceText,
         refResolves,
       });
-      docs.push({ path: doc.path, state });
+      docs.push({ path: doc.path, hash: doc.hash, state });
       summary[STATUS_SUMMARY_KEY[state]] += 1;
     }
     console.log(JSON.stringify({ docs, summary }));
+  } catch (e) {
+    failForEngineError(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// facts-write (AD-10, AD-18, AD-20, AD-22, AD-23)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read all of `stream` as a UTF-8 string. Rejects a TTY (interactive) stream
+ * -- `facts-write` needs piped JSON. `stream` is a parameter (default
+ * `process.stdin`) so tests can exercise the TTY-rejection branch with a
+ * fake stream instead of a real pty.
+ */
+export async function readStdinText(stream = process.stdin) {
+  if (stream.isTTY) {
+    const err = new Error('facts-write requires JSON on stdin, not a TTY');
+    err.projectExitCode = 1;
+    throw err;
+  }
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+/** `process.env[name]` as a positive integer, else `fallback`. Both lock env vars are test-only timing overrides -- blank, non-integer, zero, and negative all fall back to the real default. */
+function envPositiveInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+async function runFactsWrite(root, config) {
+  let stdinText;
+  try {
+    stdinText = await readStdinText();
+  } catch (e) {
+    fail(e.projectExitCode ?? exitCodeForError(e), e.message);
+    return;
+  }
+
+  let input;
+  try {
+    input = JSON.parse(stdinText);
+  } catch (e) {
+    fail(1, `bad stdin: not valid JSON: ${e.message}`);
+    return;
+  }
+  if (
+    !input || typeof input !== 'object' || Array.isArray(input)
+    || typeof input.source !== 'string'
+    || typeof input.sourceHash !== 'string'
+    || !Array.isArray(input.facts)
+  ) {
+    fail(1, 'bad stdin: expected {source, sourceHash, facts: []}');
+    return;
+  }
+
+  try {
+    assertSafeRelPath(input.source);
+  } catch (e) {
+    fail(2, e.message);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = await parseAll(root, config);
+  } catch (e) {
+    failForEngineError(e);
+    return;
+  }
+
+  const doc = parsed.docs.find((d) => d.path === input.source);
+  if (!doc) {
+    fail(2, `source not in scope: ${input.source}`);
+    return;
+  }
+  if (input.sourceHash !== doc.hash) {
+    fail(1, `re-read the doc: sourceHash does not match the current content of ${input.source}`);
+    return;
+  }
+
+  const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
+  const resolve = (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
+
+  let envelope;
+  try {
+    envelope = prepareEnvelope(input, {
+      parsed,
+      texts: parsed.texts,
+      resolve,
+      ontologyVersion: ontologyVersion(config),
+    });
+  } catch (e) {
+    fail(1, e.message, e.errors ? { errors: e.errors } : {});
+    return;
+  }
+
+  const lockPath = join(root, '_lumina', '_state', 'lock');
+  const factFilePath = join(root, '_lumina', 'facts', `${input.source}.json`);
+  const staleMs = envPositiveInt('LUMINA_PROJECT_LOCK_STALE_MS', 30000);
+  const timeoutMs = envPositiveInt('LUMINA_PROJECT_LOCK_TIMEOUT_MS', 10000);
+
+  try {
+    await withLock(lockPath, async () => {
+      // Re-check under the lock: `parsed` (and its `doc.hash`) was read
+      // before we ever waited for the lock, so a writer that raced us to
+      // acquire it first could have changed the doc in between. Without
+      // this, an older snapshot could overwrite facts checked against a
+      // newer one.
+      const currentBytes = await readFile(join(root, input.source));
+      if (contentHash(currentBytes) !== input.sourceHash) {
+        const err = new Error(`re-read the doc: sourceHash does not match the current content of ${input.source}`);
+        err.projectExitCode = 1;
+        throw err;
+      }
+
+      let existingSchemaVersion;
+      try {
+        const existingJson = JSON.parse(await readFile(factFilePath, 'utf8'));
+        existingSchemaVersion = existingJson?.schemaVersion;
+      } catch {
+        existingSchemaVersion = undefined; // no existing file, or it doesn't parse -- nothing newer to protect
+      }
+      if (typeof existingSchemaVersion === 'number' && existingSchemaVersion > CURRENT_SCHEMA_VERSION) {
+        const err = new Error(
+          `refusing to replace ${input.source}.json: its schemaVersion (${existingSchemaVersion}) is newer than this engine supports (${CURRENT_SCHEMA_VERSION})`,
+        );
+        err.projectExitCode = 3;
+        throw err;
+      }
+      await atomicWrite(factFilePath, serializeEnvelope(envelope));
+    }, { staleMs, timeoutMs });
+  } catch (e) {
+    if (e instanceof LockTimeoutError) {
+      fail(3, e.message);
+      return;
+    }
+    if (e.projectExitCode) {
+      fail(e.projectExitCode, e.message);
+      return;
+    }
+    fail(exitCodeForError(e), `internal error: ${e.message}`);
+    return;
+  }
+
+  console.log(JSON.stringify({
+    ok: true,
+    source: input.source,
+    file: `_lumina/facts/${input.source}.json`,
+    facts: envelope.facts.length,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// verify-evidence (CAP-11, AD-22): report-only. Exits 0 whenever it runs
+// (findings are reported, never a failure); a bad config or an fs/internal
+// error still exits 2/3, same as `build`/`status` (see `failForEngineError`).
+// ---------------------------------------------------------------------------
+
+async function runVerifyEvidence(root, config) {
+  try {
+    const parsed = await parseAll(root, config);
+    const facts = await loadFacts(root);
+    const findings = verifyEvidence({ parsed, texts: parsed.texts, facts });
+    console.log(JSON.stringify({ findings }));
   } catch (e) {
     failForEngineError(e);
   }
@@ -205,6 +381,10 @@ export async function main(argv = process.argv.slice(2)) {
     await runBuild(root, config);
   } else if (subcommand === 'status') {
     await runStatus(root, config);
+  } else if (subcommand === 'facts-write') {
+    await runFactsWrite(root, config);
+  } else if (subcommand === 'verify-evidence') {
+    await runVerifyEvidence(root, config);
   }
 }
 

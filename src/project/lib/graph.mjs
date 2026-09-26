@@ -30,8 +30,12 @@ import { RULES, META_RELATIONS } from '../ontology.mjs';
 import { slug } from './markdown.mjs';
 import { quoteMatches } from './evidence.mjs';
 import { resolveIncludeRootForPattern } from './scope.mjs';
+import { assertSafeRelPath } from './fsx.mjs';
 
 const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
+
+/** Matches an already-prefixed node id (`doc:`/`frag:`/`concept:`/`id:`) -- the one regex `resolveFactRef` (this module) and `factfile.mjs` both dispatch on. */
+export const PREFIXED_ID_RE = /^(?:doc|frag|concept|id):/;
 
 function severityOf(id) {
   const rule = RULE_BY_ID.get(id);
@@ -337,6 +341,69 @@ function resolveRef(raw, citingDoc, ctx) {
   return { kind: 'dangling', placeholder: null };
 }
 
+/**
+ * Build the resolver context every reference resolution needs (AD-11): the
+ * one thing `buildGraph()` and `facts-write` (`lib/factfile.mjs`) both
+ * derive from `{config, parsed, exists}` before resolving any fact's
+ * `object`/`ref` -- so the write-time and build-time resolvers are the same
+ * resolver, not two copies that can drift.
+ * @param {object} params
+ * @param {object} params.config validated `project.yaml`.
+ * @param {{docs: object[]}} params.parsed `parseAll()`'s output (or an
+ *   equivalent `{docs}` shape).
+ * @param {(path: string) => boolean} [params.exists] true when `path`
+ *   (repo-relative) exists on disk, in or out of scope; defaults to "never".
+ * @returns {object} opaque context, passed to `resolveFactRef`.
+ */
+export function makeResolverContext({ config, parsed, exists }) {
+  const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
+  const declaredIdOwners = new Map();
+  for (const doc of parsed.docs) {
+    if (doc.declares != null) {
+      if (!declaredIdOwners.has(doc.declares)) declaredIdOwners.set(doc.declares, []);
+      declaredIdOwners.get(doc.declares).push(doc.path);
+    }
+  }
+  return {
+    config,
+    docsMap,
+    declaredIdOwners,
+    exists: typeof exists === 'function' ? exists : () => false,
+    otherRoots: rootsInConfigOrder(config, parsed.docs),
+    testPattern: makePatternTester(),
+  };
+}
+
+/**
+ * Resolve one fact's raw `object`/`ref` in `citingDoc` context -- the single
+ * dispatch every caller uses, whether the raw string is already a prefixed
+ * node id (`doc:`/`frag:`/`concept:`/`id:`, validated through
+ * `validatePrefixed`) or a written-as-is reference (resolved through
+ * `resolveRef`). Same return shape as `resolveRef`:
+ *   {kind:'resolved', targetId, metaType, inScope}
+ *   {kind:'ignored'}                        -- URL / directory-like link target
+ *   {kind:'dangling', placeholder}          -- placeholder is `id:<raw>` when
+ *                                               `raw` looks like a project ID
+ *                                               (unprefixed only), else null
+ *                                               (a prefixed id that fails to
+ *                                               validate always gets `null`:
+ *                                               no phantom node for a bad
+ *                                               reference the caller already
+ *                                               committed to a specific kind).
+ * @param {string} raw
+ * @param {{path: string, includeRoot?: string, metaType?: string}} citingDoc
+ * @param {object} ctx from `makeResolverContext`.
+ */
+export function resolveFactRef(raw, citingDoc, ctx) {
+  if (PREFIXED_ID_RE.test(raw)) {
+    const v = validatePrefixed(raw, ctx);
+    return v.valid
+      ? { kind: 'resolved', targetId: raw, metaType: v.metaType, inScope: v.inScope }
+      : { kind: 'dangling', placeholder: null };
+  }
+  return resolveRef(raw, citingDoc, ctx);
+}
+
 function metaTypeOfResolvedId(id, ctx) {
   if (id.startsWith('doc:')) return ctx.docsMap.get(id.slice(4))?.metaType;
   if (id.startsWith('frag:')) return ctx.docsMap.get(id.slice(5).split('#')[0])?.metaType;
@@ -362,11 +429,22 @@ function nodeIsInScope(id, ctx) {
  * the placeholder was minted) and needs no further check here.
  * @returns {{valid: boolean, metaType?: string, inScope?: boolean}}
  */
+/** True when `path` is already its own normalized, repo-relative form -- no `..`/absolute/drive-letter escape, no redundant `.`/`//` segments to normalize away. */
+function isSafeDocPath(path) {
+  if (normalizeVirtualPath(path) !== path) return false;
+  try {
+    assertSafeRelPath(path);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function validatePrefixed(raw, ctx) {
   if (raw.startsWith('doc:')) {
     const path = raw.slice(4);
     if (ctx.docsMap.has(path)) return { valid: true, metaType: ctx.docsMap.get(path).metaType, inScope: true };
-    if (ctx.exists(path)) return { valid: true, metaType: undefined, inScope: false };
+    if (isSafeDocPath(path) && ctx.exists(path)) return { valid: true, metaType: undefined, inScope: false };
     return { valid: false };
   }
   if (raw.startsWith('frag:')) {
@@ -488,29 +566,23 @@ function resolutionKey(subjPath, factId) {
  *   `JSON.stringify` on purpose, so `build`'s output shape is unaffected.
  */
 export function buildGraph({ config, parsed, facts, exists }) {
-  const docsMap = new Map(parsed.docs.map((d) => [d.path, d]));
   const nodesById = new Map();
   const findings = [];
   const resolution = new Map();
+  const ctx = makeResolverContext({ config, parsed, exists });
 
   for (const doc of parsed.docs) {
     nodesById.set(`doc:${doc.path}`, buildDocNode(doc));
     for (const f of doc.findings ?? []) findings.push(normalizeFinding(f));
   }
 
-  // Declared-ID map + P10 (duplicate declared ID resolves to neither doc).
-  const declaredBy = new Map();
-  for (const doc of parsed.docs) {
-    if (doc.declares != null) {
-      if (!declaredBy.has(doc.declares)) declaredBy.set(doc.declares, []);
-      declaredBy.get(doc.declares).push(doc.path);
-    }
-  }
-  for (const [id, owners] of declaredBy) {
+  // P10 (duplicate declared ID resolves to neither doc), from the same
+  // declared-ID map the resolver context just built.
+  for (const [id, owners] of ctx.declaredIdOwners) {
     if (owners.length <= 1) continue;
     for (const owner of owners) {
       const others = owners.filter((o) => o !== owner);
-      const line = docsMap.get(owner)?.declaresLine ?? 1;
+      const line = ctx.docsMap.get(owner)?.declaresLine ?? 1;
       findings.push(makeFinding('P10', owner, line, `duplicate declared ID "${id}", also declared by ${others.join(', ')}`));
     }
   }
@@ -524,15 +596,6 @@ export function buildGraph({ config, parsed, facts, exists }) {
     .map(([, e]) => e)
     .filter((e) => e && !e.error && Array.isArray(e.facts));
 
-  const ctx = {
-    config,
-    docsMap,
-    declaredIdOwners: declaredBy,
-    exists: typeof exists === 'function' ? exists : () => false,
-    otherRoots: rootsInConfigOrder(config, parsed.docs),
-    testPattern: makePatternTester(),
-  };
-
   const rawEdges = [];
   const edgeFacts = [
     ...parsed.docs.flatMap((d) => d.facts ?? []),
@@ -542,22 +605,13 @@ export function buildGraph({ config, parsed, facts, exists }) {
   for (const fact of edgeFacts) {
     const subjPath = docPathOfSubject(fact.subject);
     if (subjPath === null) continue; // malformed subject; nothing to attribute the fact to
-    const citingDoc = docsMap.get(subjPath) ?? { path: subjPath, includeRoot: virtualDirname(subjPath), metaType: undefined };
+    const citingDoc = ctx.docsMap.get(subjPath) ?? { path: subjPath, includeRoot: virtualDirname(subjPath), metaType: undefined };
     // An edge's subject node must exist even when the citing doc is no
     // longer in scope (a committed fact citing a since-deleted/renamed doc).
     ensureNode(nodesById, fact.subject, ctx.docsMap.has(subjPath));
 
     const raw = fact.object;
-    const already = /^(?:doc|frag|concept|id):/.test(raw);
-    let result;
-    if (already) {
-      const v = validatePrefixed(raw, ctx);
-      result = v.valid
-        ? { kind: 'resolved', targetId: raw, metaType: v.metaType, inScope: v.inScope }
-        : { kind: 'dangling', placeholder: null }; // unknown doc/anchor/concept: dangling, no phantom node
-    } else {
-      result = resolveRef(raw, citingDoc, ctx);
-    }
+    let result = resolveFactRef(raw, citingDoc, ctx);
 
     if (result.kind === 'ignored') {
       resolution.set(resolutionKey(subjPath, fact.id), 'ignored'); // URL / directory-like link target: never a finding

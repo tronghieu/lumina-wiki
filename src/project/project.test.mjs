@@ -4,21 +4,48 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import { contentHash } from './lib/hash.mjs';
 import { loadConfig, ontologyVersion } from './lib/config.mjs';
 import { makeFact } from './lib/fact.mjs';
+import { readStdinText } from './project.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PROJECT_MJS = join(HERE, 'project.mjs');
 const FIXTURES = join(HERE, 'test-fixtures');
 const PARSE_PILOT = join(FIXTURES, 'parse-pilot');
 
-function run(cwd, args) {
-  const result = spawnSync(process.execPath, [PROJECT_MJS, ...args], { cwd, encoding: 'utf8' });
+function run(cwd, args, { input, env } = {}) {
+  const result = spawnSync(process.execPath, [PROJECT_MJS, ...args], {
+    cwd,
+    encoding: 'utf8',
+    input,
+    env: env ? { ...process.env, ...env } : process.env,
+  });
   return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
+}
+
+function runFactsWrite(cwd, input, env) {
+  return run(cwd, ['facts-write'], { input: JSON.stringify(input), env });
+}
+
+function factFilePath(root, source) {
+  return join(root, '_lumina', 'facts', `${source}.json`);
+}
+
+async function readFactFile(root, source) {
+  return JSON.parse(await readFile(factFilePath(root, source), 'utf8'));
+}
+
+async function factFileExists(root, source) {
+  try {
+    await readFile(factFilePath(root, source));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +95,16 @@ async function hashTree(root) {
   }
   return hash.digest('hex');
 }
+
+describe('readStdinText', () => {
+  test('a TTY stream is rejected (exit code 1), not read', async () => {
+    await assert.rejects(readStdinText({ isTTY: true }), (err) => {
+      assert.equal(err.projectExitCode, 1);
+      assert.match(err.message, /TTY/);
+      return true;
+    });
+  });
+});
 
 describe('bad arguments / unknown subcommand -> exit 1', () => {
   test('no subcommand', () => {
@@ -258,6 +295,18 @@ describe('status', () => {
     assert.ok(result.summary.neverIngested > 0);
     assert.ok(result.docs.every((d) => d.state === 'never-ingested'));
     assert.equal(result.summary.neverIngested, result.docs.length);
+  });
+
+  test('every doc carries its current content hash', async () => {
+    const { status, stdout } = run(PARSE_PILOT, ['status']);
+    assert.equal(status, 0);
+    const result = JSON.parse(stdout);
+    assert.ok(result.docs.length > 0);
+    for (const entry of result.docs) {
+      assert.match(entry.hash, /^[0-9a-f]{64}$/);
+    }
+    const entry = result.docs.find((d) => d.path === 'docs/adr/0052-new.md');
+    assert.equal(entry.hash, await hashOfFile(PARSE_PILOT, 'docs/adr/0052-new.md'));
   });
 
   test('fresh: hash matches sourceHash, quote and ref both still check out', async () => {
@@ -511,6 +560,413 @@ describe('status', () => {
       }
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('facts-write', () => {
+  test('happy path: an ADR-0052 supersedes fact on ADR-0009 -- build has the edge, status is fresh', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const input = {
+        source: docPath,
+        sourceHash,
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${docPath}`,
+          relation: 'supersedes',
+          object: 'ADR-0009',
+          scope: 'row: Retry policy',
+          evidence: { quote: 'Supersedes ADR-0009' },
+          provenance: 'extracted',
+        }],
+      };
+      const write = runFactsWrite(root, input);
+      assert.equal(write.status, 0);
+      const writeResult = JSON.parse(write.stdout);
+      assert.equal(writeResult.ok, true);
+      assert.equal(writeResult.source, docPath);
+      assert.equal(writeResult.facts, 1);
+
+      const envelope = await readFactFile(root, docPath);
+      assert.deepEqual(Object.keys(envelope), ['schemaVersion', 'source', 'sourceHash', 'ontologyVersion', 'facts']);
+      assert.equal(envelope.facts[0].object, 'doc:docs/adr/0009-partial.md');
+      assert.equal(envelope.facts[0].ref, 'ADR-0009');
+      assert.equal(envelope.facts[0].provenance, 'extracted');
+
+      const build = run(root, ['build']);
+      assert.equal(build.status, 0);
+      const graph = JSON.parse(build.stdout);
+      const edge = graph.edges.find((e) => e.relation === 'supersedes' && e.from === `doc:${docPath}` && e.to === 'doc:docs/adr/0009-partial.md');
+      assert.ok(edge, 'expected the supersedes edge in the graph');
+      assert.ok(edge.evidence.some((e) => e.provenance === 'extracted'));
+
+      const status = run(root, ['status']);
+      const statusResult = JSON.parse(status.stdout);
+      assert.equal(statusResult.docs.find((d) => d.path === docPath).state, 'fresh');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('acceptance: an unquoted edit -> changed; deleting the quoted sentence -> stale + verify-evidence P14', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const input = {
+        source: docPath,
+        sourceHash,
+        facts: [{
+          kind: 'edge',
+          subject: `doc:${docPath}`,
+          relation: 'supersedes',
+          object: 'ADR-0009',
+          evidence: { quote: 'Supersedes ADR-0009' },
+          provenance: 'extracted',
+        }],
+      };
+      assert.equal(runFactsWrite(root, input).status, 0);
+
+      const filePath = join(root, docPath);
+      const original = await readFile(filePath, 'utf8');
+      await writeFile(filePath, `${original}\nAn unrelated trailing paragraph.\n`);
+
+      const afterEdit = JSON.parse(run(root, ['status']).stdout);
+      assert.equal(afterEdit.docs.find((d) => d.path === docPath).state, 'changed');
+
+      const edited = (await readFile(filePath, 'utf8')).replace(/Supersedes ADR-0009 in part\.\n/, '');
+      await writeFile(filePath, edited);
+
+      const afterDelete = JSON.parse(run(root, ['status']).stdout);
+      assert.equal(afterDelete.docs.find((d) => d.path === docPath).state, 'stale');
+
+      const verify = run(root, ['verify-evidence']);
+      assert.equal(verify.status, 0);
+      const { findings } = JSON.parse(verify.stdout);
+      assert.ok(findings.some((f) => f.id === 'P14' && f.file === docPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('deterministic: the same facts, in either input order, produce a byte-identical file', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0009-partial.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const factA = {
+        kind: 'edge', subject: `doc:${docPath}`, relation: 'references', object: 'FR-102',
+        evidence: { quote: 'FR-102' }, provenance: 'extracted',
+      };
+      const factB = {
+        kind: 'edge', subject: `doc:${docPath}`, relation: 'mentions', object: 'concept:credit-limit',
+        evidence: { quote: 'credit limit' }, provenance: 'extracted',
+      };
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [factA, factB] }).status, 0);
+      const first = await readFile(factFilePath(root, docPath), 'utf8');
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [factB, factA] }).status, 0);
+      const second = await readFile(factFilePath(root, docPath), 'utf8');
+      assert.equal(first, second);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('empty facts[] writes an envelope and moves the doc from never-ingested to fresh', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0011-inline-status.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const before = JSON.parse(run(root, ['status']).stdout);
+      assert.equal(before.docs.find((d) => d.path === docPath).state, 'never-ingested');
+
+      const write = runFactsWrite(root, { source: docPath, sourceHash, facts: [] });
+      assert.equal(write.status, 0);
+      assert.equal(JSON.parse(write.stdout).facts, 0);
+
+      const after = JSON.parse(run(root, ['status']).stdout);
+      assert.equal(after.docs.find((d) => d.path === docPath).state, 'fresh');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('hash mismatch: nothing written, exit 1', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const write = runFactsWrite(root, { source: docPath, sourceHash: 'not-the-real-hash', facts: [] });
+      assert.equal(write.status, 1);
+      assert.match(write.stderr, /re-read the doc/);
+      assert.equal(await factFileExists(root, docPath), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad fact (quote not in source): nothing written, every bad index listed, exit 1', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const write = runFactsWrite(root, {
+        source: docPath,
+        sourceHash,
+        facts: [
+          { kind: 'edge', subject: `doc:${docPath}`, relation: 'references', object: 'ADR-0009', evidence: { quote: 'nowhere in the doc' }, provenance: 'extracted' },
+          { kind: 'edge', subject: `doc:${docPath}`, relation: 'references', object: 'ADR-0009', evidence: { quote: 'also nowhere' }, provenance: 'extracted' },
+        ],
+      });
+      assert.equal(write.status, 1);
+      const err = JSON.parse(write.stderr);
+      assert.equal(err.code, 1);
+      assert.deepEqual(err.errors.map((e) => e.index), [0, 1]);
+      assert.equal(await factFileExists(root, docPath), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('dangling written ref (object ADR-9999) is accepted as written, exit 0', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const write = runFactsWrite(root, {
+        source: docPath,
+        sourceHash,
+        facts: [{
+          kind: 'edge', subject: `doc:${docPath}`, relation: 'references', object: 'ADR-9999',
+          evidence: { quote: 'Supersedes ADR-0009' }, provenance: 'extracted',
+        }],
+      });
+      assert.equal(write.status, 0);
+      const envelope = await readFactFile(root, docPath);
+      assert.equal(envelope.facts[0].object, 'ADR-9999');
+
+      const build = run(root, ['build']);
+      const graph = JSON.parse(build.stdout);
+      assert.ok(graph.findings.some((f) => f.id === 'P09' && f.file === docPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad source: unsafe path exits 2, nothing written', async () => {
+    const root = await copyParsePilot();
+    try {
+      const write = runFactsWrite(root, { source: '../escape.md', sourceHash: 'x', facts: [] });
+      assert.equal(write.status, 2);
+      assert.equal(JSON.parse(write.stderr).code, 2);
+      // No source resolves to a sensible fact-file path here (it's unsafe by
+      // construction) -- assert the write created no `_lumina/facts/` at all.
+      await assert.rejects(readdir(join(root, '_lumina', 'facts')), { code: 'ENOENT' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad source: not in scope exits 2, nothing written', async () => {
+    const root = await copyParsePilot();
+    try {
+      const write = runFactsWrite(root, { source: 'docs/does-not-exist.md', sourceHash: 'x', facts: [] });
+      assert.equal(write.status, 2);
+      const err = JSON.parse(write.stderr);
+      assert.equal(err.code, 2);
+      assert.match(err.error, /not in scope/);
+      assert.equal(await factFileExists(root, 'docs/does-not-exist.md'), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad stdin: not JSON exits 1', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status, stderr } = run(root, ['facts-write'], { input: 'not json at all' });
+      assert.equal(status, 1);
+      assert.equal(JSON.parse(stderr).code, 1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad stdin: missing required fields exits 1', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status, stderr } = run(root, ['facts-write'], { input: JSON.stringify({ source: 'x' }) });
+      assert.equal(status, 1);
+      assert.equal(JSON.parse(stderr).code, 1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('extra CLI arguments exit 1 with the bad-arguments message, not stdin validation', async () => {
+    const root = await copyParsePilot();
+    try {
+      // A fully valid payload, so the only possible reason for exit 1 is the
+      // extra-argument gate in `main()`, never stdin/shape validation.
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const { status, stderr } = run(root, ['facts-write', 'extra'], {
+        input: JSON.stringify({ source: docPath, sourceHash, facts: [] }),
+      });
+      assert.equal(status, 1);
+      assert.match(JSON.parse(stderr).error, /unknown subcommand or bad arguments/);
+      assert.equal(await factFileExists(root, docPath), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('newer schemaVersion in an existing fact file: untouched, exit 3', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const existing = {
+        schemaVersion: 999, source: docPath, sourceHash: 'irrelevant', ontologyVersion: 'irrelevant', facts: [],
+      };
+      await writeFactsEnvelope(root, docPath, existing);
+
+      const write = runFactsWrite(root, { source: docPath, sourceHash, facts: [] });
+      assert.equal(write.status, 3);
+      assert.equal(JSON.parse(write.stderr).code, 3);
+      assert.deepEqual(await readFactFile(root, docPath), existing);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('lock: a fresh, held lock makes facts-write exit 3 (shortened timeout) and leaves the fact file unchanged', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const lockPath = join(root, '_lumina', '_state', 'lock');
+      await mkdir(dirname(lockPath), { recursive: true });
+      await writeFile(lockPath, 'held-by-another-process');
+
+      const write = runFactsWrite(
+        root,
+        { source: docPath, sourceHash, facts: [] },
+        { LUMINA_PROJECT_LOCK_TIMEOUT_MS: '150', LUMINA_PROJECT_LOCK_STALE_MS: '60000' },
+      );
+      assert.equal(write.status, 3);
+      assert.equal(JSON.parse(write.stderr).code, 3);
+      assert.equal(await factFileExists(root, docPath), false);
+      // The (still-live) lock itself is left in place, not deleted by the timed-out caller.
+      assert.equal(await readFile(lockPath, 'utf8'), 'held-by-another-process');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('lock: a lock older than the (shortened) stale threshold is taken over and the write succeeds', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      const lockPath = join(root, '_lumina', '_state', 'lock');
+      await mkdir(dirname(lockPath), { recursive: true });
+      await writeFile(lockPath, 'stale-leftover');
+      const longAgo = new Date(Date.now() - 60000);
+      await utimes(lockPath, longAgo, longAgo);
+
+      const write = runFactsWrite(
+        root,
+        { source: docPath, sourceHash, facts: [] },
+        { LUMINA_PROJECT_LOCK_STALE_MS: '1000', LUMINA_PROJECT_LOCK_TIMEOUT_MS: '500' },
+      );
+      assert.equal(write.status, 0);
+      assert.equal(await factFileExists(root, docPath), true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('verify-evidence', () => {
+  test('exits 0 with no findings when nothing is committed', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status, stdout } = run(root, ['verify-evidence']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), { findings: [] });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a broken quote is reported as P14 and the subcommand still exits 0', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, {
+        source: docPath,
+        sourceHash,
+        facts: [{
+          kind: 'edge', subject: `doc:${docPath}`, relation: 'references', object: 'ADR-0009',
+          evidence: { quote: 'Supersedes ADR-0009 in part.' }, provenance: 'extracted',
+        }],
+      }).status, 0);
+
+      const filePath = join(root, docPath);
+      const edited = (await readFile(filePath, 'utf8')).replace('Supersedes ADR-0009 in part.\n', '');
+      await writeFile(filePath, edited);
+
+      const { status, stdout } = run(root, ['verify-evidence']);
+      assert.equal(status, 0);
+      const { findings } = JSON.parse(stdout);
+      assert.ok(findings.some((f) => f.id === 'P14' && f.file === docPath));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a malformed fact file is reported as one P14', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const dest = join(root, '_lumina', 'facts', `${docPath}.json`);
+      await mkdir(dirname(dest), { recursive: true });
+      await writeFile(dest, '{ not json');
+
+      const { status, stdout } = run(root, ['verify-evidence']);
+      assert.equal(status, 0);
+      const { findings } = JSON.parse(stdout);
+      assert.equal(findings.length, 1);
+      assert.equal(findings[0].id, 'P14');
+      assert.equal(findings[0].file, docPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('an orphan fact file whose sourceHash matches a renamed in-scope doc is a P15 rename candidate', async () => {
+    const root = await copyParsePilot();
+    try {
+      const docPath = 'docs/adr/0052-new.md';
+      const sourceHash = await hashOfFile(root, docPath);
+      assert.equal(runFactsWrite(root, { source: docPath, sourceHash, facts: [] }).status, 0);
+
+      const renamedPath = 'docs/adr/0052-renamed.md';
+      await cp(join(root, docPath), join(root, renamedPath));
+      await rm(join(root, docPath));
+
+      const { status, stdout } = run(root, ['verify-evidence']);
+      assert.equal(status, 0);
+      const { findings } = JSON.parse(stdout);
+      assert.equal(findings.length, 1);
+      assert.equal(findings[0].id, 'P15');
+      assert.equal(findings[0].file, renamedPath);
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

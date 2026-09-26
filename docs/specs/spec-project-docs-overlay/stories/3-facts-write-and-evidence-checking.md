@@ -2,16 +2,26 @@
 title: 'facts-write and evidence checking'
 type: 'feature'
 created: '2026-09-26'
-status: 'draft'
-route: 'dispatch'
+status: 'done'
+baseline_revision: '84631bfbb89b8142b72c28e0625036d774367fe9'
 review_loop_iteration: 0
+followup_review_recommended: true
 context:
   - '{project-root}/docs/specs/spec-project-docs-overlay/SPEC.md'
   - '{project-root}/docs/specs/spec-project-docs-overlay/ontology.md'
   - '{project-root}/docs/planning-artifacts/architecture/architecture-project-docs-overlay-2026-09-26/ARCHITECTURE-SPINE.md'
+warnings: [oversized]
+deferred:
+  - summary: >-
+      src/project tests run in no npm script or CI job.
+    evidence: |-
+      grep for src/project in package.json, .github and scripts matches nothing; story 7 owns adding test:project to test:all and ci.yml (deferred-work.md entry).
+    location: >-
+      package.json
+    severity: medium
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+<intent-contract>
 
 ## Intent
 
@@ -66,7 +76,7 @@ context:
 | Orphan file | Fact file's source gone; its `sourceHash` equals an in-scope doc's hash | P15 at the new path naming the old one; no hash match gives one P14 "source gone" | exit 0 |
 | Malformed file | Fact file is bad JSON or not a v1 envelope | One P14 for that file | exit 0 |
 
-</frozen-after-approval>
+</intent-contract>
 
 ## Code Map
 
@@ -92,10 +102,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/project/lib/graph.mjs` -- export the shared resolver, and have `buildGraph` use it -- so the write-time and build-time resolvers are one resolver.
-- [ ] `src/project/lib/fsx.mjs` + `fsx.test.mjs` -- `atomicWrite` and `withLock` -- AD-23.
-- [ ] `src/project/lib/factfile.mjs` + `factfile.test.mjs` -- validation, canonicalization, envelope and verify -- cover every matrix row that is not CLI-only.
-- [ ] `src/project/project.mjs` + `project.test.mjs` -- the two subcommands, `hash` in `status`, and every CLI exit code in the matrix -- run in `mkdtemp` copies.
+- `src/project/lib/graph.mjs` -- export the shared resolver, and have `buildGraph` use it -- so the write-time and build-time resolvers are one resolver.
+- `src/project/lib/fsx.mjs` + `fsx.test.mjs` -- `atomicWrite` and `withLock` -- AD-23.
+- `src/project/lib/factfile.mjs` + `factfile.test.mjs` -- validation, canonicalization, envelope and verify -- cover every matrix row that is not CLI-only.
+- `src/project/project.mjs` + `project.test.mjs` -- the two subcommands, `hash` in `status`, and every CLI exit code in the matrix -- run in `mkdtemp` copies.
 
 **Acceptance Criteria:**
 - Given a fixture copy, when `facts-write` stores an ADR-0052 `supersedes` fact on `ADR-0009`, then `build` has that edge with `provenance: extracted` and `status` reports ADR-0052 as `fresh`.
@@ -110,7 +120,7 @@ context:
   "object":"ADR-0009","scope":"row: Retry policy","evidence":{"quote":"Supersedes ADR-0009"},"provenance":"extracted"}]}
 ```
 
-`scope` is free text and is not checked; the partial-supersession model is decided before story 4. A subject is restricted to the source doc because `buildGraph` attributes evidence to the subject's doc.
+`scope` is free text and is not checked; per spine AD-27 it becomes a label that story 4 lint matches exactly, so it is stored verbatim. A subject is restricted to the source doc because `buildGraph` attributes evidence to the subject's doc.
 
 ## Verification
 
@@ -119,8 +129,74 @@ context:
 - `npm run test:scripts` -- expected: unchanged (614 pass).
 - `cd <mkdtemp copy of parse-pilot> && node <repo>/src/project/project.mjs status` -- expected: every doc has `hash`.
 
-## Implementation Notes
-
 ## Spec Change Log
 
 ## Review Triage Log
+
+### 2026-09-26 — Review pass
+- verdicts: 46 findings — high 0, medium 13, low 27, false 6, maybe-false 0
+- findings:
+  - Blind Hunter:
+    - `[low]` `reject` stale-lock takeover lets two holders in — needs a crash-left lock plus two simultaneous writers on one doc; outcome equals last-writer-wins on one file; a correct fix needs a token/rename protocol
+    - `[low]` `reject` release unlinks another holder's lock — needs `fn` to outlive 30 s; facts-write holds the lock for milliseconds
+    - `[medium]` `patch` lock protects nothing: hash check runs before the lock, so an older snapshot can overwrite newer facts — re-hash the source inside the lock
+    - `[medium]` `patch` `envPositiveInt` accepts 0 and empty string, disabling exclusion — require an integer > 0 and mark the vars test-only
+    - `[medium]` `patch` TTY matrix row untested — make `readStdinText` take a stream and unit-test `{isTTY: true}`
+    - `[low]` `patch` extra-args test passes through "missing fields" — send a valid payload and assert the bad-arguments message
+    - `[low]` `patch` bad-source tests do not assert nothing written — assert no fact file
+    - `[low]` `patch` tests run in the checked-in fixture — use mkdtemp copies
+    - `[low]` `patch` dedup test cannot show keep-first — differing quotes, assert first survives
+    - `[low]` `patch` rejection unit tests only assert throws — assert `errors[].index` and message
+    - `[medium]` `patch` `isV1Envelope` ignores `schemaVersion` — require `schemaVersion === CURRENT_SCHEMA_VERSION`, else one P14
+    - `[low]` `patch` `verifyEvidence` ignores the loadFacts key — key/`source` mismatch is one P14 at the key
+    - `[low]` `patch` malformed-file P14 does not name the fact file — message names `_lumina/facts/<key>.json`
+    - `[low]` `patch` P15 persists after the renamed doc has its own facts; only first hash match reported — P15 per matching doc lacking an envelope, else P14 source gone
+    - `[low]` `patch` prefixed-id regex duplicated in factfile and graph — export one from graph
+    - `[low]` `patch` `buildGraph` builds a second `docsMap` — use `ctx.docsMap`
+    - `[low]` `patch` dead `config` parameter — delete
+    - `[low]` `patch` redundant `quoteMatches` before `findQuoteLine` — one call
+    - `[medium]` `patch` `scope` type unchecked; `""` changes the id (AD-27 label) — non-empty string when present
+    - `[false]` `reject` input `ref` never resolved — AD-11 keeps `ref` as written; status resolves `object`
+    - `[low]` `patch` `runVerifyEvidence` comment says always exits 0 — say exit 2/3 on config or fs errors
+    - `[false]` `reject` story checkboxes removed — the auto template has no checkboxes; the AD-27 note predates implementation
+    - `[low]` `patch` test noise: sync helper marked async, dead `rm` — delete
+  - Verification Gap:
+    - `[medium]` `defer` `src/project` tests not in any npm script or CI — owned by story 7 (deferred-work entry exists)
+    - `[low]` `patch` keep-first dedup only tested with identical duplicates — same as the dedup row above
+    - `[low]` `patch` no test rejects a dangling `frag:` object — add it
+    - `[medium]` `patch` TTY rejection untested — same as the TTY row above; testable without a PTY via an injected stream
+    - `[low]` `reject` stale-lock race (other finding) — same as the first Blind Hunter row
+  - Edge Case Hunter:
+    - `[medium]` `patch` stale-lock unlink failure (lock is a directory, EPERM) `continue`s past timeout and sleep: infinite hot loop — check timeout and sleep on that path
+    - `[low]` `reject` stale takeover race — same as above
+    - `[low]` `reject` release of another's lock — same as above
+    - `[low]` `reject` `writeFile` failure after `wx` orphans the lock — self-heals after 30 s; disk-full only
+    - `[medium]` `patch` `envPositiveInt` 0/empty — same as above
+    - `[medium]` `patch` stale snapshot overwrites newer envelope — same as the lock-scope row
+    - `[medium]` `patch` `doc:../../etc/hosts` object is statted outside the root and committed — `validatePrefixed` rejects a `doc:` path that is not a normalized safe relative path
+    - `[medium]` `patch` scope non-string or empty — same as above
+    - `[low]` `reject` internal errors reported as bad-fact exit 1 — debugging nuisance only; fix adds an error class
+    - `[low]` `reject` unreadable existing fact file bypasses the newer-schema guard — needs EACCES on a file the engine wrote itself
+    - `[low]` `patch` key/`source` mismatch not reported — same as above
+    - `[low]` `patch` stored `evidence.line` 0/NaN breaks the finding line — fall back to 1 unless an integer >= 1
+    - `[medium]` `patch` `schemaVersion` not checked in `isV1Envelope` — same as above
+    - `[false]` `reject` dedup breaks "any input order" determinism — the row covers the same facts; differing duplicates are not the same facts
+  - Intent Alignment:
+    - `[low]` `patch` two undocumented env vars — kept as test-only overrides, documented in JSDoc, positive integers only
+    - `[false]` `reject` 10 s/30 s defaults never exercised — defaults are constants checked by reading; tests use injected timings as the spec's Code Map requires
+    - `[false]` `reject` bad-fact variants unit-tested, not CLI-tested — the CLI path shares `prepareEnvelope`; one CLI bad-fact test proves wiring
+    - `[false]` `reject` errors list one message per bad index — "every problem" is read as every bad fact, the only reading the index-keyed shape supports
+
+## Auto Run Result
+
+- **Change:** `facts-write` validates one doc's facts from stdin and replaces `_lumina/facts/<source>.json` under `_lumina/_state/lock`; `verify-evidence` reports P14/P15 over committed fact files; `status` entries carry `hash`; `buildGraph` and `facts-write` share one resolver.
+- **Files:**
+  - `src/project/lib/factfile.mjs` (new): envelope validation, canonicalization, serialization, `verifyEvidence`.
+  - `src/project/lib/fsx.mjs`: `atomicWrite`, `withLock`.
+  - `src/project/lib/graph.mjs`: exported `makeResolverContext`, `resolveFactRef`, `PREFIXED_ID_RE`; `doc:` paths must be normalized and safe.
+  - `src/project/project.mjs`: two subcommands, `hash` in `status`, source re-hash inside the lock.
+  - Tests: `factfile.test.mjs` (new), `fsx.test.mjs`, `project.test.mjs`.
+- **Review:** 46 findings; 33 patched (13 medium, 20 low), 1 deferred (CI wiring, story 7), 12 rejected (6 false, 6 low and unlikely: lock takeover/release races, orphan lock on write failure, internal errors as exit 1, unreadable existing fact file).
+- **Follow-up review:** recommended. Patched medium entries: 13. Unverified risk: the in-lock re-hash and the `doc:` path guard in the shared resolver changed behavior after the first review.
+- **Verification:** `node --test src/project/` 401 pass, 2 skipped (case-sensitive FS only); `npm run test:scripts` 614 pass; `status` on a parse-pilot copy gives a 64-hex `hash` per doc; Seli `build` 0.20 s, 313 nodes, 1467 edges, no P10 (unchanged from story 2).
+- **Residual risks:** stale-lock takeover by two simultaneous writers can let both in; `src/project` tests are not in CI until story 7.
