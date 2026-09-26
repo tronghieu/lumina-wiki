@@ -32,9 +32,11 @@ Với `--yes` và không có `--ide-targets`, project mode chỉ cài cho `claud
 
 Chạy `lumi-project-setup` tiếp theo. Nó quét các tài liệu trong phạm vi và đề xuất một phạm vi, một ánh xạ loại/quan hệ, và một bộ từ vựng khái niệm. Nó không ghi gì cho đến khi bạn duyệt.
 
-Sau khi bạn duyệt và cấu hình đã được ghi, nó hỏi luôn có muốn chạy ingest ngay không. Trả lời có sẽ ingest mọi tài liệu trong phạm vi mà không cần chạy thêm lệnh hay duyệt lần hai. Trả lời không, thiết lập kết thúc và cho bạn lệnh để ingest sau.
+Sau khi bạn duyệt và cấu hình đã được ghi, nó báo số tài liệu cần ingest và hỏi luôn có muốn chạy ingest ngay không.
 
-Xác nhận việc thiết lập đã thành công:
+Trả lời có: nếu ứng dụng AI của bạn có thể khởi động một skill khác ngay từ trong setup, nó sẽ ingest mọi tài liệu trong phạm vi mà không cần chạy thêm lệnh hay duyệt lần hai. Nếu không, setup sẽ bảo bạn tự chạy `/lumi-project-ingest ingest all`, và ingest sẽ hỏi duyệt thêm một lần nữa nếu có hơn 20 tài liệu. Trả lời không: setup kết thúc và cho bạn lệnh để ingest sau.
+
+Nếu bạn muốn ingest sau, hãy xác nhận việc thiết lập đã thành công trước:
 
 ```bash
 node _lumina/project/project.mjs status
@@ -45,8 +47,8 @@ Một thiết lập mới, chưa ingest gì, trông như sau (đã rút gọn):
 ```json
 {
   "docs": [
-    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "state": "never-ingested" },
-    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "state": "never-ingested" }
+    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" },
+    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" }
   ],
   "summary": { "fresh": 0, "changed": 0, "stale": 0, "neverIngested": 2 }
 }
@@ -58,7 +60,7 @@ Mỗi tài liệu xuất hiện kèm một trạng thái. `never-ingested` cho m
 
 Chạy `lumi-project-ingest` để đọc tài liệu của bạn vào đồ thị. Ở lần chạy đầu, khi chưa ingest gì, nó đề xuất mọi tài liệu. Quá 20 tài liệu, nó hiện số lượng và chờ bạn duyệt trước khi tiếp tục.
 
-Nếu ứng dụng AI của bạn hỗ trợ subagent (Claude Code có hỗ trợ) và số tài liệu vượt 20, ingest chạy song song: nó gom tài liệu theo loại thành tối đa 8 lô, xin duyệt một lần cho toàn bộ kế hoạch, rồi giao mỗi lô cho một subagent riêng. Một lô lỗi không chặn các lô khác; sau khi tất cả lô chạy xong, những tài liệu bị bỏ sót được tự động thử ingest lại một lần. Không có subagent, ingest chạy tuần tự từng tài liệu một như trước. Cách này an toàn: fact của mỗi tài liệu được ghi vào một tệp riêng dưới một khóa, và đồ thị luôn được dựng lại từ tài liệu và fact mỗi khi đọc, nên thứ tự ghi không thể làm sai đồ thị.
+Nếu ứng dụng AI của bạn hỗ trợ subagent (Claude Code có hỗ trợ) và số tài liệu vượt 20, ingest chạy song song: tài liệu được sắp theo loại và chia thành các lô tối đa 25 tài liệu, mỗi lô một subagent, tất cả được khởi động cùng lúc dưới một lần duyệt như trên — ứng dụng AI chạy song song nhiều lô nhất có thể. Một lô lỗi không chặn các lô khác; sau khi tất cả lô chạy xong, những tài liệu bị bỏ sót được tự động thử ingest lại một lần. Không có subagent, ingest chạy tuần tự từng tài liệu một như trước. Cách này an toàn: fact của mỗi tài liệu được ghi vào một tệp riêng dưới một khóa, và đồ thị luôn được dựng lại từ tài liệu và fact mỗi khi đọc, nên thứ tự ghi không thể làm sai đồ thị.
 
 Ingest kết thúc bằng việc dựng lại khung xem đồ thị (`_lumina/graph/view.html`) và in ra liên kết `file://` của nó. `lumi-project-view` vẫn dùng được để dựng lại khung xem này bất cứ lúc nào.
 

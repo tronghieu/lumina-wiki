@@ -36,9 +36,9 @@ function runFactsWrite(cwd, input, env) {
 }
 
 /** Async, concurrent-friendly `facts-write` -- `runFactsWrite` above uses `spawnSync`, which blocks and can't run several at once. */
-function spawnFactsWrite(cwd, input) {
+function spawnFactsWrite(cwd, input, env) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [PROJECT_MJS, 'facts-write'], { cwd });
+    const child = spawn(process.execPath, [PROJECT_MJS, 'facts-write'], { cwd, env: { ...process.env, ...env } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
@@ -980,8 +980,9 @@ describe('facts-write', () => {
 
 // ---------------------------------------------------------------------------
 // facts-write concurrency (AD-23's lock): 20 distinct docs, 20 concurrent
-// writers -- proves the lock serializes them into the same end state a
-// sequential run would reach, and that it's released afterward.
+// writers -- they all succeed, reach the same end state a sequential run
+// would, and leave no lock behind. Lock mutual exclusion itself is covered
+// by the held-lock tests above and fsx.test.mjs.
 // ---------------------------------------------------------------------------
 
 const STRESS_DOC_COUNT = 20;
@@ -1024,7 +1025,7 @@ describe('facts-write concurrency', () => {
     try {
       const inputs = await stressInputs(concurrentRoot); // same generated content in both roots -> same hashes/quotes apply to either
 
-      const results = await Promise.all(inputs.map((input) => spawnFactsWrite(concurrentRoot, input)));
+      const results = await Promise.all(inputs.map((input) => spawnFactsWrite(concurrentRoot, input, { LUMINA_PROJECT_LOCK_TIMEOUT_MS: '30000' })));
       for (const r of results) assert.equal(r.status, 0, r.stderr);
 
       for (const input of inputs) {

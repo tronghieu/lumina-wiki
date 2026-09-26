@@ -30,7 +30,9 @@ With `--yes` and no `--ide-targets`, project mode installs for `claude_code` onl
 
 ## Set it up
 
-Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it. Once it writes the config, it reports how many docs are in scope and offers to start ingest right away — answer yes and it ingests every one of them, no second command or approval needed.
+Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it. Once you approve and it writes the config, it reports how many docs need ingesting and offers to start ingest right away.
+
+Answer yes: if your coding agent can start another skill from inside setup, it ingests every one of them with no second command or approval. Otherwise setup tells you to run `/lumi-project-ingest ingest all` yourself, and ingest asks once more for approval when there are more than 20 docs. Answer no: setup ends and gives you the command to run later.
 
 If you'd rather ingest later, confirm the setup worked first:
 
@@ -43,8 +45,8 @@ A fresh setup, with nothing ingested yet, looks like this (trimmed):
 ```json
 {
   "docs": [
-    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "state": "never-ingested" },
-    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "state": "never-ingested" }
+    { "path": "docs/adr/0001-use-postgres.md", "hash": "b00b80fe0172...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" },
+    { "path": "docs/adr/0002-cache-layer.md", "hash": "629cdbcc2c71...", "metaType": "Decision", "type": "ADR", "state": "never-ingested" }
   ],
   "summary": { "fresh": 0, "changed": 0, "stale": 0, "neverIngested": 2 }
 }
@@ -56,7 +58,7 @@ Every doc appears with a state. `never-ingested` for every doc, right after setu
 
 Run `lumi-project-ingest` to read your docs into the graph. On the first run, with nothing ingested yet, it offers every doc. Past 20 docs, it shows the count and waits for your approval before continuing.
 
-When there are more than 20 docs to ingest and your coding agent supports subagents (Claude Code does), ingest runs them in parallel: it groups the docs by type into up to 8 batches, one for each subagent, under the single approval above. A batch that fails doesn't stop the others, and any doc still missed once they're all done gets one automatic retry. Without subagent support, it ingests one doc at a time, as before. Either way it's safe: each doc's facts are written to their own file under a lock, and the graph rebuilds from docs and facts on every read, so write order can't change it.
+When there are more than 20 docs to ingest and your coding agent supports subagents (Claude Code does), ingest runs them in parallel: docs are sorted by type and split into batches of at most 25, one subagent per batch, all started at once under the single approval above — the coding agent runs as many at a time as it can. A batch that fails doesn't stop the others, and any doc still missed once they're all done gets one automatic retry. Without subagent support, it ingests one doc at a time, as before. Either way it's safe: each doc's facts are written to their own file under a lock, and the graph rebuilds from docs and facts on every read, so write order can't change it.
 
 Ingest ends by regenerating the graph view and printing its `file://` link. Run `lumi-project-view` any time you want to regenerate it again.
 

@@ -261,14 +261,14 @@ or write a `concept:` id yourself.
    `status` does list, and treat each of those as a named candidate; report
    the folder as out of scope only when none of `status`'s paths fall under
    it. A user-named file absent from `status`'s own list is reported and
-   skipped, never attempted. If the candidate count exceeds 20, show it and
-   wait for approval before continuing; on "no", stop the run here, write
-   nothing, and report zero candidates processed — unless the user instead
-   names a smaller subset to proceed with. When the request carries
-   lumi-project-setup's "approved at setup handoff: ingest all <N> docs",
-   that is the approval (and an "ingest all") — don't ask again. Over 20
-   with a subagent tool, continue at Orchestrator mode, which asks at O2
-   with the plan; otherwise steps 2-4 below.
+   skipped, never attempted. When the request carries lumi-project-setup's
+   "approved at setup handoff: ingest all <N> docs", that is an "ingest all"
+   and the >20 approval — don't ask it. Over 20 with a subagent tool: go to
+   Orchestrator mode now, without asking here — O2 asks, with the plan.
+   Over 20 without one: show the count and wait for approval before
+   continuing. On "no", stop the run here, write nothing, and report zero
+   candidates processed — unless the user instead names a smaller subset,
+   which re-enters this rule with the new count. Otherwise steps 2-4 below.
 
 2. **Gather what exists** (Engine facts §4):
    - Per target path the batch might cite: run `query node <path>` to learn
@@ -336,24 +336,27 @@ cluster wrote stays non-`fresh`; one written twice ends with the last
 valid set.
 
 O1. **Plan.** Sort candidates by (`type` ?? `metaType`, `path`), plain
-    string order. Clusters K = min(8, max(2, ceil(N / 25))). Split the
-    sorted list into K contiguous clusters: the first N mod K get ceil(N / K) docs, the
-    rest floor(N / K).
+    string order. Clusters K = max(2, ceil(N / 25)), no upper cap, so no
+    cluster exceeds 25 docs. Split the sorted list into K contiguous
+    clusters: the first N mod K get ceil(N / K) docs, the rest floor(N / K).
 O2. **Gate, once.** State N, K, and each cluster's doc count broken down
     by type — the counts sum to N. This is step 1's >20 approval (skip the
-    question, not the plan, when setup's handoff already approved). No
-    subagent ever asks it.
-O3. **Dispatch** all K clusters at once, so they run concurrently. Each
+    question, not the plan, when setup's handoff already approved). On
+    "no" or a smaller subset, apply step 1's rule. No subagent ever asks
+    it.
+O3. **Dispatch** all K clusters in one message, so they run concurrently;
+    a host with a lower parallel limit queues the rest itself. Each
     brief says: it is cluster k of K of lumi-project-ingest with the gate
     already approved; read `_lumina/project/PROJECT.md` and this SKILL.md
     (the path you loaded it from) and follow "Cluster subagent" below; its
     cluster's paths, each with the `hash` step 1's `status` reported.
 O4. **Merge.** Wait for every subagent; collect per-doc lines, stopped
-    clusters with their unprocessed paths, and uncaptured relations.
+    clusters with their unprocessed paths, and uncaptured relations,
+    deduplicated.
 O5. **Sweep, once.** Run `status`. A candidate not `fresh` and not reported
     skipped or stopped is missed: 5 or fewer, run steps 2-4 for them
-    yourself; more, dispatch them as one more cluster, with hashes from
-    this `status`. Anything still not `fresh` after that is reported as
+    yourself; more, split them by O1's rule and dispatch those clusters,
+    with hashes from this `status`. Anything still not `fresh` after that is reported as
     missed, never retried. Then steps 5-6 (with no misses, this `status`
     is step 5's).
 
@@ -505,13 +508,13 @@ it, and continue the batch.
 
 <example>
 First run from setup's handoff ("approved at setup handoff: ingest all 234
-docs"), host with a subagent tool. N = 234, K = min(8, max(2, 10)) = 8,
-234 mod 8 = 2: clusters 1-2 get 30 docs, 3-8 get 29 (60 + 174 = 234). The
-plan is stated without asking, all 8 briefs go out at once. Cluster 5 hits
-a lock timeout on its 12th doc and returns 11 lines plus 18 unprocessed
-paths; the others finish. `status` shows one doc from cluster 2 not
-`fresh` and not reported — the sweep ingests it itself. The report lists
-cluster 5's 18 paths with "re-run naming these paths" (a plain re-run is
+docs"), host with a subagent tool. N = 234, K = max(2, ceil(234 / 25)) =
+10, 234 mod 10 = 4: clusters 1-4 get 24 docs, 5-10 get 23 (96 + 138 =
+234). The plan is stated without asking, all 10 briefs go out in one
+message. Cluster 5 hits a lock timeout on its 12th doc and returns 11
+lines plus 12 unprocessed paths; the others finish. `status` shows one doc
+from cluster 2 not `fresh` and not reported — the sweep ingests it itself.
+The report lists cluster 5's 12 paths with "re-run naming these paths" (a plain re-run is
 update mode and would skip them as `never-ingested`), then `view`'s `url`.
 </example>
 

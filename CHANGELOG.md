@@ -8,8 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - `lumi-project-ingest` runs batches of more than 20 docs in parallel on
-  hosts with subagents: docs are grouped by type into up to 8 clusters, one
-  approval covers the plan, a failed cluster doesn't stop the others, and
+  hosts with subagents: docs are sorted by type into clusters of at most 25,
+  all dispatched at once, one approval covers the plan, a failed cluster doesn't stop the others, and
   missed docs get one automatic retry. It ends by regenerating the graph
   view and printing its link.
 - `lumi-project-setup` offers to start ingest once the config is written.

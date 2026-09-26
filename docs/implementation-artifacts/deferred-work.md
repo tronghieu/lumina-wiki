@@ -57,3 +57,8 @@
 - source_spec: `docs/specs/spec-project-docs-overlay/stories/2-deterministic-parse-and-buildgraph.md`
   summary: Register `src/project/**/*.test.mjs` in a `test:project` npm script, include it in `test:all`, and run it in CI.
   evidence: No npm script or CI job runs the project engine tests; story 1 assigns the wiring to story 7.
+
+## Deferred from: code review of SPEC-project-parallel-ingest (2026-09-27)
+
+- `docs/specs/spec-project-docs-overlay/stories/9-remaining-project-skills.md:85` still lists `status` as `{docs[{path, hash, state}], summary}`. It is a historical story in another spec, so it was not edited in this change.
+- The end-to-end success checks for CAP-2, CAP-4, CAP-5 and CAP-6 are unproven. Still to run: the Seli 234-doc run, the forced lock-timeout cluster, a sweep with a missing doc, the one-approval handoff, and a wall-clock comparison. They need a manual pilot with real subagents.

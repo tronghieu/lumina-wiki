@@ -207,20 +207,20 @@ findings at or above `--fail-on` — not a failed run.
       fixes (Engine facts §9).
 
 9. **Offer to run ingest.** Only when a config was written and Definition
-   of Done (a)-(d) all pass. Take the in-scope doc count from step 8.2's
-   `scope` result, or run `node _lumina/project/project.mjs status` and sum
-   its `summary` counts. Report that count and ask: run `/lumi-project-ingest`
-   now?
+   of Done (a)-(d) all pass. Run `node _lumina/project/project.mjs status`;
+   N is its `summary` `neverIngested` + `changed` + `stale` (every
+   in-scope doc on a fresh install; `fresh` docs are never re-ingested).
+   N = 0: say nothing needs ingesting and skip the offer. Otherwise report
+   N and ask: run `/lumi-project-ingest` now?
    - **Yes:** if the host can invoke another skill from here, start
-     `/lumi-project-ingest` in first-run mode, passing the approval
-     explicitly so it doesn't ask again: "approved at setup handoff: ingest
-     all `<N>` docs". You still never call `facts-write` yourself — the
-     handoff hands the run to the ingest skill, which does that work.
-     If the host cannot invoke another skill from inside a skill, say so
-     and tell the user to run `/lumi-project-ingest` themselves (first run
-     ingests every never-ingested doc).
+     `/lumi-project-ingest`, passing the approval explicitly so it doesn't
+     ask again: "approved at setup handoff: ingest all `<N>` docs". You
+     still never call `facts-write` yourself — the handoff hands the run to
+     the ingest skill, which does that work. If the host cannot invoke
+     another skill from inside a skill, say so and tell the user to run
+     `/lumi-project-ingest ingest all` themselves.
    - **No:** end setup here and give the exact command to run later:
-     `/lumi-project-ingest`.
+     `/lumi-project-ingest ingest all`.
 
 ## Output Format
 
@@ -236,7 +236,7 @@ Report, in this order:
    and stop here.
 5. **Validation** — `config-check` result (with any fix-and-re-approve
    round), `scope` file count vs. scan, `lint` summary by rule id.
-6. **Handoff** — only after (a)-(d) pass: the in-scope doc count and the
+6. **Handoff** — only after (a)-(d) pass: N (docs to ingest) and the
    yes/no offer to run `/lumi-project-ingest` now, and its outcome (started
    with the passed-through approval, told to the user to run it themselves,
    or the command to run later on "no").
@@ -299,12 +299,12 @@ changes and can be re-run any time.
 
 <example>
 Fresh install, the config is approved and written, and (a)-(d) all pass with
-228 in-scope docs. Setup reports the count and asks to run
+228 in-scope docs, all `never-ingested`. Setup reports N = 228 and asks to run
 `/lumi-project-ingest` now. The user says yes; the host can invoke another
-skill, so setup starts `/lumi-project-ingest` in first-run mode with
+skill, so setup starts `/lumi-project-ingest` with
 "approved at setup handoff: ingest all 228 docs" — ingest does not ask the
 >20 gate again. Had the user said no, setup would end here and tell them to
-run `/lumi-project-ingest` later.
+run `/lumi-project-ingest ingest all` later.
 </example>
 
 ## Guardrails
