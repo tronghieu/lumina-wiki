@@ -33,7 +33,9 @@ own bytes.
 ## Engine facts
 
 **1. Update mode is the default.** `status` prints `{docs:[{path, hash,
-state}], summary}` for every in-scope doc. By default, candidates are only
+state, metaType, type?}], summary}` for every in-scope doc — `type` is the
+project type, omitted for an untyped doc; `metaType` is always present
+(`Document` when untyped). By default, candidates are only
 docs whose `state` is `changed` or `stale` — `never-ingested` docs are
 *not* auto-selected, and `fresh` never is. Include `never-ingested` docs
 too only when one of:
@@ -262,7 +264,11 @@ or write a `concept:` id yourself.
    skipped, never attempted. If the candidate count exceeds 20, show it and
    wait for approval before continuing; on "no", stop the run here, write
    nothing, and report zero candidates processed — unless the user instead
-   names a smaller subset to proceed with.
+   names a smaller subset to proceed with. When the request carries
+   lumi-project-setup's "approved at setup handoff: ingest all <N> docs",
+   that is the approval (and an "ingest all") — don't ask again. Over 20
+   with a subagent tool, continue at Orchestrator mode, which asks at O2
+   with the plan; otherwise steps 2-4 below.
 
 2. **Gather what exists** (Engine facts §4):
    - Per target path the batch might cite: run `query node <path>` to learn
@@ -313,6 +319,59 @@ or write a `concept:` id yourself.
    subagent — this context's own reasoning just built these facts and is
    biased toward seeing them as correct.
 
+6. **View.** If at least one doc was committed this run, run
+   `node _lumina/project/project.mjs view` once, after step 5's `status`,
+   and end the report with its `url`. On exit 2 or 3, report the stderr
+   error instead; the ingest outcome stands. Nothing committed: skip it.
+
+## Orchestrator mode
+
+Replaces steps 2-4 when step 1 leaves more than 20 candidates and the host
+provides a subagent tool (any way to start another agent with its own
+context and a brief). Without one, run steps 2-4 yourself. Parallel writes
+are safe: each doc's facts are their own file, `facts-write` holds the
+engine lock and re-checks `sourceHash` under it, and the graph is rebuilt
+from docs + facts on every read, so write order never changes it. A doc no
+cluster wrote stays non-`fresh`; one written twice ends with the last
+valid set.
+
+O1. **Plan.** Sort candidates by (`type` ?? `metaType`, `path`), plain
+    string order. Clusters K = min(8, max(2, ceil(N / 25))). Split the
+    sorted list into K contiguous clusters: the first N mod K get ceil(N / K) docs, the
+    rest floor(N / K).
+O2. **Gate, once.** State N, K, and each cluster's doc count broken down
+    by type — the counts sum to N. This is step 1's >20 approval (skip the
+    question, not the plan, when setup's handoff already approved). No
+    subagent ever asks it.
+O3. **Dispatch** all K clusters at once, so they run concurrently. Each
+    brief says: it is cluster k of K of lumi-project-ingest with the gate
+    already approved; read `_lumina/project/PROJECT.md` and this SKILL.md
+    (the path you loaded it from) and follow "Cluster subagent" below; its
+    cluster's paths, each with the `hash` step 1's `status` reported.
+O4. **Merge.** Wait for every subagent; collect per-doc lines, stopped
+    clusters with their unprocessed paths, and uncaptured relations.
+O5. **Sweep, once.** Run `status`. A candidate not `fresh` and not reported
+    skipped or stopped is missed: 5 or fewer, run steps 2-4 for them
+    yourself; more, dispatch them as one more cluster, with hashes from
+    this `status`. Anything still not `fresh` after that is reported as
+    missed, never retried. Then steps 5-6 (with no misses, this `status`
+    is step 5's).
+
+### Cluster subagent
+
+When your brief says you are cluster k of K:
+- Your candidates are exactly the brief's paths; each one's brief `hash`
+  is its `sourceHash`. Skip step 1 — the gate is approved.
+- Run steps 2-4 for those paths only, under Engine facts and Guardrails.
+  Running `status` only to refresh a changed doc's hash (fact 7) is fine.
+- A batch-stopping exit 3 (fact 7) stops your cluster only: stop and
+  return the error with every path you did not finish.
+- Never dispatch subagents, ask the gate, run step 5's final `status`, the
+  sweep, or `view`, or write the final report.
+- Return one line per doc in the Output Format's per-doc form, then
+  `stopped: <error>; unprocessed: <paths>` if stopped, then
+  `Uncaptured: <list, or none>`.
+
 ## Output Format
 
 ```
@@ -321,12 +380,19 @@ Candidates: <N> docs (changed: Y, stale: Z[, never-ingested: X])
 [if N > 20: "N exceeds 20 — proceed? [yes/no]"; "no" ends the run here,
   writes nothing, and reports zero candidates processed, unless the user
   names a smaller subset instead]
+[orchestrator: "Plan: N docs, K clusters — 1: <n> (<type> <n>, ...),
+  2: <n> (...), ..." — shown with the question above, or alone when setup's
+  handoff already approved]
 
 docs/adr/0052-....md — 2 facts written (supersedes ADR-0009 scope "...";
   frag status superseded)
 docs/adr/0009-....md — 0 facts (nothing beyond the parse)
 docs/adr/xyz.md — skipped: <engine's error message>
 ...
+[orchestrator: all clusters' lines merged, in plan order, then:
+Clusters: K dispatched, <n> completed, <n> stopped (cluster k: <error>;
+  unprocessed: <paths> — re-run naming these paths)
+Sweep: <n> missed, <n> committed; still missing: <paths, or none>]
 
 status after: fresh <N>, changed <N>, stale <N>, never-ingested <N>
 Never-ingested remaining, not processed: <N> — always stated, even when 0;
@@ -335,6 +401,7 @@ Never-ingested remaining, not processed: <N> — always stated, even when 0;
 Uncaptured (stated only from the other side, no config mapping): <list, or none>
 Suggest: run lumi-project-check or lumi-project-verify in a fresh session
 or subagent.
+Graph view: <url> | view failed: <error> | not regenerated (nothing committed)
 ```
 
 For a skipped or stopped doc, show the engine's `errors[]` or error message
@@ -436,10 +503,22 @@ as duplicates (fact 10). A second rejection instead: skip the doc, report
 it, and continue the batch.
 </example>
 
+<example>
+First run from setup's handoff ("approved at setup handoff: ingest all 234
+docs"), host with a subagent tool. N = 234, K = min(8, max(2, 10)) = 8,
+234 mod 8 = 2: clusters 1-2 get 30 docs, 3-8 get 29 (60 + 174 = 234). The
+plan is stated without asking, all 8 briefs go out at once. Cluster 5 hits
+a lock timeout on its 12th doc and returns 11 lines plus 18 unprocessed
+paths; the others finish. `status` shows one doc from cluster 2 not
+`fresh` and not reported — the sweep ingests it itself. The report lists
+cluster 5's 18 paths with "re-run naming these paths" (a plain re-run is
+update mode and would skip them as `never-ingested`), then `view`'s `url`.
+</example>
+
 ## Guardrails
 
-- Never write a doc's bytes. The only write in this skill is a
-  `facts-write` call.
+- Never write a doc's bytes. The only writes in this skill are
+  `facts-write` calls and one final `view`.
 - Never write directly to `_lumina/facts/`, `_lumina/graph/`, or
   `_lumina/_state/` — only through `project.mjs` subcommands.
 - Never skip re-deriving a meta-relation or fragment-status fact just
@@ -462,6 +541,9 @@ it, and continue the batch.
   the same target — copy it verbatim instead.
 - Never send a partial fact set meaning to "patch" a doc's facts — every
   `facts-write` call replaces the whole set for that doc.
+- Ask the >20 gate at most once per run, and never inside a cluster
+  subagent. Only the top-level run does the final `status`, sweep, `view`,
+  and report.
 - No git operations of any kind.
 
 ## Definition of Done
@@ -472,8 +554,10 @@ Before reporting done, verify:
     that ended in one of: committed (exit 0), skipped (a second rejection,
     exit 2, or an exit 3 starting "refusing to replace" — noted in the
     report, batch continued), or the whole batch stopped on any other
-    exit 3. If the >20 gate was declined, zero candidates were written and
-    the report says so, unless the user named a smaller subset instead.
+    exit 3 (in orchestrator mode, only that cluster stopped; its
+    unprocessed docs are listed). If the >20 gate was declined, zero
+    candidates were written and the report says so, unless the user named a
+    smaller subset instead.
 (b) A final `status` run shows every successfully-committed doc `fresh`.
 (c) No fact was written whose `subject` doc differs from the doc whose hash
     was sent as `sourceHash`.
@@ -496,3 +580,9 @@ Before reporting done, verify:
     docs remain unprocessed and how to include them, any skipped docs and
     uncaptured relations, and suggests a fresh-session or subagent
     check/verify pass.
+(h) Orchestrator mode only: the plan (N, K, per-cluster counts summing to
+    N) was stated before dispatch; every candidate was in exactly one
+    brief; the gate was asked at most once and by no subagent; the sweep
+    ran once and its still-missing docs are reported.
+(i) If any doc was committed, `view` ran once after the final `status` and
+    the report ends with its `url` or its error.

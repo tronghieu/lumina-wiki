@@ -67,7 +67,7 @@ node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
 - `scope` — list in-scope docs.
 - `config-check` — validate `project.yaml` alone.
 - `build` — parse the in-scope docs and build the graph; never cached.
-- `status` — freshness per doc: `fresh` / `changed` / `stale` / `never-ingested`.
+- `status` — freshness per doc: `fresh` / `changed` / `stale` / `never-ingested`, plus its `metaType` and project `type` (omitted when untyped).
 - `facts-write` — takes JSON on stdin, `{source, sourceHash, facts: []}`
   (never a TTY — it exits 1 if stdin isn't piped); replaces that one doc's
   entire fact set, canonicalizes references, and re-checks every evidence

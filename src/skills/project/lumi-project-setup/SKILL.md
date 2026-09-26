@@ -206,6 +206,22 @@ findings at or above `--fail-on` — not a failed run.
    3. `lint`. Summarize findings by rule id and point to the top config-side
       fixes (Engine facts §9).
 
+9. **Offer to run ingest.** Only when a config was written and Definition
+   of Done (a)-(d) all pass. Take the in-scope doc count from step 8.2's
+   `scope` result, or run `node _lumina/project/project.mjs status` and sum
+   its `summary` counts. Report that count and ask: run `/lumi-project-ingest`
+   now?
+   - **Yes:** if the host can invoke another skill from here, start
+     `/lumi-project-ingest` in first-run mode, passing the approval
+     explicitly so it doesn't ask again: "approved at setup handoff: ingest
+     all `<N>` docs". You still never call `facts-write` yourself — the
+     handoff hands the run to the ingest skill, which does that work.
+     If the host cannot invoke another skill from inside a skill, say so
+     and tell the user to run `/lumi-project-ingest` themselves (first run
+     ingests every never-ingested doc).
+   - **No:** end setup here and give the exact command to run later:
+     `/lumi-project-ingest`.
+
 ## Output Format
 
 Report, in this order:
@@ -220,6 +236,10 @@ Report, in this order:
    and stop here.
 5. **Validation** — `config-check` result (with any fix-and-re-approve
    round), `scope` file count vs. scan, `lint` summary by rule id.
+6. **Handoff** — only after (a)-(d) pass: the in-scope doc count and the
+   yes/no offer to run `/lumi-project-ingest` now, and its outcome (started
+   with the passed-through approval, told to the user to run it themselves,
+   or the command to run later on "no").
 
 ## Examples
 
@@ -277,15 +297,27 @@ The user declines the proposal outright. Nothing is written, `config-check`/
 changes and can be re-run any time.
 </example>
 
+<example>
+Fresh install, the config is approved and written, and (a)-(d) all pass with
+228 in-scope docs. Setup reports the count and asks to run
+`/lumi-project-ingest` now. The user says yes; the host can invoke another
+skill, so setup starts `/lumi-project-ingest` in first-run mode with
+"approved at setup handoff: ingest all 228 docs" — ingest does not ask the
+>20 gate again. Had the user said no, setup would end here and tell them to
+run `/lumi-project-ingest` later.
+</example>
+
 ## Guardrails
 
 - Never write anything before the user approves it. No "fix all" default —
   approval must name what it covers; nothing approved means nothing written
   and no validation run.
 - Never write `_lumina/facts/`, `_lumina/graph/`, or `_lumina/_state/`, and
-  never run `facts-write`. Never touch a doc beyond an approved frontmatter
-  fix (frontmatter block only; body stays byte-identical) or an approved
-  glossary file.
+  never run `facts-write` — not even after the ingest handoff in step 9,
+  which only starts or points to `/lumi-project-ingest`; that skill does
+  the ingest work, setup does none of it. Never touch a doc beyond an
+  approved frontmatter fix (frontmatter block only; body stays
+  byte-identical) or an approved glossary file.
 - Never change the engine, the installer, or the config schema — this skill
   only ever writes `_lumina/config/project.yaml` and, on approval, doc
   frontmatter or a glossary file.
@@ -308,3 +340,5 @@ If a config (or an approved subset) was written, verify before reporting done:
     captured before step 7's first write, shows new changes only under
     `_lumina/config/project.yaml` and any approved frontmatter/glossary
     paths.
+
+Only once (a)-(d) all pass does step 9's ingest offer run.

@@ -30,9 +30,9 @@ With `--yes` and no `--ide-targets`, project mode installs for `claude_code` onl
 
 ## Set it up
 
-Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it.
+Run `lumi-project-setup` next. It scans your in-scope docs and proposes a scope, a type/relation mapping, and a concept vocabulary. It writes nothing until you approve it. Once it writes the config, it reports how many docs are in scope and offers to start ingest right away — answer yes and it ingests every one of them, no second command or approval needed.
 
-Once you approve, confirm the setup worked:
+If you'd rather ingest later, confirm the setup worked first:
 
 ```bash
 node _lumina/project/project.mjs status
@@ -50,11 +50,15 @@ A fresh setup, with nothing ingested yet, looks like this (trimmed):
 }
 ```
 
-Every doc appears with a state. `never-ingested` for every doc, right after setup, is expected — nothing has been read into the graph yet.
+Every doc appears with a state. `never-ingested` for every doc, right after setup, is expected — nothing has been read into the graph yet. Each doc also carries a `metaType` (its project role, or `Document` when nothing narrower applies) and, once it matches a type rule, a `type`.
 
 ## Ingest and ask
 
 Run `lumi-project-ingest` to read your docs into the graph. On the first run, with nothing ingested yet, it offers every doc. Past 20 docs, it shows the count and waits for your approval before continuing.
+
+When there are more than 20 docs to ingest and your coding agent supports subagents (Claude Code does), ingest runs them in parallel: it groups the docs by type into up to 8 batches, one for each subagent, under the single approval above. A batch that fails doesn't stop the others, and any doc still missed once they're all done gets one automatic retry. Without subagent support, it ingests one doc at a time, as before. Either way it's safe: each doc's facts are written to their own file under a lock, and the graph rebuilds from docs and facts on every read, so write order can't change it.
+
+Ingest ends by regenerating the graph view and printing its `file://` link. Run `lumi-project-view` any time you want to regenerate it again.
 
 After that, ask a question:
 
@@ -112,7 +116,7 @@ Project mode never creates `raw/` or `wiki/`. It writes:
 - `_lumina/project/` — the engine (`project.mjs` and its libraries). Committed.
 - `_lumina/config/` — your approved scope and type/relation mapping (`project.yaml`), written later by setup. Committed.
 - `_lumina/facts/` — one file per source doc, holding the facts an agent extracted from it. Committed.
-- `_lumina/graph/` — the graph viewer file. Gitignored, rebuilt on every `lumi-project-view` run.
+- `_lumina/graph/` — the graph viewer file. Gitignored, rebuilt after every ingest that commits a doc, and on every `lumi-project-view` run.
 - `_lumina/_state/` — the engine's write lock. Gitignored.
 - `_lumina/manifest.json` — local install bookkeeping. Gitignored.
 - `.agents/skills/lumi-project-*` — the six skills below, for every selected target.

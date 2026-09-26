@@ -131,7 +131,7 @@ in-scope doc. Use this list, not a guess or a raw directory listing, to
 bound a doc-search fallback (Instructions §7) to what's actually in scope.
 
 **10. `status` gives exact per-doc freshness.** `node
-_lumina/project/project.mjs status` prints `{docs:[{path, hash, state}],
+_lumina/project/project.mjs status` prints `{docs:[{path, hash, state, metaType, type?}],
 summary:{fresh, changed, stale, neverIngested}}`, `state` one of
 `fresh`/`changed`/`stale`/`never-ingested` **for that one doc**. A `query`
 response's own `freshness` only names the *stale* docs (Engine facts §8);

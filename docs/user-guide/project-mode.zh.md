@@ -32,7 +32,9 @@ npx lumina-wiki install --mode project --yes --ide-targets claude_code,codex
 
 接下来运行 `lumi-project-setup`。它会扫描范围内的文档，提出一个范围、一份类型/关系映射和一份概念词表。在你批准之前，它不会写入任何内容。
 
-批准之后，确认设置是否生效：
+批准之后，它会报告范围内的文档数量，并主动询问是否立即处理文档。回答"是"，就会以首次运行的方式启动 `lumi-project-ingest`，把所有文档都处理掉，不需要再输入第二个命令，也不需要再批准一次。回答"否"，设置就到此结束，之后你可以自己运行 `lumi-project-ingest`。
+
+确认设置是否生效：
 
 ```bash
 node _lumina/project/project.mjs status
@@ -50,11 +52,15 @@ node _lumina/project/project.mjs status
 }
 ```
 
-每份文档都会带有一个状态。刚设置完时，每份文档都是 `never-ingested`，这是正常的——还没有任何内容被读入图中。
+每份文档都会带有一个状态。刚设置完时，每份文档都是 `never-ingested`，这是正常的——还没有任何内容被读入图中。每份文档还带有 `metaType`（没有更具体的类型时为 `Document`），匹配到类型规则后还会带有 `type`。
 
 ## 处理文档并提问
 
 运行 `lumi-project-ingest`，把你的文档读入图中。首次运行时，因为还没有处理过任何文档，它会提供全部文档；超过 20 份文档时，它会显示数量并等待你批准后再继续。
+
+候选文档超过 20 份、且所在的编码助手支持子代理时（Claude Code 支持），处理会并行进行：文档按类型分组，拆成最多 8 个批次，一次批准就覆盖整个计划；某个批次失败不会中断其他批次，遗漏的文档会自动重试一次。不支持子代理的助手仍会像以前一样逐份处理。这个过程是安全的：每份文档的事实会写入各自独立的文件并加锁保护，而图在每次读取时都会从文档和事实重新建立，写入顺序不会改变结果。
+
+处理结束时会重新生成图视图（`_lumina/graph/view.html`）并打印它的 `file://` 链接；你也可以随时运行 `lumi-project-view` 重新生成它。
 
 之后，提出一个问题：
 
@@ -112,7 +118,7 @@ npx lumina-wiki uninstall
 - `_lumina/project/` — 引擎本体（`project.mjs` 及其库文件）。会被提交。
 - `_lumina/config/` — 你批准的范围以及类型/关系映射（`project.yaml`），由随后运行的设置写入。会被提交。
 - `_lumina/facts/` — 每份源文档对应一个文件，保存代理从中提取的事实。会被提交。
-- `_lumina/graph/` — 图查看器文件。已加入 gitignore，每次运行 `lumi-project-view` 都会重新建立。
+- `_lumina/graph/` — 图查看器文件。已加入 gitignore，每次处理文档或运行 `lumi-project-view` 都会重新建立。
 - `_lumina/_state/` — 引擎的写锁。已加入 gitignore。
 - `_lumina/manifest.json` — 本地安装记录。已加入 gitignore。
 - `.agents/skills/lumi-project-*` — 下面六个技能，写入每个被选中的目标。
