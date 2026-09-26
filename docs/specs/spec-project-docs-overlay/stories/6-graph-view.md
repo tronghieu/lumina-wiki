@@ -42,7 +42,7 @@ deferred:
 - Edit only `src/project/`. The engine imports only `node:` builtins, relative files, and the vendored js-yaml.
 - `force-graph` and the viewer files are read as text and inlined, never imported (AD-6, AD-16).
 - The viewer module is imported lazily inside the `view` branch, not at the top of `project.mjs`.
-- `view` is the only writer of `_lumina/graph/view.html`. It writes through the engine `atomicWrite`, touches nothing else, and prints `{ok: true, file: "_lumina/graph/view.html"}`. Any argument gives exit 1.
+- `view` is the only writer of `_lumina/graph/view.html`. It writes through the engine `atomicWrite`, touches nothing else, and prints `{ok: true, file: "_lumina/graph/view.html", url}`, with `url` the `file://` link. Any argument gives exit 1.
 - **Data:**
   - Paths are repo-relative.
   - The inlined JSON escapes `<`, `>`, `&`, U+2028 and U+2029 as `\uXXXX`.
@@ -59,9 +59,9 @@ deferred:
   - Settings panel: filters by meta-type, status and folder; an orphan toggle; sliders for center, repel, link strength and link distance.
   - Local graph within N hops of the selected node; search.
   - Directional arrows with relation labels on edges.
-  - Nodes with lint findings, and docs whose state is `stale`, are highlighted distinctly.
+  - Nodes with lint findings, and docs whose state is `stale`, are highlighted distinctly by rings, off by default behind a toggle.
   - Click opens a detail panel showing type, status, evidence quotes, findings and a `vscode://file/<abs>:<line>` link.
-  - Light and dark themes via `prefers-color-scheme`.
+  - Dark theme only.
 - **Editor link:** the absolute root comes from `location.pathname` at view time, by stripping `/_lumina/graph/view.html`. A Windows drive path (`/C:/…`) loses its leading slash.
 - `vendor/force-graph.min.js` is byte-identical to the package's `dist/force-graph.min.js`. `vendor/THIRD-PARTY-NOTICES.md` adds force-graph (MIT) and the license and copyright of every dependency bundled into that file.
 
@@ -74,7 +74,7 @@ deferred:
 
 | Scenario | Input / State | Expected | Error |
 |---|---|---|---|
-| Happy | `view` on parse-pilot | `view.html` written; stdout `{ok, file}` | exit 0 |
+| Happy | `view` on parse-pilot | `view.html` written; stdout `{ok, file, url}` | exit 0 |
 | Deterministic | `view` twice, unchanged input | Byte-identical file | — |
 | Injection | A doc heading or evidence quote containing `</script><script>` and U+2028 | Inlined data holds only escaped forms; the page parses one data block | — |
 | No network | Generated file | Contains no `src=`/`href=` to `http(s):`; CSP meta present | — |

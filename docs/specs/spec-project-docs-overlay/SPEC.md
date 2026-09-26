@@ -38,7 +38,7 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
   - **intent:** A deterministic parse builds the fast-path graph from frontmatter, links, ID mentions, heading-based status, and concept-vocabulary mentions, with no agent involved.
   - **success:** Two consecutive parses of unchanged docs produce byte-identical output; parsing Seli's `docs/` (234 files) completes in under one second.
 - **CAP-6**
-  - **intent:** The host agent ingests docs guided by the ontology, extracting entities, fragments, and relations beyond what the parse sees; every fact carries an evidence quote and `file:line`; results are stored per source doc, and only docs whose facts no longer hold are re-ingested.
+  - **intent:** The host agent ingests docs guided by the ontology, extracting entities, fragments, and relations beyond what the parse sees; every fact carries an evidence quote and `file:line`; results are stored per source doc, and by default only changed or stale docs are re-ingested; never-ingested docs are ingested on request or on the first run.
   - **success:** After ingest on Seli, `ADR-0009`'s partial supersession by `ADR-0052` appears as fragment-level facts with quotes; re-running ingest with no doc changes processes zero docs.
 - **CAP-7**
   - **intent:** Nodes exist at three granularities: document, fragment (ID- or anchor-addressable part of a doc), and concept (domain term with name, aliases, and mentions, holding no prose).

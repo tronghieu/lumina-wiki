@@ -6,7 +6,7 @@ Two tiers. The meta-ontology is fixed in Lumina and describes the nature of proj
 
 | Meta-type | Examples across projects |
 |---|---|
-| Decision (lifecycle: proposed, accepted, partially-superseded, superseded, deprecated) | ADR, RFC, KEP, design doc |
+| Decision (lifecycle: proposed, accepted, rejected, partially-superseded, superseded, deprecated) | ADR, RFC, KEP, design doc |
 | Requirement / Goal | FR in a PRD, OKR, user story |
 | Rule / Constraint | convention, policy, invariant, SLA |
 | Capability | feature doc, product spec |

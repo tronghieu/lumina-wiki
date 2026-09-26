@@ -9,6 +9,8 @@ An Obsidian-like graph view in Lumina's own HTML page. This is the look and inte
 - Rendered on canvas, not SVG: a full project graph reaches thousands of nodes.
 - Built on `force-graph` (2D, canvas) used directly, with no React. `3d-force-graph` is a later option only.
 - No network loads. `force-graph` is vendored into the package as a static asset (zero-telemetry rule 10), after measuring its size and adding it to the `ci-package` allowlist. A hand-written force layout is rejected: matching Obsidian-like interaction would be a sub-project.
+- Dark theme only.
+- `view` prints `{ok, file, url}`; `url` is the `file://` link to the page.
 - Viewer generation is lazily imported to keep CLI cold start under 300 ms.
 
 ## Interaction
@@ -24,5 +26,5 @@ An Obsidian-like graph view in Lumina's own HTML page. This is the look and inte
 ## Lumina-specific
 
 - Edge-type labels with directional arrows or particles (`supersedes`, `governs`, ...).
-- Lint violations and stale facts highlighted.
+- Lint violations and stale facts highlighted as rings, off by default behind a toggle so a large graph stays readable.
 - Detail panel: type, status, evidence quote, and a `vscode://file/...:line` link to the source line.
