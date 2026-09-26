@@ -38,10 +38,11 @@
 
   var META_TYPES = ['Decision', 'Requirement', 'Rule', 'Capability', 'Process', 'Structure', 'Concept', 'Actor', 'Issue', 'Evidence', 'Document'];
   var PALETTE = {
-    Decision: '#e07a5f', Requirement: '#3d9970', Rule: '#b565d8',
-    Capability: '#3b6fe0', Process: '#e0b83b', Structure: '#4fb3bf',
-    Concept: '#8a8a8a', Actor: '#d84f8f', Issue: '#d1373f',
-    Evidence: '#5c8ce0', Document: '#7a7a7a', Unknown: '#555b66',
+    // Catppuccin Mocha
+    Decision: '#fab387', Requirement: '#a6e3a1', Rule: '#cba6f7',
+    Capability: '#89b4fa', Process: '#f9e2af', Structure: '#94e2d5',
+    Concept: '#9399b2', Actor: '#f5c2e7', Issue: '#f38ba8',
+    Evidence: '#74c7ec', Document: '#b4befe', Unknown: '#6c7086',
   };
   var NODE_REL_SIZE = 4;
   var LINK_LABEL_ZOOM_THRESHOLD = 2.5;
@@ -154,14 +155,14 @@
   }
 
   // -------------------------------------------------------------------------
-  // Theme (light/dark via prefers-color-scheme -- cached, not re-read every
-  // frame; refreshed only when the OS scheme changes).
+  // Theme tokens from viewer.css, read once (not every frame).
   // -------------------------------------------------------------------------
 
   var theme = {};
   function refreshTheme() {
     theme.bg = getCss('--bg');
     theme.link = getCss('--link');
+    theme.muted = getCss('--muted');
     theme.accent = getCss('--accent');
     theme.error = getCss('--error');
     theme.warning = getCss('--warning');
@@ -267,7 +268,8 @@
     })
     .nodeId('id')
     .nodeRelSize(NODE_REL_SIZE)
-    .nodeVal(function (n) { return 1 + (degree[n.id] || 0); })
+    // sqrt damps hubs: degree 100 -> radius ~13px, not ~40px.
+    .nodeVal(function (n) { return 1 + Math.sqrt(degree[n.id] || 0); })
     .nodeColor(nodeColorAccessor)
     .nodeLabel(function (n) { return escapeHtml(n.id + (n.metaType ? ' (' + n.metaType + ')' : '') + (n.status ? ' [' + n.status + ']' : '')); })
     .nodeVisibility(function (n) { return visibleSet.has(n.id); })
@@ -319,7 +321,7 @@
       var textWidth = ctx.measureText(label).width;
       ctx.fillStyle = theme.bg;
       ctx.fillRect(-textWidth / 2 - 2, -fontSize / 2 - 1, textWidth + 4, fontSize + 2);
-      ctx.fillStyle = theme.link;
+      ctx.fillStyle = theme.muted;
       ctx.fillText(label, 0, 0);
       ctx.restore();
     })
@@ -347,7 +349,6 @@
   }
 
   refreshTheme();
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', refreshTheme);
 
   window.addEventListener('resize', function () {
     Graph.width(canvasEl.clientWidth).height(canvasEl.clientHeight);
@@ -368,7 +369,14 @@
     if (chargeForce && chargeForce.strength) chargeForce.strength(charge);
     var linkForce = Graph.d3Force('link');
     if (linkForce) {
-      if (linkForce.strength) linkForce.strength(linkStrength);
+      // Slider scales d3's own default (1 / smaller endpoint degree), so
+      // hubs don't collapse their neighborhoods into one clump.
+      if (linkForce.strength) {
+        linkForce.strength(function (l) {
+          var d = Math.min(degree[idOf(l.source)] || 1, degree[idOf(l.target)] || 1);
+          return linkStrength / Math.max(1, d);
+        });
+      }
       if (linkForce.distance) linkForce.distance(linkDistance);
     }
     Graph.d3ReheatSimulation();

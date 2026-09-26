@@ -1,34 +1,21 @@
-/* Lumina project graph view (CAP-12, graph-view.md). Light theme by default,
-   dark theme under prefers-color-scheme -- the only theme switch the spec
-   asks for (no in-page toggle). */
+/* Lumina project graph view (CAP-12, graph-view.md). Dark only, styled
+   after the AnuPpuccin Obsidian theme with the Catppuccin Mocha palette (MIT).
+   viewer.js reads --bg, --muted, --link, --accent and the severity tokens. */
 :root {
-  --bg: #f7f7f8;
-  --fg: #1b1b1f;
-  --muted: #666a73;
-  --panel-bg: #ffffffee;
-  --border: #d7d7dc;
-  --accent: #3b6fe0;
-  --stale: #6b5bd6;
-  --error: #d1373f;
-  --warning: #c9822a;
-  --info: #2f6fed;
-  --link: #9a9aa4;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16171b;
-    --fg: #e7e7ea;
-    --muted: #9a9aa4;
-    --panel-bg: #1f2127ee;
-    --border: #33353c;
-    --accent: #7ea0ff;
-    --stale: #a78bfa;
-    --error: #ff6b6f;
-    --warning: #e0a552;
-    --info: #6fa8ff;
-    --link: #4a4c56;
-  }
+  color-scheme: dark;
+  accent-color: #cba6f7;          /* mauve */
+  --bg: #1e1e2e;                  /* base */
+  --fg: #cdd6f4;                  /* text */
+  --muted: #a6adc8;               /* subtext0 */
+  --panel-bg: #181825ee;          /* mantle */
+  --input-bg: #313244;            /* surface0 */
+  --border: #45475a;              /* surface1 */
+  --accent: #89b4fa;              /* blue */
+  --stale: #cba6f7;               /* mauve */
+  --error: #f38ba8;               /* red */
+  --warning: #f9e2af;             /* yellow */
+  --info: #89dceb;                /* sky */
+  --link: #585b70;                /* surface2 */
 }
 
 * { box-sizing: border-box; }
@@ -66,18 +53,20 @@ html, body {
   overflow: auto;
   background: var(--panel-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 24px #11111b99;
   backdrop-filter: blur(6px);
 }
 
 #search-box { margin-bottom: 8px; }
+#search-input:focus { outline: 2px solid var(--stale); outline-offset: -1px; }
 #search-input {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
+  border-radius: 8px;
+  background: var(--input-bg);
   color: var(--fg);
 }
 
@@ -148,8 +137,9 @@ html, body {
   overflow: auto;
   background: var(--panel-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 12px;
+  box-shadow: 0 8px 24px #11111b99;
   backdrop-filter: blur(6px);
 }
 #detail-close {
@@ -169,7 +159,9 @@ html, body {
 #detail-body blockquote {
   margin: 4px 0;
   padding: 4px 8px;
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--stale);
+  border-radius: 0 6px 6px 0;
+  background: var(--input-bg);
   color: var(--muted);
   white-space: pre-wrap;
 }
@@ -179,3 +171,21 @@ html, body {
 #detail-body .finding-warning { color: var(--warning); }
 #detail-body .finding-info { color: var(--info); }
 #detail-body .evidence-list { margin: 2px 0 6px; padding-left: 16px; }
+
+button {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+button:hover { border-color: var(--stale); }
+#settings input[type="number"],
+#settings select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+}

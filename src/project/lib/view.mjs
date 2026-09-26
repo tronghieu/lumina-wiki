@@ -96,9 +96,9 @@ ${viewerCss}
       <label><input type="checkbox" id="filter-orphans"> Hide orphan nodes</label>
       <label>Local graph hops <input type="number" id="local-hops" min="0" step="1" value=""> <button id="local-clear" type="button">Clear</button></label>
       <label>Center force <input type="range" id="force-center" min="0" max="2" step="0.05" value="1"></label>
-      <label>Repel force <input type="range" id="force-charge" min="-500" max="0" step="10" value="-120"></label>
+      <label>Repel force <input type="range" id="force-charge" min="-500" max="0" step="10" value="-200"></label>
       <label>Link strength <input type="range" id="force-link-strength" min="0" max="2" step="0.05" value="1"></label>
-      <label>Link distance <input type="range" id="force-link-distance" min="10" max="300" step="5" value="40"></label>
+      <label>Link distance <input type="range" id="force-link-distance" min="10" max="300" step="5" value="70"></label>
     </details>
     <div id="legend"></div>
   </div>
