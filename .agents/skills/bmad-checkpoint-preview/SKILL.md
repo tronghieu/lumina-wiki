@@ -1,68 +1,21 @@
 ---
 name: bmad-checkpoint-preview
-description: 'LLM-assisted human-in-the-loop review. Make sense of a change, focus attention where it matters, test. Use when the user says "checkpoint", "human review", or "walk me through this change".'
+description: "Deprecated: forwards to bmad-walkthrough. Do not use unless invoked by name"
+metadata:
+  lifecycle: shim
 ---
 
-# Checkpoint Review Workflow
-
-**Goal:** Guide a human through reviewing a change — from purpose and context into details.
-
-**Your Role:** You are assisting the user in reviewing a change.
-
-## Conventions
-
-- Bare paths (e.g. `step-01-orientation.md`) resolve from the skill root.
-- `{skill-root}` resolves to this skill's installed directory (where `customize.toml` lives).
-- `{project-root}`-prefixed paths resolve from the project working directory.
-- `{skill-name}` resolves to the skill directory's basename.
+# Deprecated Walkthrough Alias
 
 ## On Activation
 
-### Step 1: Resolve the Workflow Block
-
-Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow`
-
-**If the script fails**, resolve the `workflow` block yourself by reading these three files in base → team → user order and applying the same structural merge rules as the resolver:
-
-1. `{skill-root}/customize.toml` — defaults
-2. `{project-root}/_bmad/custom/{skill-name}.toml` — team overrides
-3. `{project-root}/_bmad/custom/{skill-name}.user.toml` — personal overrides
-
-Any missing file is skipped. Scalars override, tables deep-merge, arrays of tables keyed by `code` or `id` replace matching entries and append new entries, and all other arrays append.
-
-### Step 2: Execute Prepend Steps
-
-Execute each entry in `{workflow.activation_steps_prepend}` in order before proceeding.
-
-### Step 3: Load Persistent Facts
-
-Treat every entry in `{workflow.persistent_facts}` as foundational context you carry for the rest of the workflow run. Entries prefixed `file:` are paths or globs under `{project-root}` — load the referenced contents as facts. All other entries are facts verbatim.
-
-### Step 4: Load Config
-
-Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
-
-- `implementation_artifacts`
-- `planning_artifacts`
-- `communication_language`
-- `document_output_language`
-
-### Step 5: Greet the User
-
-Greet the user, speaking in `{communication_language}`.
-
-### Step 6: Execute Append Steps
-
-Execute each entry in `{workflow.activation_steps_append}` in order.
-
-Activation is complete. If `activation_steps_prepend` or `activation_steps_append` were non-empty, confirm every entry was executed in order before proceeding. Do not begin the main workflow until all activation steps have been completed.
-
-## Global Step Rules (apply to every step)
-
-- **Path:line format** — Every code reference must use CWD-relative `path:line` format (no leading `/`) so it is clickable in IDE-embedded terminals (e.g., `src/auth/middleware.ts:42`).
-- **Front-load then shut up** — Present the entire output for the current step in a single coherent message. Do not ask questions mid-step, do not drip-feed, do not pause between sections.
-- **Language** — Speak in `{communication_language}`. Write any file output in `{document_output_language}`.
-
-## FIRST STEP
-
-Read fully and follow `./step-01-orientation.md` to begin.
+1. Check whether either legacy customization file exists:
+   - `{project-root}/_bmad/custom/bmad-checkpoint-preview.toml`
+   - `{project-root}/_bmad/custom/bmad-checkpoint-preview.user.toml`
+2. If neither legacy file exists, output exactly `bmad-checkpoint-preview is deprecated. Redirecting to bmad-walkthrough. Please use bmad-walkthrough in the future.`, invoke `bmad-walkthrough` exactly once with the user's original input verbatim, then execute no further steps in this shim.
+3. For every legacy file that exists, use its matching new filename:
+   - `{project-root}/_bmad/custom/bmad-checkpoint-preview.toml` becomes `{project-root}/_bmad/custom/bmad-walkthrough.toml`.
+   - `{project-root}/_bmad/custom/bmad-checkpoint-preview.user.toml` becomes `{project-root}/_bmad/custom/bmad-walkthrough.user.toml`.
+4. If the matching new file does not exist, tell the user that the customization file uses the deprecated name and offer to rename it. Rename it only after explicit approval. If approval is declined or unavailable, or the rename fails, HALT and do not invoke any skill.
+5. If the matching new file already exists, do not overwrite it. Read both files, explain their differences, and propose the exact content for the new file. Resolve conflicting values with the user. Only after the user explicitly approves that content, save and verify the new file, then remove the legacy file. If approval is declined or unavailable, or any operation fails, HALT and do not invoke any skill.
+6. After every detected legacy file has been migrated successfully and no legacy file remains, output exactly `bmad-checkpoint-preview is deprecated. Redirecting to bmad-walkthrough. Please use bmad-walkthrough in the future.`, invoke `bmad-walkthrough` exactly once with the user's original input verbatim, then execute no further steps in this shim.

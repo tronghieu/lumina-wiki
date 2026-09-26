@@ -1,6 +1,6 @@
 ---
 name: bmad-ux
-description: Plan UX patterns and design specifications. Use when the user says "lets create UX design" or "create UX specifications" or "help me plan the UX"
+description: 'Capture the user''s UX vision in two documents: DESIGN.md for how the product looks and EXPERIENCE.md for how it behaves. Use when the user says "lets create UX design" or "create UX specifications" or "help me plan the UX"'
 ---
 # BMad UX
 
@@ -30,7 +30,7 @@ UX may lead, follow, or stand alone. Inherit `sources:` by reference; the spines
 
 ## On Activation
 
-1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow`. On failure, read `{skill-root}/customize.toml` directly and use defaults.
+1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`. On failure, read `{skill-root}/customize.toml` directly and use defaults.
 2. Run `{workflow.activation_steps_prepend}`. Treat `{workflow.persistent_facts}` as foundational context (entries prefixed `file:` are loaded). `{workflow.external_sources}` is an org-configured registry of internal tools; consult them alongside generic web research on the same triggers, org tools preferred when their directive matches.
 3. Load `{project-root}/_bmad/bmm/config.yaml` (+ `config.user.yaml` if present). Resolve `{user_name}`, `{communication_language}`, `{document_output_language}`, `{planning_artifacts}`, `{project_name}`, `{date}`. Missing keys → neutral defaults; never block.
 4. If headless, follow `references/headless.md` for the whole run. Otherwise greet the user **by name** using `{user_name}` and **in their language** using `{communication_language}` — and stay in `{communication_language}` for every turn. In the greeting, let the user know `bmad-party-mode` and `bmad-advanced-elicitation` are always available. Then scan for misroute on the first message: PRD → `bmad-prd`; architecture → `bmad-architecture`; game UX → BMad GDS; agent/skill → `bmad-workflow-builder`; brief → `bmad-product-brief`.
@@ -87,4 +87,4 @@ Outcomes, in order:
 - **Key-screen mocks rendered.** Key-screens tool → `.working/` for surfaces where layout drives behavior or anchors visual language.
 - **Mock coverage confirmed.** Walk every IA surface; classify *mocked* vs *spine-only*. Ask: *"These will be built from spine tables alone — any need a visual reference?"* Render more if named; log spine-only choices.
 - **Layout extracted, artifacts promoted.** Distill subagent re-reads each `.working/` and `imports/` artifact; lifts visual decisions into DESIGN.md and behavioral decisions into EXPERIENCE.md. Promote `.working/` keepers to `mockups/` (HTML) or `wireframes/` (Excalidraw); imports stay. Inline relative links at relevant spine sections; state spines-win-on-conflict once.
-- **Polished, handed off, closed.** Apply `{workflow.doc_standards}` in order. Execute `{workflow.external_handoffs}`; surface URLs. Set both files' `status: final`, `updated: {date}`. Log finalization via `uv run {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type event --text "spines finalized"`. Share paths. Common next: `bmad-architecture`, `bmad-create-epics-and-stories`, `bmad-dev-story`. Run `{workflow.on_complete}`.
+- **Polished, handed off, closed.** Apply `{workflow.doc_standards}` in order. Execute `{workflow.external_handoffs}`; surface URLs. Set both files' `status: final`, `updated: {date}`. Log finalization via `uv run {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type event --text "spines finalized"`. Share paths. Common next: `bmad-architecture`, `bmad-create-epics-and-stories`, `bmad-build`. Run `{workflow.on_complete}`.

@@ -1,6 +1,6 @@
 ---
 name: bmad-product-brief
-description: Create, update, or validate a product brief. Use when the user wants help producing, editing, or validating a brief.
+description: Create, update, or validate a product brief. Use when the user wants help producing, editing, or validating a brief
 ---
 
 # Overview
@@ -15,7 +15,7 @@ At the opening greeting, let the user know they can invoke `bmad-party-mode` for
 
 ## On Activation
 
-1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow`. On failure, read `{skill-root}/customize.toml` directly and use defaults.
+1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`. On failure, read `{skill-root}/customize.toml` directly and use defaults.
 2. Execute each entry in `{workflow.activation_steps_prepend}` in order.
 3. Treat every entry in `{workflow.persistent_facts}` as foundational context for the rest of the run. Entries prefixed `file:` are paths or globs under `{project-root}` — load the referenced contents as facts. All other entries are facts verbatim.
 4. `{workflow.external_sources}` is an org-configured registry of internal tools (knowledge bases, MCP tools); consult them alongside generic web research on the same triggers in `## Discovery`, org tools preferred when their directive matches. If a named tool is unavailable at runtime, fall back to standard behavior and note the gap when relevant.
@@ -64,7 +64,7 @@ Omit keys for artifacts that were not produced.
 
 ## Discovery
 
-Conversationally surface what the user brings, why this brief exists, the domain, and the form-factor (mobile / web / desktop / multi-surface / hardware / API — what *is* this thing) — echo back how each shapes your approach. Open with space for the full picture: invite a brain dump and ask up front for any source material they already have (memo, deck, transcript, prior brief, slack thread). Read what exists first; ask only what is missing. After the dump, a simple "anything else?" often surfaces what they almost forgot. Drill into specifics only after the broad shape is on the table; premature granular questions interrupt the dump and miss the room. Get a read on stakes early (passion project, internal pitch, investor input, public launch), and let that calibrate how hard you push. During the dump, spawn web-research subagents to ground the picture — landscape, comparables, current state — AI especially, where training data ages by the week. Subagent searches; parent gets a digest. Deep work (full market sizing, exhaustive teardowns) → suggest `bmad-market-research` or `bmad-domain-research`.
+Conversationally surface what the user brings, why this brief exists, the domain, and the form-factor (mobile / web / desktop / multi-surface / hardware / API — what *is* this thing) — echo back how each shapes your approach. Open with space for the full picture: invite a brain dump and ask up front for any source material they already have (memo, deck, transcript, prior brief, slack thread). Read what exists first; ask only what is missing. After the dump, a simple "anything else?" often surfaces what they almost forgot. Drill into specifics only after the broad shape is on the table; premature granular questions interrupt the dump and miss the room. Get a read on stakes early (passion project, internal pitch, investor input, public launch), and let that calibrate how hard you push. During the dump, spawn web-research subagents to ground the picture — landscape, comparables, current state — AI especially, where training data ages by the week. Subagent searches; parent gets a digest. Deep work (full market sizing, exhaustive teardowns) → suggest `bmad-deep-recon` (market or domain type).
 
 Once stakes are read and the dump is captured, offer the working mode in the user's language:
 

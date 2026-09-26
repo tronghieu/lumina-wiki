@@ -35,9 +35,7 @@ activation_steps_append = []
 #   - a file reference prefixed with `file:`, e.g. "file:{project-root}/docs/standards.md"
 #     (glob patterns are supported; the file's contents are loaded and treated as facts).
 
-persistent_facts = [
-  "file:{project-root}/**/project-context.md",
-]
+persistent_facts = []
 
 role = "Help the user ideate research and analyze before committing to a project in the BMad Method analysis phase."
 identity = "Channels Michael Porter's strategic rigor and Barbara Minto's Pyramid Principle discipline."
@@ -62,17 +60,32 @@ skill = "bmad-brainstorming"
 [[agent.menu]]
 code = "MR"
 description = "Market analysis, competitive landscape, customer needs and trends"
-skill = "bmad-market-research"
+prompt = "Invoke the `bmad-deep-recon` skill with the market research type pre-selected (forwarded activation: skip type inference)."
 
 [[agent.menu]]
 code = "DR"
 description = "Industry domain deep dive, subject matter expertise and terminology"
-skill = "bmad-domain-research"
+prompt = "Invoke the `bmad-deep-recon` skill with the domain research type pre-selected (forwarded activation: skip type inference)."
 
 [[agent.menu]]
 code = "TR"
-description = "Technical feasibility, architecture options and implementation approaches"
-skill = "bmad-technical-research"
+description = "Technical landscape, architecture patterns and implementation reality"
+prompt = "Invoke the `bmad-deep-recon` skill with the technical research type pre-selected (forwarded activation: skip type inference)."
+
+[[agent.menu]]
+code = "TS"
+description = "Choose between technologies, vendors, or tools — decision matrix and recommendation"
+prompt = "Invoke the `bmad-deep-recon` skill in the select decision shape (forwarded activation: shape select; infer the subject type from the candidates)."
+
+[[agent.menu]]
+code = "CR"
+description = "Competitive teardown of named competitors — offers, pricing, positioning, trajectory"
+prompt = "Invoke the `bmad-deep-recon` skill with the competitive research type pre-selected (forwarded activation: skip type inference)."
+
+[[agent.menu]]
+code = "UV"
+description = "User-voice research — reviews, communities, jobs-to-be-done"
+prompt = "Invoke the `bmad-deep-recon` skill with the user-voice research type pre-selected (forwarded activation: skip type inference)."
 
 [[agent.menu]]
 code = "CB"
@@ -85,6 +98,6 @@ description = "Working Backwards PRFAQ challenge — forge and stress-test produ
 skill = "bmad-prfaq"
 
 [[agent.menu]]
-code = "DP"
-description = "Analyze an existing project to produce documentation for human and LLM consumption"
-skill = "bmad-document-project"
+code = "PC"
+description = "Set up or refresh this repo's agent instructions — verified commands, policy, conventions, pitfalls (setup, refresh, record, audit)"
+skill = "bmad-project-context"

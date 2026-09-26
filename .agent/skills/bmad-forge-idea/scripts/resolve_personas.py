@@ -48,7 +48,9 @@ PARTY_SKILL = "bmad-party-mode"
 def _run_json(cmd):
     """Run a resolver script and parse its JSON stdout. None on any failure."""
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        out = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", timeout=60
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     if out.returncode != 0 or not out.stdout.strip():
@@ -108,7 +110,9 @@ def find_party_skill(project_root: Path, skill_root: Path):
 def load_party_workflow(project_root: Path, party_skill: Path):
     """Merged [workflow] table for bmad-party-mode (base + user overrides)."""
     resolver = project_root / "_bmad" / "scripts" / "resolve_customization.py"
-    data = _run_json([sys.executable, str(resolver), "--skill", str(party_skill), "--key", "workflow"])
+    data = _run_json(
+        [sys.executable, str(resolver), "--skill", str(party_skill), "--project-root", str(project_root), "--key", "workflow"]
+    )
     if data is not None and isinstance(data.get("workflow"), dict):
         return data["workflow"]
     # Fallback: base customize.toml directly, no override merge.
@@ -186,7 +190,10 @@ def build_pool(agents: dict, party_members: list):
             continue
         canonical = index.get(code) or index.get(code.lower()) or code
         was_installed = canonical in pool
-        entry = {"code": canonical, "source": "custom"}
+        # Start from the installed entry so fields the override omits
+        # (icon, title, description) survive.
+        entry = dict(pool.get(canonical, {}))
+        entry.update({"code": canonical, "source": "custom"})
         for field in ("name", "icon", "title", "persona", "capabilities", "model"):
             if m.get(field) is not None:
                 entry[field] = m[field]

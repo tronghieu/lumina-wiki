@@ -1,6 +1,8 @@
 ---
 name: bmad-dev-story
-description: 'Execute story implementation following a context filled story spec file. Use when the user says "dev this story [story file]" or "implement the next story in the sprint plan"'
+description: "Deprecated: `bmad-build` is now the official implementation method. Only use this when explicitly invoked by name"
+metadata:
+  lifecycle: shim
 ---
 
 # Dev Story Workflow
@@ -27,7 +29,7 @@ description: 'Execute story implementation following a context filled story spec
 
 ### Step 1: Resolve the Workflow Block
 
-Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow`
+Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`
 
 **If the script fails**, resolve the `workflow` block yourself by reading these three files in base → team → user order and applying the same structural merge rules as the resolver:
 
@@ -59,6 +61,8 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 ### Step 5: Greet the User
 
 Greet `{user_name}`, speaking in `{communication_language}`.
+
+<output>Deprecated: `bmad-build` is now the official implementation method. Only use this when explicitly invoked by name.</output>
 
 ### Step 6: Execute Append Steps
 
@@ -494,7 +498,7 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
       <action>Suggest checking {sprint_status} to see project progress</action>
     </check>
     <action>Remain flexible - allow user to choose their own path or ask for other assistance</action>
-  <action>Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow.on_complete` — if the resolved value is non-empty, follow it as the final terminal instruction before exiting.</action>
+  <action>Run: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow.on_complete` — if the resolved value is non-empty, follow it as the final terminal instruction before exiting.</action>
   </step>
 
 </workflow>

@@ -24,14 +24,13 @@ activation_steps_append = []
 # Each entry is either a literal sentence, a skill prefixed with `skill:`, or a `file:`-prefixed
 # path/glob whose contents are loaded as facts.
 #
-# Default loads project-context.md if bmad-generate-project-context produced one — giving the
-# architect persistent awareness of the project's tech, domain, and conventions (load-bearing
-# for brownfield). Common opt-ins (set in team/user override TOML):
+# Empty by default. Repo-wide context belongs in AGENTS.md (see bmad-project-context), which every
+# skill already sees; use this for context only this skill needs, loaded on demand rather than
+# carried as constant memory. Common opt-ins (set in team/user override TOML):
 #   "Our org is AWS-only -- do not propose GCP or Azure."
 #   "file:{project-root}/docs/engineering-standards.md"
-persistent_facts = [
-  "file:{project-root}/**/project-context.md",
-]
+#   "file:{project-root}/**/project-context.md"           # if you keep a project-context.md
+persistent_facts = []
 
 # Executed when the workflow completes (after the spine is final and the user has been told).
 # String scalar (single instruction) or array of instructions executed in order. Empty for none.
@@ -59,9 +58,11 @@ run_folder_pattern = "architecture-{project_name}-{date}"
 # short, structured outputs, which are terse and carry decisions in AD-n blocks and diagrams by
 # design. Each entry is a `skill:`, `file:`, or plain-text directive applied before the user sees
 # the polished draft. Suggested order: structural passes first, prose mechanics last. Append-only.
+# The default entry runs bmad-review's two editorial lenses in order:
+# structure, then prose on top of the structure findings. The `lenses=` suffix
+# names them; drop it to let bmad-review pick what fits the content.
 doc_standards = [
-  "skill:bmad-editorial-review-structure",
-  "skill:bmad-editorial-review-prose",
+  "skill:bmad-review lenses=structure,prose",
 ]
 
 # External-source registry. Natural-language directives describing knowledge bases, MCP tools, or

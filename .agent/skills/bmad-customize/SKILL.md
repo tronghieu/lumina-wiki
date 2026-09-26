@@ -1,6 +1,6 @@
 ---
 name: bmad-customize
-description: Authors and updates customization overrides for installed BMad skills. Use when the user says 'customize bmad', 'override a skill', 'change agent behavior', or 'customize a workflow'.
+description: Authors and updates customization overrides for installed BMad skills. Use when the user says 'customize bmad', 'override a skill', 'change agent behavior', or 'customize a workflow'
 ---
 
 # BMad Customize
@@ -31,7 +31,7 @@ Load `_bmad/config.toml` and `_bmad/config.user.toml` from `{project-root}` for 
 ## Step 2: Discovery
 
 ```
-python3 {skill-root}/scripts/list_customizable_skills.py --project-root {project-root}
+uv run {skill-root}/scripts/list_customizable_skills.py --project-root {project-root}
 ```
 
 Use `--extra-root <path>` (repeatable) if the user has skills installed in additional locations.
@@ -87,7 +87,7 @@ Default by character (policy → team, personal → user), confirm before writin
 3. Write. Create `{project-root}/_bmad/custom/` if needed.
 4. Verify:
    ```
-   python3 {project-root}/_bmad/scripts/resolve_customization.py --skill <install-path> --key <agent-or-workflow>
+   uv run {project-root}/_bmad/scripts/resolve_customization.py --skill <install-path> --project-root {project-root} --key <agent-or-workflow>
    ```
    Show the merged output, point out the changed fields.
 

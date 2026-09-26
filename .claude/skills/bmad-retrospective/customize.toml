@@ -30,12 +30,10 @@ activation_steps_append = []
 #   - a file reference prefixed with `file:`, e.g. "file:{project-root}/docs/standards.md"
 #     (glob patterns are supported; the file's contents are loaded and treated as facts).
 
-persistent_facts = [
-  "file:{project-root}/**/project-context.md",
-]
+persistent_facts = []
 
-# Scalar: executed when the workflow reaches Step 13 (Final Summary and Handoff),
-# after the retrospective document is saved and sprint-status is updated. Override wins.
+# Scalar: executed at the end of Phase 5 (Close), after the retrospective
+# document is saved and sprint-status is updated. Override wins.
 # Leave empty for no custom post-completion behavior.
 
 on_complete = ""
