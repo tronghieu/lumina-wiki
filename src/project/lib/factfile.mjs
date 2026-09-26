@@ -60,8 +60,9 @@ function canonicalizeObject(raw, citingDoc, resolve) {
   const already = PREFIXED_ID_RE.test(raw);
   const result = resolve(raw, citingDoc);
   if (result.kind === 'resolved') {
-    // An anchor the target doc lacks falls back to the whole doc; for a fact that is a silent widening, so reject it.
-    if (raw.includes('#') && result.targetId.startsWith('doc:')) throw new Error(`object "${raw}" names an anchor the target doc does not have`);
+    // An anchor an in-scope target lacks falls back to the whole doc; for a fact that is a silent widening, so reject it.
+    // An out-of-scope target is never parsed, so its anchors can't be checked; it stays a doc: reference.
+    if (raw.includes('#') && result.targetId.startsWith('doc:') && result.inScope !== false) throw new Error(`object "${raw}" names an anchor the target doc does not have`);
     return result.targetId;
   }
   if (result.kind === 'ignored') return raw;

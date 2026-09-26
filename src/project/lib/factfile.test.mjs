@@ -299,6 +299,28 @@ describe('prepareEnvelope: all-or-nothing validation', () => {
     });
   });
 
+  test('an unprefixed path#anchor object with a known anchor resolves to the fragment', () => {
+    const deps = makeDeps();
+    const input = basicInput({
+      facts: [{
+        kind: 'edge', subject: `doc:${SOURCE}`, relation: 'supersedes', object: `${TARGET}#status`,
+        evidence: { quote: 'Accepted' }, provenance: 'extracted',
+      }],
+    });
+    assert.equal(prepareEnvelope(input, deps).facts[0].object, `frag:${TARGET}#status`);
+  });
+
+  test('an out-of-scope path#anchor object stays a doc: reference (its anchors are never parsed)', () => {
+    const deps = makeDeps({ exists: (p) => p === 'README.md' });
+    const input = basicInput({
+      facts: [{
+        kind: 'edge', subject: `doc:${SOURCE}`, relation: 'references', object: 'README.md#install',
+        evidence: { quote: 'Accepted' }, provenance: 'extracted',
+      }],
+    });
+    assert.equal(prepareEnvelope(input, deps).facts[0].object, 'doc:README.md');
+  });
+
   test('an unknown concept object is rejected (prefixed and does not resolve)', () => {
     const deps = makeDeps();
     const input = basicInput({
