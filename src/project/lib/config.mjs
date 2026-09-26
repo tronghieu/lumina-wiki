@@ -22,9 +22,13 @@ const TOP_LEVEL_KEYS = new Set([
 ]);
 const SOURCES_KEYS = new Set(['include', 'exclude']);
 const TYPE_KEYS = new Set(['metaType', 'paths', 'frontmatter', 'idPattern', 'status']);
-const STATUS_KEYS = new Set(['heading', 'frontmatter']);
+// A single status source names exactly one of these.
+const STATUS_SOURCE_KEYS = new Set(['heading', 'frontmatter']);
+// The single-source object shape (see validateStatus below) may also carry `map`.
+const STATUS_OBJECT_KEYS = new Set(['heading', 'frontmatter', 'map']);
+const RELATION_VALUE_KEYS = new Set(['relation', 'inverse']);
 const RELATED_RULE_KEYS = new Set(['source', 'target', 'relation', 'inverse']);
-const EXTERNAL_ID_KEYS = new Set(['pattern']);
+const EXTERNAL_ID_KEYS = new Set(['pattern', 'metaType']);
 const CONCEPT_KEYS = new Set(['name', 'aliases']);
 
 /** Thrown by `loadConfig` when `project.yaml` fails validation. `code: 2`. */
@@ -129,24 +133,124 @@ function validateSources(errors, sources) {
   };
 }
 
-function validateStatus(errors, label, status) {
-  if (status === undefined) return;
-  if (!isPlainObject(status)) {
-    errors.push(`${label}.status: must be a mapping`);
-    return;
+/**
+ * `types.<T>.status` raw shape (three forms, normalized to one):
+ *
+ *   - a single source object `{heading: text}` or `{frontmatter: key}`,
+ *     optionally with a sibling `map` (string -> string):
+ *     `{heading: Status, map: {"Đã duyệt": accepted}}`;
+ *   - a bare non-empty ordered list of source objects, each `{heading: text}`
+ *     or `{frontmatter: key}` (no `map` inside a list item or on the list
+ *     itself — a bare YAML sequence has no room for a sibling key);
+ *   - a wrapped form for when an ordered list needs a map: `{sources: [...],
+ *     map: {...}}`, `sources` a non-empty list of the same source objects.
+ *
+ * All three normalize to `{sources: [...], map: {...}}` (map `{}` when none
+ * given), or `undefined` when `status` is absent from the type.
+ */
+function validateStatusMap(errors, label, map) {
+  if (map === undefined) return {};
+  if (!isPlainObject(map)) {
+    errors.push(`${label}: must be a mapping`);
+    return {};
   }
-  const keys = Object.keys(status).filter((k) => STATUS_KEYS.has(k));
-  for (const key of Object.keys(status)) {
-    if (!STATUS_KEYS.has(key)) errors.push(`${label}.status: unknown key "${key}"`);
+  const result = {};
+  for (const [k, v] of Object.entries(map)) {
+    if (k.length === 0) {
+      errors.push(`${label}: key must not be empty`);
+      continue;
+    }
+    if (typeof v !== 'string' || v.length === 0) {
+      errors.push(`${label}.${k}: must be a non-empty string`);
+      continue;
+    }
+    // NFC so an NFD-spelled key from the source doc still matches (values untouched).
+    result[k.normalize('NFC')] = v;
   }
+  return result;
+}
+
+function validateStatusSourceItem(errors, label, item) {
+  if (!isPlainObject(item)) {
+    errors.push(`${label}: must be a mapping`);
+    return null;
+  }
+  for (const key of Object.keys(item)) {
+    if (!STATUS_SOURCE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
+  }
+  const keys = Object.keys(item).filter((k) => STATUS_SOURCE_KEYS.has(k));
   if (keys.length !== 1) {
-    errors.push(`${label}.status: must have exactly one of "heading" or "frontmatter"`);
-    return;
+    errors.push(`${label}: must have exactly one of "heading" or "frontmatter"`);
+    return null;
+  }
+  const [key] = keys;
+  if (typeof item[key] !== 'string' || item[key].length === 0) {
+    errors.push(`${label}.${key}: must be a non-empty string`);
+    return null;
+  }
+  return { [key]: item[key] };
+}
+
+function validateStatus(errors, label, status) {
+  if (status === undefined) return undefined;
+
+  if (Array.isArray(status)) {
+    if (status.length === 0) {
+      errors.push(`${label}: must not be an empty list`);
+      return undefined;
+    }
+    const sources = [];
+    let bad = false;
+    status.forEach((item, i) => {
+      const source = validateStatusSourceItem(errors, `${label}[${i}]`, item);
+      if (source === null) bad = true;
+      else sources.push(source);
+    });
+    return bad ? undefined : { sources, map: {} };
+  }
+
+  if (!isPlainObject(status)) {
+    errors.push(`${label}: must be a mapping or a non-empty list`);
+    return undefined;
+  }
+
+  if (Object.hasOwn(status, 'sources')) {
+    for (const key of Object.keys(status)) {
+      if (key !== 'sources' && key !== 'map') errors.push(`${label}: unknown key "${key}"`);
+    }
+    let sourcesBad = false;
+    const sources = [];
+    if (!Array.isArray(status.sources) || status.sources.length === 0) {
+      errors.push(`${label}.sources: must be a non-empty list`);
+      sourcesBad = true;
+    } else {
+      status.sources.forEach((item, i) => {
+        const source = validateStatusSourceItem(errors, `${label}.sources[${i}]`, item);
+        if (source === null) sourcesBad = true;
+        else sources.push(source);
+      });
+    }
+    // Validate `map` unconditionally, even when `sources` is invalid, so a
+    // caller sees every problem in one pass instead of just the first.
+    const map = validateStatusMap(errors, `${label}.map`, status.map);
+    return sourcesBad ? undefined : { sources, map };
+  }
+
+  for (const key of Object.keys(status)) {
+    if (!STATUS_OBJECT_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
+  }
+  const keys = Object.keys(status).filter((k) => STATUS_SOURCE_KEYS.has(k));
+  if (keys.length !== 1) {
+    errors.push(`${label}: must have exactly one of "heading" or "frontmatter"`);
+    return undefined;
   }
   const [key] = keys;
   if (typeof status[key] !== 'string' || status[key].length === 0) {
-    errors.push(`${label}.status.${key}: must be a non-empty string`);
+    errors.push(`${label}.${key}: must be a non-empty string`);
+    return undefined;
   }
+  const map = validateStatusMap(errors, `${label}.map`, status.map);
+  return { sources: [{ [key]: status[key] }], map };
 }
 
 function validateTypes(errors, types) {
@@ -155,6 +259,7 @@ function validateTypes(errors, types) {
     errors.push('types: must be a mapping');
     return {};
   }
+  const result = {};
   for (const [name, entry] of Object.entries(types)) {
     const label = `types.${name}`;
     if (!isPlainObject(entry)) {
@@ -184,23 +289,55 @@ function validateTypes(errors, types) {
       errors.push(`${label}.frontmatter: must be a mapping`);
     }
     if (entry.idPattern !== undefined) checkRegex(errors, `${label}.idPattern`, entry.idPattern);
-    validateStatus(errors, label, entry.status);
+    const status = validateStatus(errors, `${label}.status`, entry.status);
+    const { status: _rawStatus, ...rest } = entry;
+    result[name] = status === undefined ? rest : { ...rest, status };
   }
-  return types;
+  return result;
 }
 
+/**
+ * `relations.<name>` raw shape: a meta-relation string (shorthand for
+ * `{relation: <string>, inverse: false}`), or a `{relation, inverse}`
+ * mapping. Normalizes to `{relation, inverse}` always.
+ */
 function validateRelations(errors, relations) {
   if (relations === undefined) return {};
   if (!isPlainObject(relations)) {
     errors.push('relations: must be a mapping');
     return {};
   }
-  for (const [name, target] of Object.entries(relations)) {
-    if (!META_RELATIONS.includes(target)) {
-      errors.push(`relations.${name}: unknown meta-relation "${target}"`);
+  const result = {};
+  for (const [name, value] of Object.entries(relations)) {
+    const label = `relations.${name}`;
+    if (typeof value === 'string') {
+      if (!META_RELATIONS.includes(value)) {
+        errors.push(`${label}: unknown meta-relation "${value}"`);
+        continue;
+      }
+      result[name] = { relation: value, inverse: false };
+      continue;
+    }
+    if (!isPlainObject(value)) {
+      errors.push(`${label}: must be a meta-relation string or a mapping`);
+      continue;
+    }
+    for (const key of Object.keys(value)) {
+      if (!RELATION_VALUE_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
+    }
+    const relationOk = typeof value.relation === 'string' && META_RELATIONS.includes(value.relation);
+    if (!relationOk) {
+      errors.push(value.relation === undefined
+        ? `${label}.relation: relation is required`
+        : `${label}.relation: unknown meta-relation "${value.relation}"`);
+    }
+    const inverseOk = value.inverse === undefined || typeof value.inverse === 'boolean';
+    if (!inverseOk) errors.push(`${label}.inverse: must be a boolean`);
+    if (relationOk && inverseOk) {
+      result[name] = { relation: value.relation, inverse: value.inverse ?? false };
     }
   }
-  return relations;
+  return result;
 }
 
 function validateRelatedRules(errors, relatedRules) {
@@ -250,6 +387,9 @@ function validateExternalIds(errors, externalIds) {
       if (!EXTERNAL_ID_KEYS.has(key)) errors.push(`${label}: unknown key "${key}"`);
     }
     checkRegex(errors, `${label}.pattern`, entry.pattern);
+    if (entry.metaType !== undefined && (typeof entry.metaType !== 'string' || !Object.hasOwn(META_TYPES, entry.metaType))) {
+      errors.push(`${label}.metaType: unknown meta-type "${entry.metaType}"`);
+    }
   }
   return externalIds;
 }
@@ -349,11 +489,12 @@ export async function loadConfig(root) {
 
 /**
  * `ontologyVersion` (AD-21): a hash of the ontology-relevant `project.yaml`
- * sections, per the Design Notes formula.
- * @param {{types?: object, relations?: object, relatedRules?: unknown[], concepts?: unknown[]}} config
+ * sections. Extended in story 2 to cover `externalIds` (its `metaType`
+ * mapping is ontology-relevant, same as `relatedRules`).
+ * @param {{types?: object, relations?: object, relatedRules?: unknown[], externalIds?: unknown[], concepts?: unknown[]}} config
  * @returns {string} 64-char lowercase hex sha256 digest.
  */
 export function ontologyVersion(config) {
-  const { types = {}, relations = {}, relatedRules = [], concepts = [] } = config;
-  return sha256Hex(canonicalJson({ types, relations, relatedRules, concepts }));
+  const { types = {}, relations = {}, relatedRules = [], externalIds = [], concepts = [] } = config;
+  return sha256Hex(canonicalJson({ types, relations, relatedRules, externalIds, concepts }));
 }

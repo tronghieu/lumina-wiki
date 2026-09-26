@@ -52,8 +52,12 @@ function normalizePattern(pattern) {
   return pattern === '**' || pattern.endsWith('/**') ? pattern : `${pattern}/**`;
 }
 
-/** Strip a leading `./` and any trailing `/` so `docs/` and `./docs` behave like `docs`. */
-function normalizeSlashes(pattern) {
+/**
+ * Strip a leading `./` and any trailing `/` so `docs/` and `./docs` behave
+ * like `docs`. Exported: `parse.mjs`'s include-root resolution shares this
+ * normalization instead of keeping its own copy (AD-9).
+ */
+export function normalizeSlashes(pattern) {
   let p = pattern.startsWith('./') ? pattern.slice(2) : pattern;
   while (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
   return p;
@@ -68,13 +72,74 @@ function firstSegment(pattern) {
  * A pattern is in scope for a file when the file matches the pattern
  * itself (a file-level glob like `docs/*.md` or an exact path) OR the
  * pattern's directory form (bare-directory expansion, `pattern + '/**'`).
+ * Exported: `parse.mjs`'s `types.<T>.paths` matching reuses this instead of
+ * keeping its own copy (AD-9).
  */
-function compilePatternMatcher(pattern) {
+export function compilePatternMatcher(pattern) {
   const clean = normalizeSlashes(pattern);
   const own = compileGlob(clean);
   const dirPattern = normalizePattern(clean);
   const dir = dirPattern === clean ? null : compileGlob(dirPattern);
   return (file) => own.test(file) || (dir !== null && dir.test(file));
+}
+
+/**
+ * The pattern (own, or bare-dir-expanded) that actually matched `filePath`,
+ * with each `*` segment replaced by the doc's own segment there and
+ * everything from `**` on cut off -- e.g. pattern `packages` + `*` + `/docs`
+ * against `packages/alpha/docs/guide.md` gives `packages/alpha/docs`. Shared by
+ * `parse.mjs` (a doc's `includeRoot`) and `graph.mjs` (ordering "other
+ * include roots" in config order): AD-9's "one scope matcher" covers
+ * include-root derivation too, not just scope membership.
+ * @param {string} pattern one `sources.include` entry.
+ * @param {string} filePath repo-relative, forward-slash.
+ * @returns {string|null} the resolved root, or null when `pattern` doesn't match `filePath`.
+ */
+export function resolveIncludeRootForPattern(pattern, filePath) {
+  const clean = normalizeSlashes(pattern);
+  let matched = null;
+  let ownMatch = false;
+  if (compileGlob(clean).test(filePath)) {
+    matched = clean;
+    ownMatch = true;
+  } else {
+    const dirPattern = normalizePattern(clean);
+    if (dirPattern !== clean && compileGlob(dirPattern).test(filePath)) matched = dirPattern;
+  }
+  if (matched === null) return null;
+  const patternSegs = matched.split('/');
+  const fileSegs = filePath.split('/');
+  // The pattern matched the file itself (a file-level glob or an exact
+  // path, not the bare-dir-expanded `/**` form): its last segment names the
+  // file, not a directory, so the root excludes it.
+  const limit = ownMatch ? patternSegs.length - 1 : patternSegs.length;
+  const resolved = [];
+  for (let i = 0; i < limit; i++) {
+    const seg = patternSegs[i];
+    if (seg === '**') break;
+    if (seg === '*') {
+      resolved.push(fileSegs[i]);
+      continue;
+    }
+    if (seg.includes('*')) break; // a mixed segment (e.g. `*.md`) is not a fixed root component
+    resolved.push(seg);
+  }
+  return resolved.join('/');
+}
+
+/**
+ * The `includeRoot` for `filePath`: the root resolved from the first
+ * `include` pattern (config order) that matches it.
+ * @param {string[]} include `sources.include` (already defaulted by the caller).
+ * @param {string} filePath
+ * @returns {string|null}
+ */
+export function resolveIncludeRoot(include, filePath) {
+  for (const pattern of include) {
+    const root = resolveIncludeRootForPattern(pattern, filePath);
+    if (root !== null) return root;
+  }
+  return null;
 }
 
 /** Thrown when two in-scope paths collide after case-folding. `code: 2`. */

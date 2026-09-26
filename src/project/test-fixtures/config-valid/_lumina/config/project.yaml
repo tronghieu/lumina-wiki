@@ -8,12 +8,32 @@ types:
     paths: ["docs/adr/**"]
     frontmatter: { type: adr }
     idPattern: 'ADR-\d{4}'
-    status: { heading: Status }
+    status: { heading: Status, map: { "Đã duyệt": accepted } }
+  Convention:
+    metaType: Rule
+    paths: ["docs/conventions/**"]
+    status:
+      - { frontmatter: status }
+      - { heading: Status }
+  RFC:
+    metaType: Decision
+    paths: ["docs/rfc/**"]
+    status:
+      sources:
+        - { frontmatter: status }
+        - { heading: Status }
+      map:
+        "Đã duyệt": accepted
+  KEP:
+    metaType: Decision
+    paths: ["docs/kep/**"]
+    status: { heading: Status, map: { "Đã duyệt": accepted } }
 relations:
   implements: satisfies
+  supersededBy: { relation: supersedes, inverse: true }
 relatedRules:
   - { source: Capability, target: Decision, relation: governs, inverse: true }
 externalIds:
-  - { pattern: 'FR[\w.-]+' }
+  - { pattern: 'FR[\w.-]+', metaType: Requirement }
 concepts:
   - { name: credit limit, aliases: [hạn mức] }

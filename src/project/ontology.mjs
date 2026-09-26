@@ -93,4 +93,9 @@ export const RULES = Object.freeze([
   Object.freeze({ id: 'P14', owner: 'engine',      severity: 'error',   finding: 'broken evidence' }),
   Object.freeze({ id: 'P15', owner: 'engine',      severity: 'info',    finding: 'rename candidate' }),
   Object.freeze({ id: 'P16', owner: 'engine',      severity: 'warning', finding: 'include pattern matches no files' }),
+  // P17-P20 added in story 2 (deterministic parse): frontmatter and status.
+  Object.freeze({ id: 'P17', owner: 'engine',      severity: 'warning', finding: 'frontmatter does not parse' }),
+  Object.freeze({ id: 'P18', owner: 'engine',      severity: 'warning', finding: 'agent fact sets document status' }),
+  Object.freeze({ id: 'P19', owner: 'engine',      severity: 'warning', finding: 'status sources disagree' }),
+  Object.freeze({ id: 'P20', owner: 'engine',      severity: 'warning', finding: 'Decision status outside lifecycle' }),
 ]);

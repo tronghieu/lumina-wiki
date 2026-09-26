@@ -49,3 +49,6 @@
 **Why deferred:** Adds prompt complexity for a tier we expect almost no one to use. Most runtimes that don't support Agent will hit the prompt-files-paste-back fallback first; `--single` is the third tier and rarely needed. Re-evaluate after dogfooding.
 
 **Target milestone:** v0.10 or later, only if dogfooding surfaces demand.
+- source_spec: `docs/specs/spec-project-docs-overlay/stories/2-deterministic-parse-and-buildgraph.md`
+  summary: Register `src/project/**/*.test.mjs` in a `test:project` npm script, include it in `test:all`, and run it in CI.
+  evidence: No npm script or CI job runs the project engine tests; story 1 assigns the wiring to story 7.

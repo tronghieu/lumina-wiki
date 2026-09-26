@@ -5,7 +5,9 @@ import { dirname, join } from 'node:path';
 import { mkdtemp, mkdir, writeFile, readdir, cp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-import { compileGlob, selectScope, findCaseFoldCollisions, ScopeCollisionError } from './scope.mjs';
+import {
+  compileGlob, selectScope, findCaseFoldCollisions, ScopeCollisionError, resolveIncludeRootForPattern,
+} from './scope.mjs';
 import { matchGlob } from '../../scripts/lib/globs.mjs'; // test-only parity exception (AD-9)
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -104,6 +106,29 @@ describe('findCaseFoldCollisions', () => {
     assert.notEqual(nfc, nfd, 'precondition: NFC and NFD forms must differ in code units');
     const pairs = findCaseFoldCollisions([nfc, nfd]);
     assert.deepEqual(pairs, [[nfc, nfd]]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveIncludeRootForPattern
+// ---------------------------------------------------------------------------
+
+describe('resolveIncludeRootForPattern', () => {
+  test('a file-level glob (mixed wildcard segment) stops before that segment', () => {
+    assert.equal(resolveIncludeRootForPattern('docs/*.md', 'docs/readme.md'), 'docs');
+  });
+
+  test('an exact-file pattern stops before its own last (file) segment', () => {
+    assert.equal(resolveIncludeRootForPattern('docs/readme.md', 'docs/readme.md'), 'docs');
+  });
+
+  test('a mixed wildcard directory segment plus an exact filename resolves only the fixed/`*` prefix', () => {
+    assert.equal(resolveIncludeRootForPattern('docs/*/README.md', 'docs/adr/README.md'), 'docs/adr');
+  });
+
+  test('bare-dir expansion (unaffected by the own-match fix)', () => {
+    assert.equal(resolveIncludeRootForPattern('packages/*/docs', 'packages/alpha/docs/guide.md'), 'packages/alpha/docs');
+    assert.equal(resolveIncludeRootForPattern('docs', 'docs/adr/x.md'), 'docs');
   });
 });
 

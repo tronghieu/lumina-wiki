@@ -17,13 +17,36 @@ types:
   TypeE:
     metaType: Decision
     paths: ["docs/a?.md"]
+  TypeF:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: []
+  TypeG:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: { heading: Status, map: { ok: 1 } }
+  TypeH:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: { sources: [] }
+  TypeI:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: { heading: Status, map: { "": accepted } }
+  TypeJ:
+    metaType: Decision
+    paths: ["docs/**"]
+    status: { sources: [], map: { ok: 1 } }
+relations:
+  badOne: { relation: not-a-real, inverse: "yes", bogus: true }
+  noRelation: { inverse: true }
 relatedRules:
   - { source: BadSource, target: Decision, relation: governs }
   - { source: Capability, target: BadTarget, relation: governs }
   - { source: Capability, target: Decision, relation: bad-relation }
   - { source: Capability, target: Decision, relation: governs, inverse: "yes" }
 externalIds:
-  - { pattern: '(' }
+  - { pattern: '(', metaType: NotAType }
 concepts:
   - { name: "Foo" }
   - { name: "Foo" }

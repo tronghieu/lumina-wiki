@@ -2,7 +2,8 @@
 title: 'Deterministic parse and buildGraph'
 type: 'feature'
 created: '2026-09-26'
-status: 'draft'
+status: 'done'
+baseline_commit: 'cece6fe39b857fbec7f7974ca765e5d968b04dd7'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -68,14 +69,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/project/lib/frontmatter.mjs` + test -- split frontmatter, js-yaml `CORE_SCHEMA`, body start line.
-- [ ] `src/project/lib/markdown.mjs` + test -- body scan: headings with rendered-text anchors and dedup suffixes, inline and reference-style links, lines outside skipped regions; `matchAll(pattern, text)` with the lookarounds.
-- [ ] `src/project/lib/parse.mjs` + test -- `parseDoc(path, text, config)` pure; `parseAll(root, config)` over `selectScope`.
-- [ ] `src/project/lib/evidence.mjs` + test -- `quoteMatches(source, quote)`: NFC and whitespace collapse, substring (AD-22; story 3 reuses it).
-- [ ] `src/project/lib/graph.mjs` + test -- `buildGraph({config, parsed, facts, exists})` pure (`exists(path)` injected for out-of-scope files); `loadFacts(root)` reads `_lumina/facts/**/*.json` envelopes.
-- [ ] `src/project/lib/config.mjs`, `src/project/ontology.mjs` -- extensions and P17-P20.
-- [ ] `src/project/project.mjs` + tests -- `build`, `status` per Design Notes.
-- [ ] `src/project/test-fixtures/parse-*/` -- synthetic repo covering every matrix row, with Seli- and Capigo-style frontmatter and status.
+- [x] `src/project/lib/frontmatter.mjs` + test -- split frontmatter, js-yaml `CORE_SCHEMA`, body start line.
+- [x] `src/project/lib/markdown.mjs` + test -- body scan: headings with rendered-text anchors and dedup suffixes, inline and reference-style links, lines outside skipped regions; `matchAll(pattern, text)` with the lookarounds.
+- [x] `src/project/lib/parse.mjs` + test -- `parseDoc(path, text, config)` pure; `parseAll(root, config)` over `selectScope`.
+- [x] `src/project/lib/evidence.mjs` + test -- `quoteMatches(source, quote)`: NFC and whitespace collapse, substring (AD-22; story 3 reuses it).
+- [x] `src/project/lib/graph.mjs` + test -- `buildGraph({config, parsed, facts, exists})` pure (`exists(path)` injected for out-of-scope files); `loadFacts(root)` reads `_lumina/facts/**/*.json` envelopes.
+- [x] `src/project/lib/config.mjs`, `src/project/ontology.mjs` -- extensions and P17-P20.
+- [x] `src/project/project.mjs` + tests -- `build`, `status` per Design Notes.
+- [x] `src/project/test-fixtures/parse-*/` -- synthetic repo covering every matrix row, with Seli- and Capigo-style frontmatter and status.
 
 **Acceptance Criteria:**
 - Given an unchanged fixture, when `build` runs twice, then stdout is byte-identical (parse-determinism test).
@@ -93,6 +94,23 @@ build:  {"nodes":[{"id":"doc:docs/adr/0009-x.md","kind":"doc","metaType":"Decisi
 status: {"docs":[{"path":"docs/a.md","state":"changed"}],"summary":{"fresh":0,"changed":1,"stale":0,"neverIngested":233}}
 ```
 
+Parse-to-graph contract. `parseDoc(path, text, config)` returns:
+
+```js
+{ path, hash,                  // contentHash hex
+  includeRoot,                 // first include pattern (config order) that selects the doc, `*` replaced by the doc's segment, cut at `**`
+  frontmatterType,             // raw string frontmatter `type` or null
+  type, metaType,              // config type name or null; meta-type, default 'Document'
+  declares,                    // declared ID or null
+  declaresLine,                // 1-based line of the declaration or null
+  status,                      // resolved status value or null
+  headings: [{ level, text, anchor, line }],
+  facts: [/* makeFact edge records, subject `doc:<path>` */],
+  findings: [/* P12, P17, P19, P20 */] }
+```
+
+Parse facts are edges only. `relation` is the raw name: the frontmatter key (`related`, `superseded_by`, ...), `link`, or `mentions`. `object` and `ref` are the item, link target, or matched ID exactly as written, except a concept mention: `object` = `concept:<slug>`, `ref` = matched text. `parseAll(root, config)` returns `{ docs }` sorted by path. `buildGraph` owns resolution, typing, inversion, merging, and P09/P10/P18.
+
 Relation typing order: `relations` map for the key, key is a meta-relation name, `related` through `relatedRules`, `mentions`, else `references`. Agent facts from fact files resolve `subject` and `object` with the same resolver as `ref`.
 
 ## Verification
@@ -104,6 +122,49 @@ Relation typing order: `relations` map for the key, key is a meta-relation name,
 
 ## Implementation Notes
 
+- Built in three waves: frontmatter/markdown/evidence and config/rules in parallel; parse and graph in parallel against the contract above; then CLI, seam removal, and Seli acceptance.
+- `status` sources accept a single object (optional `map`), an ordered list, or `{sources, map}`; all normalize to `{sources, map}`.
+- `refResolves` for `status` checks a fact's evidence tuple against the built graph's edge evidence; merge keeps dropped edges' evidence on the kept edge so the check holds.
+- After review patches: `buildGraph` returns a non-serialized per-fact `resolution` map that `status` uses; `parseAll` returns `{docs, texts}` and hashes raw bytes; regexes compiled once. Seli build 0.17-0.20 s.
+- Seli copy before review patches: 0.73 s, 317 nodes, 1471 edges, no P10, ADR-0009 one node, 5 edges into C002. P09 count (565) is mostly unconfigured FR/NFR IDs and `_bmad-output` paths absent from the temp copy.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+Pass 1 (blind, edge-case, verification-gap):
+
+| # | Finding | Verdict | Route | Evidence |
+|---|---|---|---|---|
+| 1 | `status` reports fresh for a fact whose ref is an undeclared ID (placeholder edge carries its evidence); self-loop or ignored facts stay stale forever; facts sharing an evidence tuple borrow resolution | medium | patch | `makeRefResolves` keys on evidence tuples; reproduced by the verification-gap layer |
+| 2 | Malformed facts inside a valid envelope, or a `null` envelope, crash build/status (exit 3) | medium | patch | no per-fact validation in `buildGraph`; `envelope.error` on null |
+| 3 | Pre-prefixed agent object or subject pointing at a missing doc/anchor/concept makes a phantom node, no P09; edge subject may be absent from `nodes` | medium | patch | prefixed ids passed through unchecked |
+| 4 | Prototype-key relation (`toString`) gives relation `undefined` | low | patch | `config.relations[rawKey]` without `Object.hasOwn` |
+| 5 | Fragment status from two envelopes depends on readdir order | medium | patch | unsorted envelope iteration breaks determinism |
+| 6 | Existing directory link target becomes a `doc:` node | low | patch | `exists` is `existsSync` |
+| 7 | Images, links in inline code, and footnote definitions become links | medium | patch | link regexes lack those exclusions |
+| 8 | `<!--` inside inline code swallows the rest of the doc; a comment reopened on its closing line leaks | medium | patch | verified: later headings vanish |
+| 9 | Anchors `Notes, Notes, Notes-1` collide on `notes-1` | low | patch | suffix counter keyed on base slug only |
+| 10 | Setext headings not recognized | low | reject | pilots use ATX; fix adds a branch |
+| 11 | Leading `---` thematic break then prose gives false P17 and drops lines | medium | patch | verified by edge-case layer |
+| 12 | Non-string frontmatter `id` (`0009` parses as 9) declares a wrong ID | medium | patch | CORE_SCHEMA int |
+| 13 | `idPattern` prefix match has no right boundary (`ADR-00091` declares `ADR-0009`) | medium | patch | verified |
+| 14 | Status under heading starting with a list, blockquote, or subheading marker yields `''`/`###`, false P20 | medium | patch | verified `- Accepted` gives `''` |
+| 15 | Status `map` not NFC-normalized, not boundary-matched, accepts `''` key | medium | patch | `startsWith` on raw text |
+| 16 | Frontmatter relation evidence and P12 lines point at an earlier occurrence | medium | patch | `findQuoteLine` over the whole file |
+| 17 | `findFrontmatterKeyLine` matches a nested `  id:` | low | patch | leading whitespace allowed |
+| 18 | Hash computed from decoded text; status re-reads files | medium | patch | invalid UTF-8 never matches a raw-byte `sourceHash` |
+| 19 | P19/P20 always at line 1 | low | patch | source line known |
+| 20 | Lookarounds omit `\p{M}`; ID mentions not NFC | low | patch (NFC only) | lookaround text is fixed by the frozen spec |
+| 21 | CR-only files number evidence lines differently | low | reject | rare; fix touches three libs |
+| 22 | Regexes recompiled per line x pattern | medium | patch | Seli build at 0.73 s against a 1 s budget |
+| 23 | Root-absolute link `/docs/x.md` tried doc-relative first | low | patch | leading slash dropped |
+| 24 | `computeDocStatus` ignores envelope `schemaVersion` and `source` | low | patch | newer schema treated as fresh |
+| 25 | `includeRoot` wrong for `docs/*.md` or exact-file include patterns | medium | patch | verified |
+| 26 | `build`/`status` exit 3 on case-fold collision or unsafe path | medium | patch | only `runScope` maps them to 2 |
+| 27 | Wrapped status form hides map errors behind source errors; missing `relation` key message | low | patch | early return |
+| 28 | "internal error:" prefix on exit-2 errors; duplicated `['docs']` default | low | patch | cosmetic, direct fix |
+| 29 | Unterminated regions give no finding | low | reject | needs new rules |
+| 30 | `src/project` tests not in any npm script or CI | medium | defer | assigned to story 7 |
+| 31 | Missing CLI tests: ref no longer resolves, collision exit 2 | medium | patch | untested paths |
+| 32 | "C002 citations dangle" on the fixture | false | reject | fixture Convention type has no `idPattern`; the Seli run with `C\d{3}` gives 5 edges into C002; fixture gets the pattern (patch) |
