@@ -27,7 +27,7 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
   - **success:** Installing into a copy of Seli changes pre-existing files only inside the `lumina:project` marker region and `.gitignore`; a second install produces no diff.
 - **CAP-2**
   - **intent:** User can set which docs are in scope with multiple include and exclude globs, defaulting to `docs/`.
-  - **success:** With `include: [docs, "packages/*/docs"]` and `exclude: [docs/user-guide]`, the scanner, hook, and lint select the same file set; an include pattern matching zero files produces a warning.
+  - **success:** With `include: [docs, "packages/*/docs"]` and `exclude: [docs/user-guide]`, the scanner, status, and lint select the same file set; an include pattern matching zero files produces a warning.
 - **CAP-3**
   - **intent:** After install, the user opens their coding agent and runs a setup skill that scans the in-scope docs and proposes scope, a project ontology mapped to meta-types, ID patterns, status sources, external IDs, and a concept vocabulary, flagging frontmatter problems; nothing is written until the user approves.
   - **success:** On Capigo, setup reports the ADRs without frontmatter and proposes a heading-based status source for them; on a non-BMAD repo (kubernetes/enhancements), setup proposes a mapping onto meta-types with no Lumina code change.
@@ -96,6 +96,4 @@ A pain to solve plus an opportunity. Agents now write most code, so the humans o
 
 - Is the fixed meta-type list complete? The software pilots answer this for software; `Capability` and `Structure` naming is revisited after a later non-software pilot (see `pilot-evidence.md`).
 - Install flag name: decided in architecture.
-- Partial-supersession model for lint, decided before story 4: Seli's only real stale citer of `ADR-0009` (`adr/README.md:101`) links the path and cites no ID, and `partially-superseded` is not a Decision lifecycle value.
-- Query contract (the fixed operations `lumi-project-ask` uses), defined before story 5.
-- Whether a host hook is needed at all, revisited in story 8.
+

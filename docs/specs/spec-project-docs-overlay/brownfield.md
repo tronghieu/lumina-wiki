@@ -30,4 +30,4 @@ Per-doc records mean two branches conflict only when both edit the same doc, whi
 
 ## Hook
 
-Deferred to story 8. Every read parses live, so no hook is needed for correctness. Ingest runs through the ingest skill, invoked by the user or a host scheduler.
+None in v1 (spine AD-13). Every read parses live, so no hook is needed for correctness. Ingest runs through the ingest skill, invoked by the user or a host scheduler.

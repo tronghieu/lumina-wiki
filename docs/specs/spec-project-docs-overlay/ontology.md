@@ -6,7 +6,7 @@ Two tiers. The meta-ontology is fixed in Lumina and describes the nature of proj
 
 | Meta-type | Examples across projects |
 |---|---|
-| Decision (lifecycle: proposed, accepted, superseded, deprecated) | ADR, RFC, KEP, design doc |
+| Decision (lifecycle: proposed, accepted, partially-superseded, superseded, deprecated) | ADR, RFC, KEP, design doc |
 | Requirement / Goal | FR in a PRD, OKR, user story |
 | Rule / Constraint | convention, policy, invariant, SLA |
 | Capability | feature doc, product spec |
@@ -24,7 +24,7 @@ Domain fit: eight meta-types map naturally onto construction, marketing, and res
 
 | Relation | Lint rule |
 |---|---|
-| `supersedes` (may be partial) | No cycles; target status must be superseded; flag every citer of the superseded part |
+| `supersedes` (may be partial) | No cycles; target status must be superseded (partially-superseded also accepted for a partial target); flag every citer of the superseded part (see Partial supersession) |
 | `satisfies` | Flag a requirement nothing satisfies |
 | `governs` | Flag a governed node whose governor is superseded |
 | `depends-on`, `part-of` | Flag cycles |
@@ -33,6 +33,10 @@ Domain fit: eight meta-types map naturally onto construction, marketing, and res
 | `references` | None; the default and the fallback for unmapped relations |
 
 A relation that maps to no meta-relation falls back to `references`. A new meta-relation is added to Lumina only when pilots show an important relation keeps falling back; there is no user-defined lint.
+
+## Partial supersession
+
+A `supersedes` fact with no `scope` and a `doc:` target replaces the whole target; every doc citing it is flagged. One with a `scope` label or a `frag:` target replaces only that part; lint flags a citer only when it points at that fragment or holds its own fact on the same target with the same `scope`. Ingest copies `scope` labels verbatim from engine output, so a citer matches the label the superseding doc's facts used.
 
 ## Project mapping examples
 

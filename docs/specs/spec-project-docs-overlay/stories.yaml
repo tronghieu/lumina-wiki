@@ -29,7 +29,7 @@
   title: Cross-doc lint
   description: >-
     Relation rules owned by meta-relations plus engine rules, --fail-on, and the fixed lint JSON
-    shape, runnable with no agent (SPEC CAP-9; spine AD-7, AD-14).
+    shape, runnable with no agent (SPEC CAP-9; spine AD-7, AD-14, AD-27).
   invoke_dev_with: >-
     Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
     vendored js-yaml.
@@ -37,7 +37,7 @@
   title: Graph query
   description: >-
     The query subcommand the ask skill uses, returning answers from buildGraph with file:line on every
-    item (SPEC CAP-10 engine side; spine AD-15, AD-19).
+    item (SPEC CAP-10 engine side; spine AD-15, AD-19, AD-28).
   invoke_dev_with: >-
     Edit only src/project/. Import nothing from src/scripts/ and no npm package except the
     vendored js-yaml.
@@ -58,8 +58,8 @@
 - id: "8"
   title: lumi-project-setup skill
   description: >-
-    Scan, domain-neutral ontology proposal, frontmatter report, project.yaml writing, and hook registration
-    for Claude Code, Codex, and Antigravity (SPEC CAP-3; spine AD-1, AD-8, AD-13).
+    Scan, domain-neutral ontology proposal, frontmatter report, and project.yaml writing
+    for Claude Code, Codex, and Antigravity (SPEC CAP-3; spine AD-1, AD-8).
   spec_checkpoint: true
 - id: "9"
   title: Remaining project skills

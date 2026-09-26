@@ -68,7 +68,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-1
 - **Prevents:** one repo holding classic and project layouts; silent mode switches; a teammate's re-install asking the wrong question.
-- **Rule:** `lumina install --mode project`. A committed `_lumina/config/project.yaml` means project mode: plain `lumina install` there runs a project upgrade, and `--mode classic` exits 3. Without it, the default is `classic` and an interactive fresh install asks classic vs project first. `MANIFEST_SCHEMA_VERSION` goes 4 → 5, adding `mode`, with a migration that defaults to `classic`. The project branch diverges early in `installCommand` like `--agents`, never scaffolds `raw/`/`wiki/`, and never calls `renderIdeStubs`. `--mode project` with `--packs`, `--agents`, or `--profile` exits 1. `lumina wikis` commands and `findEnclosingWorkspace` read `mode` and skip or refuse project-mode repos.
+- **Rule:** `lumina install --mode project`. A committed `_lumina/config/project.yaml` or `_lumina/project/install.json` (`{schemaVersion, packageVersion, ideTargets}`, written by the installer because the manifest is gitignored) means project mode: plain `lumina install` there runs a project upgrade, and `--mode classic` exits 3. Without it, the default is `classic` and an interactive fresh install asks classic vs project first. `MANIFEST_SCHEMA_VERSION` goes 4 → 5, adding `mode`, with a migration that defaults to `classic`. The project branch diverges early in `installCommand` like `--agents`, never scaffolds `raw/`/`wiki/`, and never calls `renderIdeStubs`. `--mode project` with `--packs` or `--agents` exits 1. `lumina wikis` commands and `findEnclosingWorkspace` read `mode` and skip or refuse project-mode repos.
 
 ### AD-3 — User-owned files change only inside Lumina marker blocks `[ADOPTED]`
 
@@ -80,7 +80,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-3, CAP-6, CAP-9, CAP-10, CAP-11, CAP-12
 - **Prevents:** canonical-id collisions with classic skills; one command name with two behaviors.
-- **Rule:** Project mode installs only `lumi-project-*` skills (setup, ingest, ask, check, verify, view); classic packs are not offered. Shared skill context lives in `_lumina/project/PROJECT.md` (engine commands, ontology summary, rules), rendered by the installer; the `lumina:project` block and every `lumi-project-*` skill point there, not to the project's `README.md`. `antigravity` joins `VALID_IDE_TARGETS`, using `.agents/skills/` and `AGENTS.md`. Project-mode targets in v1: `claude_code`, `codex`, `antigravity`.
+- **Rule:** Project mode installs only `lumi-project-*` skills (setup, ingest, ask, check, verify, view); classic packs are not offered. Shared skill context lives in `_lumina/project/PROJECT.md` (engine commands, ontology summary, rules), rendered by the installer; the `lumina:project` block and every `lumi-project-*` skill point there, not to the project's `README.md`. `antigravity` is a project-mode target only, using `.agents/skills/` and `AGENTS.md`. Project-mode targets in v1: `claude_code`, `codex`, `antigravity`.
 
 ### AD-5 — Self-contained engine tree owns all Lumina state
 
@@ -130,12 +130,11 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 - **Prevents:** a stored stale list disagreeing with a live check; docs re-ingested forever; near-total re-ingest when docs churn.
 - **Rule:** Content hash = sha256 of file bytes after stripping a leading BOM and normalizing CRLF and lone CR to LF (`lib/hash.mjs`); it is a hint, not the validity test. Each in-scope doc is `fresh` (hash equals `sourceHash`), `changed` (hash differs, every fact still passes the AD-22 evidence match and its ref still resolves), `stale` (a fact fails either check, or `ontologyVersion` differs), or `never-ingested`, always computed live; skills select docs through `status --json`. A doc with nothing to extract gets `facts: []` and counts as ingested.
 
-### AD-13 — Hook registration belongs to the setup skill `[DEFERRED]`
+### AD-13 — No host hook in v1 `[RETIRED]`
 
 - **Binds:** CAP-3, CAP-8
-- **Prevents:** the installer overwriting user-owned, committed host settings; a hook that breaks the agent.
-- **Status:** Deferred to story 8. Every read parses live (AD-19), so a hook is not needed for correctness; if story 8 keeps one, this rule applies.
-- **Rule:** The setup skill merges only Lumina's entry, identified by its command string, into `.claude/settings.json` (`PostToolUse`, `Edit|Write|MultiEdit`), `.codex/hooks.json` (`PostToolUse`, `apply_patch`), and `.agents/hooks.json` (`PostToolUse`, `write_to_file|replace_file_content|multi_replace_file_content`), for installed targets. The command runs `project.mjs refresh`, ignores host stdin, resolves the script path from the host project-dir variable where one exists (`$CLAUDE_PROJECT_DIR`) else cwd, and is wrapped so a missing script or any error exits 0 silently. Installer upgrades never touch hook files; `lumi-project-check` reports a stale hook entry.
+- **Prevents:** merging Lumina entries into user-owned host settings for no correctness gain.
+- **Rule:** Lumina registers no host hook. Every read parses live (AD-19), and a hook cannot refresh agent facts because hooks never invoke an agent. Revisit only when a measured read exceeds 1 s.
 
 ### AD-14 — Lint is agent-free and report-only
 
@@ -160,7 +159,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-1
 - **Prevents:** uninstall destroying ingest results the team paid for.
-- **Rule:** Uninstall branches on `manifest.mode` before any classic step. Project-mode uninstall strips the entry-file and `.gitignore` marker blocks and the `lumi-project-*` skills, and removes `_lumina/` except `facts/` and `config/`, which it deletes only on explicit confirmation. User entry files are never recorded in `files-manifest.csv`. It never touches in-scope docs or hook files; a leftover hook is harmless by AD-13.
+- **Rule:** Uninstall branches on `manifest.mode` before any classic step. Project-mode uninstall strips the entry-file and `.gitignore` marker blocks and the `lumi-project-*` skills, and removes `_lumina/` except `facts/` and `config/`, which it deletes only on explicit confirmation. User entry files are never recorded in `files-manifest.csv`. It never touches in-scope docs or host settings files.
 
 ### AD-18 — One fact record shape
 
@@ -202,7 +201,7 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 
 - **Binds:** CAP-1, CAP-9
 - **Prevents:** timestamps and absolute paths in the team repo; CI lacking engine files; an older engine rewriting newer data.
-- **Rule:** Committed: `_lumina/project/`, `_lumina/config/project.yaml`, `_lumina/facts/`, `lumi-project-*` skills in host skill dirs. Gitignored: `_lumina/graph/`, `_lumina/_state/`, `_lumina/manifest.json`. No `_lumina/schema/` in project mode. The engine refuses to write a fact file or config whose `schemaVersion` is newer than it knows (exit 3); the installer refuses to replace a committed `_lumina/project/` with an older version (exit 3).
+- **Rule:** Committed: `_lumina/project/`, `_lumina/config/project.yaml`, `_lumina/facts/`, `lumi-project-*` skills in host skill dirs. Gitignored: `_lumina/graph/`, `_lumina/_state/`, `_lumina/manifest.json`. No `_lumina/schema/` in project mode. The engine refuses to write a fact file or config whose `schemaVersion` is newer than it knows (exit 3); the installer refuses to replace a committed `_lumina/project/` whose `install.json` names a newer version (exit 3).
 
 ### AD-25 — Engine root discovery
 
@@ -215,6 +214,18 @@ Binding, read-only; from `docs/project-context.md` §3 (PC) and `SPEC-project-do
 - **Binds:** CAP-1, CAP-5
 - **Prevents:** project code leaking into classic installs; nondeterministic parse output going unnoticed.
 - **Rule:** CI asserts a classic install contains no `_lumina/project/`. `ci-idempotency` gains a project-mode scenario that includes a CRLF `AGENTS.md`. Project tests are co-located `*.test.mjs` under `src/project/`, registered in a `test:project` script, run on synthetic fixtures in `src/project/test-fixtures/` (excluded from the package), and include a parse-determinism test. Seli, Capigo, and KEPs pilots are manual acceptance, not CI.
+
+### AD-27 — Partial supersession is scoped
+
+- **Binds:** CAP-6, CAP-9
+- **Prevents:** lint flagging every citer of a partly replaced decision; ingest inventing a new label per citer.
+- **Rule:** A `supersedes` fact with no `scope` and a `doc:` target is full; one with a `scope` label or a `frag:` target is partial. P03 flags every citer of a fully superseded doc, and for a partial one only a citer pointing at the superseded fragment or holding a fact on the same target with the same `scope`. Ingest copies `scope` labels verbatim from engine output. The Decision lifecycle adds `partially-superseded`; P02 accepts `superseded` or `partially-superseded` for a partial target.
+
+### AD-28 — Fixed query operations
+
+- **Binds:** CAP-7, CAP-10
+- **Prevents:** a query language the ask skill and engine interpret differently.
+- **Rule:** `query node <ref>` resolves an ID, path, or concept alias and returns the node with its in and out edges; `query list --meta-type T [--status S]` filters nodes; `query neighbors <ref> --relation R --direction in|out` walks one hop. Every returned item carries `file:line` and quote; every response carries `freshness{stale, changed, neverIngested}`. No path search or full-text.
 
 ```mermaid
 flowchart TD
@@ -276,22 +287,20 @@ project repo after install:
 | --- | --- | --- |
 | CAP-1 install mode | `installer/commands.js` project branch | AD-2, AD-3, AD-17, AD-24, AD-26 |
 | CAP-2 source scope | `lib/scope.mjs`, `project.yaml` | AD-8, AD-9 |
-| CAP-3 setup skill | `lumi-project-setup` | AD-1, AD-8, AD-13 |
+| CAP-3 setup skill | `lumi-project-setup` | AD-1, AD-8 |
 | CAP-4 two-tier ontology | `ontology.mjs`, `project.yaml` | AD-7, AD-8, AD-21 |
 | CAP-5 deterministic parse | `lib/parse.mjs`, `lib/graph.mjs` | AD-9, AD-12, AD-18, AD-19 |
 | CAP-6 agent ingest | `lumi-project-ingest` + `facts-write` | AD-10, AD-18, AD-20, AD-22, AD-23 |
 | CAP-7 node granularity | `buildGraph()` | AD-11, AD-20 |
-| CAP-8 freshness | `status`, live parse | AD-12, AD-19 |
-| CAP-9 cross-doc lint | `project.mjs lint` | AD-7, AD-14, AD-19 |
-| CAP-10 ask | `lumi-project-ask` + `query` | AD-15, AD-19 |
+| CAP-8 freshness | `status`, live parse | AD-12, AD-13, AD-19 |
+| CAP-9 cross-doc lint | `project.mjs lint` | AD-7, AD-14, AD-19, AD-27 |
+| CAP-10 ask | `lumi-project-ask` + `query` | AD-15, AD-19, AD-28 |
 | CAP-11 evidence verify | `verify-evidence` | AD-15, AD-22 |
 | CAP-12 graph view | `project.mjs view` | AD-16, AD-19 |
 
 ## Deferred
 
-- Host hooks (AD-13) and a parsed/graph cache: revisit at story 8, or when a measured read is slow.
-- Partial-supersession model for lint (P02, P03, P05): decide before story 4.
-- Query contract (fixed query operations): decide before story 5.
+- A parsed/graph cache and a host hook (AD-13): revisit when a measured read exceeds 1 s.
 
 - Project-mode support for `cursor`, `gemini_cli`, `qwen`, `iflow`, `generic`: add when a pilot needs one (AD-4).
 - Consolidating classic `wiki.mjs`/`lint.mjs` parsers with the project libs: touches classic installs.
