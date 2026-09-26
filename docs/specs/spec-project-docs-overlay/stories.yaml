@@ -71,3 +71,8 @@
   title: User documentation
   description: >-
     Project-mode user guide in en, vi, and zh plus CHANGELOG entry, following the multi-language doc sync rule.
+- id: "11"
+  title: Prune, ask content, ingest update
+  description: >-
+    facts-prune for fact files of deleted docs, ask answering from the cited doc text with a scoped
+    doc-search fallback, and ingest update mode as the default (spine AD-10, AD-15 amended).
