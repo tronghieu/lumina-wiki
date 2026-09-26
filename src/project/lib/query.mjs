@@ -29,8 +29,8 @@ function trimEvidence(evidence) {
   return evidence.map((e) => ({ file: e.file, line: e.line, quote: e.quote }));
 }
 
-/** `graph.nodes[].metaType` when present (doc nodes); otherwise recovered from the resolver -- the same lookup `validatePrefixed` does for a fact's own subject/object. */
-function nodeMetaType(node, resolve) {
+/** `graph.nodes[].metaType` when present (doc nodes); otherwise recovered from the resolver -- the same lookup `validatePrefixed` does for a fact's own subject/object. Exported (view.mjs): `view` colors every node by meta-type, not only doc nodes, so it needs this same recovery instead of a second copy. */
+export function nodeMetaType(node, resolve) {
   if (node.metaType !== undefined) return node.metaType;
   const result = resolve(node.id, ROOT_CITING_DOC);
   return result.kind === 'resolved' ? result.metaType : undefined;
@@ -68,13 +68,14 @@ function atForFrag(node, { docsByPath }) {
  * it when it has no incoming edge at all (an inverse-only relation, e.g.
  * `superseded_by`, makes the node only ever a `from`).
  */
-function atForResolved(node, { edges }) {
-  const incoming = sortEvidence(edges.filter((e) => e.to === node.id).flatMap((e) => e.evidence));
-  const first = incoming[0] ?? sortEvidence(edges.filter((e) => e.from === node.id).flatMap((e) => e.evidence))[0];
+function atForResolved(node, { edgesInByTarget, edgesOutBySource }) {
+  const incoming = sortEvidence((edgesInByTarget.get(node.id) ?? []).flatMap((e) => e.evidence));
+  const first = incoming[0] ?? sortEvidence((edgesOutBySource.get(node.id) ?? []).flatMap((e) => e.evidence))[0];
   return first ? { file: first.file, line: first.line, quote: first.quote } : { file: '', line: 1, quote: '' };
 }
 
-function atFor(node, ctx) {
+/** Exported (view.mjs): the node's own source location, same `{file, line, quote}` every query op reports, reused so `view` doesn't recompute it a second way. */
+export function atFor(node, ctx) {
   if (node.kind === 'doc') return atForDoc(node, ctx);
   if (node.kind === 'frag') return atForFrag(node, ctx);
   return atForResolved(node, ctx);
@@ -90,10 +91,27 @@ function nodeSummary(node, metaType, ctx) {
   };
 }
 
-function buildCtx({ graph, parsed, resolve }) {
+/** `edgesInByTarget`/`edgesOutBySource`: every edge indexed once by its `to`/`from` endpoint, so `atForResolved` (called once per `id:`/`concept:` node) is O(1) amortized instead of an O(E) scan of the whole edge list per node -- an O(N*E) `view` render on a real corpus otherwise. */
+function indexEdgesByEndpoint(edges) {
+  const byTarget = new Map();
+  const bySource = new Map();
+  for (const e of edges) {
+    if (!byTarget.has(e.to)) byTarget.set(e.to, []);
+    byTarget.get(e.to).push(e);
+    if (!bySource.has(e.from)) bySource.set(e.from, []);
+    bySource.get(e.from).push(e);
+  }
+  return { byTarget, bySource };
+}
+
+/** Exported (view.mjs): the shared `{graph, edges, byId, docsByPath, texts, resolve}` context `atFor`/`nodeMetaType` need. */
+export function buildCtx({ graph, parsed, resolve }) {
+  const { byTarget, bySource } = indexEdgesByEndpoint(graph.edges);
   return {
     graph,
     edges: graph.edges,
+    edgesInByTarget: byTarget,
+    edgesOutBySource: bySource,
     byId: new Map(graph.nodes.map((n) => [n.id, n])),
     docsByPath: new Map(parsed.docs.map((d) => [d.path, d])),
     texts: parsed.texts ?? new Map(),

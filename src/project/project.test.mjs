@@ -1523,3 +1523,197 @@ describe('query', () => {
     assertWellFormedEvidence(capability.evidence);
   }));
 });
+
+// ---------------------------------------------------------------------------
+// view (CAP-12, AD-16): writes `_lumina/graph/view.html`. Matrix rows: Happy,
+// Deterministic, No network, Empty graph, Bad args, Cold start.
+// ---------------------------------------------------------------------------
+
+describe('view', () => {
+  async function viewHtmlPath(root) {
+    return join(root, '_lumina', 'graph', 'view.html');
+  }
+
+  /** Parses the JSON assigned to `window.__LUMINA_VIEW_DATA__` back out of a rendered page. */
+  function extractViewData(html) {
+    const marker = 'window.__LUMINA_VIEW_DATA__ = ';
+    const start = html.indexOf(marker);
+    assert.ok(start !== -1, 'expected the inlined window.__LUMINA_VIEW_DATA__ assignment');
+    const jsonStart = start + marker.length;
+    const end = html.indexOf(';\n', jsonStart);
+    assert.ok(end !== -1, 'expected the assignment to end with ";\\n"');
+    return JSON.parse(html.slice(jsonStart, end));
+  }
+
+  test('happy: writes _lumina/graph/view.html and prints {ok, file} (exit 0)', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status, stdout } = run(root, ['view']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), { ok: true, file: '_lumina/graph/view.html' });
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+      assert.match(html, /<!doctype html>/i);
+      const vendorSrc = await readFile(join(HERE, 'vendor', 'force-graph.min.js'), 'utf8');
+      assert.ok(html.includes(vendorSrc), 'the vendored force-graph bundle is inlined verbatim');
+      // Data stays repo-relative (spec): the absolute local path used to run
+      // this test must never leak into the page.
+      assert.ok(!html.includes(root), 'the absolute local root must not appear in the page');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('the inlined data: a known frag/concept node carries its resolved metaType and at {file, line, quote}', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status } = run(root, ['view']);
+      assert.equal(status, 0);
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+      const data = extractViewData(html);
+      const byId = new Map(data.nodes.map((n) => [n.id, n]));
+
+      // frag: a heading (parse-pilot's 0009-partial.md links to
+      // "0052-new.md#status") that `buildGraph` resolved to a fragment node.
+      const frag = byId.get('frag:docs/adr/0052-new.md#status');
+      assert.ok(frag, 'expected the frag node in the inlined data');
+      assert.equal(frag.metaType, 'Decision');
+      assert.deepEqual(frag.at, { file: 'docs/adr/0052-new.md', line: 8, quote: 'Status' });
+
+      // concept: parse-pilot's vocabulary carries "credit limit" (aliased "hạn mức").
+      const concept = byId.get('concept:credit-limit');
+      assert.ok(concept, 'expected the concept node in the inlined data');
+      assert.equal(concept.metaType, 'Concept');
+      assert.deepEqual(concept.at, { file: 'docs/adr/0009-partial.md', line: 14, quote: 'credit limit' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('the inlined findings deep-equal lint\'s findings, and freshness docs match status\'s docs, on the same root', async () => {
+    const root = await copyParsePilot();
+    try {
+      const { status } = run(root, ['view']);
+      assert.equal(status, 0);
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+      const data = extractViewData(html);
+
+      const lintOut = JSON.parse(run(root, ['lint']).stdout);
+      assert.deepEqual(data.findings, lintOut.findings);
+
+      const statusOut = JSON.parse(run(root, ['status']).stdout);
+      assert.deepEqual(data.freshness.docs, statusOut.docs);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('injection: a heading holding </script><script>alert(1)</script> and U+2028 yields exactly one inlined data block and no raw payload', async () => {
+    const root = await copyParsePilot();
+    try {
+      const nasty = '# Nasty </script><script>alert(1)</script> heading\n\nBody text.\n';
+      await writeFile(join(root, 'docs', 'misc', 'nasty-heading.md'), nasty);
+
+      const { status } = run(root, ['view']);
+      assert.equal(status, 0);
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+
+      assert.ok(!html.includes('</script><script>alert'), 'the raw injection payload must not survive unescaped');
+      assert.ok(!html.includes(' '), 'U+2028 must not appear raw');
+      const dataBlocks = html.match(/window\.__LUMINA_VIEW_DATA__ = /g) ?? [];
+      assert.equal(dataBlocks.length, 1, 'exactly one inlined data block');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('view touches no file besides _lumina/graph/view.html', async () => {
+    const root = await copyParsePilot();
+    try {
+      const before = await hashTree(root);
+      const { status } = run(root, ['view']);
+      assert.equal(status, 0);
+      // hashTree fingerprints the whole tree; delete the one new file before
+      // re-hashing so the comparison isolates "nothing else changed".
+      await rm(await viewHtmlPath(root));
+      const after = await hashTree(root);
+      assert.equal(after, before);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('deterministic: running view twice produces byte-identical file content', async () => {
+    const root = await copyParsePilot();
+    try {
+      run(root, ['view']);
+      const first = await readFile(await viewHtmlPath(root), 'utf8');
+      run(root, ['view']);
+      const second = await readFile(await viewHtmlPath(root), 'utf8');
+      assert.equal(first, second);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('no network: no src=/href= to http(s), and the CSP meta is present', async () => {
+    const root = await copyParsePilot();
+    try {
+      run(root, ['view']);
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+      assert.ok(!/\b(?:src|href)\s*=\s*["']https?:/i.test(html));
+      assert.match(html, /<meta http-equiv="Content-Security-Policy"/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('parse-pilot: the generated file is under 400 KB', async () => {
+    const root = await copyParsePilot();
+    try {
+      run(root, ['view']);
+      const html = await readFile(await viewHtmlPath(root));
+      assert.ok(html.length < 400 * 1024, `expected under 400KB, got ${html.length} bytes`);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('bad args: "view extra" and "view --x" exit 1 and write nothing', async () => {
+    const root = await copyParsePilot();
+    try {
+      for (const args of [['view', 'extra'], ['view', '--x']]) {
+        const { status } = run(root, args);
+        assert.equal(status, 1);
+      }
+      await assert.rejects(readFile(await viewHtmlPath(root)));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('empty graph: zero in-scope docs still exits 0 with a valid, empty-graph page', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'lumina-project-cli-view-empty-'));
+    try {
+      await mkdir(join(root, '_lumina', 'config'), { recursive: true });
+      await writeFile(
+        join(root, '_lumina', 'config', 'project.yaml'),
+        'schemaVersion: 1\nsources:\n  include: ["docs-that-do-not-exist"]\n',
+      );
+      const { status, stdout } = run(root, ['view']);
+      assert.equal(status, 0);
+      assert.deepEqual(JSON.parse(stdout), { ok: true, file: '_lumina/graph/view.html' });
+      const html = await readFile(await viewHtmlPath(root), 'utf8');
+      assert.match(html, /<!doctype html>/i);
+      assert.ok(html.includes('No in-scope documents'));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test('cold start: ./lib/view.mjs is only ever dynamic-imported, never a static import', async () => {
+    const src = await readFile(PROJECT_MJS, 'utf8');
+    const staticImportRe = /^import\s+.*from\s+['"]\.\/lib\/view\.mjs['"];?\s*$/m;
+    assert.ok(!staticImportRe.test(src), 'expected no static "import ... from \'./lib/view.mjs\'" line');
+    assert.match(src, /await import\(\s*['"]\.\/lib\/view\.mjs['"]\s*\)/, 'expected the lazy import inside runView');
+  });
+});

@@ -3,8 +3,9 @@
  * @module project
  * @description Project engine CLI (AD-5). Subcommands so far: `scope`,
  * `config-check` (story 1), `build`, `status` (story 2), `facts-write`,
- * `verify-evidence` (story 3), `lint` (story 4), `query` (story 5); every
- * other subcommand exits 1. JSON to stdout; `{error, code}` to stderr.
+ * `verify-evidence` (story 3), `lint` (story 4), `query` (story 5), `view`
+ * (story 6); every other subcommand exits 1. JSON to stdout; `{error, code}`
+ * to stderr.
  *
  * Usage: node project.mjs <subcommand>
  *
@@ -13,6 +14,12 @@
  *   1  bad arguments or unknown subcommand (for `lint`: also a finding at or above --fail-on)
  *   2  invalid config, no project root, unsafe/colliding scope, or (for `query`) a ref with no node
  *   3  internal error or newer schemaVersion, or Node < 24
+ *
+ * `view` (story 6, CAP-12): writes `_lumina/graph/view.html`, the one
+ * self-contained graph viewer page. `./lib/view.mjs` (and, through it, the
+ * vendored `force-graph` bundle) is imported lazily inside `runView`, never
+ * at module top level, so `status`/`lint`/etc. never load it (cold-start
+ * budget, AD-16).
  */
 
 import { realpathSync, statSync } from 'node:fs';
@@ -32,12 +39,14 @@ import {
 import { assertSafeRelPath, atomicWrite, withLock, LockTimeoutError } from './lib/fsx.mjs';
 import { prepareEnvelope, serializeEnvelope, verifyEvidence } from './lib/factfile.mjs';
 import { lintGraph } from './lib/lint.mjs';
-import { queryNode, queryList, queryNeighbors } from './lib/query.mjs';
+import {
+  queryNode, queryList, queryNeighbors, buildCtx, atFor, nodeMetaType,
+} from './lib/query.mjs';
 import { RULES, META_TYPES, META_RELATIONS } from './ontology.mjs';
 
 const MIN_NODE_MAJOR = 24;
 const SUBCOMMANDS = new Set([
-  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query',
+  'scope', 'config-check', 'build', 'status', 'facts-write', 'verify-evidence', 'lint', 'query', 'view',
 ]);
 // Filesystem errors that mean "we can't reach the path", not "the engine is
 // broken": the repo-wide contract (docs/project-context.md, README) maps
@@ -128,11 +137,23 @@ function makeRefResolves(graph, docPath) {
   };
 }
 
+/** parsed + facts + graph (AD-19): the one loader `build`, `status`, `lint`, `query`, and `view` all start from, instead of each repeating the same three calls. */
+async function loadGraph(root, config) {
+  const parsed = await parseAll(root, config);
+  const facts = await loadFacts(root);
+  const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
+  return { parsed, facts, graph };
+}
+
+/** The `(raw, citingDoc) => resolveFactRef(...)` resolver `facts-write`, `query`, and `view` each built the same way from `{config, parsed, exists}` -- one function instead of three copies. */
+function makeResolve(root, config, parsed) {
+  const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
+  return (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
+}
+
 async function runBuild(root, config) {
   try {
-    const parsed = await parseAll(root, config);
-    const facts = await loadFacts(root);
-    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
+    const { graph } = await loadGraph(root, config);
     console.log(JSON.stringify(graph));
   } catch (e) {
     failForEngineError(e);
@@ -175,16 +196,22 @@ function computeDocStatuses({
   return { docs, summary };
 }
 
+/** `loadGraph()` plus the freshness loop (AD-12): `status`, `lint`, `query`, and `view` all need it; `build` doesn't, so it stays a separate step. */
+async function loadGraphWithStatus(root, config) {
+  const { parsed, facts, graph } = await loadGraph(root, config);
+  const ontologyVer = ontologyVersion(config);
+  const { docs: statusDocs, summary } = computeDocStatuses({
+    parsed, facts, graph, ontologyVer,
+  });
+  return {
+    parsed, facts, graph, ontologyVer, statusDocs, summary,
+  };
+}
+
 async function runStatus(root, config) {
   try {
-    const parsed = await parseAll(root, config);
-    const facts = await loadFacts(root);
-    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
-    const ontologyVer = ontologyVersion(config);
-    const { docs, summary } = computeDocStatuses({
-      parsed, facts, graph, ontologyVer,
-    });
-    console.log(JSON.stringify({ docs, summary }));
+    const { statusDocs, summary } = await loadGraphWithStatus(root, config);
+    console.log(JSON.stringify({ docs: statusDocs, summary }));
   } catch (e) {
     failForEngineError(e);
   }
@@ -270,8 +297,7 @@ async function runFactsWrite(root, config) {
     return;
   }
 
-  const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
-  const resolve = (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
+  const resolve = makeResolve(root, config, parsed);
 
   let envelope;
   try {
@@ -382,27 +408,37 @@ function parseLintArgs(rest) {
   return failOn;
 }
 
+/**
+ * The full lint finding set (CAP-9's `lint` output, folded with CAP-12's
+ * `view` highlighting): P09-P12/P17-P20 from `buildGraph()`, P01-P08 from
+ * `lintGraph`, P13 (stale facts, from the shared status loop), P14/P15 from
+ * `verifyEvidence`, and P16 (scope warnings). One assembly, called by both
+ * `runLint` and `runView` -- not a second copy (code map: "reuse runLint's
+ * findings assembly").
+ */
+function assembleFindings({
+  parsed, facts, graph, statusDocs,
+}) {
+  return sortFindings([
+    ...graph.findings, // P09, P10, P11, P12, P17-P20
+    ...lintGraph({ graph, parsed }), // P01-P08
+    ...statusDocs
+      .filter((d) => d.state === 'stale')
+      .map((d) => makeFinding('P13', d.path, 1, `stale facts: ${d.path}`)),
+    ...verifyEvidence({ parsed, texts: parsed.texts, facts }), // P14, P15
+    ...parsed.warnings.map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
+  ]);
+}
+
 async function runLint(root, config, failOn) {
   try {
-    const parsed = await parseAll(root, config);
-    const facts = await loadFacts(root);
-    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
-    const ontologyVer = ontologyVersion(config);
-    const { docs: statusDocs } = computeDocStatuses({
-      parsed, facts, graph, ontologyVer,
+    const {
+      parsed, facts, graph, statusDocs,
+    } = await loadGraphWithStatus(root, config);
+
+    const sorted = assembleFindings({
+      parsed, facts, graph, statusDocs,
     });
-
-    const findings = [
-      ...graph.findings, // P09, P10, P11, P12, P17-P20
-      ...lintGraph({ graph, parsed }), // P01-P08
-      ...statusDocs
-        .filter((d) => d.state === 'stale')
-        .map((d) => makeFinding('P13', d.path, 1, `stale facts: ${d.path}`)),
-      ...verifyEvidence({ parsed, texts: parsed.texts, facts }), // P14, P15
-      ...parsed.warnings.map((w) => makeFinding('P16', '_lumina/config/project.yaml', 1, w.message)),
-    ];
-
-    const sorted = sortFindings(findings);
     const summary = { errors: 0, warnings: 0, infos: 0 };
     for (const f of sorted) {
       if (f.severity === 'error') summary.errors += 1;
@@ -420,6 +456,46 @@ async function runLint(root, config, failOn) {
     const threshold = SEVERITY_RANK[failOn];
     const worst = sorted.reduce((max, f) => Math.max(max, SEVERITY_RANK[f.severity]), -1);
     process.exitCode = worst >= threshold ? 1 : 0;
+  } catch (e) {
+    failForEngineError(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// view (CAP-12, AD-16): writes the one self-contained `_lumina/graph/
+// view.html`. No argument (bad args -> exit 1, handled by `main`'s own
+// SUBCOMMANDS/rest-args check, same as every non-lint/query subcommand).
+// `./lib/view.mjs` is imported lazily, right here, not at module top level,
+// so `status`/`lint`/etc. never load the viewer or the vendored force-graph
+// bundle (cold-start row of the I/O matrix).
+// ---------------------------------------------------------------------------
+
+async function runView(root, config) {
+  try {
+    const {
+      parsed, facts, graph, statusDocs, summary,
+    } = await loadGraphWithStatus(root, config);
+    const findings = assembleFindings({
+      parsed, facts, graph, statusDocs,
+    });
+
+    // Enrich every node with the `metaType`/`at` that `query.mjs` already
+    // knows how to compute (reused, not recomputed a second way): doc nodes
+    // already carry `metaType` from `buildGraph`, but frag/concept/id nodes
+    // don't, and no node carries its own source location.
+    const resolve = makeResolve(root, config, parsed);
+    const qctx = buildCtx({ graph, parsed, resolve });
+    const enrichedGraph = {
+      nodes: graph.nodes.map((n) => ({ ...n, metaType: nodeMetaType(n, resolve), at: atFor(n, qctx) })),
+      edges: graph.edges,
+      findings: graph.findings,
+    };
+    const freshness = { docs: statusDocs, summary };
+
+    const { renderView } = await import('./lib/view.mjs');
+    const html = await renderView({ graph: enrichedGraph, findings, freshness });
+    await atomicWrite(join(root, '_lumina', 'graph', 'view.html'), html);
+    console.log(JSON.stringify({ ok: true, file: '_lumina/graph/view.html' }));
   } catch (e) {
     failForEngineError(e);
   }
@@ -485,13 +561,9 @@ function parseQueryArgs(rest) {
 
 async function runQuery(root, config, queryArgs) {
   try {
-    const parsed = await parseAll(root, config);
-    const facts = await loadFacts(root);
-    const graph = buildGraph({ config, parsed, facts, exists: existsUnderRoot(root) });
-    const ontologyVer = ontologyVersion(config);
-    const { docs: statusDocs, summary } = computeDocStatuses({
-      parsed, facts, graph, ontologyVer,
-    });
+    const {
+      parsed, graph, statusDocs, summary,
+    } = await loadGraphWithStatus(root, config);
     const freshness = {
       stale: summary.stale,
       changed: summary.changed,
@@ -499,8 +571,7 @@ async function runQuery(root, config, queryArgs) {
       staleDocs: statusDocs.filter((d) => d.state === 'stale').map((d) => d.path).sort(),
     };
 
-    const resolverCtx = makeResolverContext({ config, parsed, exists: existsUnderRoot(root) });
-    const resolve = (raw, citingDoc) => resolveFactRef(raw, citingDoc, resolverCtx);
+    const resolve = makeResolve(root, config, parsed);
 
     let payload;
     if (queryArgs.op === 'node') {
@@ -602,6 +673,8 @@ export async function main(argv = process.argv.slice(2)) {
     await runLint(root, config, failOn);
   } else if (subcommand === 'query') {
     await runQuery(root, config, queryArgs);
+  } else if (subcommand === 'view') {
+    await runView(root, config);
   }
 }
 
