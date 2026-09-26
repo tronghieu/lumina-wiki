@@ -13,7 +13,8 @@ Installed by lumina-wiki {{package_version}}.
   fixes, or a new file such as a glossary).
 - **Only the engine writes `_lumina/facts/`, `_lumina/graph/`, and
   `_lumina/_state/`.** Nothing else — not a skill, not you by hand — should
-  create or edit files there.
+  create or edit files there. One exception: when verify reports a fact file
+  whose source doc is gone, delete that file yourself and commit the deletion.
 - **Skills call the engine through Bash, never by importing it.** Every
   `lumi-project-*` skill runs `node _lumina/project/project.mjs <subcommand>`
   and reads its JSON output; none of them `import` engine code.

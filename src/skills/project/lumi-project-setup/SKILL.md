@@ -22,9 +22,6 @@ approves it, then validate what you wrote through the engine.
 - `_lumina/project/PROJECT.md`: engine commands, meta-types, meta-relations.
 - `## Engine facts` below: the `project.yaml` shape and the engine behaviour
   a proposal must fit. `PROJECT.md` does not document the shape.
-
-## Engine facts` below, which is taken directly from the engine's own
-  validator and parser.
 - Only the engine (`project.mjs`) validates and reads `project.yaml`; it
   never writes it. You are the only writer, and only after approval.
 
