@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Project mode scope globs: `**/` now matches zero directory levels, so
+  `**/*.md` includes root files and `docs/**/*.md` includes `docs/a.md`.
+- `facts-write` / `facts-prune` lock: a holder keeps its lock fresh while it
+  runs and releases only its own lock, so parallel ingest no longer lets two
+  writers overlap when one runs past the 30 s stale threshold.
+- An unreadable `_lumina/facts` directory now fails with exit 2 instead of
+  silently reading as "never ingested".
+- A fact file with a missing or unsupported `schemaVersion` is reported
+  stale (so update-mode ingest rewrites it) and no longer feeds the graph.
+
 ## [1.15.0-next.1] - 2026-09-27
 
 > Preview build, published to the `next` dist-tag. `latest` is untouched.

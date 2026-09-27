@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -873,6 +873,30 @@ describe('buildGraph: only an in-scope doc\'s envelope feeds the graph', () => {
   });
 });
 
+describe('buildGraph: only an envelope matching CURRENT_SCHEMA_VERSION feeds the graph', () => {
+  test('an envelope written by a newer engine contributes no edges', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({ path: 'docs/b.md' });
+    const facts = new Map([['docs/a.md', {
+      schemaVersion: 2, source: 'docs/a.md', sourceHash: 'h', ontologyVersion: 'v',
+      facts: [edgeFact({ subject: 'doc:docs/a.md', relation: 'related', object: 'doc:docs/b.md' })],
+    }]]);
+    const graph = build({ docs: [a, b], facts });
+    assert.equal(graph.edges.length, 0);
+  });
+
+  test('an envelope with no schemaVersion at all contributes no edges', () => {
+    const a = doc({ path: 'docs/a.md' });
+    const b = doc({ path: 'docs/b.md' });
+    const facts = new Map([['docs/a.md', {
+      source: 'docs/a.md', sourceHash: 'h', ontologyVersion: 'v',
+      facts: [edgeFact({ subject: 'doc:docs/a.md', relation: 'related', object: 'doc:docs/b.md' })],
+    }]]);
+    const graph = build({ docs: [a, b], facts });
+    assert.equal(graph.edges.length, 0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // loadFacts
 // ---------------------------------------------------------------------------
@@ -902,6 +926,26 @@ describe('loadFacts', () => {
       assert.deepEqual(facts.get('docs/adr/0009.md'), envelope);
       assert.ok(facts.get('docs/adr/broken.md').error);
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('an unreadable nested facts directory throws (EACCES), not treated as empty', async (t) => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      t.skip('chmod 000 does not deny reads here (Windows, or running as root)');
+      return;
+    }
+    const dir = await mkdtemp(join(tmpdir(), 'lumina-graph-facts-'));
+    const locked = join(dir, '_lumina', 'facts', 'locked');
+    try {
+      await mkdir(locked, { recursive: true });
+      await chmod(locked, 0o000);
+      await assert.rejects(loadFacts(dir), (e) => {
+        assert.match(e.code ?? '', /EACCES|EPERM/);
+        return true;
+      });
+    } finally {
+      await chmod(locked, 0o755).catch(() => {});
       await rm(dir, { recursive: true, force: true });
     }
   });
@@ -989,11 +1033,41 @@ describe('computeDocStatus', () => {
     );
   });
 
-  test('an envelope schemaVersion at or below the engine\'s is fine', () => {
+  test('an envelope schemaVersion matching the engine\'s exactly is fine', () => {
     const envelope = { schemaVersion: 1, source: 'docs/a.md', sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
     assert.equal(
       computeDocStatus({
         path: 'docs/a.md', hash: 'h1', envelope, ontologyVersion: 'v1', schemaVersion: 1, sourceText: 't', refResolves: () => true,
+      }),
+      'fresh',
+    );
+  });
+
+  test('stale when the envelope schemaVersion is missing (verify-evidence would call it malformed)', () => {
+    const envelope = { source: 'docs/a.md', sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
+    assert.equal(
+      computeDocStatus({
+        path: 'docs/a.md', hash: 'h1', envelope, ontologyVersion: 'v1', schemaVersion: 1, sourceText: 't', refResolves: () => true,
+      }),
+      'stale',
+    );
+  });
+
+  test('stale when the envelope schemaVersion is older than the engine\'s (verify-evidence would call it malformed)', () => {
+    const envelope = { schemaVersion: 0, source: 'docs/a.md', sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
+    assert.equal(
+      computeDocStatus({
+        path: 'docs/a.md', hash: 'h1', envelope, ontologyVersion: 'v1', schemaVersion: 1, sourceText: 't', refResolves: () => true,
+      }),
+      'stale',
+    );
+  });
+
+  test('schemaVersion check is skipped entirely when the param is omitted', () => {
+    const envelope = { source: 'docs/a.md', sourceHash: 'h1', ontologyVersion: 'v1', facts: [] };
+    assert.equal(
+      computeDocStatus({
+        path: 'docs/a.md', hash: 'h1', envelope, ontologyVersion: 'v1', sourceText: 't', refResolves: () => true,
       }),
       'fresh',
     );
