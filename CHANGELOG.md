@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.0-next.2] - 2026-09-27
+
+> Preview build, published to the `next` dist-tag. `latest` is untouched.
+> Try it with `npx lumina-wiki@next install`.
+
 ### Fixed
 
 - Project mode scope globs: `**/` now matches zero directory levels, so
