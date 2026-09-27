@@ -1,11 +1,13 @@
 /**
  * @file scope.mjs
  * @description The one scope matcher (AD-9, `source-scope.md`). Compiles
- * `*` (one path segment) / `**` (any depth) glob patterns with the same
- * semantics as classic `matchGlob` (`src/scripts/lib/globs.mjs`; reimplemented
- * here, not imported, per AD-6 — checked by a parity test), applies the
- * always-excluded and default-excluded directories, and returns the sorted,
- * case-fold-checked in-scope file list.
+ * `*` (one path segment) / `**` (any depth) glob patterns, mostly matching
+ * classic `matchGlob` (`src/scripts/lib/globs.mjs`; reimplemented here, not
+ * imported, per AD-6 — checked by a parity test) except that a `**\/` segment
+ * here matches zero or more directory levels, where classic `matchGlob`
+ * requires at least one (a known bug there, out of scope to fix), applies
+ * the always-excluded and default-excluded directories, and returns the
+ * sorted, case-fold-checked in-scope file list.
  */
 
 import { readdir } from 'node:fs/promises';
@@ -26,18 +28,24 @@ const DEFAULT_EXCLUDED_ROOT_DIRS = new Set([
 
 /**
  * Compile a glob pattern into a RegExp matching repo-relative,
- * forward-slash paths. `*` matches within one path segment; `**` matches
- * any depth. Mirrors classic `matchGlob`'s regex-building semantics; see
- * `scope.test.mjs`'s parity test against it.
+ * forward-slash paths. `*` matches within one path segment; a trailing or
+ * bare `**` matches any depth (including zero); a `**\/` segment matches
+ * zero or more whole directory levels, so `docs/**\/*.md` matches
+ * `docs/a.md` as well as `docs/x/a.md`. Mirrors classic `matchGlob`'s
+ * regex-building semantics except for that `**\/` zero-level case (classic
+ * requires at least one directory level there — a known bug, out of scope
+ * to fix); see `scope.test.mjs`'s parity test against it.
  * @param {string} pattern
  * @returns {RegExp}
  */
 export function compileGlob(pattern) {
   const body = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*\//g, '\u0001')
     .replace(/\*\*/g, '\u0000')
     .replace(/\*/g, '[^/]*')
-    .replace(/\u0000/g, '.*');
+    .replace(/\u0000/g, '.*')
+    .replace(/\u0001/g, '(?:.*/)?');
   return new RegExp(`^${body}$`);
 }
 

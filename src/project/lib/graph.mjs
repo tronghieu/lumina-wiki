@@ -31,6 +31,7 @@ import { slug } from './markdown.mjs';
 import { makeQuoteMatcher } from './evidence.mjs';
 import { resolveIncludeRootForPattern } from './scope.mjs';
 import { assertSafeRelPath } from './fsx.mjs';
+import { CURRENT_SCHEMA_VERSION } from './config.mjs';
 
 const RULE_BY_ID = new Map(RULES.map((r) => [r.id, r]));
 
@@ -637,9 +638,10 @@ function resolutionKey(subjPath, factId) {
  *   per-doc committed fact envelopes, keyed by source path. Only an envelope
  *   whose key belongs to an in-scope doc (`makeFactKeyOwner`) feeds the
  *   graph; one for a deleted/out-of-scope doc is reported by
- *   `verifyEvidence` (P14/P15) instead. A malformed entry (`{error}`, or
- *   `null`) is skipped for graph-building (it still drives
- *   `computeDocStatus` -> 'stale' elsewhere).
+ *   `verifyEvidence` (P14/P15) instead. A malformed entry (`{error}`,
+ *   `null`, or a `schemaVersion` other than `CURRENT_SCHEMA_VERSION` --
+ *   written by an engine this one doesn't understand) is skipped for
+ *   graph-building (it still drives `computeDocStatus` -> 'stale' elsewhere).
  * @param {(path: string) => boolean} params.exists - true when `path`
  *   (repo-relative) exists on disk, in or out of scope.
  * @returns {{nodes: object[], edges: object[], findings: object[]}} plus a
@@ -679,7 +681,7 @@ export function buildGraph({ config, parsed, facts, exists }) {
   const validEnvelopes = envelopeEntries
     .filter(([key]) => ownerOf(key) !== undefined)
     .map(([, e]) => e)
-    .filter((e) => e && !e.error && Array.isArray(e.facts));
+    .filter((e) => e && !e.error && Array.isArray(e.facts) && e.schemaVersion === CURRENT_SCHEMA_VERSION);
 
   const rawEdges = [];
   const edgeFacts = [
@@ -810,8 +812,9 @@ async function walkFacts(base, relDir, out) {
   let entries;
   try {
     entries = await readdir(join(base, relDir), { withFileTypes: true });
-  } catch {
-    return; // ponytail: an unreadable subdirectory is treated as empty; surfaced by lint's own fs errors if it matters
+  } catch (e) {
+    if (e.code === 'ENOENT') return; // deleted between the caller's access() check and this readdir: still empty
+    throw e; // EACCES/EPERM/EISDIR etc: real error, not "empty" -- let the caller's caller map it to an exit code
   }
   for (const entry of entries) {
     const rel = relDir ? `${relDir}/${entry.name}` : entry.name;
@@ -861,7 +864,11 @@ export async function loadFacts(root) {
  *   `null` when the fact file's JSON parsed to a bare `null`.
  * @param {string} params.ontologyVersion - the engine's current `ontologyVersion`.
  * @param {number} [params.schemaVersion] - the engine's current (highest
- *   understood) envelope `schemaVersion`; omit to skip this check.
+ *   understood) envelope `schemaVersion`; an envelope whose `schemaVersion`
+ *   doesn't match exactly (missing, older, or newer) is 'stale' -- `verify-
+ *   evidence` (`factfile.mjs#isV1Envelope`) requires an exact match too, so
+ *   update-mode ingest must pick up anything it would call malformed. Omit
+ *   to skip this check entirely.
  * @param {string} params.sourceText - the doc's current full text (AD-22 quote check).
  * @param {(fact: object) => boolean} params.refResolves - true when `fact`'s
  *   object/value still resolves in the freshly built graph.
@@ -875,7 +882,7 @@ export function computeDocStatus({ path, hash, envelope, ontologyVersion, schema
     || !Array.isArray(envelope.facts)
     || typeof envelope.sourceHash !== 'string'
   ) return 'stale';
-  if (isNewerSchema(envelope.schemaVersion, schemaVersion)) return 'stale';
+  if (schemaVersion !== undefined && envelope.schemaVersion !== schemaVersion) return 'stale';
   if (envelope.source !== path) return 'stale';
   if (envelope.ontologyVersion !== ontologyVersion) return 'stale';
   const matches = makeQuoteMatcher(sourceText);

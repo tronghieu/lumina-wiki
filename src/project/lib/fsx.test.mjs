@@ -142,6 +142,43 @@ describe('withLock', () => {
     assert.ok(sleeps.length > 0);
   });
 
+  test('release does not delete a lock whose token changed (was reclaimed)', async () => {
+    const lockPath = join(dir, 'lock');
+    const result = await withLock(lockPath, async () => {
+      // Simulate another process reclaiming this lock while we hold it
+      // (e.g. our heartbeat lost the race, or staleMs was too low for the
+      // work). Our own release must not delete the new owner's lock.
+      await writeFile(lockPath, `${process.pid}:someone-elses-token`);
+      return 'ok';
+    });
+    assert.equal(result, 'ok');
+    assert.equal(await readFile(lockPath, 'utf8'), `${process.pid}:someone-elses-token`);
+  });
+
+  test('heartbeat keeps a long-running holder from being reclaimed by a waiter', async () => {
+    const lockPath = join(dir, 'lock');
+    let active = 0;
+    let overlapped = false;
+
+    const holder = withLock(lockPath, async () => {
+      active += 1;
+      await new Promise((r) => setTimeout(r, 400));
+      if (active > 1) overlapped = true;
+      active -= 1;
+    }, { staleMs: 150, pollMs: 10, timeoutMs: 2000 });
+
+    await new Promise((r) => setTimeout(r, 20)); // let the holder acquire first
+
+    const waiter = withLock(lockPath, async () => {
+      active += 1;
+      if (active > 1) overlapped = true;
+      active -= 1;
+    }, { staleMs: 150, pollMs: 10, timeoutMs: 2000 });
+
+    await Promise.all([holder, waiter]);
+    assert.equal(overlapped, false);
+  });
+
   test('two concurrent callers serialize: only one runs fn at a time', async () => {
     const lockPath = join(dir, 'lock');
     let active = 0;

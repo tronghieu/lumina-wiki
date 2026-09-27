@@ -2,18 +2,18 @@
  * @file fsx.mjs
  * @description Path-safety check for project-engine relative paths and glob
  * patterns, plus the two write primitives `facts-write` needs (AD-23):
- * `atomicWrite` (temp name + fsync + rename, mirroring `src/installer/fs.js`
- * `atomicWrite` but with a unique temp name so two writers never collide on
- * the same `.tmp` path) and `withLock` (exclusive-create lock file, stale
- * after `staleMs`, retried for up to `timeoutMs`). Mirrors `safePath`'s
- * rejection rules from `src/installer/fs.js` (reject absolute, drive letter,
- * `..` segment) as a pure check with no filesystem access and no root
+ * `atomicWrite` (temp name + fsync + rename, with a unique temp name so two
+ * writers never collide on the same `.tmp` path) and `withLock`
+ * (exclusive-create lock file, holder-owned token, mtime heartbeat while
+ * held, stale after `staleMs`, retried for up to `timeoutMs`). The
+ * path-safety check rejects an absolute path, a Windows drive letter, and a
+ * `..` segment, as a pure check with no filesystem access and no root
  * argument, since the engine must validate glob patterns before any of them
- * are ever joined to a root. Not imported from `src/installer/fs.js` (AD-6:
- * engine imports only `node:` builtins and files inside `src/project/`).
+ * are ever joined to a root. Only `node:` builtins and files inside
+ * `src/project/` are imported here (AD-6).
  */
 
-import { open, mkdir, rename, unlink, stat } from 'node:fs/promises';
+import { open, mkdir, rename, unlink, stat, readFile, utimes } from 'node:fs/promises';
 import { dirname, basename, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
@@ -82,11 +82,17 @@ export async function atomicWrite(absPath, text) {
 }
 
 // ---------------------------------------------------------------------------
-// withLock (AD-23): exclusive-create lock file at `lockPath`. A lock whose
-// mtime is older than `staleMs` is taken over; otherwise the caller retries
-// (polling) for up to `timeoutMs` before giving up. Timings are parameters,
-// not constants, so tests can shorten them instead of waiting for real time
-// to pass.
+// withLock (AD-23): exclusive-create lock file at `lockPath`, content
+// `"<pid>:<token>"` with a random per-acquisition token. A lock whose mtime
+// is older than `staleMs` is taken over; otherwise the caller retries
+// (polling) for up to `timeoutMs` before giving up. While held, an unref'd
+// interval refreshes the lock's mtime every `staleMs / 3` so a holder whose
+// `fn` runs longer than `staleMs` never looks stale to a waiter. Release
+// unlinks the lock file only if its content still holds our token, so a
+// holder that *was* reclaimed (its heartbeat somehow lost the race, or
+// `staleMs` was set too low for the work) never deletes the new owner's
+// lock. Timings are parameters, not constants, so tests can shorten them
+// instead of waiting for real time to pass.
 // ---------------------------------------------------------------------------
 
 /** Thrown by `withLock` when the lock stays held (and fresh) past `timeoutMs`. */
@@ -104,7 +110,10 @@ function defaultSleep(ms) {
 
 /**
  * Run `fn` while holding an exclusive lock file at `lockPath`, released
- * afterward whether `fn` succeeds or throws.
+ * afterward whether `fn` succeeds or throws. Guards against the two races a
+ * plain "unlink on exit" lock has under concurrent, potentially slow,
+ * holders: a live holder being reclaimed as stale (heartbeat), and a
+ * reclaimed holder deleting the new owner's lock (token check on release).
  * @param {string} lockPath absolute path to the lock file.
  * @param {() => Promise<any>} fn
  * @param {object} [options]
@@ -127,32 +136,43 @@ export async function withLock(lockPath, fn, options = {}) {
 
   await mkdir(dirname(lockPath), { recursive: true });
   const start = now();
+  const token = randomBytes(8).toString('hex');
+  const ownContent = `${process.pid}:${token}`;
 
   for (;;) {
     try {
       const fd = await open(lockPath, 'wx');
-      await fd.writeFile(String(process.pid));
+      await fd.writeFile(ownContent);
       await fd.close();
       break; // acquired
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
 
+      // Content first, then mtime: a lock replaced after this read either
+      // shows a fresh mtime below or different content at the re-read, so
+      // it is never mistaken for the stale one we saw.
+      let seenContent = null;
       let mtimeMs = null;
       try {
+        seenContent = await readFile(lockPath, 'utf8').catch((err) => {
+          if (err.code === 'ENOENT') throw err;
+          return null; // unreadable (e.g. a directory): never reclaimable, fall through to timeout
+        });
         mtimeMs = (await stat(lockPath)).mtimeMs;
       } catch {
-        continue; // lock file vanished between the failed create and this stat; retry immediately
+        continue; // lock file vanished between the failed create and here; retry immediately
       }
-      if (now() - mtimeMs > staleMs) {
-        // Stale: take it over. A concurrent taker may race here and lose to
-        // `unlink` + retry -- acceptable, the retry loop resolves it. When
-        // `unlink` itself fails (e.g. `lockPath` is a directory, EPERM),
-        // don't `continue` straight back into another failing `open` --
-        // that would spin hot forever, never reaching the timeout check or
-        // sleep below. Fall through to them instead, same as a live lock.
+      if (seenContent !== null && now() - mtimeMs > staleMs) {
+        // Stale: take it over only if its content is still what we saw.
+        // ponytail: still racy between the re-read and the unlink; an atomic
+        // reclaim needs a rename/link scheme or an OS lock (flock). Fine for
+        // a single-machine, few-contender lock. Any failure falls through to
+        // timeout/sleep below instead of spinning hot into another `open`.
         try {
-          await unlink(lockPath);
-          continue;
+          if (await readFile(lockPath, 'utf8') === seenContent) {
+            await unlink(lockPath);
+            continue;
+          }
         } catch {
           // fall through
         }
@@ -164,9 +184,23 @@ export async function withLock(lockPath, fn, options = {}) {
     }
   }
 
+  const heartbeatMs = Math.max(1, Math.floor(staleMs / 3));
+  const heartbeat = setInterval(() => {
+    utimes(lockPath, new Date(), new Date()).catch(() => {});
+  }, heartbeatMs);
+  heartbeat.unref?.();
+
   try {
     return await fn();
   } finally {
-    await unlink(lockPath).catch(() => {});
+    clearInterval(heartbeat);
+    try {
+      const current = await readFile(lockPath, 'utf8');
+      if (current === ownContent) {
+        await unlink(lockPath);
+      }
+    } catch {
+      // already gone; nothing to release
+    }
   }
 }

@@ -50,6 +50,22 @@ describe('compileGlob', () => {
     assert.equal(compileGlob('docs/**').test('other/a.md'), false);
   });
 
+  test('a **/ segment matches zero or more directory levels', () => {
+    assert.equal(compileGlob('**/*.md').test('README.md'), true);
+    assert.equal(compileGlob('docs/**/*.md').test('docs/a.md'), true);
+    assert.equal(compileGlob('docs/**/*.md').test('docs/x/a.md'), true);
+    // trailing bare `**` and `docs/**` are unaffected (not a `**/` segment).
+    assert.equal(compileGlob('docs/**').test('docs/a.md'), true);
+    // exclude-style pattern with `**/` on both sides.
+    assert.equal(compileGlob('**/drafts/**').test('drafts/a.md'), true);
+    assert.equal(compileGlob('**/drafts/**').test('x/drafts/a.md'), true);
+  });
+
+  // Classic matchGlob requires at least one directory level for a `**/`
+  // segment (it lowers `**` to `.*` unconditionally, leaving the following
+  // `/` mandatory) — a known bug there, out of scope to fix (see scope.mjs's
+  // module doc). The shared list below is kept free of `**/`-in-the-middle
+  // patterns so it doesn't assert that buggy behavior as parity.
   test('parity with classic matchGlob on a shared pattern/path list', () => {
     const patterns = [
       'docs/**',
