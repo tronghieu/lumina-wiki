@@ -32,6 +32,8 @@ JavaScript uses built-in `node --test` with `node:assert/strict`; Python uses `p
 
 Recent history follows Conventional Commits, for example `feat(installer): ...`, `docs(readme): ...`, `refactor(skills): ...`, and `chore(release): ...`. PRs should state the user-visible change, list tests run, call out idempotency or packaging impact, and link related issues or roadmap items when applicable.
 
+Never post comments on a PR (including `@codex review` or other bot triggers) unless the user explicitly asks. Reading PR comments and reviews is fine.
+
 ## Security & Configuration Tips
 
 Lumina-Wiki has zero telemetry; the only outbound call is the optional npm version check. Never write secrets to committed files. Research API keys belong in local `.env`; `.env.example` documents expected variables.
