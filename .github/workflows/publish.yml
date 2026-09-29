@@ -134,6 +134,8 @@ jobs:
         # Re-derives the channel from package.json and asserts the tag reached
         # origin, the version reached npm, and the dist-tag actually moved.
         # Retries because a freshly published dist-tag can take a moment to
-        # become visible on the registry: v1.15.0 took over a minute, so allow
-        # up to 5 minutes.
+        # become visible on the registry: v1.15.0 took over a minute, so poll
+        # for about 5 minutes. A stalled git/npm probe can make each attempt
+        # much longer, so the step timeout is the hard bound.
+        timeout-minutes: 10
         run: node scripts/release-verify.mjs --retries 20 --delay 15000
