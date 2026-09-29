@@ -5,45 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-## [1.15.0-next.2] - 2026-09-27
-
-> Preview build, published to the `next` dist-tag. `latest` is untouched.
-> Try it with `npx lumina-wiki@next install`.
-
-### Fixed
-
-- Project mode scope globs: `**/` now matches zero directory levels, so
-  `**/*.md` includes root files and `docs/**/*.md` includes `docs/a.md`.
-- `facts-write` / `facts-prune` lock: a holder keeps its lock fresh while it
-  runs and releases only its own lock, so parallel ingest no longer lets two
-  writers overlap when one runs past the 30 s stale threshold.
-- An unreadable `_lumina/facts` directory now fails with exit 2 instead of
-  silently reading as "never ingested".
-- A fact file with a missing or unsupported `schemaVersion` is reported
-  stale (so update-mode ingest rewrites it) and no longer feeds the graph.
-
-## [1.15.0-next.1] - 2026-09-27
-
-> Preview build, published to the `next` dist-tag. `latest` is untouched.
-> Try it with `npx lumina-wiki@next install`.
-
-### Added
-
-- `lumi-project-ingest` runs batches of more than 20 docs in parallel on
-  hosts with subagents: docs are sorted by type into clusters of at most 25,
-  all dispatched at once, one approval covers the plan, a failed cluster doesn't stop the others, and
-  missed docs get one automatic retry. It ends by regenerating the graph
-  view and printing its link.
-- `lumi-project-setup` offers to start ingest once the config is written.
-- `project.mjs status` reports each doc's `metaType` and project `type`.
-- `lumi-project-setup` asks for a reply language and style (optional) and
-  saves them to `_lumina/config/user.config.yaml`, which every project
-  skill follows. The file is gitignored so each person keeps their own.
-
-## [1.15.0-next.0] - 2026-09-26
-
-> Preview build, published to the `next` dist-tag. `latest` is untouched.
-> Try it with `npx lumina-wiki@next install`.
+## [1.15.0] - 2026-09-29
 
 ### Added
 
@@ -51,11 +13,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   over a repo's own docs (decisions, requirements, rules, processes) instead
   of a new wiki, with six skills for setup, ingest, ask, check, verify, and
   view (`lumi-project-*`).
+  - `lumi-project-setup` asks for a reply language and style (optional),
+    saved to the gitignored `_lumina/config/user.config.yaml` that every
+    project skill follows, and offers to start ingest once the config is
+    written.
   - `lumi-project-ingest` updates only docs that changed or went stale, by
-    default.
+    default. On hosts with subagents, batches of more than 20 docs run in
+    parallel: docs are sorted by type into clusters of at most 25, one
+    approval covers the plan, a failed cluster doesn't stop the others, and
+    missed docs get one automatic retry. It ends by regenerating the graph
+    view and printing its link.
   - `lumi-project-ask` reads the doc text it cites to answer content
     questions, and falls back to a doc search when nothing in the graph
     matches.
+  - `project.mjs status` reports each doc's `metaType` and project `type`.
   - `facts-prune` removes committed fact files for docs deleted from disk; a
     doc merely excluded from scope, or renamed and not yet re-ingested,
     keeps its facts.
