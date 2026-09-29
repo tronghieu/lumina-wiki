@@ -40,7 +40,7 @@ const DEFAULT_EXCLUDED_ROOT_DIRS = new Set([
 export function compileGlob(pattern) {
   const body = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/(^|\/)\*\*\//g, '$1\u0001')
+    .replace(/(?<=^|\/)\*\*\//g, '\u0001')
     .replace(/\*\*/g, '\u0000')
     .replace(/\*/g, '[^/]*')
     .replace(/\u0000/g, '.*')
