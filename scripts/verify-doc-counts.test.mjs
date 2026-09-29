@@ -12,7 +12,7 @@
  *      so it doesn't need a parallel guard here).
  *   2. The `EDGE_TYPES` count: `docs/system-architecture.md` was updated to
  *      "42" when schemas.mjs grew to 42 entries (commit e067795,
- *      2026-07-07), but `CLAUDE.md`, `docs/project-context.md`, and
+ *      2026-07-07), but `CLAUDE.md` (now `AGENTS.md`), `docs/project-context.md`, and
  *      `docs/codebase-summary.md` were never touched and kept saying "28".
  *
  * Policy this test encodes: pin a restated NUMBER with a test when it
@@ -45,7 +45,7 @@ const trueEdgeTypeCount = EDGE_TYPES.length;
 // wording changes, this test fails with a clear "pattern not found" message
 // rather than silently passing — update the pattern alongside the wording.
 const edgeTypeCountClaims = [
-  { path: 'CLAUDE.md',                pattern: /edge types \((\d+) directed\)/ },
+  { path: 'AGENTS.md',                pattern: /edge types \((\d+) directed\)/ },
   { path: 'docs/project-context.md',  pattern: /\*\*Edge types:\*\* (\d+) directed types\./ },
   { path: 'docs/codebase-summary.md', pattern: /\*\*Edge types:\*\* (\d+) directed relationships/ },
 ];

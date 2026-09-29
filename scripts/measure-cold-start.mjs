@@ -6,7 +6,7 @@
  * min/median/max. Hard-fails if median exceeds the threshold.
  *
  * Threshold: 350 ms (300 ms target + 50 ms CI runner allowance).
- * This is a NON-NEGOTIABLE invariant per CLAUDE.md.
+ * This is a NON-NEGOTIABLE invariant per AGENTS.md.
  */
 
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';

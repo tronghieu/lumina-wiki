@@ -1,39 +1,141 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Required Agent Context
+Guidance for AI coding agents (Claude Code, Codex, Gemini, etc.) working in this repository. `CLAUDE.md` and `GEMINI.md` import this file.
 
-Before editing code, templates, or skill prompts, read `docs/project-context.md`. It contains current rules, module contracts, invariants, testing workflow, and gotchas. For deeper orientation, use `docs/DEVELOPMENT.md` and `docs/planning-artifacts/architecture.md`.
+## Read these first
 
-## Project Structure & Module Organization
+- **`docs/project-context.md`** — full critical rules and patterns AI agents must follow. **Read before editing any code or skill prompt.**
+- **`docs/DEVELOPMENT.md`** — local dev/test workflows, sandbox helpers, dev-loop pitfalls.
+- **`docs/planning-artifacts/architecture.md`** — locked v0.1 architecture decisions and rationale.
 
-Lumina-Wiki is the source repo for an npm CLI scaffolder, not a generated wiki workspace. The CLI entry point is `bin/lumina.js`. Installer code lives in `src/installer/`, runtime scripts in `src/scripts/`, Python tools in `src/tools/`, skill prompts in `src/skills/`, and install templates in `src/templates/`. Tests are colocated as `*.test.js` or `*.test.mjs`; Python tests live in `src/tools/tests/`.
+The user-facing `README.md` describes the **post-install workspace** (`raw/`, `wiki/`, `/lumi-*` slash commands). This repo IS the installer — not a usage example. Don't run `lumina install` against the repo root; always use a sandbox.
 
-## Build, Test, and Development Commands
+## What this project is
 
-- `npm ci`: install Node dependencies exactly from `package-lock.json`.
-- `npm run dev:sandbox`: install into a temporary sandbox. Use this instead of running `lumina install` in the repo root.
-- `npm run test:all`: run installer, script, and Python tests.
-- `npm run ci:idempotency`: install twice and verify watched paths do not drift.
-- `npm run ci:package`: validate npm package contents and publish safety rules.
+Lumina-Wiki is an **npm-published, multi-IDE wiki scaffolder**. `npx lumina-wiki install` projects a single source-of-truth template tree onto whichever IDE the user picks (Claude Code, Codex, Gemini, Cursor, generic), creating an LLM-maintainable knowledge workspace. After install, agents drive the wiki via `/lumi-*` skills which call Node/Python tools through `Bash`.
 
-## Coding Style & Naming Conventions
+Two layers in this repo:
 
-Use Node >=24, ESM modules, and no transpilation. Keep command imports lazy to preserve cold start. Do not add native modules, `postinstall`, Jest, Vitest, or dev dependencies. Use `atomicWrite` for writes and `safePath` for user path fragments. Skills install as flat canonical IDs, for example `lumi-init` and `lumi-research-discover`.
+- **Installer** — `bin/lumina.js` + `src/installer/*.js` (Node ESM ≥24). Idempotent, cross-platform, atomic file writes, symlink fallback ladder.
+- **Workspace payload** — `src/scripts/*.mjs` (Node wiki engine), `src/tools/*.py` (Python research-pack tools, opt-in), `src/skills/**/*.md` (markdown agent prompts), `src/templates/**/*` (rendered into the user's project on install).
 
-## Agent-Specific Instructions
+## Common commands
 
-Treat the repo as two layers: installer code plus workspace payload. Never run `lumina install` against the repo root; use `npm run dev:sandbox` or a temp directory. Preserve idempotency: install and upgrade must not modify generated `wiki/` or `raw/` data. Generated workspaces use `README.md` as canonical schema; agent entry files are rendered stubs, not symlinks.
+```bash
+# Local install into temp sandbox (creates dir, git inits, installs, prints tree, cleans up)
+npm run dev:sandbox
+npm run dev:sandbox -- --keep                    # keep tmp dir
+npm run dev:sandbox -- --reuse                   # stable path: $TMPDIR/lumi-sandbox
+npm run dev:sandbox -- --packs core,research     # forward flags to installer
 
-## Testing Guidelines
+# Direct invocation (cwd must be a sandbox, not the repo)
+node bin/lumina.js install --yes
 
-JavaScript uses built-in `node --test` with `node:assert/strict`; Python uses `pytest`. Name installer tests `src/installer/*.test.js`, script tests `src/scripts/*.test.mjs`, and tool tests `src/tools/tests/test_*.py`. Before pushing, run `npm run test:all`, `npm run ci:idempotency`, and `npm run ci:package`.
+# Tests
+npm run test:all                                 # installer + scripts + Python
+npm run test:installer                           # node --test src/installer/*.test.js
+npm run test:scripts                             # node --test src/scripts/*.test.mjs
+npm run test:python                              # pytest src/tools/tests -q
+npm run test:fs                                  # one module: fs helpers
+npm run test:manifest                            # one module: manifest read/write
+npm run test:template                            # one module: template engine
+npm run test:update                              # one module: update-check
 
-## Commit & Pull Request Guidelines
+# Single test file (any path)
+node --test src/installer/fs.test.js
+node --test src/scripts/wiki.test.mjs
 
-Recent history follows Conventional Commits, for example `feat(installer): ...`, `docs(readme): ...`, `refactor(skills): ...`, and `chore(release): ...`. PRs should state the user-visible change, list tests run, call out idempotency or packaging impact, and link related issues or roadmap items when applicable.
+# CI gates (run before push — same as GitHub Actions)
+npm run ci:idempotency                           # install twice → git diff over watched paths must be empty
+npm run ci:package                               # npm pack --dry-run, validate files allowlist + postinstall ban
+```
+
+No `devDependencies`. Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/tools/tests/test_*.py`.
+
+## Architecture — the big picture
+
+### Installer flow (`src/installer/commands.js`)
+
+18 numbered steps in source. Key shape:
+
+1. Read `_lumina/manifest.json` — `null` = fresh install, non-null = upgrade.
+2. Fresh: interactive prompts (lazy-load `@clack/prompts`). Upgrade: read YAML config first, manifest fallback.
+3. `applyInstallOverrides` merges CLI flags. **`core` pack is always force-inserted** via `unique(['core', ...rest])` — cannot be excluded.
+4. Render templates (`src/installer/template-engine.js`) and write everything via `atomicWrite` (temp + `fd.datasync()` + rename).
+5. Per-skill symlinks under `.claude/skills/lumi-*` go through the **symlink ladder**: `symlink` → `junction` (Windows) → `copy` fallback. Chosen strategy persisted in `manifest.symlinkStrategies` for idempotent re-use.
+6. Three state files written last, atomically: `manifest.json`, `_lumina/_state/skills-manifest.csv`, `_lumina/_state/files-manifest.csv`.
+
+`bin/lumina.js` is ESM and lazy-imports every subcommand inside `.action()` callbacks to keep cold-start under 300 ms. **Do not promote lazy imports to top-level `import` statements.**
+
+### Workspace contract (single source of truth: `src/scripts/schemas.mjs`)
+
+`schemas.mjs` is **pure data, no I/O, no side effects** — entity types, edge types (42 directed), required frontmatter per type, exemption globs. Both `wiki.mjs` and `lint.mjs` import it. Schema changes propagate from here.
+
+Two write paths into the workspace, both `atomicWrite`-discipline:
+
+- **`wiki.mjs`** — only allowed path for graph/frontmatter mutation, including `timeline-add`, `add-citation-by-id`, and `resolve-pending-citations`. Skills invoke via `Bash` + JSON, never `import`. JSON to stdout for reads, JSON status for mutations, `{"error":"…","code":2|3}` to stderr.
+- **`lint.mjs`** — `--fix` for L01/L03/L06/L07/L09 (kebab slugs, missing reverse edges, dedupe symmetric, refresh `<!-- lumina:index -->` block). checks L01–L22 (L15 unassigned).
+
+`reset.mjs` is the only deletion path; `--scope all` includes `wiki + state` but **never `raw/`**.
+
+### Wiki invariants (the heart of the project)
+
+- **`raw/`** is read-only by default. Only `raw/tmp/` and `raw/discovered/` accept new files (additions only, no overwrites).
+- **`graph/`** auto-generated; never hand-edit `edges.jsonl` or `citations.jsonl`.
+- **Bidirectional links mandatory**: every forward link writes its reverse in the same operation. Exempt-only mode: `foundations/**`, `outputs/**`, `*://*` are the only forward-without-reverse exceptions.
+- **`log.md` append-only**, **`index.md`** updated on every ingest.
+- Sections marked `<!-- user-edited -->` are preserved on upgrade — append, don't overwrite.
+- Topic pages are two-zone: the compiled zone is rewritten only on `/lumi-research-topic` refresh; the timeline zone is append-only, written only via `wiki.mjs timeline-add`.
+
+### Skills — authoritative source is `_lumina/schema/lumi-help.csv` (rendered by the installer, read by `/lumi-help skills` at runtime); `src/skills/**/SKILL.md` is what it's derived from. The list below is for orientation only — do not cite a count from it anywhere; see `docs/project-context.md` §6 for detail.
+
+- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`
+- Research pack, opt-in: `/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`, `/lumi-research-topic`, `/lumi-research-rank`, `/lumi-research-watchlist`, `/lumi-research-watch-run`
+- Reading pack, opt-in: `/lumi-reading-chapter-ingest`, `/lumi-reading-character-track`, `/lumi-reading-theme-map`, `/lumi-reading-plot-recap`
+- Learning pack, opt-in: `/lumi-learning-reflect`
+- Agent-host only, never installed into a project: `lumi-hub` — see `docs/specs/spec-librarian-mode/`
+
+Each skill is `src/skills/<subtree>/<name>/SKILL.md` with frontmatter (`name`, `description`, `allowed-tools`). Body opens with "Read `README.md` at the project root before this SKILL.md." — except `lumi-hub`, which is agent-host-only, has no project root, and is exempt (copied byte-verbatim; see `ci-agent-host-isolation.mjs`).
+
+### Entry-point stub pattern
+
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/rules/lumina.mdc` — all are **rendered stubs** (~5 lines) redirecting to `README.md`. **They are NOT symlinks.** README.md is the canonical agent-context file. The `<!-- lumina:schema --> ... <!-- /lumina:schema -->` markers are the only region the installer rewrites on upgrade — markers must be on their own lines.
+
+## Non-negotiable rules
+
+The full list lives in `docs/project-context.md` §3. The ones most likely to bite you when editing:
+
+1. **Never use `writeFile` directly** — always `atomicWrite` (or temp+fsync+`os.replace` in Python).
+2. **Never accept user-supplied paths without `safePath()`** — rejects `..`, absolute paths, Windows drive letters, backslash traversals.
+3. **Never add native modules.** No `node-gyp`, no `bcrypt`-style packages.
+4. **Never add a `postinstall` script.** `ci-package.mjs` blocks publish if one exists.
+5. **`devDependencies: {}` is a feature** — don't add test frameworks.
+6. **Cold-start budget < 300 ms** — keep lazy imports lazy.
+7. **No emoji in shipped files** unless explicitly requested.
+8. **v0.1 does not bundle MCP `llm-review` or any second-provider API/key plumbing** — shipping simplicity, not ideology. To reduce bias, run `/lumi-check` in a fresh session or via a subagent after `/lumi-ingest` (same model, blank context — free on every supported platform). If a user wants a second-model reviewer, that is their choice to wire in; it is not forbidden, just not bundled.
+9. **OmegaWiki** at `../OmegaWiki` is read-only **prior art for patterns only** — never copy code/schema/skills, never mention in user-facing strings (PRD, README, installer output, skill prompts, errors). All content is originally authored.
+10. **Zero telemetry** — only outbound call is the optional `npm view` update check (2 s timeout, suppressible via `--no-update` or `LUMINA_NO_UPDATE_CHECK=1`).
+
+## Idempotency invariant — what CI watches
+
+`scripts/ci-idempotency.mjs` runs `git diff --exit-code` after the second install over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/`, `.claude/`, `.agents/`, `_lumina/config/`, `_lumina/schema/`, `_lumina/scripts/`, `_lumina/tools/`, `.env.example`, `wiki/`, `raw/`.
+
+**Intentionally ignored**: `_lumina/manifest.json`, `_lumina/_state/*` (runtime state with timestamps). Don't rely on these being byte-stable across installs.
+
+## Exit code contract
+
+- `0` success
+- `1` user error (bad args)
+- `2` filesystem / path safety / unknown slug / missing `--yes`
+- `3` internal / fs failure / upgrade incompatibility / 5xx network
+- `4` user cancelled (Ctrl-C in interactive prompt or declined confirm)
+
+`EACCES` / `EPERM` / `RangeError` (from `safePath`) all map to exit 2 at `bin/lumina.js`.
+
+## Commits & pull requests
+
+Conventional Commits, e.g. `feat(installer): ...`, `docs(readme): ...`, `refactor(skills): ...`, `chore(release): ...`. PRs state the user-visible change, list tests run, call out idempotency or packaging impact, and link related issues or roadmap items.
 
 Never post comments on a PR (including `@codex review` or other bot triggers) unless the user explicitly asks. Reading PR comments and reviews is fine.
 
-## Security & Configuration Tips
-
-Lumina-Wiki has zero telemetry; the only outbound call is the optional npm version check. Never write secrets to committed files. Research API keys belong in local `.env`; `.env.example` documents expected variables.
+Never write secrets to committed files. Research API keys belong in local `.env`; `.env.example` documents expected variables.
