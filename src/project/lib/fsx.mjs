@@ -146,6 +146,14 @@ export async function withLock(lockPath, fn, options = {}) {
       await fd.close();
       break; // acquired
     } catch (e) {
+      // Windows: a lock just unlinked stays "delete pending" while any handle
+      // (a waiter's readFile) is open, and creating it fails with EPERM
+      // instead of EEXIST until that handle closes. Treat it as contention.
+      if (e.code === 'EPERM' && process.platform === 'win32') {
+        if (now() - start > timeoutMs) throw e;
+        await sleep(pollMs);
+        continue;
+      }
       if (e.code !== 'EEXIST') throw e;
 
       // Content first, then mtime: a lock replaced after this read either
@@ -185,8 +193,13 @@ export async function withLock(lockPath, fn, options = {}) {
   }
 
   const heartbeatMs = Math.max(1, Math.floor(staleMs / 3));
+  // Refresh only while the lock is still ours: once reclaimed, touching it
+  // would keep the new owner's lock fresh even after that owner dies.
+  // ponytail: read-then-utimes is not atomic, same ceiling as the reclaim above.
   const heartbeat = setInterval(() => {
-    utimes(lockPath, new Date(), new Date()).catch(() => {});
+    readFile(lockPath, 'utf8')
+      .then((current) => current === ownContent && utimes(lockPath, new Date(), new Date()))
+      .catch(() => {});
   }, heartbeatMs);
   heartbeat.unref?.();
 
