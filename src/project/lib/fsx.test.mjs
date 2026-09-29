@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, readdir, writeFile, utimes } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, readdir, writeFile, utimes, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -177,6 +177,17 @@ describe('withLock', () => {
 
     await Promise.all([holder, waiter]);
     assert.equal(overlapped, false);
+  });
+
+  test('heartbeat does not refresh a lock that was reclaimed by another owner', async () => {
+    const lockPath = join(dir, 'lock');
+    const old = new Date(Date.now() - 60000);
+    await withLock(lockPath, async () => {
+      await writeFile(lockPath, `${process.pid}:someone-elses-token`);
+      await utimes(lockPath, old, old);
+      await new Promise((r) => setTimeout(r, 60)); // several heartbeats at staleMs 30
+    }, { staleMs: 30 });
+    assert.ok(Math.abs((await stat(lockPath)).mtimeMs - old.getTime()) < 1000);
   });
 
   test('two concurrent callers serialize: only one runs fn at a time', async () => {

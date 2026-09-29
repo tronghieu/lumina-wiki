@@ -59,6 +59,9 @@ describe('compileGlob', () => {
     // exclude-style pattern with `**/` on both sides.
     assert.equal(compileGlob('**/drafts/**').test('drafts/a.md'), true);
     assert.equal(compileGlob('**/drafts/**').test('x/drafts/a.md'), true);
+    // `**/` inside a mixed segment keeps its directory boundary.
+    assert.equal(compileGlob('docs/v**/guide.md').test('docs/vguide.md'), false);
+    assert.equal(compileGlob('docs/v**/guide.md').test('docs/v2/guide.md'), true);
   });
 
   // Classic matchGlob requires at least one directory level for a `**/`

@@ -185,8 +185,13 @@ export async function withLock(lockPath, fn, options = {}) {
   }
 
   const heartbeatMs = Math.max(1, Math.floor(staleMs / 3));
+  // Refresh only while the lock is still ours: once reclaimed, touching it
+  // would keep the new owner's lock fresh even after that owner dies.
+  // ponytail: read-then-utimes is not atomic, same ceiling as the reclaim above.
   const heartbeat = setInterval(() => {
-    utimes(lockPath, new Date(), new Date()).catch(() => {});
+    readFile(lockPath, 'utf8')
+      .then((current) => current === ownContent && utimes(lockPath, new Date(), new Date()))
+      .catch(() => {});
   }, heartbeatMs);
   heartbeat.unref?.();
 
