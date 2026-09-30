@@ -86,6 +86,51 @@ node _lumina/project/project.mjs status
 
 新加入的文档一开始是 `never-ingested`。默认运行会跳过它——按名字指定该文档，或说 "ingest all"，才会把它包含进来。报告中始终会说明还剩多少 `never-ingested` 的文档。
 
+## 团队协作
+
+`_lumina/facts/` 中的事实会被提交，每份文档对应一个文件。
+所以它们会和文档一起，随分支和拉取请求（pull request）流转。
+
+### 拉取队友的改动
+
+不需要任何命令。
+每次读取，都会从文档和已提交的事实重新建立图。
+只有图视图（`_lumina/graph/view.html`，已加入 gitignore）会过时：运行 `lumi-project-view` 即可。
+
+### 分支和拉取请求
+
+- 修改了文档的分支要运行 `lumi-project-ingest`，并在同一个拉取请求中提交 `_lumina/facts/` 下的文件。
+- 两个分支修改了同一份文档：在文档中解决冲突。不要手动合并它的事实文件——任选一方保留，然后对该文档运行 `lumi-project-ingest`；它会显示为 `changed`。
+- 修改 `_lumina/config/project.yaml`（类型、关系、概念）的拉取请求，会让所有在旧配置下处理过的文档变成 `stale`。请单独并优先合并它；其他未合并的分支再 rebase 并重新处理文档。
+- 有些问题只会在合并之后出现：一个分支删除或重命名了另一个分支的事实所引用的文档，或者两个分支声明了同一个 ID。请在目标分支上也运行下面的检查；如果它报告了文档，由一个人在该分支上运行 `lumi-project-ingest` 并提交事实。
+
+### 在 CI 中检查
+
+当文档已修改却没有处理、已提交的事实不再成立，或 lint 发现错误时，检查会失败。
+
+```yaml
+name: lumina
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  docs-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node _lumina/project/project.mjs status --fail-on changed,stale
+      - run: node _lumina/project/project.mjs lint
+```
+
+在 `pull_request` 上，GitHub 检出的是合并结果，所以分支之间的冲突在合并前就会暴露。
+把 `main` 换成你的目标分支（例如 `develop`）。
+在 `--fail-on` 中加入 `never-ingested`，可以要求每份新文档都必须被处理。
+其他 CI 系统运行同样的两条命令即可；引擎需要 Node.js 24 或更高版本。
+
 ## 常见问题处理
 
 ### 孤立的事实文件
@@ -154,3 +199,5 @@ npx lumina-wiki uninstall
 - `changed` — 文档在其事实被提交之后又发生了变化。
 - `stale` — 已提交的事实站不住脚了：引用的句子消失了、某处引用无法解析、该文档处理之后配置或本体发生了变化，或者事实文件本身已损坏。
 - `never-ingested` — 这份文档还没有提交过任何事实。
+
+`node _lumina/project/project.mjs status --fail-on <states>` 在任何文档处于所列状态（以逗号分隔）之一时以退出码 1 退出，并输出相同的报告。

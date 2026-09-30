@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-09-30
+
+### Added
+
+- Project mode: `project.mjs status --fail-on changed,stale,never-ingested`
+  exits 1 when any doc is in one of the listed states, so CI can catch docs
+  edited without an ingest. The report on stdout is unchanged.
+- Project mode docs: a team workflow for branches and pull requests (commit
+  facts with doc edits, never hand-merge a fact file, merge `project.yaml`
+  changes first) and a CI example, in the user guide and in the installed
+  `_lumina/project/PROJECT.md`. See
+  [docs/user-guide/project-mode.en.md](docs/user-guide/project-mode.en.md).
+
 ## [1.15.0] - 2026-09-29
 
 ### Added
@@ -1305,7 +1318,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.1...HEAD
+[1.15.1]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.0...v1.15.1
+[1.15.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.2...v1.14.0
 [1.13.2]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.0...v1.13.1

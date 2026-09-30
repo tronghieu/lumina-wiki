@@ -250,9 +250,24 @@ async function loadGraphWithStatus(root, config, exists = existsUnderRoot(root))
   };
 }
 
-async function runStatus(root, config) {
+const STATUS_FAIL_STATES = new Set(['changed', 'stale', 'never-ingested']);
+
+/** @throws {Error} on an unknown flag, an extra positional, or a `--fail-on` state outside changed/stale/never-ingested. */
+function parseStatusArgs(rest) {
+  const { values } = parseArgs({ args: rest, options: { 'fail-on': { type: 'string' } }, allowPositionals: false });
+  if (values['fail-on'] === undefined) return new Set();
+  const states = values['fail-on'].split(',');
+  const bad = states.find((s) => !STATUS_FAIL_STATES.has(s));
+  if (bad !== undefined) {
+    throw new Error(`--fail-on states must be changed, stale or never-ingested, got ${JSON.stringify(bad)}`);
+  }
+  return new Set(states);
+}
+
+async function runStatus(root, config, failOn) {
   const { statusDocs, summary } = await loadGraphWithStatus(root, config);
   console.log(JSON.stringify({ docs: statusDocs, summary }));
+  process.exitCode = statusDocs.some((d) => failOn.has(d.state)) ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -830,7 +845,7 @@ const COMMANDS = {
   scope: { run: runScope },
   'config-check': { run: runConfigCheck },
   build: { run: runBuild },
-  status: { run: runStatus },
+  status: { parse: parseStatusArgs, run: runStatus },
   'facts-write': { run: runFactsWrite },
   'verify-evidence': { run: runVerifyEvidence },
   lint: { parse: parseLintArgs, run: runLint },

@@ -25,9 +25,10 @@ Installed by lumina-wiki {{package_version}}.
   timeout, a newer `schemaVersion` than this engine knows, or (`facts-prune`
   only) one or more files it could not delete (listed in `failed`). Every
   nonzero exit other than that last `facts-prune` case, and except `lint`
-  exit 1, prints `{error, code}` to stderr, with nothing usable on stdout.
-  `lint` exit 1 means findings at or above `--fail-on` — not a run
-  failure — and its full findings report is still printed on stdout.
+  exit 1 and `status --fail-on` exit 1, prints `{error, code}` to stderr,
+  with nothing usable on stdout. `lint` exit 1 means findings at or above
+  `--fail-on`; `status --fail-on` exit 1 means docs in a listed state —
+  neither is a run failure, and the full JSON is still printed on stdout.
 - **Reply preferences.** If `_lumina/config/user.config.yaml` exists, every
   `lumi-project-*` skill follows its `response` block in everything it says
   to the user: `language` (absent: the language the user writes in) and
@@ -48,6 +49,31 @@ Installed by lumina-wiki {{package_version}}.
   demand. Also gitignored: `_lumina/config/user.config.yaml`, one person's
   reply preferences.
 
+## Team workflow
+
+Remind users of these when they work in a shared repo.
+
+- **Pulling teammates' changes needs no command.** Every read rebuilds the
+  graph from docs + committed facts. Only the gitignored
+  `_lumina/graph/view.html` goes outdated; rerun `view`.
+- **A branch that edits in-scope docs commits their `_lumina/facts/`
+  files in the same PR.** Run `lumi-project-ingest` before opening the PR.
+- **Two branches edited the same doc:** resolve the doc. Never hand-merge
+  its fact file JSON — keep either side, then re-ingest that doc (it
+  reports `changed`).
+- **A PR that changes `_lumina/config/project.yaml`** (types, relations,
+  concepts) makes every doc ingested under the old config `stale`. Merge it
+  alone and first; other open branches rebase and re-ingest.
+- **Cross-doc problems appear only after merge:** a doc one branch deletes
+  or renames that another branch's facts cite; two branches claiming the
+  same ID. Run the CI check on the merge result and on the target branch;
+  if it reports docs, one person runs `lumi-project-ingest` there and
+  commits the facts.
+- **CI check (any CI):** `node _lumina/project/project.mjs status --fail-on
+  changed,stale`, then `node _lumina/project/project.mjs lint`. Add
+  `never-ingested` to require every new doc be ingested. Engine needs
+  Node >= 24.
+
 ## Engine commands
 
 Run each of these from anywhere inside the repo — `project.mjs` finds the
@@ -58,7 +84,7 @@ if none is found). Every subcommand prints one JSON object to stdout.
 node _lumina/project/project.mjs scope
 node _lumina/project/project.mjs config-check
 node _lumina/project/project.mjs build
-node _lumina/project/project.mjs status
+node _lumina/project/project.mjs status [--fail-on changed|stale|never-ingested,...]
 node _lumina/project/project.mjs facts-write <<'JSON'
 { "source": "...", "sourceHash": "...", "facts": [] }
 JSON
@@ -76,6 +102,8 @@ node _lumina/project/project.mjs facts-prune [--dry-run] [<fact file>...]
 - `config-check` — validate `project.yaml` alone.
 - `build` — parse the in-scope docs and build the graph; never cached.
 - `status` — freshness per doc: `fresh` / `changed` / `stale` / `never-ingested`, plus its `metaType` and project `type` (omitted when untyped).
+  `--fail-on <state>[,<state>...]` (`changed`, `stale`, `never-ingested`)
+  exits 1 when any doc is in a listed state; stdout JSON is unchanged.
 - `facts-write` — takes JSON on stdin, `{source, sourceHash, facts: []}`
   (never a TTY — it exits 1 if stdin isn't piped); replaces that one doc's
   entire fact set, canonicalizes references, and re-checks every evidence
