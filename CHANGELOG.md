@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-09-30
+
+### Fixed
+
+- Scheduled discovery: feed items without an arXiv id each get their own file
+  in `raw/discovered/<date>/<feed-id>/` instead of all overwriting
+  `rss-unknown.json` ([#70](https://github.com/tronghieu/lumina-wiki/issues/70)).
+  Items lost before this fix are marked as seen. To fetch them again, delete
+  `_lumina/_state/feeds/<feed-id>.json` and that feed's entry in
+  `_lumina/_state/discovery-runner.json`, then rerun discovery.
+
 ## [1.15.1] - 2026-09-30
 
 ### Added
@@ -1318,7 +1329,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.1...HEAD
+[Unreleased]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.2...HEAD
+[1.15.2]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/tronghieu/lumina-wiki/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/tronghieu/lumina-wiki/compare/v1.13.2...v1.14.0

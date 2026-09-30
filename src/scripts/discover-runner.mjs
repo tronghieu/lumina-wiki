@@ -297,8 +297,9 @@ function normalizeCandidate({ item, source, candidate, nowIso }) {
 }
 
 function extractSourceId(source, candidate) {
-  if (source === 's2') return String(candidate.paperId ?? candidate.id ?? candidate.externalIds?.ArXiv ?? hashObject(candidate)).trim();
-  return String(candidate.id ?? candidate.arxivId ?? candidate.externalIds?.ArXiv ?? hashObject(candidate)).trim();
+  // `||`, not `??`: feed items carry arxivId: '' and must fall through to the hash.
+  if (source === 's2') return String(candidate.paperId || candidate.id || candidate.externalIds?.ArXiv || hashObject(candidate)).trim();
+  return String(candidate.id || candidate.arxivId || candidate.externalIds?.ArXiv || hashObject(candidate)).trim();
 }
 
 function buildDedupKey({ source, sourceId, candidate, title, url, year }) {
