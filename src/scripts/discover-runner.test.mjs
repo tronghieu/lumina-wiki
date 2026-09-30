@@ -238,3 +238,29 @@ test('source filter handles optional missing S2 key without writes', async () =>
   assert.equal(summary.skipped.some(item => item.source === 's2'), true);
   assert.equal((await listJsonFiles(join(ws, 'raw', 'discovered'))).length, 0);
 });
+
+test('feed items without an arXiv id each get their own file (#70)', async () => {
+  const ws = await makeWorkspace();
+  await writeFile(join(ws, '_lumina', 'tools', 'fetch_rss.py'), [
+    'import json',
+    'items = [{"title": f"Post {i}", "link": f"https://example.com/post-{i}", "summary": "s", "published": "2026-05-01T00:00:00Z", "external_ids": {}} for i in range(3)]',
+    'print(json.dumps({"items": items}))',
+    '',
+  ].join('\n'), 'utf8');
+  await writeWatchlist(ws, [
+    'version: 1',
+    'items:',
+    '  - id: blog',
+    '    type: feed',
+    '    enabled: true',
+    '    url: "https://example.com/rss.xml"',
+    '    max_new: 10',
+    '',
+  ].join('\n'));
+
+  const summary = await runDiscover({ projectRoot: ws, json: true, now: new Date('2026-05-05T03:00:00.000Z') });
+
+  assert.equal(summary.new, 3);
+  assert.equal(new Set(summary.written).size, 3);
+  assert.equal((await listJsonFiles(join(ws, 'raw', 'discovered'))).length, 3);
+});
