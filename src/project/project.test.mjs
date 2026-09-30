@@ -305,6 +305,33 @@ describe('build', () => {
 });
 
 describe('status', () => {
+  test('--fail-on: exit 1 when a doc is in a listed state, JSON unchanged', () => {
+    const { status, stdout, stderr } = run(PARSE_PILOT, ['status', '--fail-on', 'stale,never-ingested']);
+    assert.equal(status, 1);
+    assert.equal(stderr, '');
+    const result = JSON.parse(stdout);
+    assert.ok(Array.isArray(result.docs));
+    assert.ok(result.summary.neverIngested > 0);
+  });
+
+  test('--fail-on: exit 0 when no doc is in a listed state', () => {
+    const { status, stdout } = run(PARSE_PILOT, ['status', '--fail-on', 'changed,stale']);
+    assert.equal(status, 0);
+    assert.ok(JSON.parse(stdout).docs.length > 0);
+  });
+
+  test('--fail-on: an invalid or empty state is a bad argument (exit 1)', () => {
+    for (const value of ['fresh', 'bogus', '', 'stale,']) {
+      const { status, stderr } = run(PARSE_PILOT, ['status', '--fail-on', value]);
+      assert.equal(status, 1, value);
+      assert.notEqual(stderr, '', value);
+    }
+  });
+
+  test('status still rejects extra positionals', () => {
+    assert.equal(run(PARSE_PILOT, ['status', 'extra']).status, 1);
+  });
+
   test('every doc is never-ingested when there is no _lumina/facts', () => {
     const { status, stdout } = run(PARSE_PILOT, ['status']);
     assert.equal(status, 0);

@@ -86,6 +86,51 @@ There's no hook, and nothing runs on save. Edit an already-ingested doc, and it 
 
 A newly added doc starts `never-ingested`. The default run skips it — name the doc, or say "ingest all", to include it. The report always states how many `never-ingested` docs remain.
 
+## Work as a team
+
+Facts in `_lumina/facts/` are committed, one file per doc.
+They travel with the docs through branches and pull requests.
+
+### Pull a teammate's changes
+
+No command needed.
+Every read rebuilds the graph from the docs and the committed facts.
+Only the graph view (`_lumina/graph/view.html`, gitignored) is outdated: run `lumi-project-view`.
+
+### Branches and pull requests
+
+- A branch that edits docs runs `lumi-project-ingest` and commits the `_lumina/facts/` files in the same pull request.
+- Two branches edited the same doc: resolve the conflict in the doc. Don't hand-merge its fact file — keep either side, then run `lumi-project-ingest` on that doc; it shows `changed`.
+- A pull request that changes `_lumina/config/project.yaml` (types, relations, concepts) turns every doc ingested under the old config `stale`. Merge it alone and first; other open branches rebase and re-ingest.
+- Some problems only appear after merge: one branch deletes or renames a doc another branch's facts cite, or two branches claim the same ID. Run the check below on the target branch too; if it reports docs, one person runs `lumi-project-ingest` there and commits the facts.
+
+### Check it in CI
+
+The check fails when a doc changed without being ingested, when committed facts no longer hold, or when lint finds an error.
+
+```yaml
+name: lumina
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  docs-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node _lumina/project/project.mjs status --fail-on changed,stale
+      - run: node _lumina/project/project.mjs lint
+```
+
+On `pull_request`, GitHub checks out the merge result, so conflicts between branches show up before merge.
+Replace `main` with your target branch (for example `develop`).
+Add `never-ingested` to `--fail-on` to require every new doc be ingested.
+Other CI systems run the same two commands; the engine needs Node.js 24 or newer.
+
 ## Fix common problems
 
 ### An orphaned fact file
@@ -154,3 +199,5 @@ How you invoke a skill depends on your AI app (for example a slash command in Cl
 - `changed` — the doc changed since its facts were committed.
 - `stale` — the committed facts no longer hold: a quoted sentence is gone, a reference no longer resolves, the config or ontology changed since that doc was ingested, or its fact file is malformed.
 - `never-ingested` — no facts have been committed for it yet.
+
+`node _lumina/project/project.mjs status --fail-on <states>` exits 1 when any doc is in one of the listed states (comma-separated), and prints the same report.

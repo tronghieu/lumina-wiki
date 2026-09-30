@@ -86,6 +86,49 @@ Không có hook, và không có gì chạy khi lưu tệp. Sửa một tài li�
 
 Một tài liệu mới thêm vào bắt đầu ở `never-ingested`. Lần chạy mặc định bỏ qua nó — nêu tên tài liệu, hoặc nói "ingest all", để đưa nó vào. Báo cáo luôn nêu rõ còn bao nhiêu tài liệu `never-ingested`.
 
+## Làm việc nhóm
+
+Các fact trong `_lumina/facts/` được commit, mỗi tài liệu một tệp, nên chúng đi cùng tài liệu qua các nhánh và pull request.
+
+### Pull thay đổi của đồng đội
+
+Bạn không cần chạy lệnh nào: mỗi lần đọc, đồ thị đều được dựng lại từ tài liệu và các fact đã commit.
+Chỉ khung xem đồ thị (`_lumina/graph/view.html`, bị gitignore) là cũ đi: chạy `lumi-project-view` để dựng lại.
+
+### Nhánh và pull request
+
+- Một nhánh sửa tài liệu thì chạy `lumi-project-ingest` và commit các tệp `_lumina/facts/` trong cùng pull request.
+- Hai nhánh cùng sửa một tài liệu: giải quyết xung đột ở tài liệu. Đừng merge tay tệp fact của nó — giữ một trong hai phía, rồi chạy `lumi-project-ingest` trên tài liệu đó; nó sẽ hiện `changed`.
+- Một pull request đổi `_lumina/config/project.yaml` (loại, quan hệ, khái niệm) khiến mọi tài liệu đã ingest theo cấu hình cũ chuyển sang `stale`. Hãy merge nó riêng và trước tiên; các nhánh khác đang mở rebase rồi ingest lại.
+- Một số vấn đề chỉ lộ ra sau khi merge: một nhánh xóa hoặc đổi tên tài liệu mà fact của nhánh khác đang trích dẫn, hoặc hai nhánh cùng nhận một ID. Hãy chạy phép kiểm tra bên dưới cả trên nhánh đích; nếu nó báo có tài liệu, một người chạy `lumi-project-ingest` ở đó và commit các fact.
+
+### Kiểm tra trong CI
+
+Phép kiểm tra thất bại khi có tài liệu đã thay đổi mà chưa được ingest, khi các fact đã commit không còn đúng, hoặc khi lint tìm thấy lỗi.
+
+```yaml
+name: lumina
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  docs-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node _lumina/project/project.mjs status --fail-on changed,stale
+      - run: node _lumina/project/project.mjs lint
+```
+
+Với `pull_request`, GitHub checkout kết quả merge, nên xung đột giữa các nhánh lộ ra trước khi merge.
+Thay `main` bằng nhánh đích của bạn (ví dụ `develop`).
+Thêm `never-ingested` vào `--fail-on` để bắt buộc mọi tài liệu mới đều phải được ingest.
+Các hệ thống CI khác chạy đúng hai lệnh này; engine cần Node.js 24 trở lên.
+
 ## Khắc phục các lỗi thường gặp
 
 ### Một tệp fact mồ côi
@@ -154,3 +197,5 @@ Cách gọi một skill tùy vào ứng dụng AI bạn dùng (ví dụ một sl
 - `changed` — tài liệu đã thay đổi kể từ khi fact của nó được commit.
 - `stale` — các fact đã commit không còn đúng nữa: một câu trích dẫn đã biến mất, một tham chiếu không còn giải quyết được, cấu hình hoặc ontology đã thay đổi kể từ khi tài liệu đó được ingest, hoặc tệp fact của nó bị lỗi định dạng.
 - `never-ingested` — chưa có fact nào được commit cho tài liệu này.
+
+`node _lumina/project/project.mjs status --fail-on <states>` thoát với mã 1 khi có tài liệu ở một trong các trạng thái được liệt kê (phân tách bằng dấu phẩy), và in ra cùng báo cáo.
