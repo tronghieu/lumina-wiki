@@ -1,10 +1,10 @@
 /* Lumina project graph view (CAP-12, graph-view.md). Dark only, styled
    after the AnuPpuccin Obsidian theme with the Catppuccin Mocha palette (MIT).
-   viewer.js reads --bg, --muted, --link, --accent and the severity tokens. */
+   viewer.js reads --bg, --muted and the severity tokens. */
 :root {
   color-scheme: dark;
   accent-color: #cba6f7;          /* mauve */
-  --bg: #1e1e2e;                  /* base */
+  --bg: #11111b;                  /* crust */
   --fg: #cdd6f4;                  /* text */
   --muted: #a6adc8;               /* subtext0 */
   --panel-bg: #181825ee;          /* mantle */
@@ -15,7 +15,6 @@
   --error: #f38ba8;               /* red */
   --warning: #f9e2af;             /* yellow */
   --info: #89dceb;                /* sky */
-  --link: #585b70;                /* surface2 */
 }
 
 * { box-sizing: border-box; }
@@ -189,3 +188,20 @@ button:hover { border-color: var(--stale); }
   background: var(--input-bg);
   color: var(--fg);
 }
+
+/* Communities panel; swatches follow the active "Color by" mode. */
+#communities summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
+#communities { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+#communities > label,
+#filter-communities label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+#filter-communities { max-height: 240px; overflow: auto; }
+.community-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.community-size { color: var(--muted); font-variant-numeric: tabular-nums; }
+#app:not(.color-meta) .meta-swatch,
+#app:not(.color-meta) .legend-meta,
+#app.color-meta #filter-communities .legend-swatch { display: none; }

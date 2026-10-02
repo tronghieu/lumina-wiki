@@ -5,6 +5,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.3] - 2026-10-02
+
+### Changed
+
+- Project mode graph view: nodes are colored by community (clusters of
+  densely linked nodes, found with Louvain) and links take their source
+  node's color. A new Communities panel lists each community by its
+  most-linked node, with its size and a checkbox to show or hide it.
+  Communities settle into separate clusters. "Color by" in Settings switches
+  back to meta-type colors. Darker background.
+
 ## [1.15.2] - 2026-09-30
 
 ### Fixed
