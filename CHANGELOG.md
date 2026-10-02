@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.4] - 2026-10-02
+
+### Changed
+
+- Project mode: the `<!-- lumina:project -->` block in `CLAUDE.md` and
+  `AGENTS.md` no longer names the lumina-wiki version, so upgrading no longer
+  rewrites those files. The installed version stays in
+  `_lumina/project/install.json`. The first upgrade to this version removes
+  the version from the block once.
+
 ## [1.15.3] - 2026-10-02
 
 ### Changed

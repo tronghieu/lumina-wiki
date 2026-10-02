@@ -128,7 +128,7 @@ The two marker blocks:
 
 ```text
 <!-- lumina:project -->
-This repo uses Lumina project mode (lumina-wiki >= 1.15.0). Read `_lumina/project/PROJECT.md`.
+This repo uses Lumina project mode. Read `_lumina/project/PROJECT.md`.
 If `_lumina/config/project.yaml` is missing, run `/lumi-project-setup`.
 <!-- /lumina:project -->
 

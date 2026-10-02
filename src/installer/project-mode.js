@@ -104,12 +104,10 @@ const GITIGNORE_MARKER_CLOSE = '# <<< lumina';
 const GITIGNORE_BODY = ['_lumina/graph/', '_lumina/_state/', '_lumina/manifest.json', '_lumina/config/user.config.yaml'].join('\n');
 const SKILL_PREFIX = 'lumi-project-';
 
-function projectMarkerBody(pkgVersion) {
-  return [
-    `This repo uses Lumina project mode (lumina-wiki >= ${pkgVersion}). Read \`_lumina/project/PROJECT.md\`.`,
-    'If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup` skill.',
-  ].join('\n');
-}
+const PROJECT_MARKER_BODY = [
+  'This repo uses Lumina project mode. Read `_lumina/project/PROJECT.md`.',
+  'If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup` skill.',
+].join('\n');
 
 /**
  * Validate a caller-supplied ide-target list against PROJECT_IDE_TARGETS.
@@ -410,7 +408,7 @@ export async function installProject({
   }
   for (const [entryPath, needed] of entries) {
     if (needed) {
-      await upsertMarkerFile(entryPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE, projectMarkerBody(pkgVersion));
+      await upsertMarkerFile(entryPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE, PROJECT_MARKER_BODY);
     } else {
       await stripMarkerFile(entryPath, CLAUDE_MARKER_OPEN, CLAUDE_MARKER_CLOSE);
     }

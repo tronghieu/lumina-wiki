@@ -129,7 +129,7 @@ describe('install --mode project', () => {
       assert.equal(
         claudeMd,
         '<!-- lumina:project -->\n' +
-        `This repo uses Lumina project mode (lumina-wiki >= ${PKG.version}). Read \`_lumina/project/PROJECT.md\`.\n` +
+        'This repo uses Lumina project mode. Read `_lumina/project/PROJECT.md`.\n' +
         'If `_lumina/config/project.yaml` is missing, run the `lumi-project-setup` skill.\n' +
         '<!-- /lumina:project -->\n',
       );
