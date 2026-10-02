@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { renderView } from './view.mjs';
+import { renderView, detectCommunities } from './view.mjs';
 
 const VIEWER_JS_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'view', 'viewer.js');
 
@@ -28,6 +28,34 @@ function baseInput(overrides = {}) {
     ...overrides,
   };
 }
+
+describe('detectCommunities', () => {
+  // Two triangles joined by one bridge edge, plus one isolated node.
+  const nodes = ['a1', 'a2', 'a3', 'b1', 'b2', 'b3', 'z'].map((x) => ({ id: `concept:${x}` }));
+  const e = (from, to) => ({ from: `concept:${from}`, to: `concept:${to}` });
+  const edges = [e('a1', 'a2'), e('a2', 'a3'), e('a3', 'a1'), e('a3', 'b1'), e('b1', 'b2'), e('b2', 'b3'), e('b3', 'b1')];
+
+  test('splits two linked triangles into two communities and leaves an isolated node alone', () => {
+    const { of, list } = detectCommunities(nodes, edges);
+    assert.deepEqual(of, [0, 0, 0, 1, 1, 1, 2]);
+    assert.deepEqual(list, [
+      { name: 'a3', size: 3 },
+      { name: 'b1', size: 3 },
+      { name: 'z', size: 1 },
+    ]);
+  });
+
+  test('is deterministic and survives an edge to an unknown node', () => {
+    const withDangling = [...edges, { from: 'concept:a1', to: 'concept:missing' }];
+    assert.deepEqual(detectCommunities(nodes, withDangling), detectCommunities(nodes, edges));
+  });
+
+  test('renderView tags every node with its community index', async () => {
+    const html = await renderView(baseInput());
+    assert.ok(html.includes('"community":0'));
+    assert.ok(html.includes('"communities":[{"name":"docs/a.md","size":1}]'));
+  });
+});
 
 describe('renderView: determinism', () => {
   test('the same input renders the same byte-identical HTML twice', async () => {

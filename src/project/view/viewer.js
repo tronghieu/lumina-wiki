@@ -46,9 +46,18 @@
     Concept: '#9399b2', Actor: '#f5c2e7', Issue: '#f38ba8',
     Evidence: '#74c7ec', Document: '#b4befe', Unknown: '#6c7086',
   };
+  // Tableau 10: distinct hues for community coloring, cycled past ten.
+  var COMMUNITY_PALETTE = [
+    '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
+    '#edc948', '#b07aa1', '#ff9da7', '#9c755f', '#bab0ac',
+  ];
+  var COMMUNITIES = DATA.communities || [];
+  var colorMode = 'community';
   var NODE_REL_SIZE = 4;
   var LINK_LABEL_ZOOM_THRESHOLD = 2.5;
 
+  var nodeById = Object.create(null);
+  nodes.forEach(function (n) { nodeById[n.id] = n; });
   var degree = Object.create(null);
   var neighborsOf = Object.create(null);
   nodes.forEach(function (n) { degree[n.id] = 0; neighborsOf[n.id] = []; });
@@ -80,7 +89,11 @@
   (freshness.docs || []).forEach(function (d) { docStateByPath[d.path] = d.state; });
 
   function metaTypeOf(n) { return n.metaType || 'Unknown'; }
-  function colorFor(n) { return PALETTE[metaTypeOf(n)] || PALETTE.Unknown; }
+  function communityColor(c) { return COMMUNITY_PALETTE[c % COMMUNITY_PALETTE.length]; }
+  function colorFor(n) {
+    if (colorMode === 'community' && typeof n.community === 'number') return communityColor(n.community);
+    return PALETTE[metaTypeOf(n)] || PALETTE.Unknown;
+  }
   function nodeFile(n) { return (n.at && n.at.file) || null; }
   function nodeFolder(n) {
     var f = nodeFile(n);
@@ -110,7 +123,8 @@
   // sqrt damps hubs: degree 100 -> radius ~13px, not ~40px.
   function nodeVal(n) { return 1 + Math.sqrt(degree[n.id] || 0); }
   function nodeRadius(n) { return Math.sqrt(nodeVal(n)) * NODE_REL_SIZE; }
-  function fade(hex) { return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + '33' : hex; }
+  function withAlpha(hex, aa) { return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex; }
+  function fade(hex) { return withAlpha(hex, '33'); }
   function idOf(x) { return x && typeof x === 'object' ? x.id : x; }
   function getCss(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
@@ -174,9 +188,7 @@
   var theme = {};
   function refreshTheme() {
     theme.bg = getCss('--bg');
-    theme.link = getCss('--link');
     theme.muted = getCss('--muted');
-    theme.accent = getCss('--accent');
     theme.error = getCss('--error');
     theme.warning = getCss('--warning');
     theme.info = getCss('--info');
@@ -206,12 +218,15 @@
   function linkIsHoverActive(l) {
     return !!hoverNode && (idOf(l.source) === hoverNode.id || idOf(l.target) === hoverNode.id);
   }
+  // A link takes its source node's color, translucent so dense regions
+  // blend instead of saturating.
   function linkColorAccessor(l) {
-    if (!hoverNode) return theme.link;
-    return linkIsHoverActive(l) ? theme.accent : fade(theme.link);
+    var base = colorFor(nodeById[idOf(l.source)]);
+    if (!hoverNode) return withAlpha(base, '59');
+    return linkIsHoverActive(l) ? base : withAlpha(base, '14');
   }
   function linkWidthAccessor(l) {
-    return linkIsHoverActive(l) ? 2.2 : 1;
+    return linkIsHoverActive(l) ? 1.6 : 0.6;
   }
 
   // -------------------------------------------------------------------------
@@ -248,9 +263,15 @@
     var hops = hopsRaw === '' ? null : Math.max(0, parseInt(hopsRaw, 10) || 0);
     var localSet = hops !== null && selectedNodeId ? bfs(selectedNodeId, hops) : null;
 
+    var checkedCommunity = Object.create(null);
+    document.querySelectorAll('#filter-communities input[type=checkbox]').forEach(function (cb) {
+      checkedCommunity[cb.value] = cb.checked;
+    });
+
     var visible = new Set();
     nodes.forEach(function (n) {
       if (checked[metaTypeOf(n)] === false) return;
+      if (checkedCommunity[n.community] === false) return;
       if (statusFilter && n.status !== statusFilter) return;
       if (folderFilter && nodeFolder(n) !== folderFilter) return;
       if (hideOrphans && !degree[n.id]) return;
@@ -269,6 +290,7 @@
   // force-graph setup.
   // -------------------------------------------------------------------------
 
+  var fitted = false;
   var Graph = ForceGraph()(canvasEl)
     // force-graph's own hover/click hit-testing runs only inside its
     // per-frame render tick, and `autoPauseRedraw` (default true) stops
@@ -306,7 +328,7 @@
     .linkColor(linkColorAccessor)
     .linkWidth(linkWidthAccessor)
     .linkVisibility(function (l) { return visibleSet.has(idOf(l.source)) && visibleSet.has(idOf(l.target)); })
-    .linkDirectionalArrowLength(5)
+    .linkDirectionalArrowLength(3)
     .linkDirectionalArrowRelPos(1)
     .linkLabel(function (l) { return escapeHtml(l.relation); })
     .linkCanvasObjectMode(function () { return 'after'; })
@@ -351,6 +373,13 @@
       refreshFilters();
       showDetail(node);
     })
+    // Frame the whole graph once, when the first layout settles; later
+    // reheats (sliders, filters) keep the viewer's own pan and zoom.
+    .onEngineStop(function () {
+      if (fitted) return;
+      fitted = true;
+      Graph.zoomToFit(400, 40);
+    })
     .onBackgroundClick(function () {
       document.getElementById('detail').hidden = true;
     });
@@ -374,6 +403,10 @@
   // Force sliders (center, repel/charge, link strength, link distance).
   // -------------------------------------------------------------------------
 
+  function crossesCommunity(l) {
+    return nodeById[idOf(l.source)].community !== nodeById[idOf(l.target)].community;
+  }
+
   function applyForces() {
     var center = parseFloat(document.getElementById('force-center').value);
     var charge = parseFloat(document.getElementById('force-charge').value);
@@ -386,14 +419,18 @@
     var linkForce = Graph.d3Force('link');
     if (linkForce) {
       // Slider scales d3's own default (1 / smaller endpoint degree), so
-      // hubs don't collapse their neighborhoods into one clump.
+      // hubs don't collapse their neighborhoods into one clump. A link
+      // between two communities pulls weaker and rests longer, so each
+      // community settles into its own cluster.
       if (linkForce.strength) {
         linkForce.strength(function (l) {
           var d = Math.min(degree[idOf(l.source)] || 1, degree[idOf(l.target)] || 1);
-          return linkStrength / Math.max(1, d);
+          return (linkStrength / Math.max(1, d)) * (crossesCommunity(l) ? 0.3 : 1);
         });
       }
-      if (linkForce.distance) linkForce.distance(linkDistance);
+      if (linkForce.distance) {
+        linkForce.distance(function (l) { return crossesCommunity(l) ? linkDistance * 2 : linkDistance; });
+      }
     }
     Graph.d3ReheatSimulation();
   }
@@ -418,7 +455,7 @@
       cb.value = mt;
       cb.addEventListener('change', refreshFilters);
       var sw = document.createElement('span');
-      sw.className = 'legend-swatch';
+      sw.className = 'legend-swatch meta-swatch';
       sw.style.background = PALETTE[mt] || PALETTE.Unknown;
       label.appendChild(cb);
       label.appendChild(sw);
@@ -444,7 +481,7 @@
     META_TYPES.concat(['Unknown']).forEach(function (mt) {
       if (!present.has(mt)) return;
       var row = document.createElement('div');
-      row.className = 'legend-row';
+      row.className = 'legend-row legend-meta';
       var sw = document.createElement('span');
       sw.className = 'legend-swatch';
       sw.style.background = PALETTE[mt] || PALETTE.Unknown;
@@ -454,7 +491,7 @@
     });
 
     var divider = document.createElement('div');
-    divider.className = 'legend-divider';
+    divider.className = 'legend-divider legend-meta';
     legend.appendChild(divider);
     [
       ['Error finding', theme.error],
@@ -510,6 +547,58 @@
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Communities panel: one checkbox per community (swatch, name, size), plus
+  // "Select all".
+  // -------------------------------------------------------------------------
+
+  function buildCommunityFilters() {
+    var container = document.getElementById('filter-communities');
+    var all = document.getElementById('communities-all');
+    var boxes = [];
+    function syncAll() {
+      var n = boxes.filter(function (cb) { return cb.checked; }).length;
+      all.checked = n === boxes.length;
+      all.indeterminate = n > 0 && n < boxes.length;
+    }
+    COMMUNITIES.forEach(function (c, i) {
+      var label = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = true;
+      cb.value = String(i);
+      cb.addEventListener('change', function () { syncAll(); refreshFilters(); });
+      boxes.push(cb);
+      var sw = document.createElement('span');
+      sw.className = 'legend-swatch';
+      sw.style.background = communityColor(i);
+      var name = document.createElement('span');
+      name.className = 'community-name';
+      name.textContent = c.name;
+      name.title = c.name;
+      var size = document.createElement('span');
+      size.className = 'community-size';
+      size.textContent = String(c.size);
+      label.appendChild(cb);
+      label.appendChild(sw);
+      label.appendChild(name);
+      label.appendChild(size);
+      container.appendChild(label);
+    });
+    all.addEventListener('change', function () {
+      boxes.forEach(function (cb) { cb.checked = all.checked; });
+      all.indeterminate = false;
+      refreshFilters();
+    });
+  }
+
+  document.getElementById('color-mode').addEventListener('change', function (e) {
+    colorMode = e.target.value;
+    appEl.classList.toggle('color-meta', colorMode === 'metaType');
+    redraw();
+  });
+
+  buildCommunityFilters();
   buildMetaTypeFilters();
   buildSelectOptions('filter-status', Array.from(new Set(nodes.map(function (n) { return n.status; }).filter(Boolean))).sort());
   buildSelectOptions('filter-folder', Array.from(new Set(nodes.map(nodeFolder))).sort());
