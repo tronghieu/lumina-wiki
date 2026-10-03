@@ -955,6 +955,13 @@ describe('loadFacts', () => {
 // computeDocStatus
 // ---------------------------------------------------------------------------
 
+// A fact `buildGraph` would keep, so only the check under test decides the state.
+function validFact(quote) {
+  return {
+    kind: 'edge', subject: 'doc:docs/a.md', relation: 'cites', object: 'doc:docs/b.md', provenance: 'extracted', evidence: { line: 1, quote },
+  };
+}
+
 describe('computeDocStatus', () => {
   test('never-ingested when there is no fact file', () => {
     assert.equal(
@@ -967,7 +974,7 @@ describe('computeDocStatus', () => {
     const envelope = {
       sourceHash: 'h1',
       ontologyVersion: 'v1',
-      facts: [{ evidence: { line: 1, quote: 'quoted text' } }],
+      facts: [validFact('quoted text')],
     };
     assert.equal(
       computeDocStatus({ hash: 'h1', envelope, ontologyVersion: 'v1', sourceText: 'quoted text here', refResolves: () => true }),
@@ -976,7 +983,7 @@ describe('computeDocStatus', () => {
   });
 
   test('changed when the hash differs but every fact still checks out', () => {
-    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [{ evidence: { line: 1, quote: 'quoted text' } }] };
+    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [validFact('quoted text')] };
     assert.equal(
       computeDocStatus({ hash: 'h2', envelope, ontologyVersion: 'v1', sourceText: 'quoted text here', refResolves: () => true }),
       'changed',
@@ -984,7 +991,7 @@ describe('computeDocStatus', () => {
   });
 
   test('stale when a fact\'s quote is gone', () => {
-    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [{ evidence: { line: 1, quote: 'gone now' } }] };
+    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [validFact('gone now')] };
     assert.equal(
       computeDocStatus({ hash: 'h2', envelope, ontologyVersion: 'v1', sourceText: 'totally different text', refResolves: () => true }),
       'stale',
@@ -992,9 +999,17 @@ describe('computeDocStatus', () => {
   });
 
   test('stale when a fact\'s ref no longer resolves', () => {
-    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [{ evidence: { line: 1, quote: 'quoted text' } }] };
+    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [validFact('quoted text')] };
     assert.equal(
       computeDocStatus({ hash: 'h1', envelope, ontologyVersion: 'v1', sourceText: 'quoted text here', refResolves: () => false }),
+      'stale',
+    );
+  });
+
+  test('stale when a fact is malformed, even with a matching hash and quote', () => {
+    const envelope = { sourceHash: 'h1', ontologyVersion: 'v1', facts: [{ ...validFact('quoted text'), kind: 'bogus' }] };
+    assert.equal(
+      computeDocStatus({ hash: 'h1', envelope, ontologyVersion: 'v1', sourceText: 'quoted text here', refResolves: () => true }),
       'stale',
     );
   });
