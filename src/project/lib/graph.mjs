@@ -887,6 +887,8 @@ export function computeDocStatus({ path, hash, envelope, ontologyVersion, schema
   if (envelope.ontologyVersion !== ontologyVersion) return 'stale';
   const matches = makeQuoteMatcher(sourceText);
   for (const fact of envelope.facts) {
+    // `buildGraph` silently drops a fact neither predicate accepts, so it must not count as fresh.
+    if (!isValidEdgeFact(fact) && !isValidAttrFact(fact)) return 'stale';
     const quote = fact?.evidence?.quote;
     if (typeof quote !== 'string' || !matches(quote)) return 'stale';
     if (!refResolves(fact)) return 'stale';

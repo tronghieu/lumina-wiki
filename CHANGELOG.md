@@ -5,6 +5,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.15.5] - 2026-10-03
+
+### Fixed
+
+- Project mode: `status` now reports a doc `stale` when its fact file holds a
+  malformed fact (unknown `kind`, missing field). Before, the doc read as
+  `fresh` while the graph silently dropped that fact, so a hand edit or bad
+  merge could remove a relation from every query without failing the CI check.
+
 ## [1.15.4] - 2026-10-02
 
 ### Changed
