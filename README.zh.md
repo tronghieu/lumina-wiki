@@ -145,6 +145,7 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 | `/lumi-help` | 获得一条适合当前情况的下一步建议。 |
 | `/lumi-ingest` | 把一份资料加入 wiki。 |
 | `/lumi-ask` | 根据 wiki 中已有的知识提问。 |
+| `/lumi-view` | 在浏览器中查看 wiki：页面关系图、页面列表和阅读窗格。 |
 | `/lumi-edit` | 修改或更新一个 wiki 页面。 |
 | `/lumi-verify` | 检查笔记是否与引用的来源一致。 |
 | `/lumi-check` | 检查失效链接和其他问题。 |
@@ -160,7 +161,7 @@ $lumi-ingest raw/sources/my-first-paper.pdf
 - [使用 QMD 进行本机搜索](docs/user-guide/advanced-qmd.zh.md) — 高级
 - [连接 OpenClaw 或 Hermes](docs/user-guide/openclaw-hermes-integration.zh.md) — 高级
 
-你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹，以图形界面浏览 Markdown 笔记。
+要浏览 wiki，请使用 `/lumi-view`。它会启动内置查看器，并给出一个可在浏览器中打开的地址，其中有页面之间的关系图。你也可以用 [Obsidian](https://obsidian.md) 打开项目根文件夹来浏览 Markdown 笔记。
 
 ## 项目模式
 

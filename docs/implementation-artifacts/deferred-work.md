@@ -62,3 +62,31 @@
 
 - `docs/specs/spec-project-docs-overlay/stories/9-remaining-project-skills.md:85` still lists `status` as `{docs[{path, hash, state}], summary}`. It is a historical story in another spec, so it was not edited in this change.
 - The end-to-end success checks for CAP-2, CAP-4, CAP-5 and CAP-6 are unproven. Still to run: the Seli 234-doc run, the forced lock-timeout cluster, a sweep with a missing doc, the one-approval handoff, and a wall-clock comparison. They need a manual pilot with real subagents.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/2-read-model-and-contract-fixture.md`
+  summary: `runLint` throws on a JSON `null` line in `wiki/graph/edges.jsonl` or `citations.jsonl`, and on a non-string `to` of a reversible edge type.
+  evidence: Reproduced during the wiki view read-model review; `parseEdgeLines` in `src/scripts/lint.mjs` pushes any parsed JSON value, and L06 and L17 then read properties of `null`. The viewer's `/api/lint` returns 500 on such a file while `/api/wiki` skips the row. Fix in the engine: keep only rows that are non-null objects.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
+  summary: No test proves that the viewer finds its running copy when the workspace is entered through a non-real path on Windows (a short name or a junction).
+  evidence: Replacing `fs.realpathSync.native(root)` with `root` in `src/viewer/view.mjs` passes every test on macOS, because `process.cwd()` is already physical there. A Windows-only case that starts the viewer from the unresolved `os.tmpdir()` spelling would settle it.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/5-reader-pane.md`
+  summary: The engine's wikilink pattern is quadratic on text with many `[[` and no closing `]]`; `lint.mjs` still runs it unguarded.
+  evidence: `WIKILINK_RE` scans to the end of the text from every `[[` before failing. The viewer guards its own two uses (the server's `readPage` and the client renderer). Lint applies the pattern per line and per frontmatter value, which limits the cost, but one very long line would still stall `lumi-check`. A constant-time pre-filter like the one in `src/viewer/lib/data.mjs` would close it.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
+  summary: One run of the whole viewer suite in about 45 failed once in `view.test.mjs`; it did not reproduce.
+  evidence: Seen by a reviewer during a full `npm run test:viewer` run with all test files in parallel; the subtest was not captured. Forty runs of `view.test.mjs` alone passed, and three CI runs on three operating systems passed. If it returns, look first at the 10 s deadline for the ready line under CPU contention.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/8-installer-and-skill.md`
+  summary: An upgrade run without `--profile` installs the full profile even when the workspace was installed as `minimal`.
+  evidence: `src/installer/commands.js` takes `profile` from the command options only (`opts.profile === 'minimal' ? 'minimal' : 'full'`) and never reads the existing manifest's `profile`. A hub-managed wiki that is re-installed to gain the viewer would gain per-project skill folders and stubs. Keeping the manifest's profile when the option is absent would fix it; that changes upgrade behavior and needs its own change.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/6-filters-local-graph-search.md`
+  summary: Filter suggestions follow the last term of the text, not the term under the caret.
+  evidence: `suggest` in `src/viewer/ui/lib/query.mjs` reads the text after the last space. Editing a term in the middle of a filter offers suggestions for the final term instead. It would need the caret position passed in from `GraphControls.jsx` and the replacement spliced at that position.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/7-communities-and-lint-markers.md`
+  summary: When the graph has nothing to draw, the graph panel is not rendered, so the "checks could not be loaded" notice has nowhere to show.
+  evidence: `src/viewer/ui/panes/GraphControls.jsx` returns nothing when `total === 0` (a fresh wiki holding only `index` and `log`). The tree still marks pages when the checks load. Only the failure notice and the three counts are lost. Rendering the Problems row alone in that case would close it.

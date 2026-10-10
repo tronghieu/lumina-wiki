@@ -7,6 +7,7 @@ lumi-check,CH,core,anytime,,,false,,,"lint — broken links, orphans, missing re
 lumi-reset,RS,core,anytime,,,false,,,scoped destructive cleanup (never touches raw/)
 lumi-verify,VR,core,anytime,,,false,,,flag wiki claims that diverge from cited sources (never auto-edits)
 lumi-migrate-legacy,ML,core,anytime,,,false,[--backfill-ids],,LLM-driven backfill of provenance/confidence and other legacy-schema gaps after an upgrade
+lumi-view,VW,core,anytime,,,false,,,"see the wiki in your browser — a map of the pages, a page list, and a reader"
 lumi-help,HP,core,anytime,,,false,[skills | explain <topic>],,"orient yourself; recommend the next action; answer questions about Lumina itself"
 {{#if pack_research}}
 lumi-research-prefill,RP,research,1-bootstrap,lumi-init,lumi-ingest,false,,wiki/foundations/**,seed foundations/ to prevent concept duplication

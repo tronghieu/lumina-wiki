@@ -103,6 +103,11 @@ heading is more than 30 days before today, append:
 
 > Hint: No wiki activity in N days — `/lumi-check` runs a graph-health audit when you're ready.
 
+Viewer hint (additive, never replaces primary): if the catalog has a
+`lumi-view` row and `list-entities` returned at least one page, append:
+
+> Hint: `/lumi-view` opens the wiki in your browser — a map of the pages, a page list, and a reader.
+
 ### Step d · Ground
 
 For S.id `lumi-X`, citation in priority order:
@@ -127,6 +132,7 @@ One `resolve-alias` call. No retry. Omit citation arrow when none found.
 
 ↳ <citation path>     ← only if step d found one
 [Idle-wiki hint, if applicable]
+[Viewer hint, if applicable]
 
 Want me to run it now? (yes / show me first / skip)
 
@@ -145,7 +151,7 @@ Anything non-affirmative ("show me first", "skip", silence) → don't invoke.
 When input is casual ("hi bro", "chào", "嗨", emojis, slang), drop the `##`
 heading and the trailing two-line footer. Lead with a one-sentence answer in
 `COMM_LANG`, then the bullet, then "Want me to run it now?". Keep the citation
-arrow `↳` if step d found one.
+arrow `↳` if step d found one, and keep any hint that applies.
 
 ## Mode B · Catalog rendering
 

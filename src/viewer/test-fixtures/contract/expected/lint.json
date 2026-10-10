@@ -1,0 +1,216 @@
+{
+  "findings": [
+    {
+      "id": "L06-missing-reverse-edge",
+      "severity": "error",
+      "fixable": true,
+      "file": "adapters",
+      "line": null,
+      "message": "Missing reverse edge: \"sources/lora\" should have edge \"uses_concept\" -> \"adapters\"",
+      "nodeId": "concepts/adapters"
+    },
+    {
+      "id": "L06-missing-reverse-edge",
+      "severity": "error",
+      "fixable": true,
+      "file": "concepts/rank",
+      "line": null,
+      "message": "Missing reverse edge: \"concepts/rank\" should have edge \"has_part\" -> \"concepts/rank\"",
+      "nodeId": "concepts/rank"
+    },
+    {
+      "id": "L02-frontmatter-types",
+      "severity": "error",
+      "fixable": false,
+      "file": "concepts/rank.md",
+      "line": null,
+      "message": "\"title\" must be a string, got object",
+      "nodeId": "concepts/rank"
+    },
+    {
+      "id": "L20-dangling-citation",
+      "severity": "error",
+      "fixable": false,
+      "file": "graph/citations.jsonl",
+      "line": null,
+      "message": "Citation sources/lora cites sources/gone points to an unavailable page: sources/gone",
+      "nodeId": null
+    },
+    {
+      "id": "L04-orphan-page",
+      "severity": "warning",
+      "fixable": false,
+      "file": "graph/notes.md",
+      "line": null,
+      "message": "Page has no inbound or outbound links (orphan)",
+      "nodeId": null
+    },
+    {
+      "id": "L09-index-stale",
+      "severity": "warning",
+      "fixable": true,
+      "file": "index.md",
+      "line": null,
+      "message": "index.md is missing 1 entity file(s): graph/notes.md",
+      "nodeId": "index"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": true,
+      "file": "log.md",
+      "line": 4,
+      "message": "Broken wikilink: [[deep-work]] does not resolve to any wiki file",
+      "nodeId": "log"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": false,
+      "file": "log.md",
+      "line": 11,
+      "message": "Broken wikilink: [[sources/attention]] does not resolve to any wiki file",
+      "nodeId": "log"
+    },
+    {
+      "id": "L06-missing-reverse-edge",
+      "severity": "error",
+      "fixable": true,
+      "file": "people/ada-park",
+      "line": null,
+      "message": "Missing reverse edge: \"sources/lora\" should have edge \"authored_by\" -> \"people/ada-park\"",
+      "nodeId": "people/ada-park"
+    },
+    {
+      "id": "L02-frontmatter-types",
+      "severity": "error",
+      "fixable": false,
+      "file": "readings/deep-work/00-preface.md",
+      "line": null,
+      "message": "\"title\" must be a string, got number",
+      "nodeId": "readings/deep-work/00-preface"
+    },
+    {
+      "id": "L19-citation-in-edges",
+      "severity": "error",
+      "fixable": true,
+      "file": "sources/deep-work",
+      "line": null,
+      "message": "Citation stored as a graph edge: sources/deep-work --cites--> sources/lora belongs in graph/citations.jsonl as sources/deep-work cites sources/lora",
+      "nodeId": "sources/deep-work"
+    },
+    {
+      "id": "L01-frontmatter-required",
+      "severity": "error",
+      "fixable": false,
+      "file": "sources/deep-work.md",
+      "line": null,
+      "message": "Missing required field: \"importance\" (type: enum)",
+      "nodeId": "sources/deep-work"
+    },
+    {
+      "id": "L01-frontmatter-required",
+      "severity": "error",
+      "fixable": false,
+      "file": "sources/deep-work.md",
+      "line": null,
+      "message": "Missing required field: \"year\" (type: number)",
+      "nodeId": "sources/deep-work"
+    },
+    {
+      "id": "L06-missing-reverse-edge",
+      "severity": "error",
+      "fixable": true,
+      "file": "sources/lora",
+      "line": null,
+      "message": "Missing reverse edge: \"concepts/adapters\" should have edge \"used_in\" -> \"sources/lora\"",
+      "nodeId": "sources/lora"
+    },
+    {
+      "id": "L07-symmetric-edge-duplicate",
+      "severity": "warning",
+      "fixable": true,
+      "file": "sources/lora",
+      "line": null,
+      "message": "Symmetric edge \"similar_method_to\" stored both ways between \"sources/lora\" and \"sources/lora-2\"; should be stored once with sorted endpoints",
+      "nodeId": "sources/lora"
+    },
+    {
+      "id": "L19-citation-in-edges",
+      "severity": "error",
+      "fixable": true,
+      "file": "sources/lora",
+      "line": null,
+      "message": "Citation stored as a graph edge: sources/lora --cited_by--> sources/lora-2 belongs in graph/citations.jsonl as sources/lora-2 cites sources/lora",
+      "nodeId": "sources/lora"
+    },
+    {
+      "id": "L07-symmetric-edge-duplicate",
+      "severity": "warning",
+      "fixable": true,
+      "file": "sources/lora-2",
+      "line": null,
+      "message": "Symmetric edge \"similar_method_to\" stored both ways between \"sources/lora-2\" and \"sources/lora\"; should be stored once with sorted endpoints",
+      "nodeId": "sources/lora-2"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": true,
+      "file": "sources/lora-2.md",
+      "line": 18,
+      "message": "Broken wikilink: [[lora]] does not resolve to any wiki file",
+      "nodeId": "sources/lora-2"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": true,
+      "file": "sources/lora-2.md",
+      "line": 20,
+      "message": "Broken wikilink: [[lora]] does not resolve to any wiki file",
+      "nodeId": "sources/lora-2"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": false,
+      "file": "sources/lora-2.md",
+      "line": 21,
+      "message": "Broken wikilink: [[nope]] does not resolve to any wiki file",
+      "nodeId": "sources/lora-2"
+    },
+    {
+      "id": "L05-broken-wikilink",
+      "severity": "error",
+      "fixable": false,
+      "file": "sources/lora-2.md",
+      "line": 22,
+      "message": "Broken wikilink: [[https://a.b]] does not resolve to any wiki file",
+      "nodeId": "sources/lora-2"
+    },
+    {
+      "id": "L22-pending-citations",
+      "severity": "info",
+      "fixable": false,
+      "file": "sources/lora.md",
+      "line": null,
+      "message": "1 citation(s) wait for works not yet in the wiki: Rank schedules; ingest those works or leave this as is",
+      "nodeId": "sources/lora"
+    },
+    {
+      "id": "L02-frontmatter-types",
+      "severity": "error",
+      "fixable": false,
+      "file": "summary/2024.md",
+      "line": null,
+      "message": "\"title\" must be a string, got number",
+      "nodeId": "summary/2024"
+    }
+  ],
+  "summary": {
+    "errors": 18,
+    "warnings": 4,
+    "info": 1
+  }
+}

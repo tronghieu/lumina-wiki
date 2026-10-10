@@ -36,6 +36,7 @@ npm run test:all                                 # installer + scripts + Python
 npm run test:installer                           # node --test src/installer/*.test.js
 npm run test:scripts                             # node --test src/scripts/*.test.mjs
 npm run test:python                              # pytest src/tools/tests -q
+npm run test:viewer                              # node --test src/viewer/**/*.test.mjs + the build script's test
 npm run test:fs                                  # one module: fs helpers
 npm run test:manifest                            # one module: manifest read/write
 npm run test:template                            # one module: template engine
@@ -48,9 +49,13 @@ node --test src/scripts/wiki.test.mjs
 # CI gates (run before push — same as GitHub Actions)
 npm run ci:idempotency                           # install twice → git diff over watched paths must be empty
 npm run ci:package                               # npm pack --dry-run, validate files allowlist + postinstall ban
+npm run ci:viewer-bundle                         # rebuild the viewer bundle and notices → git diff must be empty
+
+# Wiki viewer bundle (after any change under src/viewer/ui/ or to a viewer devDependency; commit both outputs)
+npm run build:viewer
 ```
 
-No `devDependencies`. Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/tools/tests/test_*.py`.
+Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** `devDependencies` are allowed only for building the wiki viewer bundle. Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/viewer/**/*.test.mjs`, `src/tools/tests/test_*.py`.
 
 ## Architecture — the big picture
 
@@ -89,7 +94,7 @@ Two write paths into the workspace, both `atomicWrite`-discipline:
 
 ### Skills — authoritative source is `_lumina/schema/lumi-help.csv` (rendered by the installer, read by `/lumi-help skills` at runtime); `src/skills/**/SKILL.md` is what it's derived from. The list below is for orientation only — do not cite a count from it anywhere; see `docs/project-context.md` §6 for detail.
 
-- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`
+- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`, `/lumi-view`
 - Research pack, opt-in: `/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`, `/lumi-research-topic`, `/lumi-research-rank`, `/lumi-research-watchlist`, `/lumi-research-watch-run`
 - Reading pack, opt-in: `/lumi-reading-chapter-ingest`, `/lumi-reading-character-track`, `/lumi-reading-theme-map`, `/lumi-reading-plot-recap`
 - Learning pack, opt-in: `/lumi-learning-reflect`
@@ -107,9 +112,9 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 
 1. **Never use `writeFile` directly** — always `atomicWrite` (or temp+fsync+`os.replace` in Python).
 2. **Never accept user-supplied paths without `safePath()`** — rejects `..`, absolute paths, Windows drive letters, backslash traversals.
-3. **Never add native modules.** No `node-gyp`, no `bcrypt`-style packages.
+3. **Never add native modules.** No `node-gyp`, no `bcrypt`-style packages. This covers everything a user installs; the viewer build's `esbuild` binary is a `devDependency` only.
 4. **Never add a `postinstall` script.** `ci-package.mjs` blocks publish if one exists.
-5. **`devDependencies: {}` is a feature** — don't add test frameworks.
+5. **`devDependencies` are for the wiki viewer bundle build only** — exact-pinned, never a test framework. Everything else ships as authored source. See `docs/specs/spec-wiki-view/delivery.md`.
 6. **Cold-start budget < 300 ms** — keep lazy imports lazy.
 7. **No emoji in shipped files** unless explicitly requested.
 8. **v0.1 does not bundle MCP `llm-review` or any second-provider API/key plumbing** — shipping simplicity, not ideology. To reduce bias, run `/lumi-check` in a fresh session or via a subagent after `/lumi-ingest` (same model, blank context — free on every supported platform). If a user wants a second-model reviewer, that is their choice to wire in; it is not forbidden, just not bundled.
@@ -118,7 +123,7 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 
 ## Idempotency invariant — what CI watches
 
-`scripts/ci-idempotency.mjs` runs `git diff --exit-code` after the second install over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/`, `.claude/`, `.agents/`, `_lumina/config/`, `_lumina/schema/`, `_lumina/scripts/`, `_lumina/tools/`, `.env.example`, `wiki/`, `raw/`.
+`scripts/ci-idempotency.mjs` runs `git diff --exit-code` after the second install over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/`, `.claude/`, `.agents/`, `_lumina/config/`, `_lumina/schema/`, `_lumina/scripts/`, `_lumina/tools/`, `_lumina/viewer/`, `.env.example`, `wiki/`, `raw/`.
 
 **Intentionally ignored**: `_lumina/manifest.json`, `_lumina/_state/*` (runtime state with timestamps). Don't rely on these being byte-stable across installs.
 

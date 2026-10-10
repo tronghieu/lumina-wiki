@@ -80,7 +80,7 @@ lumina-wiki/
 │   ├── implementation-artifacts/ # Deferred work, implementation notes
 │   └── user-guide/               # End-user guides (EN, VI, ZH)
 ├── .github/workflows/            # CI matrix (Node 24 × 3 platforms)
-├── package.json                  # ESM, no devDependencies, 5 deps
+├── package.json                  # ESM, 5 deps; devDependencies only for the viewer bundle
 ├── package-lock.json
 ├── CLAUDE.md                     # Agent rules (read first)
 ├── README.md                     # User-facing intro + schema

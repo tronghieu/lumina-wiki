@@ -46,8 +46,8 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 ### Technical Constraints & Dependencies
 
-- **Runtime:** Node ≥20, ESM-only. No transpile step.
-- **Direct deps (BMAD-modeled):** `commander`, `@clack/prompts`, `js-yaml`, `picocolors`, `glob`. License audit: MIT/ISC/Apache-2.0 only. No native modules.
+- **Runtime:** Node ≥20, ESM-only. No transpile step. *Amended 2026-10-10:* the wiki viewer's client bundle is built with `esbuild` at release time and committed to git. Nothing else is built. See `docs/specs/spec-wiki-view/`.
+- **Direct deps (BMAD-modeled):** `commander`, `@clack/prompts`, `js-yaml`, `picocolors`, `glob`. License audit: MIT/ISC/Apache-2.0 only. No native modules. *Amended 2026-10-10:* libraries bundled into the wiki viewer are build-time `devDependencies`, not direct deps, and may also be BSD-2-Clause or BSD-3-Clause.
 - **Filesystem safety:** path joins via `node:path`; reject `..` and absolute traversal; refuse to operate outside the chosen project root.
 - **Atomicity discipline:** every file write is temp + fsync + rename; manifest writes resist torn JSON under crash.
 - **OmegaWiki:** read-only local clone at `../OmegaWiki` for design study only — no runtime, build, or attribution dependency. All schema, skills, and templates are originally authored.
@@ -65,7 +65,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 ### Architectural Implications
 
-- **Daemonless** — no server, no long-running process. State lives entirely on disk (manifest + config + workspace).
+- **Daemonless** — no background daemon. State lives entirely on disk (manifest + config + workspace). *Amended 2026-10-10:* one foreground process is allowed: the wiki viewer's local server. It runs only while its starter keeps it, binds loopback only, and writes nothing. See `docs/planning-artifacts/architecture/architecture-wiki-view-2026-10-10/ARCHITECTURE-SPINE.md`.
 - **Two-layer skill-tool split** — skills are markdown agent prompts; tools are Node/Python scripts the agent invokes via Bash + JSON. Graph-mutation logic does not live in skill prompts.
 - **Template engine** — Handlebars-style placeholders + conditional pack blocks suffice; no full DSL needed.
 - **Filesystem layer is the riskiest module** — symlink ladder, atomic writes, idempotency tests all converge on `src/installer/fs.js`.

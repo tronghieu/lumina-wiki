@@ -85,6 +85,7 @@ https://github.com/tronghieu/lumina-wiki/blob/main/CONTRIBUTING.md
 - [ ] `npm run test:catalog` passes
 - [ ] `npm run ci:idempotency` passes
 - [ ] `npm run ci:package` passes
+- [ ] `npm run ci:viewer-bundle` passes (only if `src/viewer/ui/` or a viewer `devDependency` changed)
 - [ ] Cold-start measured locally (`node scripts/measure-cold-start.mjs`) — paste result if cross-platform impact possible
 
 ## Rule deviations

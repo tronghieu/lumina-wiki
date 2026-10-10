@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Wiki viewer: `/lumi-view` starts a small local page and gives you its
+  address. The page shows the wiki three ways: a map of the pages and how
+  they relate, a list of every page, and a reader for the open page. Nothing
+  can be changed from it.
+  - The map colors pages by type, or by cluster of closely linked pages. One
+    filter box narrows it: `type:`, `rel:`, and `conf:` keep pages and
+    relations by kind, a leading `-` hides them, and plain words match page
+    titles.
+  - A search box above the page list finds a page by its title.
+  - Pages that the wiki's checks point at carry a mark in the list, and the
+    reader shows what each check says. The viewer fixes nothing; that stays
+    with `/lumi-check`.
+  - The viewer runs only while its command runs and answers on this computer
+    only. It reads the wiki from disk at each request, so reloading the page
+    shows the latest state.
+  - A wiki made by an earlier version gets the viewer the next time you run
+    `npx lumina-wiki@latest install` in it.
+  - `/lumi-help` mentions the viewer once the wiki has a page.
+
+### Changed
+
+- The package now holds a built script for the viewer page, with the
+  licenses of what it contains in `THIRD-PARTY-NOTICES.md` beside it.
+  Installing still runs no build step and adds no dependency. The script is
+  rebuilt and compared in CI on every pull request and before every publish.
+
 ## [1.15.5] - 2026-10-03
 
 ### Fixed

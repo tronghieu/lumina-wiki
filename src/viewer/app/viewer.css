@@ -1,0 +1,269 @@
+/* Lumina wiki viewer: dark tokens, base rule, and the pane grid.
+   Colors are the Catppuccin Mocha palette (MIT). */
+:root {
+  color-scheme: dark;
+  accent-color: #cba6f7;
+  --bg: #11111b;
+  --fg: #cdd6f4;
+  --muted: #a6adc8;
+  --panel-bg: #181825;
+  --input-bg: #313244;
+  --border: #45475a;
+  --accent: #89b4fa;
+  --error: #f38ba8;
+  --warning: #f9e2af;
+  --info: #89dceb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+#root { height: 100%; }
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  width: 100%;
+  height: 100%;
+}
+
+.app.has-reader { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 280px; }
+
+.pane { min-width: 0; min-height: 0; overflow: auto; }
+.pane + .pane { border-left: 1px solid var(--border); }
+.pane-graph { position: relative; overflow: hidden; }
+.pane-tree { background: var(--panel-bg); padding: 8px; }
+
+.status { margin: 0; color: var(--muted); }
+
+/* Tree pane */
+.tree-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tree-list { list-style: none; margin: 0; padding: 0; }
+.tree-children { margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--border); }
+
+.tree-folder, .tree-page {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-folder:hover, .tree-page:hover { background: var(--input-bg); }
+.tree-folder:focus-visible, .tree-page:focus-visible { outline: 1px solid var(--accent); }
+.tree-folder { color: var(--muted); }
+.tree-folder::before {
+  content: "";
+  display: inline-block;
+  margin-right: 6px;
+  border: 4px solid transparent;
+  border-top-color: currentColor;
+  border-bottom-width: 0;
+  vertical-align: middle;
+}
+.tree-folder.is-collapsed::before {
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  border-right-width: 0;
+}
+.tree-page.is-selected { background: var(--input-bg); color: var(--accent); }
+
+/* Graph pane overlays */
+.graph-canvas { position: absolute; inset: 0; }
+.controls, .caption {
+  position: absolute;
+  left: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.legend-swatch.is-hollow { background: transparent; border: 1.5px solid #6c7086; }
+.legend-swatch.is-hollow.is-missing { border-color: var(--error); }
+.caption { bottom: 12px; z-index: 2; max-width: calc(100% - 24px); display: flex; align-items: center; gap: 8px; }
+.caption-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Graph controls (filter box, switches, legend) and the tree-pane search box. */
+.controls { top: 12px; width: 240px; max-width: calc(100% - 24px); padding: 8px; z-index: 1; pointer-events: auto; }
+.filter-input { width: 100%; padding: 4px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.filter-input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); }
+.filter-suggestions { display: none; max-height: 220px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; }
+.filter:focus-within .filter-suggestions { display: block; }
+.filter-suggestion { display: block; width: 100%; padding: 3px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.filter-suggestion:hover, .filter-suggestion:focus-visible { background: var(--input-bg); }
+.filter-suggestion-hint { margin-left: 8px; color: var(--muted); font-size: 11px; }
+.control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
+.control-item, .control-select { display: inline-flex; align-items: center; gap: 6px; }
+.control-item { cursor: pointer; }
+.control-item input { margin: 0; accent-color: var(--accent); }
+.control-select select { padding: 1px 4px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.control-item input:focus-visible, .control-select select:focus-visible { outline: 1px solid var(--accent); }
+.legend-list { display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 0; padding: 0; list-style: none; }
+.legend-entry { display: inline-flex; align-items: center; gap: 5px; padding: 1px 4px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.legend-entry:hover, .legend-entry[aria-pressed="true"] { background: var(--input-bg); }
+.legend-entry.is-off { opacity: 0.4; }
+.legend-entry:focus-visible { outline: 1px solid var(--accent); }
+.filter-empty, .lint-failed { margin: 6px 0 0; }
+.filter-clear { border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.filter-clear:focus-visible { outline: 1px solid var(--accent); }
+
+.search { position: sticky; top: 0; z-index: 1; margin-bottom: 8px; padding-bottom: 6px; background: var(--panel-bg); }
+.search-input { width: 100%; padding: 4px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.search-input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); }
+.search-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 40vh; overflow-y: auto; }
+.search-result { display: block; width: 100%; padding: 3px 6px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result:hover { background: var(--input-bg); }
+.search-result:focus-visible { outline: 1px solid var(--accent); }
+.search-result-type { margin-left: 6px; color: var(--muted); font-size: 11px; }
+.search-result-id { margin-left: 6px; color: var(--muted); font-size: 11px; }
+.search-empty { margin: 6px 0 0; }
+.search-more { margin: 4px 0 0; }
+
+/* Load failure */
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+}
+.notice p { margin: 0; }
+.notice-hint { color: var(--muted); }
+.notice-button {
+  padding: 6px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The library injects its own rule later at equal specificity; the pane class wins. */
+.pane-graph .float-tooltip-kap {
+  background: var(--panel-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.graph-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 320px; text-align: center; }
+
+/* Reader pane: header, rendered page body, and relations list. */
+.pane-reader { position: relative; overflow-y: auto; padding: 20px 28px; background: var(--panel-bg); font-size: 15px; line-height: 1.6; }
+.reader-header, .reader-body, .reader-relations, .reader-findings { max-width: 72ch; }
+.reader-close { position: sticky; top: 0; float: right; z-index: 1; padding: 2px 6px; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+.reader-close:hover { color: var(--fg); }
+.reader-retry { margin-top: 8px; padding: 6px 14px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: inherit; font: inherit; cursor: pointer; }
+.reader-header { padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.reader-title { margin: 0 0 6px; font-size: 22px; font-weight: 600; overflow-wrap: anywhere; }
+.reader-type { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.reader-fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; }
+.reader-field { display: contents; }
+.reader-fields dt { color: var(--muted); }
+.reader-fields dd { margin: 0; overflow-wrap: anywhere; }
+.reader-body { overflow-wrap: anywhere; }
+.reader-body h1, .reader-body h2, .reader-body h3 { margin: 1.2em 0 0.4em; font-weight: 600; }
+.reader-body h1 { font-size: 20px; }
+.reader-body h2 { font-size: 17px; }
+.reader-body h3 { font-size: 15px; }
+.reader-body p, .reader-body ul, .reader-body ol { margin: 0.7em 0; }
+.reader-body code { padding: 2px 4px; border-radius: 3px; background: var(--input-bg); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+.reader-body pre { padding: 10px; border-radius: 6px; background: var(--input-bg); overflow-x: auto; }
+.reader-body pre code { padding: 0; background: none; }
+.reader-body blockquote { margin: 0.7em 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+.reader-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.reader-body th, .reader-body td { padding: 4px 8px; border: 1px solid var(--border); }
+.reader-body hr { height: 0; border: 0; border-top: 1px solid var(--border); }
+.reader-body a { color: var(--accent); text-decoration: none; }
+.reader-body a:hover { text-decoration: underline; }
+.reader-body a.external { text-decoration: underline; }
+.reader-body a.external::after { content: "\2197"; margin-left: 2px; color: var(--muted); }
+.reader-close:focus-visible, .reader-retry:focus-visible, .caption-close:focus-visible, .notice-button:focus-visible,
+.reader-body a:focus-visible, .reader-relations a:focus-visible, .reader-findings a:focus-visible { outline: 1px solid var(--accent); }
+.pane-reader:focus { outline: none; }
+.reader-body .wikilink.is-broken { color: var(--error); text-decoration: underline dotted; cursor: not-allowed; }
+.reader-body .inert-link { color: var(--muted); text-decoration: underline dotted; }
+.reader-relations, .reader-findings { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border); }
+.relations-title { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.relation-type { margin: 10px 0 2px; font-size: 13px; font-weight: 600; }
+.relation-direction { color: var(--muted); font-size: 12px; font-weight: 400; }
+.relation-list { list-style: none; margin: 0; padding: 0; }
+.relation-list li { padding: 1px 0; }
+.relation-link { color: var(--accent); }
+.relation-note { color: var(--muted); font-size: 12px; }
+.relation-missing { color: var(--muted); text-decoration: underline dotted; }
+.relation-confidence { color: var(--muted); font-size: 12px; }
+.reader-id { margin: 4px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+/* Lint marks, community list, and finding lists. */
+.lint-mark { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; vertical-align: middle; flex: none; }
+/* Rows ellipsize their label, so the dot sits in reserved right padding where it cannot be clipped. */
+.tree-folder:has(.lint-mark), .tree-page:has(.lint-mark) { position: relative; padding-right: 18px; }
+.tree-folder .lint-mark, .tree-page .lint-mark { position: absolute; right: 6px; top: 50%; margin: -3px 0 0; }
+.lint-mark.is-error { background: var(--error); }
+.lint-mark.is-warning { background: var(--warning); }
+.lint-mark.is-info { background: var(--info); }
+.lint-mark.is-folder { opacity: 0.5; }
+.legend-swatch.is-plain:not(.is-hollow) { background: var(--muted); }
+.communities { max-height: 30vh; overflow-y: auto; margin-top: 6px; }
+.community > summary, .lint-workspace > summary { cursor: pointer; }
+.community > summary .legend-swatch { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.community-title { overflow-wrap: anywhere; }
+.community-size { margin-left: 4px; color: var(--muted); font-size: 11px; }
+.community-members { list-style: none; margin: 2px 0 4px; padding: 0 0 0 15px; }
+.community-members a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.community-members a:hover { text-decoration: underline; }
+.community-members a:focus-visible, .community > summary:focus-visible, .lint-workspace > summary:focus-visible { outline: 1px solid var(--accent); }
+.lint-summary { margin-left: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.lint-count + .lint-count { margin-left: 6px; }
+.lint-count.is-error { color: var(--error); }
+.lint-count.is-warning { color: var(--warning); }
+.lint-count.is-info { color: var(--info); }
+.finding-list { list-style: none; margin: 0; padding: 0; }
+.finding { margin: 0 0 6px; padding-left: 8px; border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+.finding.is-error { border-left-color: var(--error); }
+.finding.is-warning { border-left-color: var(--warning); }
+.finding.is-info { border-left-color: var(--info); }
+.finding-id { font-family: ui-monospace, monospace; font-weight: 700; }
+.finding-severity, .finding-file, .finding-line { color: var(--muted); font-size: 11px; }
+.finding-message { display: block; overflow-wrap: anywhere; }
+.tree-footer { margin-top: 8px; padding: 6px; border-top: 1px solid var(--border); min-width: 0; }
+.tree-footer .lint-workspace > summary { padding: 3px 0; font: inherit; color: inherit; cursor: pointer; }
+.tree-footer .finding-list { margin-top: 6px; }
+.tree-footer .finding { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }

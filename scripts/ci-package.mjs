@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { PROJECT_ENGINE_FILES } from '../src/installer/project-mode.js';
+import { VIEWER_FILES, VIEWER_ENGINE_FILES } from '../src/installer/viewer-files.js';
 
 const npmCache = process.env.LUMINA_NPM_CACHE || join(tmpdir(), 'lumina-npm-cache');
 const npmHome = join(tmpdir(), 'lumina-npm-home');
@@ -69,6 +70,8 @@ const prohibitedPatterns = [
   /^\.github\//,
   /^scripts\/ci-/,
   /^src\/project\/test-fixtures\//,
+  /^src\/viewer\/test-fixtures\//,
+  /^src\/viewer\/ui\//,
 ];
 
 const requiredFiles = [
@@ -113,6 +116,9 @@ const requiredFiles = [
   'src/templates/project/PROJECT.md',
   'src/skills/project/lumi-project-setup/SKILL.md',
   ...PROJECT_ENGINE_FILES.map((f) => `src/project/${f}`),
+  'src/installer/viewer-files.js',
+  ...VIEWER_FILES.map((f) => `src/viewer/${f}`),
+  ...VIEWER_ENGINE_FILES.map((f) => `src/scripts/${f}`),
   'README.md',
   'LICENSE',
 ];

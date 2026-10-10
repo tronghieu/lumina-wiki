@@ -145,6 +145,7 @@ These are enough for most people:
 | `/lumi-help` | Get one useful suggestion for what to do next. |
 | `/lumi-ingest` | Add a document to the wiki. |
 | `/lumi-ask` | Ask a question using the knowledge already in the wiki. |
+| `/lumi-view` | See the wiki in your browser: a map of the pages, a page list, and a reader. |
 | `/lumi-edit` | Correct or update a wiki page. |
 | `/lumi-verify` | Check that notes match the sources they cite. |
 | `/lumi-check` | Check the wiki for broken links and other problems. |
@@ -160,7 +161,7 @@ See the [command reference](docs/user-guide/commands.en.md) for every classic-mo
 - [Use QMD for local search](docs/user-guide/advanced-qmd.en.md) — advanced
 - [Connect OpenClaw or Hermes](docs/user-guide/openclaw-hermes-integration.en.md) — advanced
 
-You can also open the project root in [Obsidian](https://obsidian.md) to browse the Markdown notes visually.
+To browse the wiki, use `/lumi-view`. It starts a built-in viewer and gives you an address to open in your browser, with a map of how the pages relate. You can also open the project root in [Obsidian](https://obsidian.md) to browse the Markdown notes.
 
 ## Project mode
 

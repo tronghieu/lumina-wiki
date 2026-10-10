@@ -2,6 +2,12 @@
 # issues on Windows in both test assertions and installed template content).
 * text=auto eol=lf
 
+# The viewer bundle is build output. CI compares its bytes, so git must not
+# normalize it; a line merge of two builds is never a valid build, so every
+# concurrent change must conflict and be resolved by rebuilding.
+src/viewer/app/viewer.js binary linguist-generated
+src/viewer/app/THIRD-PARTY-NOTICES.md linguist-generated
+
 # Explicitly binary — never touch line endings.
 *.png binary
 *.jpg binary

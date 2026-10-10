@@ -1,0 +1,527 @@
+{
+  "schema": {
+    "entityTypes": [
+      {
+        "name": "sources",
+        "required": [
+          "authors",
+          "year",
+          "importance",
+          "provenance"
+        ]
+      },
+      {
+        "name": "concepts",
+        "required": [
+          "key_sources",
+          "related_concepts"
+        ]
+      },
+      {
+        "name": "people",
+        "required": [
+          "key_sources"
+        ]
+      },
+      {
+        "name": "summary",
+        "required": [
+          "covers"
+        ]
+      },
+      {
+        "name": "outputs",
+        "required": []
+      },
+      {
+        "name": "readings",
+        "required": [
+          "source",
+          "part"
+        ]
+      },
+      {
+        "name": "foundations",
+        "required": []
+      },
+      {
+        "name": "topics",
+        "required": [
+          "key_sources"
+        ]
+      },
+      {
+        "name": "chapters",
+        "required": [
+          "book",
+          "number"
+        ]
+      },
+      {
+        "name": "characters",
+        "required": [
+          "book"
+        ]
+      },
+      {
+        "name": "themes",
+        "required": [
+          "book"
+        ]
+      },
+      {
+        "name": "plot",
+        "required": [
+          "book",
+          "up_to_chapter"
+        ]
+      },
+      {
+        "name": "reflections",
+        "required": [
+          "related_concepts",
+          "related_sources",
+          "evolution_count"
+        ]
+      }
+    ],
+    "relationTypes": [
+      {
+        "name": "cites",
+        "symmetric": false,
+        "reverse": "cited_by"
+      },
+      {
+        "name": "cited_by",
+        "symmetric": false,
+        "reverse": "cites"
+      },
+      {
+        "name": "same_problem_as",
+        "symmetric": true,
+        "reverse": "same_problem_as"
+      },
+      {
+        "name": "similar_method_to",
+        "symmetric": true,
+        "reverse": "similar_method_to"
+      },
+      {
+        "name": "complementary_to",
+        "symmetric": true,
+        "reverse": "complementary_to"
+      },
+      {
+        "name": "compares_against",
+        "symmetric": true,
+        "reverse": "compares_against"
+      },
+      {
+        "name": "builds_on",
+        "symmetric": false,
+        "reverse": "built_upon_by"
+      },
+      {
+        "name": "built_upon_by",
+        "symmetric": false,
+        "reverse": "builds_on"
+      },
+      {
+        "name": "improves_on",
+        "symmetric": false,
+        "reverse": "improved_by"
+      },
+      {
+        "name": "improved_by",
+        "symmetric": false,
+        "reverse": "improves_on"
+      },
+      {
+        "name": "challenges",
+        "symmetric": false,
+        "reverse": "challenged_by"
+      },
+      {
+        "name": "challenged_by",
+        "symmetric": false,
+        "reverse": "challenges"
+      },
+      {
+        "name": "surveys",
+        "symmetric": false,
+        "reverse": "surveyed_by"
+      },
+      {
+        "name": "surveyed_by",
+        "symmetric": false,
+        "reverse": "surveys"
+      },
+      {
+        "name": "introduces_concept",
+        "symmetric": false,
+        "reverse": "introduced_in"
+      },
+      {
+        "name": "introduced_in",
+        "symmetric": false,
+        "reverse": "introduces_concept"
+      },
+      {
+        "name": "uses_concept",
+        "symmetric": false,
+        "reverse": "used_in"
+      },
+      {
+        "name": "used_in",
+        "symmetric": false,
+        "reverse": "uses_concept"
+      },
+      {
+        "name": "extends_concept",
+        "symmetric": false,
+        "reverse": "extended_in"
+      },
+      {
+        "name": "extended_in",
+        "symmetric": false,
+        "reverse": "extends_concept"
+      },
+      {
+        "name": "critiques_concept",
+        "symmetric": false,
+        "reverse": "critiqued_in"
+      },
+      {
+        "name": "critiqued_in",
+        "symmetric": false,
+        "reverse": "critiques_concept"
+      },
+      {
+        "name": "authored_by",
+        "symmetric": false,
+        "reverse": "authored"
+      },
+      {
+        "name": "authored",
+        "symmetric": false,
+        "reverse": "authored_by"
+      },
+      {
+        "name": "annotates",
+        "symmetric": false,
+        "reverse": "annotated_by"
+      },
+      {
+        "name": "annotated_by",
+        "symmetric": false,
+        "reverse": "annotates"
+      },
+      {
+        "name": "related_to",
+        "symmetric": true,
+        "reverse": "related_to"
+      },
+      {
+        "name": "part_of",
+        "symmetric": false,
+        "reverse": "has_part"
+      },
+      {
+        "name": "has_part",
+        "symmetric": false,
+        "reverse": "part_of"
+      },
+      {
+        "name": "includes_source",
+        "symmetric": false,
+        "reverse": "included_in_topic"
+      },
+      {
+        "name": "included_in_topic",
+        "symmetric": false,
+        "reverse": "includes_source"
+      },
+      {
+        "name": "covers_concept",
+        "symmetric": false,
+        "reverse": "covered_by_topic"
+      },
+      {
+        "name": "covered_by_topic",
+        "symmetric": false,
+        "reverse": "covers_concept"
+      },
+      {
+        "name": "grounded_in",
+        "symmetric": false,
+        "reverse": null
+      },
+      {
+        "name": "produced",
+        "symmetric": false,
+        "reverse": null
+      },
+      {
+        "name": "see_also_url",
+        "symmetric": false,
+        "reverse": null
+      },
+      {
+        "name": "features",
+        "symmetric": false,
+        "reverse": "appears_in"
+      },
+      {
+        "name": "appears_in",
+        "symmetric": false,
+        "reverse": null
+      },
+      {
+        "name": "tagged_with",
+        "symmetric": false,
+        "reverse": "appears_in"
+      },
+      {
+        "name": "associated_with",
+        "symmetric": false,
+        "reverse": "expresses_theme"
+      },
+      {
+        "name": "expresses_theme",
+        "symmetric": false,
+        "reverse": "associated_with"
+      },
+      {
+        "name": "appears_with",
+        "symmetric": true,
+        "reverse": "appears_with"
+      }
+    ],
+    "wikilinkPattern": "\\[\\[([^\\]|]+)(?:\\|[^\\]]+)?\\]\\]"
+  },
+  "nodes": [
+    {
+      "id": "concepts/adapters",
+      "kind": "page",
+      "type": "concepts",
+      "title": "Adapters",
+      "community": 0
+    },
+    {
+      "id": "concepts/rank",
+      "kind": "page",
+      "type": "concepts",
+      "title": "rank",
+      "community": 1
+    },
+    {
+      "id": "index",
+      "kind": "page",
+      "type": null,
+      "title": "index",
+      "community": 2
+    },
+    {
+      "id": "log",
+      "kind": "page",
+      "type": null,
+      "title": "log",
+      "community": 3
+    },
+    {
+      "id": "missing:sources/gone",
+      "kind": "missing",
+      "type": null,
+      "title": "sources/gone",
+      "community": null
+    },
+    {
+      "id": "people/ada-park",
+      "kind": "page",
+      "type": "people",
+      "title": "ada-park",
+      "community": 0
+    },
+    {
+      "id": "readings/deep-work/00-preface",
+      "kind": "page",
+      "type": "readings",
+      "title": "0",
+      "community": 4
+    },
+    {
+      "id": "readings/deep-work/01-focus",
+      "kind": "page",
+      "type": "readings",
+      "title": "Focus is a skill",
+      "community": 1
+    },
+    {
+      "id": "sources/deep-work",
+      "kind": "page",
+      "type": "sources",
+      "title": "Deep Work",
+      "community": 1
+    },
+    {
+      "id": "sources/lora",
+      "kind": "page",
+      "type": "sources",
+      "title": "LoRA",
+      "community": 0
+    },
+    {
+      "id": "sources/lora-2",
+      "kind": "page",
+      "type": "sources",
+      "title": "LoRA follow-up",
+      "community": 0
+    },
+    {
+      "id": "summary/2024",
+      "kind": "page",
+      "type": "summary",
+      "title": "2024",
+      "community": 5
+    },
+    {
+      "id": "url:https://example.org/lora",
+      "kind": "url",
+      "type": null,
+      "title": "https://example.org/lora",
+      "community": null
+    }
+  ],
+  "edges": [
+    {
+      "from": "concepts/rank",
+      "to": "concepts/rank",
+      "type": "part_of",
+      "directed": true,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "concepts/rank",
+      "to": "concepts/rank",
+      "type": "related_to",
+      "directed": false,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "people/ada-park",
+      "to": "sources/lora",
+      "type": "authored",
+      "directed": true,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "readings/deep-work/01-focus",
+      "to": "sources/deep-work",
+      "type": "annotates",
+      "directed": true,
+      "confidence": "low",
+      "source": "edges"
+    },
+    {
+      "from": "sources/deep-work",
+      "to": "sources/lora",
+      "type": "cites",
+      "directed": true,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "sources/deep-work",
+      "to": "sources/lora-2",
+      "type": "cites",
+      "directed": true,
+      "confidence": null,
+      "source": "citations"
+    },
+    {
+      "from": "sources/deep-work",
+      "to": "concepts/rank",
+      "type": "mentions",
+      "directed": true,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "sources/lora",
+      "to": "missing:sources/gone",
+      "type": "cites",
+      "directed": true,
+      "confidence": null,
+      "source": "citations"
+    },
+    {
+      "from": "sources/lora",
+      "to": "sources/deep-work",
+      "type": "cites",
+      "directed": true,
+      "confidence": null,
+      "source": "citations"
+    },
+    {
+      "from": "sources/lora",
+      "to": "url:https://example.org/lora",
+      "type": "see_also_url",
+      "directed": true,
+      "confidence": null,
+      "source": "edges"
+    },
+    {
+      "from": "sources/lora",
+      "to": "sources/lora-2",
+      "type": "similar_method_to",
+      "directed": false,
+      "confidence": "high",
+      "source": "edges"
+    },
+    {
+      "from": "sources/lora",
+      "to": "concepts/adapters",
+      "type": "uses_concept",
+      "directed": true,
+      "confidence": "medium",
+      "source": "edges"
+    },
+    {
+      "from": "sources/lora-2",
+      "to": "sources/lora",
+      "type": "cites",
+      "directed": true,
+      "confidence": null,
+      "source": "citations"
+    }
+  ],
+  "communities": [
+    {
+      "name": "sources/lora",
+      "size": 4
+    },
+    {
+      "name": "sources/deep-work",
+      "size": 3
+    },
+    {
+      "name": "index",
+      "size": 1
+    },
+    {
+      "name": "log",
+      "size": 1
+    },
+    {
+      "name": "readings/deep-work/00-preface",
+      "size": 1
+    },
+    {
+      "name": "summary/2024",
+      "size": 1
+    }
+  ]
+}

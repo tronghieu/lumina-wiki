@@ -231,7 +231,7 @@ The domain is developer tooling — specifically, an npm-distributed CLI scaffol
 ### Compliance & Licensing
 
 - **MIT license** for the entire Lumina-Wiki package. All code, schema, skills, and templates are original work authored for Lumina-Wiki.
-- **No third-party code dependencies beyond declared npm packages.** Lumina-Wiki does not fork, vendor, or re-distribute code from OmegaWiki or any other project. OmegaWiki is studied as inspiration only; no skill files, schema fragments, or templates are copied.
+- **No third-party code dependencies beyond declared npm packages.** Lumina-Wiki does not fork, vendor, or re-distribute code from OmegaWiki or any other project. OmegaWiki is studied as inspiration only; no skill files, schema fragments, or templates are copied. *Amended 2026-10-10:* open-source libraries may ship inside the two graph viewers, each listed with its license in a third-party notices file.
 - **No telemetry, no analytics, no remote logging** in v0.1. The only outbound network call permitted is the optional `npm view lumina-wiki@latest version` auto-update check, and it must be skippable via flag and environment variable.
 - **No bundled binaries.** All dependencies resolve through the user's npm install; the package itself contains only JavaScript, templates, and the original skill content authored by Lumina-Wiki.
 
@@ -304,7 +304,7 @@ The project type is best matched as `cli_tool` distributed via npm, with some `d
 
 ### Project-Type Overview
 
-Lumina-Wiki is an **interactive CLI scaffolder**: the primary command is `npx lumina-wiki install`, run once per project. There is no daemon, no background process, no long-running server. After the install command completes, the package's only further role is responding to `lumina --version` (auto-update check) and `lumina install` again (upgrade). Other planned commands (`status`, `lint`, `search`, `pack add/remove`) are deferred to v0.2.
+Lumina-Wiki is an **interactive CLI scaffolder**: the primary command is `npx lumina-wiki install`, run once per project. There is no daemon, no background process, no long-running server. *Amended 2026-10-10:* the wiki viewer adds one foreground local server that the user or their agent starts and stops; it is not a daemon. After the install command completes, the package's only further role is responding to `lumina --version` (auto-update check) and `lumina install` again (upgrade). Other planned commands (`status`, `lint`, `search`, `pack add/remove`) are deferred to v0.2.
 
 ### Command Structure (v0.1)
 
@@ -388,7 +388,7 @@ Package contents shipped to npm registry (per `package.json` `files` field): `bi
 
 - **Runtime:** Node ≥20.0.0 (declared in `engines`). ESM only.
 - **Tested on:** Node 20 LTS and Node 22 LTS, on macOS 13+, Ubuntu 22.04+, Windows 11. CI matrix covers all six combinations.
-- **No transpile step** in v0.1 — the package ships JS source directly. This keeps install fast (`npx` cold-start under a second) and the diff-on-publish small.
+- **No transpile step** in v0.1 — the package ships JS source directly. This keeps install fast (`npx` cold-start under a second) and the diff-on-publish small. *Amended 2026-10-10:* the wiki viewer's client bundle is the one built file; it is built at release time and committed.
 
 ### Dependencies
 
@@ -453,7 +453,7 @@ Re-stating the §Product Scope MVP set as a strategic capability inventory, in p
 ### Post-MVP Phases (Confirmation of Brief)
 
 - **v0.2 (Growth):** runtime CLI commands, bundled MCP server, GHA cron template, `qmd` / Marp / Dataview integrations, installer UI i18n. Triggered only after the §Success Criteria personal-use bar is met.
-- **12-month Vision:** third-party pack ecosystem (`lumina pack add @vendor/pack-name`), optional collaboration mode, browser surface. Strictly speculative until v0.2 ships and proves the core compounds.
+- **12-month Vision:** third-party pack ecosystem (`lumina pack add @vendor/pack-name`), optional collaboration mode, browser surface. Strictly speculative until v0.2 ships and proves the core compounds. *Update 2026-10-10:* a local browser surface is now specified in `docs/specs/spec-wiki-view/`.
 
 ### Risk-Based Scoping Decisions
 
@@ -596,7 +596,7 @@ Only categories that meaningfully apply to a single-user CLI scaffolder run on t
 ### Maintainability
 
 - **NFR-M1:** The package's source tree is under **3,000 lines of original JavaScript** in v0.1, excluding template content and skill files. (Soft cap; intent is to keep the installer auditable in one sitting.)
-- **NFR-M2:** All shipped content (schema, skills, templates, scripts) is original work authored for Lumina-Wiki. No third-party content is bundled, fork-vendored, or re-distributed.
+- **NFR-M2:** All shipped content (schema, skills, templates, scripts) is original work authored for Lumina-Wiki. No third-party content is bundled, fork-vendored, or re-distributed. *Amended 2026-10-10:* third-party libraries bundled in the graph viewers are the exception; each is listed with its license in a third-party notices file.
 - **NFR-M3:** Schema files carry a `schemaVersion` field. The Installer cross-checks workspace `schemaVersion` against the package's expected version and refuses upgrades across major-version gaps without a `--force` flag.
 - **NFR-M4:** Pack-specific lint rules and edge-type vocabularies live in data files (`.agents/schema/cross-reference-packs.md`, `.agents/schema/graph-packs.md`), not in code. Adding a pack requires no installer code changes.
 

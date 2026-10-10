@@ -49,6 +49,7 @@ const managedDiffPaths = [
   '_lumina/schema',
   '_lumina/scripts',
   '_lumina/tools',
+  '_lumina/viewer',
   '.env.example',
   'wiki',
   'raw',

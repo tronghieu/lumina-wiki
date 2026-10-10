@@ -16,6 +16,7 @@ Ví dụ bên dưới dùng `/`. Trong Codex, thay dấu `/` đầu tiên bằng
 | `/lumi-reset` | làm lại với phần nội dung bạn chọn | `/lumi-reset` | Kế hoạch được đưa ra trước; chỉ thay đổi sau khi bạn xác nhận. |
 | `/lumi-verify` | đối chiếu ghi chú với nguồn mà chúng nhắc tới | `/lumi-verify article` | Các điểm cần bạn xem lại; lệnh không tự đổi ghi chú. |
 | `/lumi-migrate-legacy` | cập nhật ghi chú cũ sau khi nâng cấp Lumina-Wiki | `/lumi-migrate-legacy --backfill-ids` | Hỗ trợ bổ sung thông tin còn thiếu cho các trang cũ, nhất là những gì bước kiểm tra tự động chưa thể tự điền an toàn. |
+| `/lumi-view` | xem wiki trên trình duyệt | `/lumi-view` | Một địa chỉ để mở trên trình duyệt. Trang đó có sơ đồ các trang và quan hệ giữa chúng, danh sách mọi trang và khung đọc. Ở đó không sửa được gì. Tải lại trang để thấy thay đổi mới. |
 | `/lumi-help` | tìm bước tiếp theo hoặc hỏi cách một tính năng hoạt động | `/lumi-help` | Một bước tiếp theo được gợi ý. Dùng `skills` để xem lệnh đã cài, hoặc `explain <câu hỏi>` để hỏi về Lumina-Wiki. |
 
 `/lumi-ingest` cũng nhận tiêu đề bài báo, mã arXiv hoặc liên kết web khi bạn chưa có tệp trên máy. `/lumi-ask` chỉ lưu câu trả lời khi bạn yêu cầu rõ ràng.

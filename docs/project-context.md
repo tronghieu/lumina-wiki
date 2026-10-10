@@ -30,7 +30,7 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 ## 2. Technology stack & versions
 
 **Runtime:**
-- Node ≥24 (ESM-only, no transpile, no native modules)
+- Node ≥24 (ESM-only, no native modules). Shipped code is authored source with no transpile step. The one built file is the wiki viewer's client bundle.
 - Python 3.9+ (soft dependency for all installs — `extract_pdf.py` needs `pip install pypdf`; research pack adds further tools and deps)
 
 **Direct JS deps (license-audited MIT/ISC/Apache-2.0):**
@@ -40,9 +40,11 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 - `picocolors@^1.1.1` — TTY-aware color (lazy-loaded, optional)
 - `glob@^11.0.0` — template expansion
 
+**Build-only JS deps (wiki viewer bundle):** exact-pinned `devDependencies`, used to build `src/viewer/app/viewer.js` and for nothing else. A library bundled into the viewer must be MIT, ISC, Apache-2.0, BSD-2-Clause, or BSD-3-Clause, and must appear in the viewer's third-party notices. Users never install these. See `docs/specs/spec-wiki-view/delivery.md`.
+
 **Python deps:** `requests>=2.31`, `pypdf>=4.0`, `pytest>=7`, `pytest-cov>=4`. Optional: `pdfminer.six`, `pdfplumber`.
 
-**Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
+**Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no test framework.** `devDependencies` are allowed only for the viewer bundle build.
 
 **CI:** Node 24 × {Ubuntu, macOS, Windows} = 3 runners, `fail-fast: false`. Trigger: push to main + all PRs. `engines` requires Node >=24, matching the CI matrix.
 
@@ -61,7 +63,7 @@ These are absolutes. Every one corresponds to a real failure mode.
 1. **Never call `writeFile` directly.** Always use `atomicWrite` (temp + `fd.datasync()` + rename). Same in Python: temp + fsync + `os.replace`. This is the entire reliability story of the installer.
 2. **Never accept a user-supplied path fragment without `safePath()`.** It rejects `..`, absolute Unix paths, Windows drive letters (`C:\`), and backslash traversals. `RangeError` from `safePath` maps to exit code 2 at `bin/lumina.js`.
 3. **Path joins go through `node:path`.** Never string-concatenate paths. Same in Python: `pathlib`.
-4. **Never use native modules.** No N-API, no `node-gyp`, no `bcrypt`-style packages. Cross-platform install must work without compilers.
+4. **Never use native modules.** No N-API, no `node-gyp`, no `bcrypt`-style packages. Cross-platform install must work without compilers. This covers everything a user installs. The viewer build's `esbuild` ships a prebuilt binary and is a `devDependency` only.
 5. **Never add a `postinstall` script** to `package.json`. `ci-package.mjs` blocks publish if one exists.
 
 ### Color & output
@@ -354,7 +356,7 @@ All tools follow these contracts:
 | Summary | `summary/` | Area-level synthesis |
 | Reading note | `readings/` | Per-unit page-anchored notes for long sources (books, theses); written by `/lumi-ingest` long-source pipeline, linked to the source via `annotates`/`annotated_by`, exempt from `wiki/index.md` (L09) like `reflections/` |
 
-**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `challenges`, `cites`, `includes_source`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
+**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `challenges`, `cites`, `includes_source`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{from, type, to, confidence?: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 
 **Bidirectional `exempt-only` mode** is the default. Only `outputs/**`, `*://*`, `reflections/**`, and (research pack only) `foundations/**` may have a forward link without a reverse. Anything else without a reverse is a lint error.
 
@@ -416,7 +418,7 @@ All tools follow these contracts:
 
 Source tree is hierarchical (`src/skills/core/<name>/`, `src/skills/packs/<pack>/<name>/`, `src/skills/agents/<name>/`); the **installed `canonicalId`** is flat under `.agents/skills/` (or, for `lumi-hub`, a platform's global skills directory) and follows a pack-prefix rule:
 
-- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`, `lumi-verify`, `lumi-migrate-legacy`, `lumi-help`.
+- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`, `lumi-verify`, `lumi-migrate-legacy`, `lumi-help`, `lumi-view`.
 - **Pack skills** insert the pack name between `lumi-` and the leaf: `lumi-<pack>-<name>`. Examples: `lumi-research-discover`, `lumi-research-survey`, `lumi-reading-chapter-ingest`, `lumi-reading-plot-recap`, `lumi-learning-reflect`.
 - **`lumi-hub`** is the one skill with neither prefix pattern — it is not part of any pack and is never installed into `.agents/skills/`.
 
@@ -457,18 +459,21 @@ Steps (`installability`, in order):
 1. Checkout — `actions/checkout@v7`
 2. Setup Node — `actions/setup-node@v7`, `cache: npm`
 3. Setup Python — `actions/setup-python@v7`, `python-version: "3.11"`
-4. `npm ci`
+4. `npm ci --ignore-scripts`
 5. `python -m pip install -r src/tools/requirements.txt`
 6. `npm run test:installer` — three chained stages: `test:installer:commands`, `test:installer:commands-agents`, then `node --test` over `bin/*.test.js` plus 11 named `src/installer/*.test.js` files
 7. `npm run test:scripts` — `node --test` over 11 named `src/scripts/*.test.mjs` files
-8. `npm run test:python` — `pytest src/tools/tests -q`
-9. `npm run test:catalog` — catalog + doc-count integrity
-10. `node bin/lumina.js --version --no-update` — CLI smoke
-11. `npm run ci:idempotency`
-12. `npm run ci:cold-start` — **Linux-only** (`if: runner.os == 'Linux'`)
-13. `npm run ci:package`
-14. `npm run ci:agent-isolation`
-15. `npm run test:e2e` — end-to-end (librarian mode)
+8. `npm run test:project` — project engine tests
+9. `npm run test:viewer` — wiki viewer tests and the build script's checks
+10. `npm run ci:viewer-bundle` — rebuild the viewer bundle and notices; `git diff` must be empty
+11. `npm run test:python` — `pytest src/tools/tests -q`
+12. `npm run test:catalog` — catalog + doc-count integrity
+13. `node bin/lumina.js --version --no-update` — CLI smoke
+14. `npm run ci:idempotency`
+15. `npm run ci:cold-start` — **Linux-only** (`if: runner.os == 'Linux'`)
+16. `npm run ci:package`
+17. `npm run ci:agent-isolation`
+18. `npm run test:e2e` — end-to-end (librarian mode)
 
 `bun-smoke` steps: checkout, `oven-sh/setup-bun@v2` (bun-version latest), `bun install`, `bun bin/lumina.js --version --no-update`, `bun run dev:sandbox -- --yes --packs core`.
 
@@ -477,7 +482,7 @@ Steps (`installability`, in order):
 Five scenarios: `core-default`; `full-pack` (core + research + reading + learning × 6 IDE targets); `multilingual-en`, `multilingual-vi`, `multilingual-zh` (each `--lang <x> --packs core,research`). For each:
 1. `git init`, install once, commit baseline
 2. Install again with same args
-3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `.env.example`, `wiki`, `raw`
+3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `_lumina/viewer`, `.env.example`, `wiki`, `raw`
 
 **Any byte-level drift fails CI.** Runtime state outside watched paths is intentionally ignored.
 
@@ -494,7 +499,7 @@ Five scenarios: `core-default`; `full-pack` (core + research + reading + learnin
 
 ## 8. Testing patterns
 
-- **Runner:** `node --test` for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
+- **Runner:** `node --test` for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no test framework.**
 - **JS test files:** `*.test.js` (installer) or `*.test.mjs` (scripts), colocated with source.
 - **Python tests:** `src/tools/tests/` with `conftest.py` providing `tmp_project`, `mock_env`, `env_file` fixtures. Network mocked via `unittest.mock.patch` on `requests.Session` at module level — no `responses` or `httpretty`.
 - **Fixture discipline:** each test creates its own `os.tmpdir()` subtree via `mkdtemp`; no shared state.
@@ -554,6 +559,7 @@ The user-facing `README.md` describes the **post-install workspace** (`raw/`, `w
 npm run test:all           # node --test (installer + scripts) + pytest (tools)
 npm run ci:idempotency     # install twice → git diff over watched paths must be empty
 npm run ci:package         # npm pack --dry-run, validate files allowlist + postinstall ban
+npm run ci:viewer-bundle   # rebuild the wiki viewer bundle → git diff must be empty
 ```
 
 These three commands are a subset of what CI runs across Node 24 × {ubuntu, macos, windows} (`installability` job) — see §7 for the full 15-step list, which also includes `test:catalog`, `ci:cold-start` (Linux-only), `ci:agent-isolation`, and `test:e2e`. Passing locally covers the core gates, not all of CI.
@@ -577,7 +583,7 @@ npm run test:python        # src/tools/tests/ via pytest
 ```
 README.md, CLAUDE.md, AGENTS.md, GEMINI.md, QWEN.md, IFLOW.md,
 .cursor/, .claude/, .agents/,
-_lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/,
+_lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/, _lumina/viewer/,
 .env.example, wiki/, raw/
 ```
 
@@ -588,7 +594,7 @@ _lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/,
 1. **Never run `lumina install` inside the repo root.** It will scaffold a workspace on top of the source code. Always use a sandbox dir.
 2. **Sandbox needs `git init`** before testing idempotency — `dev-sandbox.mjs` does this for you; manual paths must do it explicitly.
 3. **`commands.test.js` is slow** (real `spawnSync` of the CLI, 30 s timeout per test). Don't add more integration tests there unless absolutely necessary.
-4. **Don't add `devDependencies`** to make test setup easier. The current invariant (`devDependencies: {}`) is a feature — Node and pytest are enough.
+4. **Don't add `devDependencies` for testing.** Node and pytest are enough. `devDependencies` are allowed for one purpose only: building the wiki viewer bundle.
 5. **Don't mock `exec` in `update-check.test.js`** — the test deliberately hits real `npm` if available, guarded by a 3 s wall-clock assertion.
 6. **Python test fixtures live in `src/tools/tests/conftest.py`**: `tmp_project` (full directory tree), `mock_env` (dummy keys), `env_file` (writes `.env`). Reuse these instead of building new fixtures.
 7. **`prompts.js` has no tests** — keep prompt logic minimal so the untested surface stays small.
