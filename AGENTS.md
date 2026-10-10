@@ -50,7 +50,7 @@ npm run ci:idempotency                           # install twice → git diff ov
 npm run ci:package                               # npm pack --dry-run, validate files allowlist + postinstall ban
 ```
 
-No `devDependencies`. Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/tools/tests/test_*.py`.
+Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** `devDependencies` are allowed only for building the wiki viewer bundle. Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/tools/tests/test_*.py`.
 
 ## Architecture — the big picture
 
@@ -107,9 +107,9 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 
 1. **Never use `writeFile` directly** — always `atomicWrite` (or temp+fsync+`os.replace` in Python).
 2. **Never accept user-supplied paths without `safePath()`** — rejects `..`, absolute paths, Windows drive letters, backslash traversals.
-3. **Never add native modules.** No `node-gyp`, no `bcrypt`-style packages.
+3. **Never add native modules.** No `node-gyp`, no `bcrypt`-style packages. This covers everything a user installs; the viewer build's `esbuild` binary is a `devDependency` only.
 4. **Never add a `postinstall` script.** `ci-package.mjs` blocks publish if one exists.
-5. **`devDependencies: {}` is a feature** — don't add test frameworks.
+5. **`devDependencies` are for the wiki viewer bundle build only** — exact-pinned, never a test framework. Everything else ships as authored source. See `docs/specs/spec-wiki-view/delivery.md`.
 6. **Cold-start budget < 300 ms** — keep lazy imports lazy.
 7. **No emoji in shipped files** unless explicitly requested.
 8. **v0.1 does not bundle MCP `llm-review` or any second-provider API/key plumbing** — shipping simplicity, not ideology. To reduce bias, run `/lumi-check` in a fresh session or via a subagent after `/lumi-ingest` (same model, blank context — free on every supported platform). If a user wants a second-model reviewer, that is their choice to wire in; it is not forbidden, just not bundled.

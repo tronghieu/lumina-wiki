@@ -30,7 +30,7 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 ## 2. Technology stack & versions
 
 **Runtime:**
-- Node ≥24 (ESM-only, no transpile, no native modules)
+- Node ≥24 (ESM-only, no native modules). Shipped code is authored source with no transpile step. The one built file is the wiki viewer's client bundle.
 - Python 3.9+ (soft dependency for all installs — `extract_pdf.py` needs `pip install pypdf`; research pack adds further tools and deps)
 
 **Direct JS deps (license-audited MIT/ISC/Apache-2.0):**
@@ -40,9 +40,11 @@ A separate global "hub" mode (`lumina wikis` CLI + `lumi-hub` skill, `src/instal
 - `picocolors@^1.1.1` — TTY-aware color (lazy-loaded, optional)
 - `glob@^11.0.0` — template expansion
 
+**Build-only JS deps (wiki viewer bundle):** exact-pinned `devDependencies`, used to build `src/viewer/app/viewer.js` and for nothing else. A library bundled into the viewer must be MIT, ISC, Apache-2.0, BSD-2-Clause, or BSD-3-Clause, and must appear in the viewer's third-party notices. Users never install these. See `docs/specs/spec-wiki-view/delivery.md`.
+
 **Python deps:** `requests>=2.31`, `pypdf>=4.0`, `pytest>=7`, `pytest-cov>=4`. Optional: `pdfminer.six`, `pdfplumber`.
 
-**Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
+**Test runners:** `node --test` (built-in `node:test` + `node:assert/strict`) for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no test framework.** `devDependencies` are allowed only for the viewer bundle build.
 
 **CI:** Node 24 × {Ubuntu, macOS, Windows} = 3 runners, `fail-fast: false`. Trigger: push to main + all PRs. `engines` requires Node >=24, matching the CI matrix.
 
@@ -61,7 +63,7 @@ These are absolutes. Every one corresponds to a real failure mode.
 1. **Never call `writeFile` directly.** Always use `atomicWrite` (temp + `fd.datasync()` + rename). Same in Python: temp + fsync + `os.replace`. This is the entire reliability story of the installer.
 2. **Never accept a user-supplied path fragment without `safePath()`.** It rejects `..`, absolute Unix paths, Windows drive letters (`C:\`), and backslash traversals. `RangeError` from `safePath` maps to exit code 2 at `bin/lumina.js`.
 3. **Path joins go through `node:path`.** Never string-concatenate paths. Same in Python: `pathlib`.
-4. **Never use native modules.** No N-API, no `node-gyp`, no `bcrypt`-style packages. Cross-platform install must work without compilers.
+4. **Never use native modules.** No N-API, no `node-gyp`, no `bcrypt`-style packages. Cross-platform install must work without compilers. This covers everything a user installs. The viewer build's `esbuild` ships a prebuilt binary and is a `devDependency` only.
 5. **Never add a `postinstall` script** to `package.json`. `ci-package.mjs` blocks publish if one exists.
 
 ### Color & output
@@ -354,7 +356,7 @@ All tools follow these contracts:
 | Summary | `summary/` | Area-level synthesis |
 | Reading note | `readings/` | Per-unit page-anchored notes for long sources (books, theses); written by `/lumi-ingest` long-source pipeline, linked to the source via `annotates`/`annotated_by`, exempt from `wiki/index.md` (L09) like `reflections/` |
 
-**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `challenges`, `cites`, `includes_source`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{source, target, type, confidence: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
+**Edge types — authoritative source is `_lumina/scripts/schemas.mjs`** (rendered as `src/scripts/schemas.mjs` in this repo). Sample core types: `related_to`, `builds_on`, `challenges`, `cites`, `includes_source`, `part_of`, `same_problem_as`, `grounded_in`, `produced`, `see_also_url`. Stored in `wiki/graph/edges.jsonl` (or `citations.jsonl` for `cites`/`cited_by`). Each edge: `{from, type, to, confidence?: high|medium|low}`. Symmetric edges stored once with sorted endpoints — agents must read both `outbound` and `inbound` to reconstruct.
 
 **Bidirectional `exempt-only` mode** is the default. Only `outputs/**`, `*://*`, `reflections/**`, and (research pack only) `foundations/**` may have a forward link without a reverse. Anything else without a reverse is a lint error.
 
@@ -494,7 +496,7 @@ Five scenarios: `core-default`; `full-pack` (core + research + reading + learnin
 
 ## 8. Testing patterns
 
-- **Runner:** `node --test` for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no devDependencies.**
+- **Runner:** `node --test` for JS/MJS; `pytest -q` for Python. **No Jest, no Vitest, no test framework.**
 - **JS test files:** `*.test.js` (installer) or `*.test.mjs` (scripts), colocated with source.
 - **Python tests:** `src/tools/tests/` with `conftest.py` providing `tmp_project`, `mock_env`, `env_file` fixtures. Network mocked via `unittest.mock.patch` on `requests.Session` at module level — no `responses` or `httpretty`.
 - **Fixture discipline:** each test creates its own `os.tmpdir()` subtree via `mkdtemp`; no shared state.
@@ -588,7 +590,7 @@ _lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/,
 1. **Never run `lumina install` inside the repo root.** It will scaffold a workspace on top of the source code. Always use a sandbox dir.
 2. **Sandbox needs `git init`** before testing idempotency — `dev-sandbox.mjs` does this for you; manual paths must do it explicitly.
 3. **`commands.test.js` is slow** (real `spawnSync` of the CLI, 30 s timeout per test). Don't add more integration tests there unless absolutely necessary.
-4. **Don't add `devDependencies`** to make test setup easier. The current invariant (`devDependencies: {}`) is a feature — Node and pytest are enough.
+4. **Don't add `devDependencies` for testing.** Node and pytest are enough. `devDependencies` are allowed for one purpose only: building the wiki viewer bundle.
 5. **Don't mock `exec` in `update-check.test.js`** — the test deliberately hits real `npm` if available, guarded by a 3 s wall-clock assertion.
 6. **Python test fixtures live in `src/tools/tests/conftest.py`**: `tmp_project` (full directory tree), `mock_env` (dummy keys), `env_file` (writes `.env`). Reuse these instead of building new fixtures.
 7. **`prompts.js` has no tests** — keep prompt logic minimal so the untested surface stays small.
