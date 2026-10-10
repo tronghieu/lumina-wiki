@@ -58,10 +58,10 @@
     images, and HTML comments. Inject its output at exactly one element. Extend the notices if the metafile gained
     packages. Rebuild and commit the bundle.
 - id: "6"
-  title: Filters, local graph, and search
+  title: Filters and search
   description: >-
-    Filters by entity type, relation type, and confidence, the orphan toggle, the local graph by hop count, and
-    page search by title and slug (SPEC CAP-4, CAP-6, CAP-12; spine AD-5, AD-15). All of it works from the
+    Filters by entity type, relation type, and confidence, the orphan toggle, and
+    page search by title and slug (SPEC CAP-4, CAP-12; spine AD-5, AD-15). All of it works from the
     /api/wiki data already loaded.
   invoke_dev_with: >-
     View settings live in the one root reducer; add no second store. Filtering, local-graph search, and page

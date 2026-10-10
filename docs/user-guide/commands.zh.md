@@ -16,6 +16,7 @@
 | `/lumi-reset` | 对你选定的内容重新开始 | `/lumi-reset` | 先给出计划；只有你确认后才会改变内容。 |
 | `/lumi-verify` | 将笔记与它们提到的资料进行核对 | `/lumi-verify article` | 需要你查看的结果；它不会自行改动笔记。 |
 | `/lumi-migrate-legacy` | 在升级 Lumina-Wiki 后更新旧笔记 | `/lumi-migrate-legacy --backfill-ids` | 帮助为旧页面补充缺少的信息，尤其是自动检查无法安全自行填写的部分。 |
+| `/lumi-view` | 在浏览器中查看 wiki | `/lumi-view` | 一个可在浏览器中打开的地址。页面上有页面关系图、全部页面的列表和阅读窗格。那里不能修改任何内容。刷新页面即可看到新的变化。 |
 | `/lumi-help` | 寻找下一步或询问功能如何使用 | `/lumi-help` | 一个建议的下一步。用 `skills` 查看已安装命令，用 `explain <问题>` 询问 Lumina-Wiki。 |
 
 当你没有本地文件时，`/lumi-ingest` 也接受论文标题、arXiv 编号或网页链接。只有你明确要求时，`/lumi-ask` 才会保存回答。

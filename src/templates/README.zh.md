@@ -79,6 +79,7 @@
 - `_lumina/config/lumina.config.yaml` — 工作空间配置；可编辑
 - `_lumina/schema/` — 更深层的参考文档；当此文件指向时打开
 - `_lumina/scripts/` — Node 引擎（`wiki.mjs`、`lint.mjs`、`reset.mjs`、`schemas.mjs`）
+- `_lumina/viewer/` — 内置只读查看器，由 `/lumi-view` 启动；切勿编辑
 - `_lumina/tools/` — Python 工具（始终包含：`extract_pdf.py`、`fetch_pdf.py`、`verify_quotes.py`、`requirements.txt`{{#if pack_research}}；research 包添加 `_env.py`、`prepare_source.py`、`init_discovery.py`、`discover.py` 和各 fetcher 工具{{/if}}）
 - `_lumina/_state/` — 安装程序/技能检查点状态；已 gitignore
 - `_lumina/manifest.json` — 安装程序状态；绝不手动编辑
@@ -197,6 +198,7 @@
 | `/lumi-check`  | 手动/每周       | Lint：断开的链接、孤立页面、缺失的反向链接                        |
 | `/lumi-reset`  | 手动            | 有范围的破坏性清理                                                  |
 | `/lumi-verify` | 手动            | 检查 wiki 页面是否与其引用的来源匹配；报告可疑陈述供用户审查；绝不自动编辑 |
+| `/lumi-view`   | 手动            | 启动内置查看器（`_lumina/viewer/view.mjs`）并报告本地地址：带类型的关系图、页面树、阅读窗格。只读；运行到其命令结束为止 |
 
 {{#if pack_research}}### 包：research
 

@@ -19,7 +19,8 @@ Nothing is generated into the user's workspace.
 - Prints the address once it is listening, as one JSON line with `ok` and `url`. Errors go to stderr as `{"error", "code"}` with exit code 2 or 3, as elsewhere in the engine.
 - A second start for the same workspace reports the address already serving it.
 - A port held by something else leads to another port and a clear message.
-- A refused bind (`EPERM` or `EACCES`) exits 2 with a message naming a sandbox as the likely cause. The skill then hands the user the command.
+- A refused bind (`EPERM` or `EACCES`) exits 2 with a message naming a sandbox as the likely cause. The skill then hands the user the command. A sandbox that also refuses outgoing loopback connections ends the same way.
+- Before listening, every candidate port is probed; only a port that refused the probe is used. A refused loopback connection can take over a second on Windows, so a start there takes about one second.
 - Ending the command frees the port. No process and no file remain.
 
 Who starts it:
@@ -55,10 +56,11 @@ A local server is reachable by any process on the machine and, without care, by 
 - UI: React 19.
 - The bundle is committed to git.
 - CI rebuilds it and fails on any difference, on every pull request and before publish. This is the same "regenerate, then `git diff --exit-code`" pattern as `ci:idempotency`.
-- Mark the bundle as generated in `.gitattributes` to keep diffs quiet.
-- On a merge conflict in the bundle, rebuild. Never merge it by hand.
+- The bundle is marked `binary` in `.gitattributes`, so git never line-merges two builds. On a conflict, rebuild.
+- The same build generates the third-party notices from each bundled package's own license file. CI diffs both files.
+- CI and the publish workflow install with `npm ci --ignore-scripts`, so the build tool's install script never runs in a job that can publish.
 
-Fallback, if Linux CI yields different bytes than macOS: stop committing the bundle, build it in `prepack`, and assert the built assets exist before publish.
+The fallback of building in `prepack` was not needed: the bundle check passes on Linux, macOS, and Windows.
 
 Rejected: bundling on the user's machine. `esbuild` is a 10.6 MB native binary with its own `postinstall`. It would become a runtime dependency and move build failures onto users.
 
@@ -125,9 +127,11 @@ Build spike, macOS arm64, Node 24:
 | Second run, with `markdown-it` 15.0.2 in place of `marked` | 502,466 bytes raw, 169,361 gzipped; two builds matched |
 | Licenses in the install tree | MIT 24, ISC 16, BSD-3-Clause 1, BSD-2-Clause 1, PSF-2.0 1 (`argparse`, used only by a CLI and not bundled) |
 | Build time | About 55 ms |
-| Not tested | Linux |
+| Linux and Windows | Proven later by CI: the bundle check passes on ubuntu, macos, and windows runners |
 
-Server spike, macOS arm64, Node 24: a 71-line zero-dependency server passed start, reuse, live read from disk, `Host` rejection, and clean exit. It also survived the Claude Code tool call that launched it. Windows and Linux were not tested.
+Server spike, macOS arm64, Node 24: a 71-line zero-dependency server passed start, reuse, live read from disk, `Host` rejection, and clean exit. It also survived the Claude Code tool call that launched it.
+
+The built server, in CI on ubuntu, macos, and windows runners: start, reuse, two starts at once, a stale version, busy ports, forced listen failures, loopback-only bind, and stop with the port released all pass. Typing Ctrl-C in a Windows terminal is the one behavior no runner can show.
 
 Agent hosts:
 

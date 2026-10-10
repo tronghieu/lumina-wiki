@@ -78,6 +78,7 @@ Keep this mental map in immediate context:
 - `_lumina/config/lumina.config.yaml` — workspace config; editable
 - `_lumina/schema/` — deeper reference docs; open when this file points you there
 - `_lumina/scripts/` — Node engine (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
+- `_lumina/viewer/` — built-in read-only viewer, started by `/lumi-view`; never edit
 - `_lumina/tools/` — Python tools (always: `extract_pdf.py`, `fetch_pdf.py`, `verify_quotes.py`, `requirements.txt`{{#if pack_research}}; research pack adds `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py`, and fetcher tools{{/if}})
 - `_lumina/_state/` — installer/skill checkpoint state; gitignored
 - `_lumina/manifest.json` — installer state; never edit by hand
@@ -196,6 +197,7 @@ Skills live in `.agents/skills/` and are invoked via slash commands. Active inst
 | `/lumi-check`  | manual/weekly  | Lint: broken links, orphans, missing reverse links    |
 | `/lumi-reset`  | manual         | Scoped destructive cleanup                            |
 | `/lumi-verify` | manual         | Check that wiki pages match the sources they cite; reports suspicious statements for the user to review; never auto-edits                            |
+| `/lumi-view`   | manual         | Start the built-in viewer (`_lumina/viewer/view.mjs`) and report its local address: typed graph, page tree, reader. Read-only; it runs until its command ends |
 | `/lumi-help`   | manual         | Read workspace state and recommend the single next action; offer to run it. Argument `skills`/`catalog`/`list` (or a "what's available" question) switches to catalog mode and renders `_lumina/schema/lumi-help.csv` grouped by pack. |
 
 {{#if pack_research}}### Pack: research

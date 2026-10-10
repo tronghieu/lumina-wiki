@@ -30,7 +30,7 @@ Three panes when a page is open:
 
 ## Graph pane
 
-Inherited from the project-mode graph view: animated force layout, drag, zoom, pan, node size by degree, hover highlight of a node and its neighbors, legend, orphan toggle, local graph by hop count, community coloring with a community list.
+Inherited from the project-mode graph view: animated force layout, drag, zoom, pan, node size by degree, hover highlight of a node and its neighbors, legend, orphan toggle, community coloring with a community list.
 
 The resting view holds one filter box, two switches, and the legend. Nothing else sits over the graph until the reader asks for it.
 
@@ -43,7 +43,7 @@ Specific to the wiki:
 | Citations | Drawn as their own relation between source nodes |
 | Confidence | Visible on an edge that carries it, and usable as a filter |
 | External URL target | A distinct kind of leaf node; it has no reader page |
-| Filters | One filter box: plain text keeps pages whose title matches; `type:`, `rel:`, and `conf:` terms keep one kind of page, relation, or confidence; a leading `-` excludes. Focusing the box offers the keys and this wiki's values. Two switches beside it: orphans, and depth around the open page. A legend entry toggles its `type:` term |
+| Filters | One filter box: plain text keeps pages whose title matches; `type:`, `rel:`, and `conf:` terms keep one kind of page, relation, or confidence; a leading `-` excludes. Focusing the box offers the keys and this wiki's values. One switch beside it: orphans. A legend entry toggles its `type:` term |
 | Lint findings | A ring on the node, behind a toggle that is off by default |
 | Choosing a node | Opens that page in the reader and reveals it in the tree |
 
@@ -88,8 +88,11 @@ Relations:
 
 Lint findings:
 
-- The reader lists the open page's findings: check id, severity, message.
-- It offers no fix.
+- The reader lists the open page's findings: check id, severity, message, and line when known.
+- The page list marks each page that has findings, and each folder that holds one.
+- Findings that name no page are listed once, under the page list, closed until opened.
+- The graph panel shows the three counts beside its toggle.
+- The viewer calls findings "Problems" and offers no fix.
 
 ## Staying in step
 

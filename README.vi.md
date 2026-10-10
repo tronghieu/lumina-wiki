@@ -145,6 +145,7 @@ Những lệnh sau là đủ cho phần lớn người dùng:
 | `/lumi-help` | Nhận một gợi ý hữu ích về việc nên làm tiếp. |
 | `/lumi-ingest` | Đưa một tài liệu vào wiki. |
 | `/lumi-ask` | Đặt câu hỏi dựa trên kiến thức đã có trong wiki. |
+| `/lumi-view` | Xem wiki trên trình duyệt: sơ đồ các trang, danh sách trang và khung đọc. |
 | `/lumi-edit` | Sửa hoặc cập nhật một trang wiki. |
 | `/lumi-verify` | Kiểm tra ghi chú có khớp với nguồn được dẫn hay không. |
 | `/lumi-check` | Kiểm tra liên kết hỏng và các vấn đề khác trong wiki. |
@@ -160,7 +161,7 @@ Xem [bảng tra cứu lệnh](docs/user-guide/commands.vi.md) để biết toàn
 - [Dùng QMD để tìm kiếm trên máy](docs/user-guide/advanced-qmd.vi.md) — nâng cao
 - [Kết nối OpenClaw hoặc Hermes](docs/user-guide/openclaw-hermes-integration.vi.md) — nâng cao
 
-Bạn cũng có thể mở thư mục gốc bằng [Obsidian](https://obsidian.md) để xem các ghi chú Markdown bằng giao diện trực quan.
+Để xem wiki, dùng `/lumi-view`. Lệnh này khởi động trình xem có sẵn và đưa cho bạn một địa chỉ để mở trên trình duyệt, kèm sơ đồ quan hệ giữa các trang. Bạn cũng có thể mở thư mục gốc bằng [Obsidian](https://obsidian.md) để xem các ghi chú Markdown.
 
 ## Project mode
 

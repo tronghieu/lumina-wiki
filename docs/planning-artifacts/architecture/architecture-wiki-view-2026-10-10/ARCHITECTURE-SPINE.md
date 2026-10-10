@@ -253,7 +253,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 - **Rule:**
   - The open page is the URL hash and lives nowhere else. One helper pair in `ui/lib/` converts between a page id and a hash, encoding each path segment; every pane and `render.mjs` use it. An empty hash means no page is open. The hash names page ids only.
   - Choosing a `url` node opens its href in a new tab. Choosing a `missing` node opens nothing. A page whose `type` is `null` is drawn in the graph only when an edge touches it.
-  - View settings (filters, color mode, hop count, lint toggle, search text) live in one reducer at the root. Panes are views of the hash and that reducer. Only the graph pane touches `force-graph`.
+  - View settings (filters, color mode, lint toggle, search text) live in one reducer at the root. Panes are views of the hash and that reducer. Only the graph pane touches `force-graph`.
   - A failed `/api/wiki` shows one full-window notice with a reload control. A hash id absent from `nodes`, or a 404 from `/api/page`, shows "page not found" in the reader and leaves graph and tree working.
   - Filtering, local-graph search, page search, tree building, hash conversion, escaping, and rendering are pure modules in `src/viewer/ui/lib/` that import neither React nor any DOM global. A test enforces that.
 
@@ -412,7 +412,7 @@ sequenceDiagram
 | CAP-3 citations | `lib/data.mjs` | AD-5, AD-6 |
 | CAP-4 filters | `ui/lib/` | AD-7, AD-15 |
 | CAP-5 communities | `lib/communities.mjs` | AD-3, AD-6 |
-| CAP-6 local graph | `ui/lib/` | AD-15 |
+| CAP-6 local graph | retired | — |
 | CAP-7 page tree | `ui/lib/`, tree pane | AD-4, AD-5, AD-15, AD-20 |
 | CAP-8 reader | `ui/lib/render.mjs`, reader pane | AD-8, AD-14 |
 | CAP-9 link navigation | `lib/data.mjs`, `render.mjs` | AD-5, AD-14, AD-15, AD-20 |

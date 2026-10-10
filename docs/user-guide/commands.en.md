@@ -16,6 +16,7 @@ Examples below use `/`. In Codex, replace the first `/` with `$`.
 | `/lumi-reset` | start over with selected material | `/lumi-reset` | A proposed plan first, then changes only after you confirm. |
 | `/lumi-verify` | compare notes with the sources they name | `/lumi-verify article` | Findings you can inspect; it does not change your notes by itself. |
 | `/lumi-migrate-legacy` | update older notes after a Lumina-Wiki upgrade | `/lumi-migrate-legacy --backfill-ids` | Help filling in information older pages are missing, especially anything the automatic check could not safely fill in by itself. |
+| `/lumi-view` | see the wiki in your browser | `/lumi-view` | An address to open in your browser. The page shows a map of the pages and how they relate, a list of every page, and a reader. Nothing can be changed there. Reload the page to see new changes. |
 | `/lumi-help` | find the next step or learn how a feature works | `/lumi-help` | One suggested next action. Use `skills` to see your installed commands or `explain <question>` for a product question. |
 
 `/lumi-ingest` also accepts a paper title, an arXiv identifier, or a web link when you do not have a local file. `/lumi-ask` may save an answer only when you explicitly ask it to do so.

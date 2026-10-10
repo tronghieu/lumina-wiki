@@ -418,7 +418,7 @@ All tools follow these contracts:
 
 Source tree is hierarchical (`src/skills/core/<name>/`, `src/skills/packs/<pack>/<name>/`, `src/skills/agents/<name>/`); the **installed `canonicalId`** is flat under `.agents/skills/` (or, for `lumi-hub`, a platform's global skills directory) and follows a pack-prefix rule:
 
-- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`, `lumi-verify`, `lumi-migrate-legacy`, `lumi-help`.
+- **Core skills** keep the bare `lumi-` prefix: `lumi-init`, `lumi-ingest`, `lumi-ask`, `lumi-edit`, `lumi-check`, `lumi-reset`, `lumi-verify`, `lumi-migrate-legacy`, `lumi-help`, `lumi-view`.
 - **Pack skills** insert the pack name between `lumi-` and the leaf: `lumi-<pack>-<name>`. Examples: `lumi-research-discover`, `lumi-research-survey`, `lumi-reading-chapter-ingest`, `lumi-reading-plot-recap`, `lumi-learning-reflect`.
 - **`lumi-hub`** is the one skill with neither prefix pattern — it is not part of any pack and is never installed into `.agents/skills/`.
 
@@ -482,7 +482,7 @@ Steps (`installability`, in order):
 Five scenarios: `core-default`; `full-pack` (core + research + reading + learning × 6 IDE targets); `multilingual-en`, `multilingual-vi`, `multilingual-zh` (each `--lang <x> --packs core,research`). For each:
 1. `git init`, install once, commit baseline
 2. Install again with same args
-3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `.env.example`, `wiki`, `raw`
+3. `git diff --exit-code` over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `QWEN.md`, `IFLOW.md`, `.cursor`, `.claude`, `.agents`, `_lumina/config`, `_lumina/schema`, `_lumina/scripts`, `_lumina/tools`, `_lumina/viewer`, `.env.example`, `wiki`, `raw`
 
 **Any byte-level drift fails CI.** Runtime state outside watched paths is intentionally ignored.
 
@@ -583,7 +583,7 @@ npm run test:python        # src/tools/tests/ via pytest
 ```
 README.md, CLAUDE.md, AGENTS.md, GEMINI.md, QWEN.md, IFLOW.md,
 .cursor/, .claude/, .agents/,
-_lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/,
+_lumina/config/, _lumina/schema/, _lumina/scripts/, _lumina/tools/, _lumina/viewer/,
 .env.example, wiki/, raw/
 ```
 

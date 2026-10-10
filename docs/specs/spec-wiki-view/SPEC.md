@@ -35,9 +35,7 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 - **CAP-5**
   - **intent:** User can recolor the graph by detected community to see clusters of related pages.
   - **success:** Switching to community view recolors the nodes and lists each community with its member pages.
-- **CAP-6**
-  - **intent:** User can focus the graph on one page and its neighbors within a chosen number of hops.
-  - **success:** At one hop, only the selected page and the pages directly related to it remain.
+- **CAP-6** (retired 2026-10-10 by the maintainer: the hop-count switch was built and then removed as one control too many; the open page and its neighbors are still highlighted, and the filter box narrows the graph)
 - **CAP-7**
   - **intent:** User can browse every page in a tree organized the way `wiki/` is, including nested readings and chapters.
   - **success:** The tree holds every markdown file under `wiki/` outside `wiki/graph/`, the index and the log included. Nested units sit under their source or book.
@@ -77,8 +75,8 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 - The server runs in the foreground. No daemon, no detached child, no state file, no idle timer. Whoever starts it owns its life: the agent host as a background task, or the user in a terminal (see `delivery.md`).
 - The server binds `127.0.0.1` only, rejects any request whose `Host` header is not its own loopback address, accepts GET only, and sends no CORS headers. It never builds a filesystem path from request input: page ids and asset names are looked up in maps it built itself. It exposes wiki content and its own assets, nothing else.
 - One source of truth. Entity types, relation types, symmetry, and exemptions come from `schemas.mjs`. Wikilinks resolve by the same rules as lint. The viewer holds no second hard-coded list (see `data-mapping.md`).
-- Page content is untrusted, because pages are written from ingested external sources. Nothing from a page body, frontmatter, or slug runs as script or raw HTML, and the page carries a restrictive content security policy.
-- The viewer bundle is built by the maintainer and committed to git. A user's machine never runs a bundler.
+- Page content is untrusted, because pages are written from ingested external sources. Nothing from a page body, frontmatter, or slug runs as script or raw HTML, and the page carries a restrictive content security policy. An address taken from wiki text leaves the viewer only when it starts with `http://`, `https://`, or `mailto:`. No page text can stall the browser tab or the server.
+- The viewer bundle is built by the maintainer and committed to git. A user's machine never runs a bundler. The committed bundle is byte-identical when rebuilt on Linux, macOS, and Windows; CI proves it on every pull request.
 - Policy amendment: `devDependencies` are allowed for building the viewer bundle and for nothing else. The CLI, installer, and scripts keep shipping as authored source. Runtime `dependencies`, the ban on `postinstall`, the ban on native modules on user machines, and zero telemetry are unchanged.
 - Policy amendment: the architecture rule "Daemonless — no server, no long-running process" now allows a foreground viewer server. A background daemon is still not allowed.
 - Libraries bundled into the viewer are build-time inputs, not runtime dependencies. Each carries an allowed license (MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause) and is listed in the third-party notices.
@@ -115,6 +113,7 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 - Edge targets that are external URLs show as a distinct kind of leaf node with no reader page.
 - A relation stored in both directions is drawn as one directed edge. An edge that names a page that does not exist shows as a missing node.
 - Search covers titles and slugs only.
+- The graph is narrowed through one filter box with `type:`, `rel:`, and `conf:` terms, in the manner of the markdown app the readers already know, not through lists of checkboxes.
 - Dark theme only, and English interface text, in this iteration.
 - The reader header shows title, type, created and updated dates, and the type-specific required frontmatter fields.
 - Lint markers in the graph sit behind a toggle that is off by default, as in the project-mode viewer. The tree always marks. The viewer shows findings and offers no fix.
@@ -125,4 +124,3 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 ## Open Questions
 
 - Ctrl-C in a Windows terminal is checked by hand before release. CI covers start, request rejection, and port release on Windows.
-- Same bundle bytes on Linux, macOS, and Windows are proven by the first CI run of the bundle check. The fallback is defined in `delivery.md`.

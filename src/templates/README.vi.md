@@ -78,6 +78,7 @@ Ghi nhớ bản đồ tư duy này trong ngữ cảnh tức thì:
 - `_lumina/config/lumina.config.yaml` — cấu hình workspace; có thể chỉnh sửa
 - `_lumina/schema/` — tài liệu tham chiếu sâu hơn; mở khi tệp này hướng bạn đến đó
 - `_lumina/scripts/` — bộ máy Node (`wiki.mjs`, `lint.mjs`, `reset.mjs`, `schemas.mjs`)
+- `_lumina/viewer/` — trình xem chỉ đọc có sẵn, khởi động bằng `/lumi-view`; không bao giờ sửa
 - `_lumina/tools/` — công cụ Python (luôn có: `extract_pdf.py`, `fetch_pdf.py`, `verify_quotes.py`, `requirements.txt`{{#if pack_research}}; gói research thêm `_env.py`, `prepare_source.py`, `init_discovery.py`, `discover.py` và các công cụ fetcher{{/if}})
 - `_lumina/_state/` — trạng thái checkpoint installer/skill; bị gitignore
 - `_lumina/manifest.json` — trạng thái installer; không bao giờ chỉnh sửa thủ công
@@ -196,6 +197,7 @@ Các skill nằm trong `.agents/skills/` và được gọi qua lệnh slash. C�
 | `/lumi-check`  | thủ công/hàng tuần | Lint: liên kết hỏng, trang mồ côi, thiếu liên kết ngược           |
 | `/lumi-reset`  | thủ công       | Dọn dẹp phá hủy có phạm vi                                            |
 | `/lumi-verify` | thủ công       | Kiểm tra các trang wiki có khớp với nguồn được trích dẫn; báo cáo các câu đáng ngờ để người dùng xem xét; không bao giờ tự động chỉnh sửa |
+| `/lumi-view`   | thủ công       | Khởi động trình xem có sẵn (`_lumina/viewer/view.mjs`) và báo địa chỉ cục bộ: graph có kiểu, cây trang, khung đọc. Chỉ đọc; chạy đến khi lệnh của nó kết thúc |
 
 {{#if pack_research}}### Gói: research
 
