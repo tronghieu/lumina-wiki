@@ -5,8 +5,9 @@ export const initialState = Object.freeze({
   selectedEdge: null,
   filter: '',
   showOrphans: true,
-  hops: null,
   query: '',
+  colorMode: 'type',
+  showLint: false,
 });
 
 // Folder names come from wiki paths, so 'constructor' or '__proto__' must act like any other name.
@@ -35,13 +36,18 @@ export function reducer(state, action) {
       const value = action.value === true;
       return state.showOrphans === value ? state : { ...state, showOrphans: value };
     }
-    case 'setHops': {
-      const value = action.value === 1 || action.value === 2 || action.value === 3 ? action.value : null;
-      return state.hops === value ? state : { ...state, hops: value };
-    }
     case 'setQuery': {
       const value = typeof action.value === 'string' ? action.value : '';
       return state.query === value ? state : { ...state, query: value };
+    }
+    case 'setColorMode': {
+      const value = action.value;
+      if (value !== 'type' && value !== 'community') return state;
+      return state.colorMode === value ? state : { ...state, colorMode: value };
+    }
+    case 'setShowLint': {
+      const value = action.value === true;
+      return state.showLint === value ? state : { ...state, showLint: value };
     }
     case 'selectEdge':
       return state.selectedEdge === action.key ? state : { ...state, selectedEdge: action.key };

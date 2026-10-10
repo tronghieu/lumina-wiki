@@ -124,7 +124,7 @@ html, body {
 .filter-suggestion { display: block; width: 100%; padding: 3px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .filter-suggestion:hover, .filter-suggestion:focus-visible { background: var(--input-bg); }
 .filter-suggestion-hint { margin-left: 8px; color: var(--muted); font-size: 11px; }
-.filter-switches { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
 .control-item, .control-select { display: inline-flex; align-items: center; gap: 6px; }
 .control-item { cursor: pointer; }
 .control-item input { margin: 0; accent-color: var(--accent); }
@@ -135,7 +135,7 @@ html, body {
 .legend-entry:hover, .legend-entry[aria-pressed="true"] { background: var(--input-bg); }
 .legend-entry.is-off { opacity: 0.4; }
 .legend-entry:focus-visible { outline: 1px solid var(--accent); }
-.filter-empty { margin: 6px 0 0; }
+.filter-empty, .lint-failed { margin: 6px 0 0; }
 .filter-clear { border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
 .filter-clear:focus-visible { outline: 1px solid var(--accent); }
 
@@ -187,7 +187,7 @@ html, body {
 
 /* Reader pane: header, rendered page body, and relations list. */
 .pane-reader { position: relative; overflow-y: auto; padding: 20px 28px; background: var(--panel-bg); font-size: 15px; line-height: 1.6; }
-.reader-header, .reader-body, .reader-relations { max-width: 72ch; }
+.reader-header, .reader-body, .reader-relations, .reader-findings { max-width: 72ch; }
 .reader-close { position: sticky; top: 0; float: right; z-index: 1; padding: 2px 6px; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
 .reader-close:hover { color: var(--fg); }
 .reader-retry { margin-top: 8px; padding: 6px 14px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: inherit; font: inherit; cursor: pointer; }
@@ -216,11 +216,11 @@ html, body {
 .reader-body a.external { text-decoration: underline; }
 .reader-body a.external::after { content: "\2197"; margin-left: 2px; color: var(--muted); }
 .reader-close:focus-visible, .reader-retry:focus-visible, .caption-close:focus-visible, .notice-button:focus-visible,
-.reader-body a:focus-visible, .reader-relations a:focus-visible { outline: 1px solid var(--accent); }
+.reader-body a:focus-visible, .reader-relations a:focus-visible, .reader-findings a:focus-visible { outline: 1px solid var(--accent); }
 .pane-reader:focus { outline: none; }
 .reader-body .wikilink.is-broken { color: var(--error); text-decoration: underline dotted; cursor: not-allowed; }
 .reader-body .inert-link { color: var(--muted); text-decoration: underline dotted; }
-.reader-relations { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border); }
+.reader-relations, .reader-findings { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border); }
 .relations-title { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .relation-type { margin: 10px 0 2px; font-size: 13px; font-weight: 600; }
 .relation-direction { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -231,3 +231,40 @@ html, body {
 .relation-missing { color: var(--muted); text-decoration: underline dotted; }
 .relation-confidence { color: var(--muted); font-size: 12px; }
 .reader-id { margin: 4px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+/* Lint marks, community list, and finding lists. */
+.lint-mark { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; vertical-align: middle; flex: none; }
+/* Rows ellipsize their label, so the dot sits in reserved right padding where it cannot be clipped. */
+.tree-folder:has(.lint-mark), .tree-page:has(.lint-mark) { position: relative; padding-right: 18px; }
+.tree-folder .lint-mark, .tree-page .lint-mark { position: absolute; right: 6px; top: 50%; margin: -3px 0 0; }
+.lint-mark.is-error { background: var(--error); }
+.lint-mark.is-warning { background: var(--warning); }
+.lint-mark.is-info { background: var(--info); }
+.lint-mark.is-folder { opacity: 0.5; }
+.legend-swatch.is-plain:not(.is-hollow) { background: var(--muted); }
+.communities { max-height: 30vh; overflow-y: auto; margin-top: 6px; }
+.community > summary, .lint-workspace > summary { cursor: pointer; }
+.community > summary .legend-swatch { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.community-title { overflow-wrap: anywhere; }
+.community-size { margin-left: 4px; color: var(--muted); font-size: 11px; }
+.community-members { list-style: none; margin: 2px 0 4px; padding: 0 0 0 15px; }
+.community-members a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+.community-members a:hover { text-decoration: underline; }
+.community-members a:focus-visible, .community > summary:focus-visible, .lint-workspace > summary:focus-visible { outline: 1px solid var(--accent); }
+.lint-summary { margin-left: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.lint-count + .lint-count { margin-left: 6px; }
+.lint-count.is-error { color: var(--error); }
+.lint-count.is-warning { color: var(--warning); }
+.lint-count.is-info { color: var(--info); }
+.finding-list { list-style: none; margin: 0; padding: 0; }
+.finding { margin: 0 0 6px; padding-left: 8px; border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+.finding.is-error { border-left-color: var(--error); }
+.finding.is-warning { border-left-color: var(--warning); }
+.finding.is-info { border-left-color: var(--info); }
+.finding-id { font-family: ui-monospace, monospace; font-weight: 700; }
+.finding-severity, .finding-file, .finding-line { color: var(--muted); font-size: 11px; }
+.finding-message { display: block; overflow-wrap: anywhere; }
+.tree-footer { margin-top: 8px; padding: 6px; border-top: 1px solid var(--border); min-width: 0; }
+.tree-footer .lint-workspace > summary { padding: 3px 0; font: inherit; color: inherit; cursor: pointer; }
+.tree-footer .finding-list { margin-top: 6px; }
+.tree-footer .finding { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }

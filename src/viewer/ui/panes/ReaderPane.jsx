@@ -5,6 +5,7 @@ import { relationsOf, headerFields } from '../lib/relations.mjs';
 import { idToHash } from '../lib/hash.mjs';
 import { typeColor } from '../lib/graph-model.mjs';
 import { urlNodeHref } from '../lib/links.mjs';
+import { FindingList } from './FindingList.jsx';
 
 const DIRECTION = { out: STRINGS.directionOut, in: STRINGS.directionIn, both: STRINGS.directionBoth };
 
@@ -32,7 +33,7 @@ function RelationItem({ item }) {
   );
 }
 
-export function ReaderPane({ id, wiki, onClose }) {
+export function ReaderPane({ id, wiki, onClose, findings = [] }) {
   const [state, setState] = useState({ status: 'loading', page: null });
   const [attempt, setAttempt] = useState(0);
   const rootRef = useRef(null);
@@ -76,6 +77,14 @@ export function ReaderPane({ id, wiki, onClose }) {
   const failed = status === 'failed' || (status === 'ready' && html === null);
   const fields = page ? headerFields(page, wiki.schema.entityTypes) : [];
   const groups = page ? relationsOf(wiki, page.id) : [];
+
+  // Broken pages are the ones most likely to have findings, so every non-loading state shows them.
+  const findingsSection = findings.length > 0 && (
+    <section className="reader-findings" aria-labelledby="reader-findings-title">
+      <h2 id="reader-findings-title" className="relations-title">{STRINGS.findingsTitle}</h2>
+      <FindingList findings={findings} />
+    </section>
+  );
 
   return (
     <section className="pane pane-reader" ref={rootRef} aria-label={STRINGS.readerLabel} tabIndex={-1}>
@@ -132,6 +141,7 @@ export function ReaderPane({ id, wiki, onClose }) {
           )}
         </>
       )}
+      {status !== 'loading' && findingsSection}
     </section>
   );
 }

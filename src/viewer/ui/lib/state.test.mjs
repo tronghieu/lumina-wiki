@@ -15,10 +15,11 @@ test('initialState is frozen with the documented shape', () => {
     selectedEdge: null,
     filter: '',
     showOrphans: true,
-    hops: null,
     query: '',
+    colorMode: 'type',
+    showLint: false,
   });
-  assert.deepEqual(Object.keys(initialState).sort(), ['collapsed', 'filter', 'hops', 'query', 'selectedEdge', 'showOrphans']);
+  assert.deepEqual(Object.keys(initialState).sort(), ['collapsed', 'colorMode', 'filter', 'query', 'selectedEdge', 'showLint', 'showOrphans']);
 });
 
 test('toggleFolder closes then opens', () => {
@@ -94,15 +95,6 @@ test('setShowOrphans stores a boolean and is a no-op when unchanged', () => {
   for (const v of ['true', 1, undefined]) assert.equal(reducer(i, { type: 'setShowOrphans', value: v }).showOrphans, false, String(v));
 });
 
-test('setHops accepts null, 1, 2, 3 and maps anything else to null', () => {
-  for (const v of [1, 2, 3]) assert.equal(reducer(frozen(initialState), { type: 'setHops', value: v }).hops, v);
-  const two = frozen(reducer(frozen(initialState), { type: 'setHops', value: 2 }));
-  for (const v of [4, 0, '2', undefined, null]) assert.equal(reducer(two, { type: 'setHops', value: v }).hops, null, String(v));
-  assert.equal(reducer(two, { type: 'setHops', value: 2 }), two);
-  const i = frozen(initialState);
-  for (const v of [null, 4, '2', undefined]) assert.equal(reducer(i, { type: 'setHops', value: v }), i);
-});
-
 test('setQuery sets, coerces non-strings to empty, and is a no-op when unchanged', () => {
   const q = reducer(frozen(initialState), { type: 'setQuery', value: 'abc' });
   assert.equal(q.query, 'abc');
@@ -111,4 +103,38 @@ test('setQuery sets, coerces non-strings to empty, and is a no-op when unchanged
   assert.equal(reducer(s, { type: 'setQuery', value: 5 }).query, '');
   const i = frozen(initialState);
   assert.equal(reducer(i, { type: 'setQuery', value: undefined }), i);
+});
+
+test('setColorMode sets only its field, rejects unknown modes, and is a no-op when unchanged', () => {
+  const i = frozen(initialState);
+  const c = reducer(i, { type: 'setColorMode', value: 'community' });
+  assert.equal(c.colorMode, 'community');
+  assert.deepEqual({ ...c, colorMode: 'type' }, i);
+  const s = frozen(c);
+  assert.equal(reducer(s, { type: 'setColorMode', value: 'community' }), s);
+  for (const v of ['bogus', '', null, undefined, 1]) assert.equal(reducer(s, { type: 'setColorMode', value: v }), s, String(v));
+  assert.equal(reducer(i, { type: 'setColorMode', value: 'type' }), i);
+  assert.equal(reducer(i, { type: 'setColorMode', value: 'bogus' }), i);
+  assert.equal(reducer(s, { type: 'setColorMode', value: 'type' }).colorMode, 'type');
+});
+
+test('setShowLint stores a boolean, coerces non-booleans to false, and is a no-op when unchanged', () => {
+  const i = frozen(initialState);
+  const on = reducer(i, { type: 'setShowLint', value: true });
+  assert.equal(on.showLint, true);
+  assert.deepEqual({ ...on, showLint: false }, i);
+  const s = frozen(on);
+  assert.equal(reducer(s, { type: 'setShowLint', value: true }), s);
+  for (const v of ['true', 1, null, undefined]) assert.equal(reducer(s, { type: 'setShowLint', value: v }).showLint, false, String(v));
+  assert.equal(reducer(i, { type: 'setShowLint', value: false }), i);
+  assert.equal(reducer(i, { type: 'setShowLint', value: 'x' }), i);
+});
+
+test('setFilter and toggleFolder leave colorMode and showLint alone', () => {
+  const s = frozen({ ...initialState, colorMode: 'community', showLint: true });
+  for (const a of [{ type: 'setFilter', value: 'x' }, { type: 'toggleFolder', path: 'a' }]) {
+    const n = reducer(s, a);
+    assert.equal(n.colorMode, 'community');
+    assert.equal(n.showLint, true);
+  }
 });

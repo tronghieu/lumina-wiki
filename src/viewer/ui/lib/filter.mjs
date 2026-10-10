@@ -33,7 +33,6 @@ export function vocabulary(model, wiki) {
 export function visibleSets(model, wiki, settings, openId) {
   const q = parseFilter(settings.filter ?? '');
   const showOrphans = settings.showOrphans !== false;
-  const hops = settings.hops > 0 ? settings.hops : null;
   const open = model.nodes.some((n) => n.id === openId) ? openId : null;
   // Each typed value is resolved once against the buckets the wiki holds, so exact names beat prefixes.
   const vocab = vocabulary(model, wiki);
@@ -60,21 +59,6 @@ export function visibleSets(model, wiki, settings, openId) {
     const touched = new Set(passing.flatMap((l) => [l.source, l.target]));
     ids = new Set([...ids].filter((id) => touched.has(id)));
   }
-  if (hops !== null && open !== null) {
-    const adj = new Map();
-    for (const l of passing) {
-      for (const [a, b] of [[l.source, l.target], [l.target, l.source]]) {
-        if (!adj.has(a)) adj.set(a, []);
-        adj.get(a).push(b);
-      }
-    }
-    const seen = new Set([open]);
-    let frontier = [open];
-    for (let h = 0; h < hops; h++) {
-      frontier = frontier.flatMap((id) => adj.get(id) || []).filter((id) => !seen.has(id) && seen.add(id));
-    }
-    ids = new Set([...ids].filter((id) => seen.has(id)));
-  }
   const matchCount = ids.size;
   if (open !== null) ids.add(open);
 
@@ -85,7 +69,7 @@ export function visibleSets(model, wiki, settings, openId) {
     neighbors.get(l.source).add(l.target);
     neighbors.get(l.target).add(l.source);
   }
-  return { nodeIds: ids, linkKeys: new Set(kept.map((l) => l.key)), neighbors, open, matchCount };
+  return { nodeIds: ids, linkKeys: new Set(kept.map((l) => l.key)), neighbors, matchCount };
 }
 
 // A selected relation is shown only while the filter leaves it on screen.

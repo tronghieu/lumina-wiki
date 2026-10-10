@@ -2,18 +2,21 @@ import { useEffect, useRef } from 'react';
 import ForceGraph from 'force-graph';
 import { NEUTRAL, nodeLabelHtml, linkLabelHtml } from '../lib/graph-model.mjs';
 import { urlNodeHref } from '../lib/links.mjs';
+import { nodeFill } from '../lib/communities.mjs';
 import { STRINGS } from '../lib/strings.mjs';
 
 const idOf = (x) => (typeof x === 'object' ? x.id : x);
 const hollow = (n) => n.kind !== 'page';
 
-export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSelectEdge, onClearEdge, children }) {
+export function GraphPane({ model, visible, openId, selectedEdge, colorMode = 'type', lintRings = null, onOpen, onSelectEdge, onClearEdge, children }) {
   const canvasRef = useRef(null);
   const graphRef = useRef(null);
   const hoverRef = useRef(null);
   const openRef = useRef(openId);
   const edgeRef = useRef(selectedEdge);
   const visRef = useRef(visible);
+  const modeRef = useRef(colorMode);
+  const ringsRef = useRef(lintRings);
   const cbRef = useRef({ onOpen, onSelectEdge, onClearEdge });
   cbRef.current = { onOpen, onSelectEdge, onClearEdge };
 
@@ -30,7 +33,7 @@ export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSele
     const el = canvasRef.current;
     const css = getComputedStyle(document.documentElement);
     const theme = Object.fromEntries(
-      ['--bg', '--fg', '--muted', '--error'].map((k) => [k, css.getPropertyValue(k).trim()]),
+      ['--bg', '--fg', '--muted', '--error', '--warning', '--info'].map((k) => [k, css.getPropertyValue(k).trim()]),
     );
     const bg = theme['--bg'];
     // The library mutates what it is given, so it gets copies; the model stays pristine.
@@ -55,6 +58,9 @@ export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSele
       return f !== null && (idOf(l.source) === f || idOf(l.target) === f);
     };
     const chosen = (l) => l.key === edgeRef.current;
+    const fill = (n) => nodeFill(n, modeRef.current);
+    // Only 7-character hex colors take an alpha suffix.
+    const fade = (c, on) => (on || !/^#[0-9a-f]{6}$/i.test(c) ? c : c + '33');
     const ring = (n) => (n.kind === 'url' ? NEUTRAL : n.kind === 'missing' ? theme['--error'] : null);
 
     const g = new ForceGraph(el)
@@ -65,7 +71,7 @@ export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSele
       .linkVisibility((l) => visRef.current.linkKeys.has(l.key))
       .nodeId('id').nodeRelSize(4).nodeVal('val')
       .cooldownTime(Infinity).d3AlphaMin(0.001)
-      .nodeColor((n) => (hollow(n) ? bg : lit(n.id) ? n.color : n.color + '33'))
+      .nodeColor((n) => (hollow(n) ? bg : lit(n.id) ? fill(n) : fill(n) + '33'))
       .nodeCanvasObjectMode(() => 'after')
       .nodeCanvasObject((n, ctx, scale) => {
         const r = Math.sqrt(n.val) * 4;
@@ -77,17 +83,26 @@ export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSele
           ctx.lineWidth = 1.5 / scale;
           ctx.stroke();
         }
-        if (n.id === openRef.current) {
+        const isOpen = n.id === openRef.current;
+        if (isOpen) {
           ctx.beginPath();
           ctx.arc(n.x, n.y, r + 2.5, 0, 2 * Math.PI);
           ctx.strokeStyle = theme['--fg'];
           ctx.lineWidth = 1.5 / scale;
           ctx.stroke();
         }
+        const sev = ringsRef.current?.get(n.id);
+        if (sev) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r + 2.5 + (isOpen ? 2.5 : 0), 0, 2 * Math.PI);
+          ctx.strokeStyle = fade((theme[`--${sev}`] || fill(n)).trim(), lit(n.id));
+          ctx.lineWidth = 1.5 / scale;
+          ctx.stroke();
+        }
       })
       .linkColor((l) => {
         const src = byId.get(idOf(l.source));
-        const c = hollow(src) ? NEUTRAL : src.color;
+        const c = fill(src);
         return focus() === null && !chosen(l) ? c + '59' : touches(l) || chosen(l) ? c : c + '14';
       })
       .linkWidth((l) => (touches(l) || chosen(l) ? 1.6 : 0.6))
@@ -207,6 +222,13 @@ export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSele
     edgeRef.current = selectedEdge;
     redraw();
   }, [selectedEdge, model]);
+
+  // Color mode and lint rings only repaint: no data reset, no re-heat, no camera move.
+  useEffect(() => {
+    modeRef.current = colorMode;
+    ringsRef.current = lintRings;
+    redraw();
+  }, [colorMode, lintRings, model]);
 
   return (
     <section className="pane pane-graph" aria-label={STRINGS.graphLabel}>

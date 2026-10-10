@@ -10,7 +10,7 @@ import { reducer, initialState } from './state.mjs';
 const wiki = JSON.parse(readFileSync(
   new URL('../../test-fixtures/contract/expected/wiki.json', import.meta.url), 'utf8'));
 const model = buildGraphModel(wiki);
-const ALL = { filter: '', showOrphans: true, hops: null };
+const ALL = { filter: '', showOrphans: true };
 const tri = (e) => `${e.from} ${e.type} ${e.to}`;
 const sort = (a) => [...a].sort();
 
@@ -23,22 +23,6 @@ const allNodes = sort(model.nodes.map((n) => n.id));
 const triples = (pred) => sort(wiki.edges.filter(pred).map(tri));
 const among = (ids) => triples((e) => ids.includes(e.from) && ids.includes(e.to));
 const SOURCES = ['sources/deep-work', 'sources/lora', 'sources/lora-2'];
-
-// Plain breadth-first walk over the given edges, either direction.
-function walk(edges, start, hops) {
-  const seen = new Set([start]);
-  let frontier = [start];
-  for (let h = 0; h < hops; h++) {
-    const next = [];
-    for (const e of edges) {
-      for (const [a, b] of [[e.from, e.to], [e.to, e.from]]) {
-        if (frontier.includes(a) && !seen.has(b)) { seen.add(b); next.push(b); }
-      }
-    }
-    frontier = next;
-  }
-  return sort(seen);
-}
 
 function mini(nodes, edges) {
   return {
@@ -70,12 +54,9 @@ test('defaults give every node and link; neighbors match the model', () => {
   assert.deepEqual(r.v.neighbors, model.neighbors);
 });
 
-test('missing showOrphans counts as true; non-positive hops as no depth', () => {
+test('missing showOrphans counts as true', () => {
   const v = visibleSets(model, wiki, { filter: '' }, 'sources/lora-2');
   assert.deepEqual(sort(v.nodeIds), allNodes);
-  for (const hops of [0, -1, undefined]) {
-    assert.deepEqual(run({ hops }, 'sources/lora-2').nodes, allNodes);
-  }
 });
 
 test('free text', () => {
@@ -191,46 +172,6 @@ test('orphans off with an open page', () => {
   assert.deepEqual(run({ showOrphans: false }, 'summary/2024').nodes, sort([...linked, 'summary/2024']));
 });
 
-test('depth', () => {
-  const open = 'sources/lora-2';
-  const d1 = walk(wiki.edges, open, 1);
-  assert.deepEqual(d1, ['sources/deep-work', 'sources/lora', 'sources/lora-2']);
-  const r1 = run({ hops: 1 }, open);
-  assert.deepEqual(r1.nodes, d1);
-  assert.deepEqual(r1.links, among(d1));
-  assert.equal(r1.links.length, 5);
-  for (const k of r1.v.linkKeys) {
-    const l = model.links.find((x) => x.key === k);
-    assert.ok(r1.v.nodeIds.has(l.source) && r1.v.nodeIds.has(l.target));
-  }
-  const d2 = walk(wiki.edges, open, 2);
-  assert.equal(d2.length, 9); // adds rank, adapters, gone, url, ada-park, 01-focus
-  assert.deepEqual(run({ hops: 2 }, open).nodes, d2);
-  assert.deepEqual(run({ hops: 2 }, open).links, among(d2));
-  assert.deepEqual(run({ hops: 3 }, open).nodes, walk(wiki.edges, open, 3));
-  assert.deepEqual(run({ hops: 3 }, open).nodes, d2);
-});
-
-test('depth walks visible links only', () => {
-  const open = 'sources/lora-2';
-  const noCites = wiki.edges.filter((e) => e.type !== 'cites');
-  assert.deepEqual(run({ filter: '-rel:cites', hops: 1 }, open).nodes, ['sources/lora', 'sources/lora-2']);
-  const d3 = run({ filter: '-rel:cites', hops: 3 }, open);
-  assert.deepEqual(d3.nodes, walk(noCites, open, 3));
-  assert.ok(!d3.nodes.includes('sources/deep-work'));
-  assert.ok(d3.links.every((l) => !l.includes(' cites ')));
-  // The only source between ada-park and the rest is hidden, so the walk stops at once.
-  const a = run({ filter: '-type:sources', hops: 3 }, 'people/ada-park');
-  assert.deepEqual(a.nodes, ['people/ada-park']);
-  assert.deepEqual(a.links, []);
-});
-
-test('no usable open page means no depth', () => {
-  assert.deepEqual(run({ hops: 1 }, null).nodes, allNodes);
-  assert.deepEqual(run({ hops: 1 }, 'index').nodes, allNodes);
-  assert.deepEqual(run({ hops: 1, filter: 'type:sources' }, 'index').nodes, SOURCES);
-});
-
 test('the open page stays when its kind is filtered out', () => {
   const r = run({ filter: 'type:concepts' }, 'sources/lora');
   assert.deepEqual(r.nodes, ['concepts/adapters', 'concepts/rank', 'sources/lora']);
@@ -303,10 +244,7 @@ test('exact names beat prefixes', () => {
   assert.deepEqual(run({ filter: 'type:s' }).nodes, sort([...SOURCES, 'summary/2024']));
 });
 
-test('open and matchCount', () => {
-  assert.equal(run({}, 'sources/lora').v.open, 'sources/lora');
-  assert.equal(run({}, null).v.open, null);
-  assert.equal(run({}, 'index').v.open, null);
+test('matchCount', () => {
   const z = run({ filter: 'zzzz' }, 'sources/lora');
   assert.deepEqual(z.nodes, ['sources/lora']);
   assert.equal(z.v.matchCount, 0);
@@ -329,7 +267,5 @@ test('the reducer state drives the filter', () => {
   s = reducer(initialState, { type: 'setShowOrphans', value: false });
   const gone = ['readings/deep-work/00-preface', 'summary/2024'];
   assert.deepEqual(sort(visibleSets(model, wiki, s, null).nodeIds), allNodes.filter((id) => !gone.includes(id)));
-  s = reducer(initialState, { type: 'setHops', value: 1 });
-  assert.deepEqual(sort(visibleSets(model, wiki, s, 'sources/lora-2').nodeIds), walk(wiki.edges, 'sources/lora-2', 1));
   assert.deepEqual(sort(visibleSets(model, wiki, initialState, null).nodeIds), allNodes);
 });

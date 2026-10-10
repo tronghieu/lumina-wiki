@@ -123,6 +123,8 @@ Bucket names. A node's kind is its entity type name, or `other` (a page with no 
 
 ## Spec Change Log
 
+- **2026-10-10, maintainer on the story 7 build.** The Depth switch is removed: one control too many. Every line above about depth or hops is void; SPEC CAP-6 is retired. The code left with story 7's commit.
+
 - **2026-10-10, maintainer feedback on the first build.** The first build filtered with checkbox lists of types, relations, and confidence levels, with counts and a reset button. The maintainer could not tell what the block was for and asked for a filter search like the one in the markdown app his readers know. The filter is now one query box with three keys, suggestions, and two switches. Capabilities are unchanged. KEEP: one pure visibility function; hidden nodes stay in the layout; search separate from the filter; settings in the one reducer.
 - **Same pass, from review.** Highlighting read the unfiltered neighbor map; the edge caption outlived its edge; the hop selector was live for a page outside the graph; a narrowed graph could leave an empty pane with no way out; search split words on spaces only.
 

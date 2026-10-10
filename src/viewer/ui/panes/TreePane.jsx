@@ -1,8 +1,22 @@
 import { useEffect, useRef } from 'react';
-import { STRINGS } from '../lib/strings.mjs';
+import { STRINGS, severityName } from '../lib/strings.mjs';
+
+// Severity dot shown after a row label; `worst` is null when the row has no lint finding.
+function Mark({ worst, folder = false }) {
+  if (!worst) return null;
+  const label = STRINGS.markLabel + ': ' + severityName(worst);
+  return (
+    <span
+      className={'lint-mark is-' + worst + (folder ? ' is-folder' : '')}
+      role="img"
+      aria-label={label}
+      title={label}
+    />
+  );
+}
 
 // Renders one level of rows. Closed folders render no children.
-function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested = false }) {
+function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, marks, nested = false }) {
   return (
     <ul className={nested ? 'tree-list tree-children' : 'tree-list'}>
       {rows.map((row) => {
@@ -18,6 +32,7 @@ function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested =
                 onClick={() => onToggle(row.path)}
               >
                 {row.name}
+                {marks && <Mark worst={marks.folders.get(row.path)} folder />}
               </button>
               {!closed && (
                 <Rows
@@ -27,6 +42,7 @@ function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested =
                   onToggle={onToggle}
                   onOpen={onOpen}
                   selectedRef={selectedRef}
+                  marks={marks}
                   nested
                 />
               )}
@@ -45,6 +61,7 @@ function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested =
               onClick={() => onOpen(row.id)}
             >
               {row.title}
+              {marks && <Mark worst={marks.byNode.get(row.id)?.worst} />}
             </button>
           </li>
         );
@@ -53,7 +70,7 @@ function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested =
   );
 }
 
-export function TreePane({ tree, openId, collapsed, onToggle, onOpen, children }) {
+export function TreePane({ tree, openId, collapsed, onToggle, onOpen, marks = null, footer = null, children }) {
   const selectedRef = useRef(null);
   const scrolledTo = useRef(null);
 
@@ -81,8 +98,10 @@ export function TreePane({ tree, openId, collapsed, onToggle, onOpen, children }
           onToggle={onToggle}
           onOpen={onOpen}
           selectedRef={selectedRef}
+          marks={marks}
         />
       )}
+      {footer !== null && <div className="tree-footer">{footer}</div>}
     </aside>
   );
 }

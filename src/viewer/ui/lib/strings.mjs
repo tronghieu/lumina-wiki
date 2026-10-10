@@ -40,8 +40,30 @@ export const STRINGS = Object.freeze({
   suggestConf: 'confidence of a relation',
   orphansLabel: 'Orphans',
   orphansHint: 'Pages with no visible relation',
-  depthLabel: 'Depth',
-  depthAll: 'All',
   legendLabel: 'Kinds of page',
   readerLabel: 'Page',
+  colorLabel: 'Color by',
+  colorByType: 'Page type',
+  colorByCommunity: 'Cluster',
+  colorHint: 'Page type colors each page by its folder. Cluster gives one color to pages that link closely to each other.',
+  communitiesLabel: 'Clusters of closely linked pages',
+  lintToggle: 'Problems',
+  lintHint: 'Ring the pages that the wiki checks point at',
+  lintLoading: 'checking...',
+  lintNone: 'none found',
+  lintFailed: 'The checks could not be loaded.',
+  lintErrors: 'errors',
+  lintWarnings: 'warnings',
+  lintInfo: 'notes',
+  lintWorkspace: 'Problems in the wiki as a whole',
+  findingsTitle: 'Problems',
+  findingLine: 'line',
+  markLabel: 'has problems',
+  severityError: 'error',
+  severityWarning: 'warning',
+  severityInfo: 'note',
 });
+
+/** The word shown for a severity; an unknown one is shown as sent. */
+const SEVERITY_NAMES = new Map([['error', STRINGS.severityError], ['warning', STRINGS.severityWarning], ['info', STRINGS.severityInfo]]);
+export const severityName = (s) => SEVERITY_NAMES.get(s) ?? String(s);

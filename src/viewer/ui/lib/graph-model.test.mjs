@@ -5,7 +5,7 @@ import {
   TYPE_PALETTE, NEUTRAL, typeColor, buildGraphModel, nodeTooltip, edgeCaption,
   nodeLabelHtml, linkLabelHtml, legendOf, EMPTY_WIKI,
 } from './graph-model.mjs';
-import { STRINGS } from './strings.mjs';
+import { STRINGS, severityName } from './strings.mjs';
 
 const wiki = JSON.parse(readFileSync(
   new URL('../../test-fixtures/contract/expected/wiki.json', import.meta.url), 'utf8'));
@@ -171,4 +171,12 @@ test('the placeholder wiki builds an empty model and an empty legend', () => {
   assert.equal(m.neighbors.size, 0);
   assert.equal(m.degree.size, 0);
   assert.deepEqual(legendOf(m, EMPTY_WIKI.schema.entityTypes), []);
+});
+
+test('severityName maps the three severities and passes anything else through as text', () => {
+  assert.equal(severityName('error'), 'error');
+  assert.equal(severityName('warning'), 'warning');
+  assert.equal(severityName('info'), 'note');
+  assert.equal(severityName('constructor'), 'constructor');
+  assert.equal(severityName(undefined), 'undefined');
 });
