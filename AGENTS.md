@@ -36,6 +36,7 @@ npm run test:all                                 # installer + scripts + Python
 npm run test:installer                           # node --test src/installer/*.test.js
 npm run test:scripts                             # node --test src/scripts/*.test.mjs
 npm run test:python                              # pytest src/tools/tests -q
+npm run test:viewer                              # node --test src/viewer/**/*.test.mjs + the build script's test
 npm run test:fs                                  # one module: fs helpers
 npm run test:manifest                            # one module: manifest read/write
 npm run test:template                            # one module: template engine
@@ -48,9 +49,13 @@ node --test src/scripts/wiki.test.mjs
 # CI gates (run before push — same as GitHub Actions)
 npm run ci:idempotency                           # install twice → git diff over watched paths must be empty
 npm run ci:package                               # npm pack --dry-run, validate files allowlist + postinstall ban
+npm run ci:viewer-bundle                         # rebuild the viewer bundle and notices → git diff must be empty
+
+# Wiki viewer bundle (after any change under src/viewer/ui/ or to a viewer devDependency; commit both outputs)
+npm run build:viewer
 ```
 
-Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** `devDependencies` are allowed only for building the wiki viewer bundle. Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/tools/tests/test_*.py`.
+Tests use built-in `node --test` (`node:test` + `node:assert/strict`) and `pytest`. **Do not add Jest, Vitest, or any test framework.** `devDependencies` are allowed only for building the wiki viewer bundle. Test naming: `src/installer/*.test.js`, `src/scripts/*.test.mjs`, `src/viewer/**/*.test.mjs`, `src/tools/tests/test_*.py`.
 
 ## Architecture — the big picture
 

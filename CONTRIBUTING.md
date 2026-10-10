@@ -48,7 +48,7 @@ this repo** — it will overwrite source files. Use `npm run dev:sandbox` instea
 ## 3. Local dev setup
 
 ```bash
-# Clone and install runtime deps (no devDependencies — that's intentional)
+# Clone and install deps (devDependencies exist only to build the wiki viewer bundle)
 git clone https://github.com/tronghieu/lumina-wiki.git
 cd lumina-wiki
 npm install
@@ -68,6 +68,7 @@ npm run test:all          # Node + Python + installer
 npm run test:catalog      # lumi-help.csv integrity (8 pack combos)
 npm run ci:idempotency    # install twice → git diff over watched paths empty
 npm run ci:package        # npm pack --dry-run + files allowlist + postinstall ban
+npm run ci:viewer-bundle  # rebuild the wiki viewer bundle → git diff empty
 ```
 
 ## 4. Non-negotiable rules (the short version)
@@ -80,7 +81,7 @@ most likely to fail review:
 | **Never `writeFile` directly — always `atomicWrite`** (Node) or `tempfile + fsync + os.replace` (Python) | Partial writes corrupt the workspace |
 | **Never accept user paths without `safePath()`** | Rejects `..`, absolute paths, Windows drive letters, backslash traversals |
 | **Cold-start budget < 300 ms** (CI fails at 350 ms median) | `bin/lumina.js` lazy-imports every subcommand; keep it that way |
-| **No `postinstall` script. No native modules. No `devDependencies`.** | `ci-package.mjs` blocks publish if any of these creep in |
+| **No `postinstall` script. No native modules for users. `devDependencies` only for the wiki viewer bundle, exact-pinned.** | Nothing runs or compiles on a user's machine at install. `ci-package.mjs` blocks a `postinstall`; a test pins the `devDependencies` set |
 | **`raw/` is user-owned** — additions only into `raw/tmp/` and `raw/discovered/` | Touching anything else destroys user data |
 | **Bidirectional links are mandatory** | Forward link + reverse link in the same operation; exceptions live in `foundations/**`, `outputs/**`, `*://*` |
 | **No emoji in shipped files** (READMEs, installer output, skills) unless the user asks | Maintainer preference; respected in every shipped file today |
@@ -221,6 +222,8 @@ Every PR runs:
   (intentionally ignores `_lumina/manifest.json` and `_lumina/_state/*`)
 - **`npm run ci:package`** — `npm pack --dry-run`, validates `files` allowlist
   and the postinstall ban
+- **`npm run ci:viewer-bundle`** — rebuilds the wiki viewer bundle and its
+  third-party notices; the result must match what is committed
 - **Cold-start measurement** — median across N runs must be < 350 ms (budget 300
   ms)
 

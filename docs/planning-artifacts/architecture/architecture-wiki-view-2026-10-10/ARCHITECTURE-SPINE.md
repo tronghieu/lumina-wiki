@@ -37,7 +37,7 @@ Five units are built separately. Each owns the files in its row and no others (A
 | Server | `src/viewer/view.mjs`, `src/viewer/lib/server.mjs` |
 | Read model | `src/viewer/lib/data.mjs`, `src/viewer/lib/communities.mjs`, the engine edit in AD-3, the contract fixture (AD-23) |
 | Client | `src/viewer/ui/**`, `src/viewer/app/index.html`, `src/viewer/app/viewer.css` |
-| Build | `scripts/build-viewer.mjs`, `scripts/ci-viewer-bundle.mjs`, `src/viewer/app/viewer.js`, the notices file, CI steps |
+| Build | `scripts/build-viewer.mjs` and its test, `scripts/ci-viewer-bundle.mjs`, `src/viewer/app/viewer.js`, the notices file, CI steps |
 | Install | the install list, package lists, the skill, registration and documents (AD-24) |
 
 ## Inherited Invariants
@@ -114,14 +114,15 @@ flowchart TD
 - **Binds:** CAP-2, CAP-3, CAP-4, CAP-5, CAP-10
 - **Prevents:** double arrows for one relation; one relation spelled two ways counting twice; community results changing between machines.
 - **Rule:** Endpoints are resolved to ids first (AD-4, AD-5). Everything below runs on ids.
-  - A row that is not an object with string `from`, `type`, and `to` is skipped. A `confidence` outside `high`, `medium`, `low` becomes `null`.
-  - A `cites` or `cited_by` row found in `edges.jsonl` is treated as a citation: `cited_by` is flipped to `cites`.
+  - Rows are read from `edges.jsonl`, then `citations.jsonl`, each in file order. That order decides every "first" below.
+  - An `edges.jsonl` row that is not an object with string `from`, `type`, and `to` is skipped. A `citations.jsonl` row needs string `from` and `to` only; its type is always `cites`, as the engine never reads that key back. A `confidence` outside `high`, `medium`, `low` becomes `null`.
+  - A `cites` or `cited_by` row found in `edges.jsonl` is treated as a citation: `cited_by` is flipped to `cites`. Rows of `citations.jsonl` are never flipped.
   - A symmetric type yields one edge with `directed: false` and `from < to`.
-  - Rows `(a, T, b)` and `(b, U, a)` where `T.reverse` is `U` or `U.reverse` is `T` are one relation. Keep the row whose type names the other in `reverse`; when both do, keep the type listed first in `EDGE_TYPES`. A row with no partner is emitted as stored.
-  - Rows equal on `(from, type, to)` collapse to one. The kept row's `confidence` wins; when it has none, the dropped row's is used. `source: "citations"` wins over `"edges"`.
+  - Rows equal on `(from, type, to)` collapse to one. Its `confidence` is the first non-null one among them. Its `source` is `"citations"` when any of them came from `citations.jsonl`, else `"edges"`.
+  - Then rows `(a, T, b)` and `(b, U, a)` where `T.reverse` is `U` or `U.reverse` is `T` are one relation. Keep the row whose type names the other in `reverse`; when both do, keep the type listed first in `EDGE_TYPES`. The kept row takes the dropped row's `confidence` when it has none. Symmetric types are not paired, and a row is never paired with itself, so a self-loop is emitted. A row with no partner is emitted as stored.
   - A row whose type is not in `EDGE_TYPES` is emitted with `directed: true`.
-  - Nodes are emitted sorted by `id`, edges by `(from, type, to)`, compared by UTF-16 code unit.
-  - Community detection runs on page nodes and page-to-page edges only, in that order. `url` and `missing` nodes get `community: null`.
+  - Nodes are emitted sorted by `id`; edges by `from`, then `type`, then `to`. Strings compare by UTF-16 code unit, field by field.
+  - Community detection runs on the page nodes and the final page-to-page edges, in that order. `url` and `missing` nodes get `community: null`.
 
 ### AD-7 — The HTTP contract
 
@@ -144,16 +145,16 @@ Every type carries `charset=utf-8`. Assets are read from disk on each request.
 | Shape | Keys and values |
 | --- | --- |
 | `schema.entityTypes[]` | `{name, required}`. `name` is a key of `ENTITY_DIRS`, in its order, without `graph`. `required` is the keys marked `required: true` in `REQUIRED_FRONTMATTER[name]`, in order, minus the base keys; `[]` when the type has no entry. |
-| `schema.relationTypes[]` | `{name, symmetric, reverse}` for each entry of `EDGE_TYPES`, in its order. `symmetric` is a boolean. `reverse` is a string or `null`. |
+| `schema.relationTypes[]` | `{name, symmetric, reverse}` for each entry of `EDGE_TYPES`, in its order. `symmetric` is `true` only when the entry says so, else `false`. `reverse` is a string or `null`. |
 | `schema.wikilinkPattern` | `WIKILINK_RE.source` |
-| `nodes[]` | `{id, kind, type, title, community}`. Holds every page, always including `index` and `log`, plus one node per `url` and `missing` endpoint. `kind` is `"page"`, `"url"`, or `"missing"`. `type` is the entity type name from `entityTypeForPath`, or `null`. `community` is an index into `communities`, or `null`. |
-| `title` | Always a non-empty string: the frontmatter title as a string when present and non-empty; else the last segment of the id; for a `url` node the href; for a `missing` node the endpoint as written. |
+| `nodes[]` | `{id, kind, type, title, community}`. Holds every page, always including `index` and `log`, plus one node per `url` and `missing` endpoint. `kind` is `"page"`, `"url"`, or `"missing"`. `type` is the page's entity folder name from `entityTypeForPath`, never the frontmatter `type`; it is `null` for a page outside an entity folder and for every `url` and `missing` node. `community` is an index into `communities`, or `null`. |
+| `title` | Always a non-empty string: the frontmatter title when it is a non-empty string or a number, as a string; else the last segment of the id; for a `url` node the href; for a `missing` node the endpoint as written. |
 | `edges[]` | `{from, to, type, directed, confidence, source}`. `confidence` is `"high"`, `"medium"`, `"low"`, or `null`. `source` is `"edges"` or `"citations"`. |
 | `communities[]` | `{name, size}`. `name` is the id of the community's highest-degree page. The client shows that page's `title`. |
 | page `frontmatter` | The parsed frontmatter object unchanged: keys and value types as parsed. `{}` when the page has none. |
-| page `body` | Markdown with the frontmatter block removed, otherwise unchanged. |
+| page `body` | The text after the frontmatter block, as `parseFrontmatter` returns it, untrimmed. The whole file when there is no frontmatter. |
 | page `links` | `{"<target>": "<page id>" \| null}`. The key is capture group 1 of `WIKILINK_RE`, trimmed, never including the alias. The read model scans the whole body. A target with `://` or one that does not resolve maps to `null`. |
-| `findings[]` | `{id, severity, fixable, file, line, message, nodeId}`; exactly these keys. |
+| `findings[]` | `{id, severity, fixable, file, line, message, nodeId}`; exactly these keys. Sorted by `file`, `line`, `id`, `message`, with `null` first and `line` compared as a number. |
 | `summary` | `{errors, warnings, info}` |
 | any error | `{error, message}`. `error` is `method_not_allowed`, `forbidden_host`, `not_found`, or `internal`, with status 405, 403, 404, or 500. The client branches on the status only. |
 
@@ -221,7 +222,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** CAP-15
 - **Prevents:** a slow or failing lint run leaving the user with no viewer; findings that point at no node.
-- **Rule:** `readLint` calls `runLint(root, {})`, which writes nothing. It keeps only the finding keys of AD-7 and sets `nodeId` to `resolveWikilinkTarget(file, …)`, or `null` when that gives no page. Edge checks put the endpoint as written in `file`, and citation checks put a `.jsonl` path there, so stripping `.md` is not enough. The client marks a page only for a non-null `nodeId` and lists the remaining findings in one workspace-level group. The marked set is the set of non-null `nodeId`s. A failed `/api/lint` shows a notice and leaves graph, tree, and reader working.
+- **Rule:** `readLint` calls `runLint(root, {})`, which writes nothing. It keeps only the finding keys of AD-7 and sets `nodeId` to `resolveWikilinkTarget(file, …)` against the page set of AD-4, or `null` when that gives no page. A `file` that is not a string becomes `null`, with `nodeId: null`. Edge checks put the endpoint as written in `file`, and citation checks put a `.jsonl` path there, so stripping `.md` is not enough. The client marks a page only for a non-null `nodeId` and lists the remaining findings in one workspace-level group. The marked set is the set of non-null `nodeId`s. A failed `/api/lint` shows a notice and leaves graph, tree, and reader working.
 
 ### AD-14 — One renderer, two escape points
 
@@ -247,20 +248,20 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
   - A failed `/api/wiki` shows one full-window notice with a reload control. A hash id absent from `nodes`, or a 404 from `/api/page`, shows "page not found" in the reader and leaves graph and tree working.
   - Filtering, local-graph search, page search, tree building, hash conversion, escaping, and rendering are pure modules in `src/viewer/ui/lib/` that import neither React nor any DOM global. A test enforces that.
 
-### AD-16 — One build, fixed options, one output `[ADOPTED]`
+### AD-16 — One build, fixed options, two generated files `[ADOPTED]`
 
 - **Binds:** CAP-14
 - **Prevents:** two machines producing different bundles; a build that overwrites an authored file.
-- **Rule:** `scripts/build-viewer.mjs` is the only way the bundle is produced. Entry `src/viewer/ui/main.jsx`; output `src/viewer/app/viewer.js`. Options: `bundle`, `minify`, `format: "iife"`, `target: "es2022"`, `jsx: "automatic"`, `define` of `process.env.NODE_ENV` to `"production"`, `legalComments: "none"`, `metafile: true`, no source map. Files under `ui/` import no CSS. The build fails when the metafile lists any output other than `viewer.js`. `npm run build:viewer` runs the script.
+- **Rule:** `scripts/build-viewer.mjs` is the only way the bundle is produced. Entry `src/viewer/ui/main.jsx`; output `src/viewer/app/viewer.js`. Options: `bundle`, `minify`, `format: "iife"`, `target: "es2022"`, `jsx: "automatic"`, `define` of `process.env.NODE_ENV` to `"production"`, `legalComments: "none"`, `metafile: true`, no source map. Files under `ui/` import no CSS. The build runs in memory and fails when esbuild yields any output other than `viewer.js`. It also generates `src/viewer/app/THIRD-PARTY-NOTICES.md` (AD-17). It writes neither file unless every check passes. `npm run build:viewer` runs the script.
   - The shell `app/index.html` is authored by the client unit. It links `/assets/viewer.css`, loads `/assets/viewer.js` with `defer`, holds `<div id="root">`, and contains no inline script and no inline style.
 
 ### AD-17 — The release guard
 
 - **Binds:** CAP-14
 - **Prevents:** shipping a bundle that does not match its source; shipping a library without its license.
-- **Rule:** `npm run ci:viewer-bundle` runs the build, then `git diff --exit-code -- src/viewer/app/viewer.js`. It runs in `ci.yml` on all three operating systems and in `publish.yml` before `ci:package`. `.gitattributes` marks the bundle `-text -diff linguist-generated`. Bundled libraries and `esbuild` are `devDependencies` pinned to exact versions; `package-lock.json` pins the rest. A merge conflict in the bundle is resolved by rebuilding.
-  - The build fails when a package in the metafile is missing from `src/viewer/app/THIRD-PARTY-NOTICES.md`, or when its license is outside the allowed set. The allowed set is MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause.
-  - The notices file follows the format of `src/project/vendor/THIRD-PARTY-NOTICES.md`: one section per package with source, license, copyright, and full text.
+- **Rule:** `npm run ci:viewer-bundle` runs the build, then `git diff --exit-code` over the bundle and the notices file. It runs in `ci.yml` on all three operating systems and in `publish.yml` before `ci:package`. `.gitattributes` marks the bundle `binary linguist-generated`, so git never line-merges two builds. Both workflows install with `npm ci --ignore-scripts`. Bundled libraries and `esbuild` are `devDependencies` pinned to exact versions; `package-lock.json` pins the rest. A merge conflict in the bundle is resolved by rebuilding.
+  - The build generates the notices file from the metafile: one section per bundled package with source, license, copyright, and the full text of the license file that package ships. It fails when a license is outside the allowed set, or when a package ships no license file and has no entry in the build script's own table. The allowed set is MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause.
+  - A test in `test:viewer` pins the `devDependencies` key set and requires exact versions.
 
 ### AD-18 — What installed viewer code may import
 
@@ -302,7 +303,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** all units
 - **Prevents:** two units editing one shared file; a needed file that nobody writes.
-- **Rule:** The unit table under Design Paradigm is binding. `src/viewer/lib/` holds exactly `server.mjs`, `data.mjs`, and `communities.mjs`; a new file there is a spine change. Shared files have these owners:
+- **Rule:** The unit table under Design Paradigm is binding. `src/viewer/lib/` holds exactly `server.mjs`, `data.mjs`, and `communities.mjs`, plus their co-located tests; any other new file there is a spine change. Shared files have these owners:
 
 | File | Owner |
 | --- | --- |
@@ -311,7 +312,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 | `src/scripts/schemas.mjs`, `src/scripts/lint.mjs` (the AD-3 edit only) | Read model |
 | `src/viewer/test-fixtures/` outside `contract/` | each unit, in a folder named after it |
 
-Ownership is authorship, not a ban on generated output. A change to `ui/` runs the build and commits the resulting `app/viewer.js`, and adds a notices section for any library it starts to bundle. A unit adds its own test files to the explicit test lists in `package.json`.
+Ownership is authorship, not a ban on generated output. A change to `ui/` runs the build and commits the resulting `app/viewer.js` and notices file. A unit adds its own test files to the explicit test lists in `package.json`.
 
 ### AD-23 — One contract fixture feeds both sides
 
@@ -424,6 +425,7 @@ sequenceDiagram
 - Browser-level tests of the panes: no framework is allowed; the manual check in AD-20 stands in.
 - Moving community detection to a module both viewers import: when a third consumer appears.
 - Engine debt the viewer inherits and does not fix: `findEntityFile` in `wiki.mjs` and `resolveWikilinkTarget` in `lint.mjs` disagree on an ambiguous bare slug; lint check L05 uses exact match while the resolver accepts a unique basename. The viewer follows the resolver.
+- Engine behavior the viewer lives with: `runLint` throws on a `null` row in `edges.jsonl`, so `/api/lint` fails on such a file while the graph still loads. A page id that contains `:` gets a shortened community name.
 - Upgrading `force-graph` past 1.51.4: when a needed fix lands.
 - Light theme, translated interface text, math, syntax highlighting, images: spec non-goals.
 - Wikis beyond about 1,000 pages (paged graph, body search on the server): no known wiki is near it.

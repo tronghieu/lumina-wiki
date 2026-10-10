@@ -23,7 +23,7 @@ These are absolutes. Violations map to real failure modes. For the full rational
 | Rule | Applies To | Violation Impact |
 |------|-----------|------------------|
 | **No `postinstall` script** in `package.json` | Root `package.json` | npm publish blocks; CI gate fails |
-| **`devDependencies: {}` is intentional** — never add Jest, Vitest, or test frameworks | Dependencies | Cold-start bloat; breaks publishing |
+| **`devDependencies` are for the wiki viewer bundle only**, exact-pinned — never add Jest, Vitest, or test frameworks | Dependencies | A test in `test:viewer` fails on any other entry |
 
 ### Performance (1 rule)
 
@@ -142,7 +142,7 @@ Skill re-formats for agent (`/lumi-ingest` constructs page frontmatter from JSON
 
 **Run before push:**
 ```bash
-npm run test:all && npm run ci:idempotency && npm run ci:package
+npm run test:all && npm run ci:idempotency && npm run ci:package && npm run ci:viewer-bundle
 ```
 
 ---
@@ -193,7 +193,7 @@ npm run test:all && npm run ci:idempotency && npm run ci:package
 
 Before `git push`:
 
-- [ ] No `devDependencies` added
+- [ ] No `devDependencies` added beyond the wiki viewer build set
 - [ ] No `postinstall` script in `package.json`
 - [ ] All tests pass: `npm run test:all` (includes Python tests)
 - [ ] Idempotency holds: `npm run ci:idempotency`

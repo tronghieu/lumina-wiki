@@ -67,14 +67,19 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The viewer's build tool declares an install script it does not need.
+      # No dependency's script runs in a job that can publish.
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Installer tests
         run: npm run test:installer
 
       - name: Install idempotency
         run: npm run ci:idempotency
+
+      - name: Viewer bundle is current
+        run: npm run ci:viewer-bundle
 
       - name: Package readiness
         run: npm run ci:package

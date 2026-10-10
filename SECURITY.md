@@ -86,8 +86,10 @@ The following surfaces are in scope for security reports:
   flag injection from user-supplied identifiers reaching `Bash` tool calls
 - **Update check** — the optional `npm view` call (suppressible via
   `LUMINA_NO_UPDATE_CHECK=1`)
-- **Supply chain** — runtime dependency vulnerabilities; we have no
-  devDependencies, no postinstall, and no native modules by policy
+- **Supply chain** — runtime dependency vulnerabilities, the libraries
+  bundled into the wiki viewer, and the tool that builds that bundle; we ship
+  no postinstall and no native modules by policy, devDependencies exist only
+  for that build, and CI installs them without running install scripts
 
 ## Out of scope
 

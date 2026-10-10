@@ -103,9 +103,12 @@ Run before pushing:
 npm run test:all           # node --test (installer + scripts) + pytest (tools)
 npm run ci:idempotency     # install twice → git diff must be empty
 npm run ci:package         # npm pack --dry-run, validate files allowlist + postinstall ban
+npm run ci:viewer-bundle   # rebuild the wiki viewer bundle → git diff must be empty
 ```
 
-CI runs all three on Node 24 × {ubuntu, macos, windows}. Failure on any cell blocks merge. `engines` requires Node >=24, matching the CI matrix.
+`npm run build:viewer` writes two generated files: `src/viewer/app/viewer.js` and `src/viewer/app/THIRD-PARTY-NOTICES.md`. Run it and commit both after any change under `src/viewer/ui/`, any change to a viewer `devDependency`, and any lockfile refresh. On a merge conflict in the bundle, rebuild; never merge it by hand. A bundled package that ships no license file fails the build until it has an entry in the `NO_LICENSE_FILE` table of `scripts/build-viewer.mjs`.
+
+CI runs all of these on Node 24 × {ubuntu, macos, windows}. Failure on any cell blocks merge. `engines` requires Node >=24, matching the CI matrix.
 
 ### What each gate catches
 
@@ -114,6 +117,8 @@ CI runs all three on Node 24 × {ubuntu, macos, windows}. Failure on any cell bl
 | `test:installer` | Pure-unit + integration tests for `src/installer/*.js` (fs, manifest, template, update-check, commands) |
 | `test:scripts` | `wiki.mjs` / `lint.mjs` / `reset.mjs` — schema invariants, idempotency, path safety |
 | `test:python` | `src/tools/tests/` — fetcher contracts, env loading, prepare_source idempotency |
+| `test:viewer` | Everything under `src/viewer/`, plus the build script's own checks and the pinned `devDependencies` set |
+| `ci:viewer-bundle` | A committed viewer bundle or notices file that no longer matches a fresh build; a bundled library with a license outside the allowed set or with no license text |
 | `ci:idempotency` | Re-install drift across `wiki/`, `raw/`, `_lumina/`, all entry-point stubs |
 | `ci:package` | Missing required files, prohibited test/state files in tarball, `postinstall` script presence |
 
@@ -249,7 +254,7 @@ npm link && cd /tmp/sandbox && lumina-wiki install --yes
 Before push:
 
 ```bash
-npm run test:all && npm run ci:idempotency && npm run ci:package
+npm run test:all && npm run ci:idempotency && npm run ci:package && npm run ci:viewer-bundle
 ```
 
 ---

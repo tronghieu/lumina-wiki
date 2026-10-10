@@ -114,7 +114,13 @@
     "js-yaml": "^4.1.0",
     "picocolors": "^1.1.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "force-graph": "1.51.4",
+    "markdown-it": "15.0.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
   "scripts": {
     "test": "npm run test:installer",
     "test:installer": "npm run test:installer:commands && npm run test:installer:commands-agents && node --test bin/lumina.flags.test.js bin/lumina.deprecations.test.js bin/lumina.cancel.test.js src/installer/agents-manifest.test.js src/installer/fs.test.js src/installer/layout.test.js src/installer/locales.test.js src/installer/manifest.test.js src/installer/project-mode.test.js src/installer/prompts.test.js src/installer/readme-templates.test.js src/installer/registry.test.js src/installer/template-engine.test.js src/installer/update-check.test.js src/installer/wikis-command.test.js",
@@ -122,9 +128,10 @@
     "test:installer:commands-agents": "node src/installer/commands-agents.test.js",
     "test:scripts": "node --test src/scripts/lint.test.mjs src/scripts/reset.test.mjs src/scripts/wiki.test.mjs src/scripts/discover-runner.test.mjs src/scripts/external-ids.test.mjs src/scripts/parse-ids.test.mjs src/scripts/merge-ids.test.mjs src/scripts/build-source.test.mjs src/scripts/wiki-yaml-object.test.mjs src/scripts/schemas.test.mjs src/scripts/page-templates.test.mjs",
     "test:project": "node --test \"src/project/**/*.test.mjs\"",
+    "test:viewer": "node --test \"src/viewer/**/*.test.mjs\" scripts/build-viewer.test.mjs",
     "test:python": "node scripts/run-pytest.mjs",
     "test:e2e": "node src/installer/librarian-e2e.test.mjs",
-    "test:all": "npm run test:installer && npm run test:scripts && npm run test:project && npm run test:python && npm run test:e2e && npm run test:catalog",
+    "test:all": "npm run test:installer && npm run test:scripts && npm run test:project && npm run test:python && npm run test:e2e && npm run test:catalog && npm run test:viewer",
     "test:catalog": "node --test scripts/verify-lumi-help.test.mjs scripts/verify-doc-counts.test.mjs scripts/release-verify.test.mjs",
     "test:fs": "node --test src/installer/fs.test.js",
     "test:manifest": "node --test src/installer/manifest.test.js",
@@ -133,11 +140,13 @@
     "ci:idempotency": "node scripts/ci-idempotency.mjs",
     "ci:cold-start": "node scripts/measure-cold-start.mjs",
     "ci:package": "node scripts/ci-package.mjs",
+    "ci:viewer-bundle": "node scripts/ci-viewer-bundle.mjs",
     "ci:agent-isolation": "node scripts/ci-agent-host-isolation.mjs",
     "release:verify": "node scripts/release-verify.mjs",
     "pack:check": "npm run ci:package",
     "dev:install": "node bin/lumina.js install",
-    "dev:sandbox": "node scripts/dev-sandbox.mjs"
+    "dev:sandbox": "node scripts/dev-sandbox.mjs",
+    "build:viewer": "node scripts/build-viewer.mjs"
   },
   "publishConfig": {
     "access": "public"

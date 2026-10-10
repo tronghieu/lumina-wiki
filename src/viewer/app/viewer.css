@@ -1,0 +1,48 @@
+/* Lumina wiki viewer: dark tokens, base rule, and the pane grid.
+   Colors are the Catppuccin Mocha palette (MIT). */
+:root {
+  color-scheme: dark;
+  accent-color: #cba6f7;
+  --bg: #11111b;
+  --fg: #cdd6f4;
+  --muted: #a6adc8;
+  --panel-bg: #181825;
+  --input-bg: #313244;
+  --border: #45475a;
+  --accent: #89b4fa;
+  --error: #f38ba8;
+  --warning: #f9e2af;
+  --info: #89dceb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+#root { height: 100%; }
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  width: 100%;
+  height: 100%;
+}
+
+.app.has-reader { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 280px; }
+
+.pane { min-width: 0; min-height: 0; overflow: auto; }
+.pane + .pane { border-left: 1px solid var(--border); }
+.pane-graph { position: relative; overflow: hidden; }
+.pane-reader { background: var(--panel-bg); padding: 16px; }
+.pane-tree { background: var(--panel-bg); padding: 8px; }
+
+.status { margin: 0; color: var(--muted); }

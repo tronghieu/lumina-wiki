@@ -459,18 +459,21 @@ Steps (`installability`, in order):
 1. Checkout — `actions/checkout@v7`
 2. Setup Node — `actions/setup-node@v7`, `cache: npm`
 3. Setup Python — `actions/setup-python@v7`, `python-version: "3.11"`
-4. `npm ci`
+4. `npm ci --ignore-scripts`
 5. `python -m pip install -r src/tools/requirements.txt`
 6. `npm run test:installer` — three chained stages: `test:installer:commands`, `test:installer:commands-agents`, then `node --test` over `bin/*.test.js` plus 11 named `src/installer/*.test.js` files
 7. `npm run test:scripts` — `node --test` over 11 named `src/scripts/*.test.mjs` files
-8. `npm run test:python` — `pytest src/tools/tests -q`
-9. `npm run test:catalog` — catalog + doc-count integrity
-10. `node bin/lumina.js --version --no-update` — CLI smoke
-11. `npm run ci:idempotency`
-12. `npm run ci:cold-start` — **Linux-only** (`if: runner.os == 'Linux'`)
-13. `npm run ci:package`
-14. `npm run ci:agent-isolation`
-15. `npm run test:e2e` — end-to-end (librarian mode)
+8. `npm run test:project` — project engine tests
+9. `npm run test:viewer` — wiki viewer tests and the build script's checks
+10. `npm run ci:viewer-bundle` — rebuild the viewer bundle and notices; `git diff` must be empty
+11. `npm run test:python` — `pytest src/tools/tests -q`
+12. `npm run test:catalog` — catalog + doc-count integrity
+13. `node bin/lumina.js --version --no-update` — CLI smoke
+14. `npm run ci:idempotency`
+15. `npm run ci:cold-start` — **Linux-only** (`if: runner.os == 'Linux'`)
+16. `npm run ci:package`
+17. `npm run ci:agent-isolation`
+18. `npm run test:e2e` — end-to-end (librarian mode)
 
 `bun-smoke` steps: checkout, `oven-sh/setup-bun@v2` (bun-version latest), `bun install`, `bun bin/lumina.js --version --no-update`, `bun run dev:sandbox -- --yes --packs core`.
 
@@ -556,6 +559,7 @@ The user-facing `README.md` describes the **post-install workspace** (`raw/`, `w
 npm run test:all           # node --test (installer + scripts) + pytest (tools)
 npm run ci:idempotency     # install twice → git diff over watched paths must be empty
 npm run ci:package         # npm pack --dry-run, validate files allowlist + postinstall ban
+npm run ci:viewer-bundle   # rebuild the wiki viewer bundle → git diff must be empty
 ```
 
 These three commands are a subset of what CI runs across Node 24 × {ubuntu, macos, windows} (`installability` job) — see §7 for the full 15-step list, which also includes `test:catalog`, `ci:cold-start` (Linux-only), `ci:agent-isolation`, and `test:e2e`. Passing locally covers the core gates, not all of CI.

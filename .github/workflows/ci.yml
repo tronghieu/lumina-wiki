@@ -43,8 +43,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      # The viewer's build tool declares an install script it does not need.
+      # No dependency's script runs in a job that can publish.
       - name: Install Node dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install Python test dependencies
         run: python -m pip install -r src/tools/requirements.txt
@@ -57,6 +59,12 @@ jobs:
 
       - name: Project engine tests
         run: npm run test:project
+
+      - name: Viewer tests
+        run: npm run test:viewer
+
+      - name: Viewer bundle is current
+        run: npm run ci:viewer-bundle
 
       - name: Python tool tests
         run: npm run test:python
