@@ -1,0 +1,65 @@
+{
+  "index": {
+    "id": "index",
+    "type": null,
+    "title": "index",
+    "frontmatter": {},
+    "body": "# Index\n\nEverything in this wiki. See [[log]] for the history.\n\n<!-- lumina:index -->\n- [[concepts/adapters]]\n- [[concepts/rank]]\n- [[people/ada-park]]\n- [[sources/deep-work]]\n- [[sources/lora]]\n- [[sources/lora-2]]\n- [[summary/2024]]\n<!-- /lumina:index -->\n",
+    "links": {
+      "log": "log",
+      "concepts/adapters": "concepts/adapters",
+      "concepts/rank": "concepts/rank",
+      "people/ada-park": "people/ada-park",
+      "sources/deep-work": "sources/deep-work",
+      "sources/lora": "sources/lora",
+      "sources/lora-2": "sources/lora-2",
+      "summary/2024": "summary/2024"
+    }
+  },
+  "sources/lora-2": {
+    "id": "sources/lora-2",
+    "type": "sources",
+    "title": "LoRA follow-up",
+    "frontmatter": {
+      "id": "lora-2",
+      "title": "LoRA follow-up",
+      "type": "source",
+      "created": "2026-02-03",
+      "updated": "2026-02-10",
+      "authors": [
+        "Ada Park",
+        "Ben Ito"
+      ],
+      "year": 2025,
+      "importance": 3,
+      "provenance": "partial",
+      "confidence": "medium"
+    },
+    "body": "\n\n# LoRA follow-up\n\nA second look at the method, one year later.\n\n- Bare slug: [[lora]] is the tutorial this one extends.\n- Aliased: [[sources/lora|LoRA]] reads better in a sentence.\n- Inner spaces: [[ lora ]] still points at the same page.\n- Broken: [[nope]] was never written.\n- URL-shaped: [[https://a.b]] is not a page.\n",
+    "links": {
+      "lora": "sources/lora",
+      "sources/lora": "sources/lora",
+      "nope": null,
+      "https://a.b": null
+    }
+  },
+  "readings/deep-work/01-focus": {
+    "id": "readings/deep-work/01-focus",
+    "type": "readings",
+    "title": "Focus is a skill",
+    "frontmatter": {
+      "id": "readings/deep-work/01-focus",
+      "title": "Focus is a skill",
+      "type": "reading",
+      "created": "2026-01-13",
+      "updated": "2026-01-14",
+      "source": "deep-work",
+      "part": 1,
+      "pages": "1-24"
+    },
+    "body": "\n\n# Focus is a skill\n\nNotes on part one of [[sources/deep-work]].\n\n- Attention is trained, not found.\n- \"Shallow work fills the day\" (p. 12)\n",
+    "links": {
+      "sources/deep-work": "sources/deep-work"
+    }
+  }
+}

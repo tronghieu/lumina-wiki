@@ -1,0 +1,17 @@
+{"from":"sources/lora-2","type":"similar_method_to","to":"sources/lora","confidence":"high"}
+{"from":"sources/lora","type":"similar_method_to","to":"sources/lora-2","confidence":"low"}
+{"from":"adapters","type":"used_in","to":"sources/lora","confidence":"medium"}
+{"from":"sources/lora","type":"uses_concept","to":"concepts/adapters"}
+{"from":"people/ada-park","type":"authored","to":"sources/lora"}
+{"from":"sources/lora","type":"cited_by","to":"sources/lora-2"}
+{"from":"sources/deep-work","type":"cites","to":"sources/lora"}
+{"from":"sources/deep-work","type":"mentions","to":"concepts/rank","confidence":"certain"}
+{"from":"sources/lora","type":"see_also_url","to":"https://example.org/lora"}
+{"from":"concepts/rank","type":"related_to","to":"concepts/rank"}
+{"from":"concepts/rank","type":"part_of","to":"concepts/rank"}
+{"from":"sources/deep-work","type":"annotated_by","to":"readings/deep-work/01-focus","confidence":"high"}
+{"from":"readings/deep-work/01-focus","type":"annotates","to":"sources/deep-work","confidence":"low"}
+not json
+42
+[1]
+{"from":"sources/lora","type":7,"to":"concepts/adapters"}

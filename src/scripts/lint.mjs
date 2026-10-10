@@ -56,6 +56,7 @@ import {
   LEGACY_ENUM_DEFAULTS,
   TIMELINE_MARKER_OPEN,
   TIMELINE_MARKER_CLOSE,
+  WIKILINK_RE,
 } from './schemas.mjs';
 import {
   EXTERNAL_ID_NAMESPACES,
@@ -176,9 +177,6 @@ const KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** ISO date pattern YYYY-MM-DD. */
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Wikilink pattern [[slug]] or [[slug|alias]]. */
-const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FRONTMATTER-VALUE DERIVATION

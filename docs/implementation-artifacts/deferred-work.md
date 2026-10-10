@@ -62,3 +62,7 @@
 
 - `docs/specs/spec-project-docs-overlay/stories/9-remaining-project-skills.md:85` still lists `status` as `{docs[{path, hash, state}], summary}`. It is a historical story in another spec, so it was not edited in this change.
 - The end-to-end success checks for CAP-2, CAP-4, CAP-5 and CAP-6 are unproven. Still to run: the Seli 234-doc run, the forced lock-timeout cluster, a sweep with a missing doc, the one-approval handoff, and a wall-clock comparison. They need a manual pilot with real subagents.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/2-read-model-and-contract-fixture.md`
+  summary: `runLint` throws on a JSON `null` line in `wiki/graph/edges.jsonl` or `citations.jsonl`, and on a non-string `to` of a reversible edge type.
+  evidence: Reproduced during the wiki view read-model review; `parseEdgeLines` in `src/scripts/lint.mjs` pushes any parsed JSON value, and L06 and L17 then read properties of `null`. The viewer's `/api/lint` returns 500 on such a file while `/api/wiki` skips the row. Fix in the engine: keep only rows that are non-null objects.

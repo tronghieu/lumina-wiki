@@ -115,14 +115,14 @@ flowchart TD
 - **Prevents:** double arrows for one relation; one relation spelled two ways counting twice; community results changing between machines.
 - **Rule:** Endpoints are resolved to ids first (AD-4, AD-5). Everything below runs on ids.
   - Rows are read from `edges.jsonl`, then `citations.jsonl`, each in file order. That order decides every "first" below.
-  - An `edges.jsonl` row that is not an object with string `from`, `type`, and `to` is skipped. A `citations.jsonl` row needs string `from` and `to` only; its type is always `cites`, as the engine never reads that key back. A `confidence` outside `high`, `medium`, `low` becomes `null`.
+  - An `edges.jsonl` row that is not an object with non-blank string `from`, `type`, and `to` is skipped. A `citations.jsonl` row needs non-blank string `from` and `to` only; its type is always `cites`, as the engine never reads that key back. A `confidence` outside `high`, `medium`, `low` becomes `null`.
   - A `cites` or `cited_by` row found in `edges.jsonl` is treated as a citation: `cited_by` is flipped to `cites`. Rows of `citations.jsonl` are never flipped.
-  - A symmetric type yields one edge with `directed: false` and `from < to`.
+  - A symmetric type yields one edge with `directed: false` and `from <= to`; the two are equal only for a self-loop.
   - Rows equal on `(from, type, to)` collapse to one. Its `confidence` is the first non-null one among them. Its `source` is `"citations"` when any of them came from `citations.jsonl`, else `"edges"`.
-  - Then rows `(a, T, b)` and `(b, U, a)` where `T.reverse` is `U` or `U.reverse` is `T` are one relation. Keep the row whose type names the other in `reverse`; when both do, keep the type listed first in `EDGE_TYPES`. The kept row takes the dropped row's `confidence` when it has none. Symmetric types are not paired, and a row is never paired with itself, so a self-loop is emitted. A row with no partner is emitted as stored.
+  - Then rows `(a, T, b)` and `(b, U, a)` where `T.reverse` is `U` or `U.reverse` is `T` are one relation. Keep the row whose type names the other in `reverse`; when both do, keep the type listed first in `EDGE_TYPES`. The kept row takes the dropped row's `confidence` when it has none. Symmetric types are not paired, so a row is never paired with itself. Two self-loop rows of reverse types are one relation like any other pair. A row with no partner is emitted as stored.
   - A row whose type is not in `EDGE_TYPES` is emitted with `directed: true`.
   - Nodes are emitted sorted by `id`; edges by `from`, then `type`, then `to`. Strings compare by UTF-16 code unit, field by field.
-  - Community detection runs on the page nodes and the final page-to-page edges, in that order. `url` and `missing` nodes get `community: null`.
+  - Community detection runs on the page nodes and the final page-to-page edges, in that order. The read model passes ids with a `:` prefix, because the copied function names a community by the text after the first `:`. `url` and `missing` nodes get `community: null`.
 
 ### AD-7 — The HTTP contract
 
@@ -148,9 +148,10 @@ Every type carries `charset=utf-8`. Assets are read from disk on each request.
 | `schema.relationTypes[]` | `{name, symmetric, reverse}` for each entry of `EDGE_TYPES`, in its order. `symmetric` is `true` only when the entry says so, else `false`. `reverse` is a string or `null`. |
 | `schema.wikilinkPattern` | `WIKILINK_RE.source` |
 | `nodes[]` | `{id, kind, type, title, community}`. Holds every page, always including `index` and `log`, plus one node per `url` and `missing` endpoint. `kind` is `"page"`, `"url"`, or `"missing"`. `type` is the page's entity folder name from `entityTypeForPath`, never the frontmatter `type`; it is `null` for a page outside an entity folder and for every `url` and `missing` node. `community` is an index into `communities`, or `null`. |
-| `title` | Always a non-empty string: the frontmatter title when it is a non-empty string or a number, as a string; else the last segment of the id; for a `url` node the href; for a `missing` node the endpoint as written. |
+| `title` | Always a non-empty string: the frontmatter title when it is a non-blank string or a number, as a string; else the last segment of the id; for a `url` node the href; for a `missing` node the endpoint as written. |
 | `edges[]` | `{from, to, type, directed, confidence, source}`. `confidence` is `"high"`, `"medium"`, `"low"`, or `null`. `source` is `"edges"` or `"citations"`. |
 | `communities[]` | `{name, size}`. `name` is the id of the community's highest-degree page. The client shows that page's `title`. |
+| page `id`, `type`, `title` | The same values as the page's node. |
 | page `frontmatter` | The parsed frontmatter object unchanged: keys and value types as parsed. `{}` when the page has none. |
 | page `body` | The text after the frontmatter block, as `parseFrontmatter` returns it, untrimmed. The whole file when there is no frontmatter. |
 | page `links` | `{"<target>": "<page id>" \| null}`. The key is capture group 1 of `WIKILINK_RE`, trimmed, never including the alias. The read model scans the whole body. A target with `://` or one that does not resolve maps to `null`. |
@@ -170,7 +171,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** CAP-1, CAP-16
 - **Prevents:** DNS rebinding; another site reading responses; stale assets after an upgrade; script reaching the page through content.
-- **Rule:** The server listens on `127.0.0.1` only. Each request passes, in order: method is GET, else 405; `Host`, compared case-insensitively, is `127.0.0.1:<port>` or `localhost:<port>`, else 403; route match, else 404. Every response, errors included, carries:
+- **Rule:** The server listens on `127.0.0.1` only. The server is created with `requireHostHeader: false`, so a request with no `Host` reaches the handler and is refused there. Each request passes, in order: method is GET, else 405 with `Allow: GET`; `Host`, compared case-insensitively, is `127.0.0.1:<port>` or `localhost:<port>`, else 403; route match, else 404. A request target that does not parse is 404. Any other failure inside the handler is 500 with a fixed message, never the thrown text, and the server keeps running. Every response the handler writes, errors included, carries:
   - `Cache-Control: no-store`
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: no-referrer`
@@ -196,7 +197,8 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
     | `node_version` | 3 |
     | `internal` | 3 |
 
-  - SIGINT and SIGTERM close the server and exit 0. On Windows a programmatic signal ends the process without running handlers; the port is still released.
+  - Any failure not named above, an uncaught one included, is reported as `internal` with exit 3.
+  - SIGINT and SIGTERM close the server and its open connections and exit 0. On Windows a programmatic signal ends the process without running handlers; the port is still released.
   - It writes no file, spawns no child, and sets no timer that outlives a request.
   - It does not open a browser; the skill reports the address.
 
@@ -206,11 +208,14 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 - **Prevents:** two servers for one workspace; taking a port another process holds on a different interface; a new client talking to an old server after an upgrade.
 - **Rule:**
   - The real path is `fs.realpathSync.native(root)`. `digest` is sha256 over its UTF-8 bytes. `root` in `/api/health` is the first 16 hex characters of `digest`. The base port is `28000 + digest.readUInt32BE(0) % 1000`. The range is 20 ports from the base.
-  - `version` is `packageVersion` from `_lumina/manifest.json`, read once at start; `null` when run from the repo.
-  - Step 1: probe all 20 ports with `GET http://127.0.0.1:<port>/api/health`, 300 ms timeout each. A reply with `app: "lumina-view"` and the same `root` ends the search: same `version` reports reuse; a different `version` fails with `stale_server`.
-  - Step 2: walk the range from the base. Listen on a port only when its probe got connection refused. A port that accepted a connection is busy, whatever it answered.
-  - `EADDRINUSE` on listen: probe that port once more with a 2 s timeout, apply step 1 to the answer, then move on. `EACCES` on listen: treat as busy and move on. `EPERM` on listen: fail with `bind_refused` at once.
+  - `version` is `packageVersion` from `<root>/_lumina/manifest.json`, read once at start; `null` when that file is missing or unreadable.
+  - A probe of a port is one `node:http` request for `GET /api/health` on `127.0.0.1`. No connection within 1 s, refused or silent, means **free**: a listener on loopback accepts at once, while a refusal can take over a second on Windows. Once connected, it waits up to 2 s for the reply: a JSON reply with `app: "lumina-view"` is a **viewer**; anything else, a timeout included, is **busy**. A probe never follows a redirect and never leaves loopback.
+  - Step 1: probe all 20 ports at once. A viewer with the same `root` ends the search: same `version` reports reuse; a different `version` fails with `stale_server`.
+  - Step 2: walk the range from the base. Listen only on a port whose probe said free.
+  - `EADDRINUSE` on listen: probe that port again, apply step 1 to the answer, then move on. This is what makes two starts at the same moment end as one server and one reuse. `EACCES` on listen: treat as busy and move on. `EPERM` on listen: fail with `bind_refused` at once.
   - Range exhausted: `bind_refused` when any port gave `EACCES`, else `no_free_port`.
+  - The walk is one function that takes its probe and its listen as arguments, so every branch is tested without a socket.
+  - Accepted: a local process that knows the workspace path can answer the health check on the base port and receive the user's browser. Anyone able to do that can already read the wiki.
 
 ### AD-12 — Every read is live `[ADOPTED]`
 
@@ -222,7 +227,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** CAP-15
 - **Prevents:** a slow or failing lint run leaving the user with no viewer; findings that point at no node.
-- **Rule:** `readLint` calls `runLint(root, {})`, which writes nothing. It keeps only the finding keys of AD-7 and sets `nodeId` to `resolveWikilinkTarget(file, …)` against the page set of AD-4, or `null` when that gives no page. A `file` that is not a string becomes `null`, with `nodeId: null`. Edge checks put the endpoint as written in `file`, and citation checks put a `.jsonl` path there, so stripping `.md` is not enough. The client marks a page only for a non-null `nodeId` and lists the remaining findings in one workspace-level group. The marked set is the set of non-null `nodeId`s. A failed `/api/lint` shows a notice and leaves graph, tree, and reader working.
+- **Rule:** `readLint` calls `runLint(root, {})`, which writes nothing. It keeps only the finding keys of AD-7 and sets `nodeId` from `file`. A `file` ending in `.md` is a path: `nodeId` is that path without `.md` when it is a page id, else `null`. Any other `file` is an endpoint as written and goes through `resolveWikilinkTarget` against the page set of AD-4. A `file` that is not a string becomes `null`, with `nodeId: null`. Edge checks put the endpoint as written in `file`, and citation checks put a `.jsonl` path there, so stripping `.md` is not enough. The client marks a page only for a non-null `nodeId` and lists the remaining findings in one workspace-level group. The marked set is the set of non-null `nodeId`s. A failed `/api/lint` shows a notice and leaves graph, tree, and reader working.
 
 ### AD-14 — One renderer, two escape points
 
@@ -303,7 +308,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** all units
 - **Prevents:** two units editing one shared file; a needed file that nobody writes.
-- **Rule:** The unit table under Design Paradigm is binding. `src/viewer/lib/` holds exactly `server.mjs`, `data.mjs`, and `communities.mjs`, plus their co-located tests; any other new file there is a spine change. Shared files have these owners:
+- **Rule:** The unit table under Design Paradigm is binding. `src/viewer/lib/` holds exactly three modules, `server.mjs`, `data.mjs`, and `communities.mjs`, plus test files; any other module there is a spine change. Shared files have these owners:
 
 | File | Owner |
 | --- | --- |
@@ -318,7 +323,7 @@ Ownership is authorship, not a ban on generated output. A change to `ui/` runs t
 
 - **Binds:** Read model, Client
 - **Prevents:** the read model and the client each testing against their own idea of the JSON.
-- **Rule:** `src/viewer/test-fixtures/contract/` holds one workspace and the expected JSON for `/api/wiki`, `/api/lint`, and three `/api/page` calls. The read-model test asserts deep equality with it, `generatedAt` aside. Client tests load that JSON and no hand-made data. The workspace contains at least: `index` and `log` without frontmatter; a numeric title; a bare-slug link, an aliased link, a link with inner spaces, a broken link; a relation stored both ways with one bare endpoint; a reverse row with no partner; a symmetric row stored twice; a `cites` row in `edges.jsonl`; an unknown edge type; a URL endpoint; a missing endpoint; a nested reading unit; a missing-reverse-edge finding and a dangling-citation finding.
+- **Rule:** `src/viewer/test-fixtures/contract/` holds one workspace and the expected JSON for `/api/wiki`, `/api/lint`, and three `/api/page` calls. The read-model test asserts deep equality of nodes, edges, communities, pages, and findings with it. The `schema` block in the fixture is a snapshot for client tests; the read-model test checks `schema` against the engine's tables instead, so a new type in `schemas.mjs` does not fail the viewer. Client tests load that JSON and no hand-made data. The workspace contains at least: `index` and `log` without frontmatter; a numeric title; a bare-slug link, an aliased link, a link with inner spaces, a broken link; a relation stored both ways with one bare endpoint; a reverse row with no partner; a symmetric row stored twice; a `cites` row in `edges.jsonl`; an unknown edge type; a URL endpoint; a missing endpoint; a nested reading unit; a missing-reverse-edge finding and a dangling-citation finding.
 
 ### AD-24 — Registration and documents
 
@@ -425,7 +430,7 @@ sequenceDiagram
 - Browser-level tests of the panes: no framework is allowed; the manual check in AD-20 stands in.
 - Moving community detection to a module both viewers import: when a third consumer appears.
 - Engine debt the viewer inherits and does not fix: `findEntityFile` in `wiki.mjs` and `resolveWikilinkTarget` in `lint.mjs` disagree on an ambiguous bare slug; lint check L05 uses exact match while the resolver accepts a unique basename. The viewer follows the resolver.
-- Engine behavior the viewer lives with: `runLint` throws on a `null` row in `edges.jsonl`, so `/api/lint` fails on such a file while the graph still loads. A page id that contains `:` gets a shortened community name.
+- Engine behavior the viewer lives with: `runLint` throws on a `null` row in `edges.jsonl`, so `/api/lint` fails on such a file while the graph still loads. A numeric frontmatter title loses its written form (`007` shows as `7`), because the engine's parser returns a number.
 - Upgrading `force-graph` past 1.51.4: when a needed fix lands.
 - Light theme, translated interface text, math, syntax highlighting, images: spec non-goals.
 - Wikis beyond about 1,000 pages (paged graph, body search on the server): no known wiki is near it.

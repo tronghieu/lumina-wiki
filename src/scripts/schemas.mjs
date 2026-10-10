@@ -80,6 +80,12 @@ const SLUG_STYLE = /** @type {const} */ (['kebab-case']);
  */
 export const EDGE_CONFIDENCE = /** @type {const} */ (['high', 'medium', 'low']);
 
+/**
+ * Wikilink pattern `[[slug]]` or `[[slug|alias]]`; group 1 is the slug.
+ * Carries the `g` flag, so callers build a fresh `RegExp` from `.source`.
+ */
+export const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+
 // ---------------------------------------------------------------------------
 // TOPIC TIMELINE
 // Topic pages (research pack) have two zones: a compiled zone on top that is
