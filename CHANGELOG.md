@@ -5,6 +5,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.16.0-next.0] - 2026-10-10
+
+> Preview build, published to the `next` dist-tag. `latest` is untouched.
+> Try it with `npx lumina-wiki@next install`.
+
 ### Added
 
 - Wiki viewer: `/lumi-view` starts a small local page and gives you its
