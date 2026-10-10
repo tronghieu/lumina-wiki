@@ -2328,7 +2328,10 @@ describe('installCommand — viewer files', () => {
     try {
       const repo = resolve(dirname(CLI), '..');
       for (const name of ['bin', 'src', 'package.json']) {
-        await cp(join(repo, name), join(pkg, name), { recursive: true });
+        await cp(join(repo, name), join(pkg, name), {
+          recursive: true,
+          filter: (src) => !src.split(/[\\/]/).some((seg) => ['.venv', '__pycache__', 'node_modules', '.pytest_cache'].includes(seg)),
+        });
       }
       try {
         await symlink(join(repo, 'node_modules'), join(pkg, 'node_modules'), 'junction');

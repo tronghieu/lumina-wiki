@@ -90,7 +90,7 @@ context:
 - [x] `src/skills/core/view/SKILL.md` -- the skill.
 - [x] `src/templates/_lumina/schema/lumi-help.csv` -- one row.
 - [x] `AGENTS.md` -- add `/lumi-view` to the core list and `_lumina/viewer/` to the watched paths.
-- [x] `src/viewer/lib/server.mjs`, `server.test.mjs` -- a probe whose connect is refused by policy (`EPERM`, `EACCES`) reports `denied`. The port is still tried, so the listen that follows reports the true reason, `bind_refused`. When that listen finds the port taken, nobody can tell whose it is, and the answer is `bind_refused` too. Without this a sandbox that blocks connecting reads as twenty busy ports.
+- [x] `src/viewer/lib/server.mjs`, `server.test.mjs` -- a probe whose connect is refused by policy (`EPERM`, `EACCES`) reports `denied`. Any denied probe ends the start with `bind_refused`, before any listen: the viewer cannot check its own port range for a viewer already serving this wiki. Without this a sandbox that blocks connecting reads as twenty busy ports.
 
 **Acceptance Criteria:**
 - Given `npm run dev:sandbox -- --keep`, when `node _lumina/viewer/view.mjs` runs in the sandbox, then the address it prints serves the viewer.
@@ -124,6 +124,13 @@ context:
 | 15 | Failure rows mixed the message with the action | low | patch | one sentence and one action per reason |
 | 16 | A file dropped from the list stays under `_lumina/viewer/` after an upgrade | low | reject | AD-2 accepts it; nothing loads an unlisted file |
 | 17 | An upgrade without a profile turns a minimal wiki into a full one | medium | defer | existing behavior; logged in deferred work; the skill warns |
+| 18 | Final pass: with connects refused and listening allowed, a second viewer started when the first sat on another port of the range | medium | patch | reproduced; any denied probe now ends in `bind_refused` with no listen; the rule of row 1 is replaced by this simpler one |
+| 19 | Final pass: the CI write check could not see a new file inside an ignored folder that already held files | medium | patch | reproduced; `--untracked-files=all` |
+| 20 | Final pass: the skill's remote path handed over a command for a folder the user's computer does not have | medium | patch | wording: the two lines run where the wiki folder is, and the address opens there |
+| 21 | Final pass: the skill's start step joined two commands with `&&` | low | patch | working directory first, then one command |
+| 22 | Final pass: a host that cannot read a background command's output threw away a viewer that had started | low | patch | one sentence in the start step |
+| 23 | Final pass: the broken-package test copied a local 67 MB virtual environment | low | patch | copy filter |
+| 24 | Final pass: the CI start check has no signal handler, and a timeout in cleanup hides the first error | low | reject | CI runners reap the process tree; the first error is still printed by the scenario |
 
 ## Design Notes
 

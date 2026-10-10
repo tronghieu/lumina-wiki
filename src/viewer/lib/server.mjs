@@ -170,9 +170,13 @@ export async function choosePort({ basePort, rootId, version, probe, listen }) {
     if (v) return v;
   }
 
+  // A sandbox that refuses loopback connects hides any viewer already in the range, so starting
+  // one could duplicate it. The person starts it where connects are allowed.
+  if (results.some((r) => r.state === 'denied')) return { outcome: 'failed', reason: 'bind_refused' };
+
   let sawEacces = false;
   for (let i = 0; i < PORT_RANGE; i++) {
-    if (results[i].state !== 'free' && results[i].state !== 'denied') continue;
+    if (results[i].state !== 'free') continue;
     try {
       await listen(ports[i]);
       return { outcome: 'started', port: ports[i] };
@@ -182,8 +186,7 @@ export async function choosePort({ basePort, rootId, version, probe, listen }) {
         const again = await probe(ports[i]);
         const v = verdict(ports[i], again);
         if (v) return v;
-        // Denied probes cannot tell whether the holder is this wiki's viewer.
-        if (results[i].state === 'denied' || again.state === 'denied') return { outcome: 'failed', reason: 'bind_refused' };
+        if (again.state === 'denied') return { outcome: 'failed', reason: 'bind_refused' };
       } else if (err?.code === 'EACCES') sawEacces = true;
       else if (err?.code === 'EPERM') return { outcome: 'failed', reason: 'bind_refused' };
       else throw err;

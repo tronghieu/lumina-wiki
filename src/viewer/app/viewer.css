@@ -116,10 +116,9 @@ html, body {
 
 /* Graph controls (filter box, switches, legend) and the tree-pane search box. */
 .controls { top: 12px; width: 240px; max-width: calc(100% - 24px); padding: 8px; z-index: 1; pointer-events: auto; }
-.filter { position: relative; }
 .filter-input { width: 100%; padding: 4px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
 .filter-input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); }
-.filter-suggestions { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 2; max-height: 220px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; }
+.filter-suggestions { display: none; max-height: 220px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; }
 .filter:focus-within .filter-suggestions { display: block; }
 .filter-suggestion { display: block; width: 100%; padding: 3px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .filter-suggestion:hover, .filter-suggestion:focus-visible { background: var(--input-bg); }

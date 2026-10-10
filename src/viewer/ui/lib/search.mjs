@@ -21,8 +21,9 @@ export function fold(text) {
 }
 
 // Punctuation becomes a word break, so "Low-Rank (LoRA)" matches "low rank".
-// Folding first keeps decomposed text (macOS file names) from splitting at its marks.
-export const foldWords = (text) => fold(fold(text).replace(/[^\p{L}\p{N}]+/gu, ' '));
+// Marks are kept so voiced kana, Thai tones and Devanagari signs still tell words apart.
+// Folding first drops Latin marks and keeps decomposed text (macOS file names) whole.
+export const foldWords = (text) => fold(fold(text).replace(/[^\p{L}\p{N}\p{M}]+/gu, ' '));
 
 function rank(node, q) {
   const t = foldWords(node.title ?? '');

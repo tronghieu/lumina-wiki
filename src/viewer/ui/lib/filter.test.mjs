@@ -251,6 +251,30 @@ test('matchCount', () => {
   assert.equal(run({}).v.matchCount, 11);
 });
 
+test('matchCount counts nodes after the orphans switch', () => {
+  // The two readings pass the type test but have no relation among themselves.
+  const readings = ['readings/deep-work/00-preface', 'readings/deep-work/01-focus'];
+  assert.deepEqual(run({ filter: 'type:readings' }).nodes, readings);
+  const off = run({ filter: 'type:readings', showOrphans: false });
+  assert.deepEqual(off.nodes, []);
+  assert.equal(off.v.matchCount, 0);
+  const open = run({ filter: 'type:readings', showOrphans: false }, 'sources/lora');
+  assert.deepEqual(open.nodes, ['sources/lora']);
+  assert.equal(open.v.matchCount, 0);
+});
+
+test('an open id that is not a node changes nothing', () => {
+  for (const settings of [{}, { filter: 'type:sources' }, { showOrphans: false }]) {
+    const base = run(settings, null);
+    for (const id of ['index', 'nope/nothing']) {
+      const r = run(settings, id);
+      assert.equal(r.v.matchCount, base.v.matchCount);
+      assert.deepEqual(r.nodes, base.nodes);
+      assert.deepEqual(r.links, base.links);
+    }
+  }
+});
+
 test('selectedLink follows visibility', () => {
   const cites = model.links.find((l) => l.type === 'cites');
   const hidden = run({ filter: '-rel:cites' }).v;

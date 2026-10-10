@@ -46,16 +46,20 @@ Use the root's full path in every command below.
 The address works only on the computer where the viewer runs.
 
 - You run on the user's own computer: go to Step 3.
-- You run somewhere else (a remote session, a hosted agent, a container): do not start anything. Say that the address would not open in their browser, and go to Step 5.
+- You run somewhere else (a remote session, a hosted agent, a container): do not start anything. Say that an address from this machine would not open in their browser. Then go to Step 5, and add that the two lines only work on a computer that holds this wiki folder.
 - You cannot tell: go to Step 3, and say in your answer that the address opens only on the computer this session runs on.
 
 ### Step 3 — Start it so that it keeps running
 
+Run this with the wiki root as the working directory:
+
 ```bash
-cd "<wiki root>" && node _lumina/viewer/view.mjs
+node _lumina/viewer/view.mjs
 ```
 
-Start it the way your host keeps a command running after the step returns: a background task or a background shell command. Do not wait for the command to finish. It does not finish.
+If your tool has no setting for the working directory, change into the wiki root first, as a separate command or line. Do not join the two with `&&`; some shells reject it.
+
+Start it the way your host keeps a command running after the step returns: a background task or a background shell command. Do not wait for the command to finish. It does not finish. The way you start it must let you read what the command prints; if it cannot, go to Step 5.
 
 Run this same step every time the user asks, even when you started a viewer earlier in the session. A second run answers at once with `"reused":true` and the same address.
 
@@ -70,7 +74,7 @@ Wait up to 10 seconds for the first line that starts with `{`.
 
 | `reason` | Say | Then |
 | --- | --- | --- |
-| `bind_refused` | I am not allowed to open a local address from here. | Go to Step 5. |
+| `bind_refused` | I am not allowed to use a local address from here. | Go to Step 5. |
 | `stale_server` | A viewer from before the last update is still running for this wiki. | Go to "A viewer from an older version". |
 | `no_workspace` | This folder is not a wiki. | Stop. |
 | `no_free_port` | Every address the viewer may use is taken on this computer. | Pass on the message, which names the range. Stop. |
@@ -84,7 +88,7 @@ After a failure, do not run the command again to "try once more". The one except
 
 ### Step 5 — Hand the command to the user
 
-Tell the user to run these two lines in their own terminal, and to open the address the second one prints:
+Tell the user to run these two lines in a terminal on the computer that holds the wiki, and to open the address the second one prints in a browser on that same computer:
 
 ```
 cd "<wiki root>"
@@ -106,7 +110,7 @@ The `stale_server` message names the port, for example "on port 28412".
 - Someone else started it and the user knows where: tell them to press Ctrl-C in the terminal that runs it, then to ask you again. Stop.
 - Nobody knows where it runs: offer to stop it, and wait for a yes. Then:
   1. Check that the port still belongs to a viewer. Run `node -e "fetch('http://127.0.0.1:<port>/api/health').then(r=>r.text()).then(console.log)"`. Go on only if the answer contains `"app":"lumina-view"`.
-  2. Find the process that listens on that port and end it. macOS and Linux: `lsof -ti tcp:<port> -sTCP:LISTEN`, then `kill <pid>`. Windows PowerShell: `(Get-NetTCPConnection -LocalPort <port> -State Listen).OwningProcess`, then `Stop-Process -Id <pid>`.
+  2. Find the process that listens on that port and end it. macOS and Linux: `lsof -ti tcp:<port> -sTCP:LISTEN`, then `kill <pid>`. Windows PowerShell: `(Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort <port> -State Listen).OwningProcess`, then `Stop-Process -Id <pid>`.
   3. Run Step 3 once more.
 
 If any of these fails, say what happened and stop.
@@ -156,7 +160,7 @@ You handed over the command: show the two lines and the two points from Step 5. 
 <example>
 User: show me the wiki
 
-You are on the user's computer. The wiki root is `/home/ana/notes`. You start `cd "/home/ana/notes" && node _lumina/viewer/view.mjs` as a background task and read:
+You are on the user's computer. The wiki root is `/home/ana/notes`. You start `node _lumina/viewer/view.mjs` there as a background task and read:
 `{"ok":true,"url":"http://127.0.0.1:28412/","port":28412,"reused":false}`
 
 You answer:
@@ -172,7 +176,7 @@ The command prints to the error stream:
 `{"error":"The system refused to open a local port, which usually means a sandbox, so run this command in your own terminal","code":2,"reason":"bind_refused"}`
 
 You answer:
-I am not allowed to open a local address from here. Run these two lines in your own terminal and open the address the second one prints:
+I am not allowed to use a local address from here. Run these two lines in your own terminal and open the address the second one prints:
 
 cd "/home/ana/notes"
 node _lumina/viewer/view.mjs

@@ -164,6 +164,12 @@ Bucket names. A node's kind is its entity type name, or `other` (a page with no 
 | 30 | Zoom jump with one visible node; a node hidden by typing stayed clickable for a moment | low | patch | center instead of fit; hover and clicks ignore hidden nodes |
 | 31 | Suggestions follow the last term only, not the caret | low | defer | editing in the middle of a long filter is rare; logged |
 | 32 | Search results not announced | false | reject | the count and no-match notes are `role="status"` already |
+| 33 | Final pass: the suggestion list lay over the switches, so a click on Orphans picked a suggestion | medium | patch | reproduced in a browser; the list is in normal flow |
+| 34 | Final pass: `foldWords` dropped non-Latin marks that `fold` had kept | low | patch | reproduced; marks are kept; kana and Thai tests |
+| 35 | Final pass: a legend click after an unclosed quote appended inside the quote | low | patch | the quote is closed first |
+| 36 | Final pass: `matchCount` after the orphans switch, and an open page outside the graph, pinned by no test | low | patch | two tests; the mutant now fails |
+| 37 | Final pass: `toggleTerm` had no caller; a link filter was a no-op after the depth switch left | low | patch | both deleted |
+| 38 | Final pass: typing `type` blanks the graph until the colon arrives | low | reject | `type` can be a title word; the exclusion form is handled because `-ty` cannot be one |
 
 ## Verification
 

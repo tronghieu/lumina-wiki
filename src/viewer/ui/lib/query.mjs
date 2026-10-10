@@ -46,12 +46,6 @@ export function matchValue(value, name) {
   return v !== '' && fold(name).startsWith(v);
 }
 
-export function toggleTerm(text, term) {
-  const terms = text.split(/\s+/).filter(Boolean);
-  const kept = terms.filter((t) => t.toLowerCase() !== term.toLowerCase());
-  return (kept.length === terms.length ? [...terms, term] : kept).join(' ');
-}
-
 // Exact names beat prefixes, so "authored" selects one kind and "auth" selects both.
 export function resolveValues(values, names) {
   const out = new Set();
@@ -73,6 +67,9 @@ export function removeTerms(text, predicate) {
     .join(' ');
 }
 
+// An appended term must not land inside an unclosed quote.
+const closeQuote = (t) => ((t.match(/"/g) ?? []).length % 2 ? `${t}"` : t);
+
 // One legend button per node kind; `next` is the filter text after a click.
 export function legendEntries(legend, text) {
   const q = parseFilter(text);
@@ -86,7 +83,7 @@ export function legendEntries(legend, text) {
     const off = excluded || (q.include.type.length > 0 && !picked);
     const next = picked || excluded
       ? removeTerms(text, (t) => t.key === 'type' && t.exclude === excluded && resolveValues([t.value], kinds).has(kind))
-      : `${(text ?? '').trim()} type:${kind}`.trim();
+      : `${closeQuote((text ?? '').trim())} type:${kind}`.trim();
     return { ...e, kind, picked, off, next };
   });
 }

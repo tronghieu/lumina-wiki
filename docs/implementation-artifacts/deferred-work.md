@@ -86,3 +86,7 @@
 - source_spec: `docs/specs/spec-wiki-view/stories/6-filters-local-graph-search.md`
   summary: Filter suggestions follow the last term of the text, not the term under the caret.
   evidence: `suggest` in `src/viewer/ui/lib/query.mjs` reads the text after the last space. Editing a term in the middle of a filter offers suggestions for the final term instead. It would need the caret position passed in from `GraphControls.jsx` and the replacement spliced at that position.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/7-communities-and-lint-markers.md`
+  summary: When the graph has nothing to draw, the graph panel is not rendered, so the "checks could not be loaded" notice has nowhere to show.
+  evidence: `src/viewer/ui/panes/GraphControls.jsx` returns nothing when `total === 0` (a fresh wiki holding only `index` and `log`). The tree still marks pages when the checks load. Only the failure notice and the three counts are lost. Rendering the Problems row alone in that case would close it.

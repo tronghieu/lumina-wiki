@@ -451,21 +451,24 @@ test('probeErrorState maps codes to free, denied or busy', () => {
     assert.equal(probeErrorState(code, true), 'busy', String(code));
 });
 
-test('choosePort: a sandbox that denies the probe still reaches listen and reports bind_refused', async () => {
-  const f = fakes({ fallback: { state: 'denied' }, listens: { [BASE]: 'EPERM' } });
-  assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
-  assert.deepEqual(f.listened, [BASE]);
-});
-
-test('choosePort: denied probes with a working listen start on the base port', async () => {
+test('choosePort: every probe denied is bind_refused and nothing is listened', async () => {
   const f = fakes({ fallback: { state: 'denied' } });
-  assert.deepEqual(await choose(f), { outcome: 'started', port: BASE });
+  assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
+  assert.equal(f.listened.length, 0);
 });
 
-test('choosePort: denied probe plus EADDRINUSE is bind_refused without trying another port', async () => {
-  const f = fakes({ fallback: { state: 'denied' }, listens: { [BASE]: 'EADDRINUSE' } });
+test('choosePort: one denied probe among free ones is bind_refused and nothing is listened', async () => {
+  const f = fakes({ probes: { [BASE + 2]: { state: 'denied' } } });
   assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
-  assert.deepEqual(f.listened, [BASE]);
+  assert.equal(f.listened.length, 0);
+});
+
+test('choosePort: a same-root viewer wins over a denied probe elsewhere', async () => {
+  const f = fakes({ probes: { [BASE + 1]: viewer(), [BASE + 3]: { state: 'denied' } } });
+  assert.deepEqual(await choose(f), { outcome: 'reused', port: BASE + 1 });
+  const g = fakes({ probes: { [BASE + 1]: viewer(ROOT_ID, '0.9.0'), [BASE + 3]: { state: 'denied' } } });
+  assert.deepEqual(await choose(g), { outcome: 'failed', reason: 'stale_server', port: BASE + 1 });
+  assert.equal(f.listened.length + g.listened.length, 0);
 });
 
 test('choosePort: free probe, EADDRINUSE, then a denied re-probe is bind_refused', async () => {

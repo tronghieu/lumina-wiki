@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFilter, matchValue, toggleTerm, suggest, resolveValues, removeTerms, legendEntries } from './query.mjs';
+import { parseFilter, matchValue, suggest, resolveValues, removeTerms, legendEntries } from './query.mjs';
 
 const empty = { type: [], rel: [], conf: [] };
 const P = (t) => parseFilter(t);
@@ -55,17 +55,6 @@ test('matchValue', () => {
   assert.equal(matchValue('x', 'sources'), false);
   assert.equal(matchValue('', 'sources'), false);
   assert.equal(matchValue('SÓ', 'Sources'), true);
-});
-
-test('toggleTerm', () => {
-  assert.equal(toggleTerm('', 'type:a'), 'type:a');
-  assert.equal(toggleTerm('lor', 'type:a'), 'lor type:a');
-  assert.equal(toggleTerm('type:a lor x', 'type:a'), 'lor x');
-  assert.equal(toggleTerm('lor type:a x', 'type:a'), 'lor x');
-  assert.equal(toggleTerm('lor  type:a', 'type:a'), 'lor');
-  assert.equal(toggleTerm('type:sources-extra -type:sources', 'type:sources'), 'type:sources-extra -type:sources type:sources');
-  assert.equal(toggleTerm('lor TYPE:Sources', 'type:sources'), 'lor');
-  assert.equal(toggleTerm('type:a', 'type:a'), '');
 });
 
 const vocab = { type: ['sources', 'concepts', 'summary', 'url'], rel: ['cites', 'uses_concept', 'other'], conf: ['high', 'none'] };
@@ -171,4 +160,14 @@ test('legendEntries: exclusion and passthrough', () => {
   const f = L('')
   assert.deepEqual([f.sources.kind, f.url.kind, f.missing.kind], ['sources', 'url', 'missing']);
   assert.deepEqual([f.url.label, f.url.color, f.url.variant], ['L-url', '#123', 'v']);
+});
+
+test('legendEntries: unclosed quote is closed before the new term', () => {
+  const legend = [{ key: 'type:sources' }, { key: 'type:concepts' }];
+  const { next } = legendEntries(legend, '"foo').find((e) => e.kind === 'sources');
+  assert.equal(next, '"foo" type:sources');
+  const q = parseFilter(next);
+  assert.deepEqual(q.words, ['foo']);
+  assert.deepEqual(q.include.type, ['sources']);
+  assert.equal(legendEntries(legend, next).find((e) => e.kind === 'sources').picked, true);
 });

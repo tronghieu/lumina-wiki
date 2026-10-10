@@ -127,6 +127,8 @@ The graph panel stays small: the default view adds one checkbox, three counts, a
 | 24 | Checks slower than 30 s fail for good | low | reject | no retry timer is allowed; the notice says so |
 | 25 | `AbortSignal.timeout` missing in old browsers | false | reject | already used by the page and wiki requests; current browsers only |
 | 26 | Model nodes might lack `community`; `--warning` and `--info` might be undefined | false | reject | both exist; the blind reviewer could not see them |
+| 27 | Final pass: ring color not pinned to the worst severity | low | patch | test added; the mutant now fails |
+| 28 | Final pass: a wiki with nothing to draw hides the graph panel, and with it the checks notice | low | defer | needs a fresh wiki and a failed checks reply at once; logged |
 
 ## Verification
 

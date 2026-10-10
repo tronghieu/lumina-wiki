@@ -128,3 +128,12 @@ test('ringsOf', () => {
   assert.ok(e instanceof Map);
   assert.equal(e.size, 0);
 });
+
+test('ringsOf colors a page by its worst severity, not its first finding', () => {
+  const f = (severity) => ({ id: 'L1', severity, message: 'm', nodeId: 'a/p', file: 'wiki/a/p.md', line: 1, fixable: false });
+  const body = { findings: ['info', 'error', 'warning'].map(f) };
+  assert.equal(ringsOf(lintIndex(body), true).get('a/p'), 'error');
+  // Fixture: sources/lora-2 lists a warning before its errors.
+  assert.equal(lint.findings.find((x) => x.nodeId === 'sources/lora-2').severity, 'warning');
+  assert.equal(ringsOf(index, true).get('sources/lora-2'), 'error');
+});

@@ -113,9 +113,11 @@ function run(command, args, opts = {}) {
   return result;
 }
 
-// --ignored: the installed .gitignore hides state, tmp, .env and node_modules, where a stray write would hide.
+// --ignored lists the folders the installed .gitignore hides (state, tmp, .env, node_modules).
+// --untracked-files=all lists every file in them one by one, so a new or removed file changes the output.
+// It cannot see a change inside a file that already exists in an ignored folder.
 function gitStatus(workspace) {
-  return run('git', ['status', '--porcelain', '--ignored'], { cwd: workspace }).stdout;
+  return run('git', ['status', '--porcelain', '--ignored', '--untracked-files=all'], { cwd: workspace }).stdout;
 }
 
 function withDeadline(promise, ms, what) {

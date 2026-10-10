@@ -62,7 +62,8 @@ export function visibleSets(model, wiki, settings, openId) {
   const matchCount = ids.size;
   if (open !== null) ids.add(open);
 
-  const kept = passing.filter((l) => ids.has(l.source) && ids.has(l.target));
+  // Every end of a passing link is a passed node or the open page, so both ends are in ids already.
+  const kept = passing;
   const neighbors = new Map([...ids].map((id) => [id, new Set()]));
   for (const l of kept) {
     if (l.source === l.target) continue;

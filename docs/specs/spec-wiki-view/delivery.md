@@ -19,7 +19,7 @@ Nothing is generated into the user's workspace.
 - Prints the address once it is listening, as one JSON line with `ok` and `url`. Errors go to stderr as `{"error", "code"}` with exit code 2 or 3, as elsewhere in the engine.
 - A second start for the same workspace reports the address already serving it.
 - A port held by something else leads to another port and a clear message.
-- A refused bind (`EPERM` or `EACCES`) exits 2 with a message naming a sandbox as the likely cause. The skill then hands the user the command. A sandbox that also refuses outgoing loopback connections ends the same way.
+- A refused bind (`EPERM` or `EACCES`) exits 2 with a message naming a sandbox as the likely cause. The skill then hands the user the command. A sandbox that refuses outgoing loopback connections ends the same way, even when it would allow listening: the viewer cannot check its own port range for a viewer already serving this wiki.
 - Before listening, every candidate port is probed; only a port that refused the probe is used. A refused loopback connection can take over a second on Windows, so a start there takes about one second.
 - Ending the command frees the port. No process and no file remain.
 

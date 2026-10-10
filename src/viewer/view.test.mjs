@@ -403,13 +403,6 @@ describe('view.mjs process contract', () => {
     "  process.nextTick(() => this.emit('error', Object.assign(new Error('connect ' + code), { code })));",
     '  return this;',
     '};',
-    'if (process.env.LISTEN_CODE) {',
-    '  net.Server.prototype.listen = function listen() {',
-    "    const code = process.env.LISTEN_CODE;",
-    "    process.nextTick(() => this.emit('error', Object.assign(new Error('listen ' + code), { code })));",
-    '    return this;',
-    '  };',
-    '}',
     '',
   ].join('\n');
 
@@ -421,10 +414,11 @@ describe('view.mjs process contract', () => {
     return env.start(ws, { args: ['--import', pathToFileURL(preload).href, VIEW_MJS], env: extraEnv });
   }
 
-  for (const [connect, listen] of [['EPERM', 'EPERM'], ['EACCES', 'EACCES'], ['EPERM', 'EADDRINUSE']]) {
-    it(`maps ${connect} connect plus ${listen} listen failures to bind_refused`, T, async () => {
+  // A denied probe cannot tell whether the port range already holds this wiki's viewer, so the viewer never listens.
+  for (const connect of ['EPERM', 'EACCES']) {
+    it(`refuses with bind_refused when a ${connect} connect denies the probe`, T, async () => {
       await withEnv(async (env) => {
-        const h = await startDenied(env, { CONNECT_CODE: connect, LISTEN_CODE: listen });
+        const h = await startDenied(env, { CONNECT_CODE: connect });
         const { code } = await exitWithin(h);
         assert.equal(code, 2);
         assert.equal(h.stdout(), '');
@@ -434,16 +428,6 @@ describe('view.mjs process contract', () => {
       });
     });
   }
-
-  it('starts when loopback connects are denied but listening is allowed', T, async () => {
-    await withEnv(async (env) => {
-      const h = await startDenied(env, { CONNECT_CODE: 'EPERM' });
-      const line = await h.line;
-      assert.equal(line.reused, false);
-      h.child.kill('SIGTERM');
-      await h.exit;
-    });
-  });
 
   for (const [label, content] of [['unparseable', '{'], ['non-string packageVersion', JSON.stringify({ packageVersion: 5 })]]) {
     it(`starts with no version when the manifest is ${label}`, T, async () => {

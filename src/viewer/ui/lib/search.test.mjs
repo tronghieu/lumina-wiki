@@ -153,3 +153,14 @@ test('foldWords of decomposed text', () => {
   assert.equal(foldWords(c.normalize('NFD')), foldWords(c.normalize('NFC')));
   assert.equal(foldWords(c.normalize('NFD')), 'dai so eclair');
 });
+
+test('foldWords keeps non-Latin marks', () => {
+  assert.notEqual(foldWords('が'), foldWords('か'));
+  assert.equal(find([page('a/k', 'かな')], 'が').length, 0);
+  assert.equal(find([page('a/k', 'かな')], 'か').length, 1);
+  assert.equal(find([page('a/t', 'น้ำ')], 'นำ').length, 0);
+  assert.equal(find([page('a/v', 'Dại số'.normalize('NFD'))], 'dai so').length, 1);
+  assert.equal(foldWords('deep-work'), 'deep work');
+  assert.equal(fold('ħ'), 'h');
+  assert.equal(fold('ŧ'), 't');
+});
