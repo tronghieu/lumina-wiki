@@ -68,13 +68,16 @@ Decision ladder is **load-bearing** — pick first match in this order:
 3. raw/ files not yet ingested → `/lumi-ingest`.
 4. Default → `/lumi-ask`.
 
+Two hints may follow the recommendation and never replace it: the idle-wiki
+hint (`/lumi-check`), and the viewer hint (`/lumi-view`) once the wiki has a page.
+
 Output: skill recommendation + one-sentence reason in `COMM_LANG` + `→ Run`
 line + (write-skill only) `DOC_LANG` note + citation arrow + **"Want me to run
 it now? (yes / show me first / skip)"**. Skip the prompt for case (4). On
 "yes" → invoke; otherwise don't.
 
 > For the exact Bash reads at each step (locate / detect / ground), the full
-> formal-and-casual output templates, the idle-wiki hint format, and fallback
+> formal-and-casual output templates, the idle-wiki and viewer hint formats, and fallback
 > codes (`__NO_MANIFEST__`, `__NO_CATALOG__`, `__NO_GRAPH__`, `__NO_DATE__`),
 > read `_lumina/schema/lumi-help-runbook.md` § Mode A before producing output.
 

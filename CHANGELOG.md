@@ -24,6 +24,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     shows the latest state.
   - A wiki made by an earlier version gets the viewer the next time you run
     `npx lumina-wiki@latest install` in it.
+  - `/lumi-help` mentions the viewer once the wiki has a page.
 
 ### Changed
 
