@@ -94,7 +94,7 @@ Two write paths into the workspace, both `atomicWrite`-discipline:
 
 ### Skills — authoritative source is `_lumina/schema/lumi-help.csv` (rendered by the installer, read by `/lumi-help skills` at runtime); `src/skills/**/SKILL.md` is what it's derived from. The list below is for orientation only — do not cite a count from it anywhere; see `docs/project-context.md` §6 for detail.
 
-- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`
+- Core, always installed: `/lumi-init`, `/lumi-ingest`, `/lumi-ask`, `/lumi-edit`, `/lumi-check`, `/lumi-reset`, `/lumi-verify`, `/lumi-migrate-legacy`, `/lumi-help`, `/lumi-view`
 - Research pack, opt-in: `/lumi-research-discover`, `/lumi-research-survey`, `/lumi-research-prefill`, `/lumi-research-setup`, `/lumi-research-topic`, `/lumi-research-rank`, `/lumi-research-watchlist`, `/lumi-research-watch-run`
 - Reading pack, opt-in: `/lumi-reading-chapter-ingest`, `/lumi-reading-character-track`, `/lumi-reading-theme-map`, `/lumi-reading-plot-recap`
 - Learning pack, opt-in: `/lumi-learning-reflect`
@@ -123,7 +123,7 @@ The full list lives in `docs/project-context.md` §3. The ones most likely to bi
 
 ## Idempotency invariant — what CI watches
 
-`scripts/ci-idempotency.mjs` runs `git diff --exit-code` after the second install over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/`, `.claude/`, `.agents/`, `_lumina/config/`, `_lumina/schema/`, `_lumina/scripts/`, `_lumina/tools/`, `.env.example`, `wiki/`, `raw/`.
+`scripts/ci-idempotency.mjs` runs `git diff --exit-code` after the second install over: `README.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.cursor/`, `.claude/`, `.agents/`, `_lumina/config/`, `_lumina/schema/`, `_lumina/scripts/`, `_lumina/tools/`, `_lumina/viewer/`, `.env.example`, `wiki/`, `raw/`.
 
 **Intentionally ignored**: `_lumina/manifest.json`, `_lumina/_state/*` (runtime state with timestamps). Don't rely on these being byte-stable across installs.
 

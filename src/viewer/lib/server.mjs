@@ -92,6 +92,14 @@ export function createViewerServer({ root, rootId, version, data = defaultData }
   return server;
 }
 
+// A sandbox that forbids loopback connects (EPERM/EACCES) cannot say who holds a port, so it is
+// 'denied', not 'free'. Only a refusal before connect proves the port is unbound; anything else is busy.
+export function probeErrorState(code, connected) {
+  if (connected) return 'busy';
+  if (['ECONNREFUSED', 'ENETUNREACH', 'EADDRNOTAVAIL', 'EHOSTUNREACH'].includes(code)) return 'free';
+  return code === 'EPERM' || code === 'EACCES' ? 'denied' : 'busy';
+}
+
 export function probePort(port) {
   return new Promise((resolve) => {
     let done = false;
@@ -121,7 +129,7 @@ export function probePort(port) {
         timer = setTimeout(() => finish({ state: 'busy' }), 2000);
       });
     });
-    req.on('error', (err) => finish({ state: err?.code === 'ECONNREFUSED' ? 'free' : 'busy' }));
+    req.on('error', (err) => finish({ state: probeErrorState(err?.code, connected) }));
     req.on('response', (res) => {
       if (res.statusCode !== 200) return finish({ state: 'busy' });
       const chunks = [];
@@ -164,15 +172,18 @@ export async function choosePort({ basePort, rootId, version, probe, listen }) {
 
   let sawEacces = false;
   for (let i = 0; i < PORT_RANGE; i++) {
-    if (results[i].state !== 'free') continue;
+    if (results[i].state !== 'free' && results[i].state !== 'denied') continue;
     try {
       await listen(ports[i]);
       return { outcome: 'started', port: ports[i] };
     } catch (err) {
       if (err?.code === 'EADDRINUSE') {
         // Lost a race: someone bound the port after the probe. Re-check who.
-        const v = verdict(ports[i], await probe(ports[i]));
+        const again = await probe(ports[i]);
+        const v = verdict(ports[i], again);
         if (v) return v;
+        // Denied probes cannot tell whether the holder is this wiki's viewer.
+        if (results[i].state === 'denied' || again.state === 'denied') return { outcome: 'failed', reason: 'bind_refused' };
       } else if (err?.code === 'EACCES') sawEacces = true;
       else if (err?.code === 'EPERM') return { outcome: 'failed', reason: 'bind_refused' };
       else throw err;

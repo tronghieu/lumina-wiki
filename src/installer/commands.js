@@ -32,6 +32,7 @@ import {
   linkDirectory,
   pathExists,
 } from './fs.js';
+import { assertViewerFilesPresent, copyViewerFiles } from './viewer-files.js';
 import {
   readManifest,
   writeManifest,
@@ -299,6 +300,9 @@ export async function installCommand(opts = {}) {
   const { reLink = false } = opts;
   const colors = await getColorFns();
 
+  // A broken package must fail before any workspace file is written.
+  await assertViewerFilesPresent();
+
   // 1. Read existing manifest at the initial path (upgrade detection)
   // Distinguish ENOENT (fresh install) from real I/O errors. Real errors must
   // bail loud — silently treating them as "fresh install" would let a transient
@@ -490,6 +494,9 @@ export async function installCommand(opts = {}) {
 
   // 8. Copy scripts
   await copyScripts(projectRoot);
+
+  // 8.2. Copy the wiki viewer into _lumina/viewer/ (every classic profile)
+  await copyViewerFiles(projectRoot);
 
   // 8.5. Copy CHANGELOG.md so /lumi-migrate-legacy can read it offline
   await copyChangelog(projectRoot);
@@ -2206,6 +2213,7 @@ function getSkillDefs(packs) {
       { name: 'reset',           canonicalId: 'lumi-reset',           displayName: '/lumi-reset' },
       { name: 'verify',          canonicalId: 'lumi-verify',          displayName: '/lumi-verify' },
       { name: 'migrate-legacy',  canonicalId: 'lumi-migrate-legacy',  displayName: '/lumi-migrate-legacy' },
+      { name: 'view',            canonicalId: 'lumi-view',            displayName: '/lumi-view' },
       { name: 'help',            canonicalId: 'lumi-help',            displayName: '/lumi-help' },
     ];
     for (const s of coreSkills) {

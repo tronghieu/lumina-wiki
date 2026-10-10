@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { rootIdentity, createViewerServer, probePort, choosePort, PORT_RANGE } from './server.mjs';
+import { rootIdentity, createViewerServer, probePort, probeErrorState, choosePort, PORT_RANGE } from './server.mjs';
 import { readWiki } from './data.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -440,6 +440,51 @@ test('choosePort: EPERM fails at once after one listen', async () => {
   const f = fakes({ listens: { [BASE]: 'EPERM' } });
   assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
   assert.deepEqual(f.listened, [BASE]);
+});
+
+test('probeErrorState maps codes to free, denied or busy', () => {
+  for (const code of ['ECONNREFUSED', 'ENETUNREACH', 'EADDRNOTAVAIL', 'EHOSTUNREACH'])
+    assert.equal(probeErrorState(code, false), 'free', code);
+  for (const code of ['EPERM', 'EACCES']) assert.equal(probeErrorState(code, false), 'denied', code);
+  for (const code of ['EMFILE', undefined]) assert.equal(probeErrorState(code, false), 'busy', String(code));
+  for (const code of ['ECONNREFUSED', 'ENETUNREACH', 'EADDRNOTAVAIL', 'EHOSTUNREACH', 'EPERM', 'EACCES', 'EMFILE', undefined])
+    assert.equal(probeErrorState(code, true), 'busy', String(code));
+});
+
+test('choosePort: a sandbox that denies the probe still reaches listen and reports bind_refused', async () => {
+  const f = fakes({ fallback: { state: 'denied' }, listens: { [BASE]: 'EPERM' } });
+  assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
+  assert.deepEqual(f.listened, [BASE]);
+});
+
+test('choosePort: denied probes with a working listen start on the base port', async () => {
+  const f = fakes({ fallback: { state: 'denied' } });
+  assert.deepEqual(await choose(f), { outcome: 'started', port: BASE });
+});
+
+test('choosePort: denied probe plus EADDRINUSE is bind_refused without trying another port', async () => {
+  const f = fakes({ fallback: { state: 'denied' }, listens: { [BASE]: 'EADDRINUSE' } });
+  assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
+  assert.deepEqual(f.listened, [BASE]);
+});
+
+test('choosePort: free probe, EADDRINUSE, then a denied re-probe is bind_refused', async () => {
+  const f = fakes({ probes: { [BASE]: (n) => ({ state: n === 1 ? 'free' : 'denied' }) }, listens: { [BASE]: 'EADDRINUSE' } });
+  assert.deepEqual(await choose(f), { outcome: 'failed', reason: 'bind_refused' });
+  assert.deepEqual(f.listened, [BASE]);
+});
+
+test('probePort reports denied when the socket connect fails with EPERM', async () => {
+  const orig = net.Socket.prototype.connect;
+  net.Socket.prototype.connect = function () {
+    process.nextTick(() => this.destroy(err('EPERM')));
+    return this;
+  };
+  try {
+    assert.deepEqual(await probePort(BASE), { state: 'denied' });
+  } finally {
+    net.Socket.prototype.connect = orig;
+  }
 });
 
 test('choosePort: a same-root, same-version viewer is reused without listening', async () => {

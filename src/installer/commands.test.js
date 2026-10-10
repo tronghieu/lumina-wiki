@@ -9,7 +9,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, access, rm, mkdir, readlink, readdir, lstat, symlink } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, access, rm, mkdir, readlink, readdir, lstat, symlink, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -17,6 +17,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { installCommand, uninstallCommand, printPostUpgradeBanner, applyInstallOverrides, validateLanguageInput, isLuminaOwnedSkillEntry, copySkills, removeManagedSkillLink, removeOwnedAgentsSkills, removeOwnedClaudeSkillLinks } from './commands.js';
+import { VIEWER_FILES, VIEWER_SRC_DIR } from './viewer-files.js';
 import { readManifest, readSkillsManifest, writeManifest, MANIFEST_SCHEMA_VERSION } from './manifest.js';
 
 const require = createRequire(import.meta.url);
@@ -2265,5 +2266,90 @@ describe('uninstallCommand — .claude/skills/lumi-* links are actually removed'
       readlinkImpl: async () => '/somewhere/entirely/unrelated',
     });
     assert.equal(owned, false, 'the readlink fallback must not become a blanket "assume owned" — a dangling link pointing elsewhere stays foreign');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wiki viewer files: copied on every install, fatal when the package lacks one.
+// ---------------------------------------------------------------------------
+
+describe('installCommand — viewer files', () => {
+  async function assertViewerInstalled(root) {
+    for (const rel of VIEWER_FILES) {
+      const parts = rel.split('/');
+      const [src, dst] = await Promise.all([
+        readFile(join(VIEWER_SRC_DIR, ...parts)),
+        readFile(join(root, '_lumina', 'viewer', ...parts)),
+      ]);
+      assert.ok(src.equals(dst), `${rel} must be byte-equal to its source`);
+    }
+  }
+
+  test('classic install copies every viewer file and the lumi-view skill', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await assertViewerInstalled(tmp);
+      await access(join(tmp, '.claude', 'skills', 'lumi-view', 'SKILL.md'));
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('minimal profile still copies the viewer files', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ directory: tmp, yes: true, profile: 'minimal', packs: ['core'], ide: ['generic'], updateCheck: false });
+      await assertViewerInstalled(tmp);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('upgrade restores a deleted viewer folder and overwrites a modified file', async () => {
+    const tmp = await makeTmpDir();
+    try {
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await rm(join(tmp, '_lumina', 'viewer'), { recursive: true, force: true });
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await assertViewerInstalled(tmp);
+
+      await writeFile(join(tmp, '_lumina', 'viewer', 'app', 'viewer.css'), 'junk');
+      await installCommand({ cwd: tmp, yes: true, noUpdate: true });
+      await assertViewerInstalled(tmp);
+    } finally {
+      await cleanTmp(tmp);
+    }
+  });
+
+  test('a package missing a viewer file fails with exit 3 before writing anything', { timeout: 60000 }, async (t) => {
+    const pkg = await makeTmpDir();
+    const target = await makeTmpDir();
+    try {
+      const repo = resolve(dirname(CLI), '..');
+      for (const name of ['bin', 'src', 'package.json']) {
+        await cp(join(repo, name), join(pkg, name), { recursive: true });
+      }
+      try {
+        await symlink(join(repo, 'node_modules'), join(pkg, 'node_modules'), 'junction');
+      } catch (err) {
+        t.skip(`cannot link node_modules: ${err.message}`);
+        return;
+      }
+      await rm(join(pkg, 'src', 'viewer', 'app', 'viewer.css'));
+
+      const res = spawnSync(process.execPath, [join(pkg, 'bin', 'lumina.js'), 'install', '--yes'], {
+        cwd: target,
+        encoding: 'utf8',
+        timeout: 30000,
+        env: { ...process.env, LUMINA_NO_UPDATE_CHECK: '1' },
+      });
+      assert.equal(res.status, 3, `${res.stdout}\n${res.stderr}`);
+      assert.match(`${res.stdout}${res.stderr}`, /viewer\.css/);
+      assert.deepEqual(await readdir(target), []);
+    } finally {
+      await cleanTmp(pkg);
+      await cleanTmp(target);
+    }
   });
 });

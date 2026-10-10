@@ -395,6 +395,56 @@ describe('view.mjs process contract', () => {
     });
   }
 
+  // A sandbox can refuse loopback connects. The probe must not read that as a free or busy port.
+  const DENY_PRELOAD = [
+    "import net from 'node:net';",
+    'net.Socket.prototype.connect = function connect() {',
+    "  const code = process.env.CONNECT_CODE;",
+    "  process.nextTick(() => this.emit('error', Object.assign(new Error('connect ' + code), { code })));",
+    '  return this;',
+    '};',
+    'if (process.env.LISTEN_CODE) {',
+    '  net.Server.prototype.listen = function listen() {',
+    "    const code = process.env.LISTEN_CODE;",
+    "    process.nextTick(() => this.emit('error', Object.assign(new Error('listen ' + code), { code })));",
+    '    return this;',
+    '  };',
+    '}',
+    '',
+  ].join('\n');
+
+  async function startDenied(env, extraEnv) {
+    const ws = await env.workspace();
+    const dir = await env.tmp();
+    const preload = join(dir, 'deny-connect.mjs');
+    await writeFile(preload, DENY_PRELOAD);
+    return env.start(ws, { args: ['--import', pathToFileURL(preload).href, VIEW_MJS], env: extraEnv });
+  }
+
+  for (const [connect, listen] of [['EPERM', 'EPERM'], ['EACCES', 'EACCES'], ['EPERM', 'EADDRINUSE']]) {
+    it(`maps ${connect} connect plus ${listen} listen failures to bind_refused`, T, async () => {
+      await withEnv(async (env) => {
+        const h = await startDenied(env, { CONNECT_CODE: connect, LISTEN_CODE: listen });
+        const { code } = await exitWithin(h);
+        assert.equal(code, 2);
+        assert.equal(h.stdout(), '');
+        const err = lastJsonLine(h.stderr());
+        assert.equal(err.reason, 'bind_refused');
+        assert.equal(err.code, 2);
+      });
+    });
+  }
+
+  it('starts when loopback connects are denied but listening is allowed', T, async () => {
+    await withEnv(async (env) => {
+      const h = await startDenied(env, { CONNECT_CODE: 'EPERM' });
+      const line = await h.line;
+      assert.equal(line.reused, false);
+      h.child.kill('SIGTERM');
+      await h.exit;
+    });
+  });
+
   for (const [label, content] of [['unparseable', '{'], ['non-string packageVersion', JSON.stringify({ packageVersion: 5 })]]) {
     it(`starts with no version when the manifest is ${label}`, T, async () => {
       await withEnv(async (env) => {
