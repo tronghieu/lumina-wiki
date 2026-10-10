@@ -8,9 +8,9 @@
  */
 
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { atomicWrite } from '../src/installer/fs.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -158,8 +158,8 @@ export async function buildViewer() {
   if (problems.length) throw new Error(problems.join('\n'));
 
   const bytes = outputFiles[0].contents;
-  await writeFile(resolve(repoRoot, OUTFILE), bytes);
-  await writeFile(resolve(repoRoot, NOTICES), renderNotices(entries));
+  await atomicWrite(resolve(repoRoot, OUTFILE), bytes);
+  await atomicWrite(resolve(repoRoot, NOTICES), renderNotices(entries));
   return { bytes: bytes.length, packages: packages.length };
 }
 

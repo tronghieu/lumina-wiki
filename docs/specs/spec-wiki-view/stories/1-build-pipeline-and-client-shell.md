@@ -116,6 +116,7 @@ context:
 | 23 | `git` missing or failing is reported as a stale bundle | low | patch | spawn errors and statuses above 1 reported as git failures |
 | 24 | A staged but uncommitted bundle passes locally | low | reject | intended: the check runs before the commit; CI checks a clean checkout |
 | 25 | Spec said `checkNotices(packages, noticesText)`; code took three arguments | false | reject | the function no longer exists |
+| 26 | PR review: the build writes both outputs with `writeFile`; an interrupted run leaves a cut-off file | low | patch | both writes now go through `atomicWrite` from `src/installer/fs.js`; `ci:viewer-bundle` still reports no diff |
 
 ## Verification
 
