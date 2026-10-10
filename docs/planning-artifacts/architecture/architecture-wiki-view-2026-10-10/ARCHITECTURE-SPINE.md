@@ -240,7 +240,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
   - It replaces the image renderer with one that prints the alt text as plain text. It emits no `<img>`.
   - It removes HTML comments outside fenced code before rendering. With raw HTML off they would otherwise print as text.
   - It renders wikilinks with an inline rule built from `wikilinkPattern`. It looks up capture group 1, trimmed, in `links`: an id becomes an in-app link (AD-15); `null` or an absent key becomes a marked, inert span.
-  - A markdown link whose href has a scheme is external and gets `target="_blank"` and `rel="noopener noreferrer"`. Any other href renders as inert text.
+  - A markdown link whose href starts with `http:`, `https:`, or `mailto:` is external and gets `target="_blank"` and `rel="noopener noreferrer"`. Any other href, another scheme included, renders as inert text. The same rule decides whether choosing a `url` node in the graph opens anything.
   - The React tree injects this string at exactly one element. No other component sets inner HTML.
   - `force-graph` writes labels as HTML in its tooltip. Every string handed to it as a node or link label passes through one escape helper in `ui/lib/`.
 

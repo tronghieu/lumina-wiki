@@ -46,3 +46,107 @@ html, body {
 .pane-tree { background: var(--panel-bg); padding: 8px; }
 
 .status { margin: 0; color: var(--muted); }
+
+/* Tree pane */
+.tree-title, .legend-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tree-list { list-style: none; margin: 0; padding: 0; }
+.tree-children { margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--border); }
+
+.tree-folder, .tree-page {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-folder:hover, .tree-page:hover { background: var(--input-bg); }
+.tree-folder:focus-visible, .tree-page:focus-visible { outline: 1px solid var(--accent); }
+.tree-folder { color: var(--muted); }
+.tree-folder::before {
+  content: "";
+  display: inline-block;
+  margin-right: 6px;
+  border: 4px solid transparent;
+  border-top-color: currentColor;
+  border-bottom-width: 0;
+  vertical-align: middle;
+}
+.tree-folder.is-collapsed::before {
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  border-right-width: 0;
+}
+.tree-page.is-selected { background: var(--input-bg); color: var(--accent); }
+
+/* Graph pane overlays */
+.graph-canvas { position: absolute; inset: 0; }
+.legend, .caption {
+  position: absolute;
+  left: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.legend { top: 12px; pointer-events: none; }
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.legend-swatch.is-hollow { background: transparent; border: 1.5px solid #6c7086; }
+.legend-swatch.is-hollow.is-missing { border-color: var(--error); }
+.caption { bottom: 12px; max-width: calc(100% - 24px); display: flex; align-items: center; gap: 8px; }
+.caption-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Load failure */
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  text-align: center;
+}
+.notice p { margin: 0; }
+.notice-hint { color: var(--muted); }
+.notice-button {
+  padding: 6px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The library injects its own rule later at equal specificity; the pane class wins. */
+.pane-graph .float-tooltip-kap {
+  background: var(--panel-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.graph-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 320px; text-align: center; }
