@@ -42,7 +42,6 @@ html, body {
 .pane { min-width: 0; min-height: 0; overflow: auto; }
 .pane + .pane { border-left: 1px solid var(--border); }
 .pane-graph { position: relative; overflow: hidden; }
-.pane-reader { background: var(--panel-bg); padding: 16px; }
 .pane-tree { background: var(--panel-bg); padding: 8px; }
 
 .status { margin: 0; color: var(--muted); }
@@ -150,3 +149,50 @@ html, body {
 }
 
 .graph-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 320px; text-align: center; }
+
+/* Reader pane: header, rendered page body, and relations list. */
+.pane-reader { position: relative; overflow-y: auto; padding: 20px 28px; background: var(--panel-bg); font-size: 15px; line-height: 1.6; }
+.reader-header, .reader-body, .reader-relations { max-width: 72ch; }
+.reader-close { position: sticky; top: 0; float: right; z-index: 1; padding: 2px 6px; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+.reader-close:hover { color: var(--fg); }
+.reader-retry { margin-top: 8px; padding: 6px 14px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: inherit; font: inherit; cursor: pointer; }
+.reader-header { padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.reader-title { margin: 0 0 6px; font-size: 22px; font-weight: 600; overflow-wrap: anywhere; }
+.reader-type { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.reader-fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 10px 0 0; }
+.reader-field { display: contents; }
+.reader-fields dt { color: var(--muted); }
+.reader-fields dd { margin: 0; overflow-wrap: anywhere; }
+.reader-body { overflow-wrap: anywhere; }
+.reader-body h1, .reader-body h2, .reader-body h3 { margin: 1.2em 0 0.4em; font-weight: 600; }
+.reader-body h1 { font-size: 20px; }
+.reader-body h2 { font-size: 17px; }
+.reader-body h3 { font-size: 15px; }
+.reader-body p, .reader-body ul, .reader-body ol { margin: 0.7em 0; }
+.reader-body code { padding: 2px 4px; border-radius: 3px; background: var(--input-bg); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+.reader-body pre { padding: 10px; border-radius: 6px; background: var(--input-bg); overflow-x: auto; }
+.reader-body pre code { padding: 0; background: none; }
+.reader-body blockquote { margin: 0.7em 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+.reader-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.reader-body th, .reader-body td { padding: 4px 8px; border: 1px solid var(--border); }
+.reader-body hr { height: 0; border: 0; border-top: 1px solid var(--border); }
+.reader-body a { color: var(--accent); text-decoration: none; }
+.reader-body a:hover { text-decoration: underline; }
+.reader-body a.external { text-decoration: underline; }
+.reader-body a.external::after { content: "\2197"; margin-left: 2px; color: var(--muted); }
+.reader-close:focus-visible, .reader-retry:focus-visible, .caption-close:focus-visible, .notice-button:focus-visible,
+.reader-body a:focus-visible, .reader-relations a:focus-visible { outline: 1px solid var(--accent); }
+.pane-reader:focus { outline: none; }
+.reader-body .wikilink.is-broken { color: var(--error); text-decoration: underline dotted; cursor: not-allowed; }
+.reader-body .inert-link { color: var(--muted); text-decoration: underline dotted; }
+.reader-relations { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--border); }
+.relations-title { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.relation-type { margin: 10px 0 2px; font-size: 13px; font-weight: 600; }
+.relation-direction { color: var(--muted); font-size: 12px; font-weight: 400; }
+.relation-list { list-style: none; margin: 0; padding: 0; }
+.relation-list li { padding: 1px 0; }
+.relation-link { color: var(--accent); }
+.relation-note { color: var(--muted); font-size: 12px; }
+.relation-missing { color: var(--muted); text-decoration: underline dotted; }
+.relation-confidence { color: var(--muted); font-size: 12px; }
+.reader-id { margin: 4px 0 0; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }

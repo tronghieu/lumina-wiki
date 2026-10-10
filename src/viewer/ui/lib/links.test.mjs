@@ -11,7 +11,7 @@ test('externalHref accepts web and mail addresses unchanged', () => {
 test('externalHref refuses everything else', () => {
   for (const a of [
     'javascript:alert(1)', 'javascript://%0aalert(1)', 'JAVASCRIPT://x', ' https://x',
-    'data:text/html,x', 'vbscript:x', 'file:///etc/passwd', 'ftp://x', 'ms-msdt:/id',
+    'data:text/html,x', 'vbscript:x', 'file:///etc/passwd', 'ftp://x', 'http:foo', 'https:foo', 'ms-msdt:/id',
     'obsidian://open', '//evil.example/x', '/api/wiki', 'other.md', '#top', '',
     null, undefined, 5,
   ]) {

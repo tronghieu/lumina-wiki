@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useReducer, useState, useSyncExternalStore } from 'react';
 import { GraphPane } from './panes/GraphPane.jsx';
+import { ReaderPane } from './panes/ReaderPane.jsx';
 import { TreePane } from './panes/TreePane.jsx';
-import { idToHash, openPageId } from './lib/hash.mjs';
+import { hashToId, idToHash, openPageId } from './lib/hash.mjs';
 import { initialState, reducer } from './lib/state.mjs';
 import { ancestorsOf, buildTree } from './lib/tree.mjs';
 import { buildGraphModel, edgeCaption, legendOf } from './lib/graph-model.mjs';
@@ -25,7 +26,7 @@ export function App() {
     fetch('/api/wiki', { signal: AbortSignal.timeout(15000) })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((w) => {
-        const ok = Array.isArray(w?.nodes) && Array.isArray(w?.edges) && Array.isArray(w?.schema?.entityTypes);
+        const ok = Array.isArray(w?.nodes) && Array.isArray(w?.edges) && Array.isArray(w?.schema?.entityTypes) && typeof w.schema.wikilinkPattern === 'string';
         if (!ok) throw new Error('bad body');
         if (live) setLoad({ status: 'ready', wiki: w });
       })
@@ -40,6 +41,7 @@ export function App() {
   const pageIds = useMemo(() => new Set(wiki.nodes.filter((n) => n.kind === 'page').map((n) => n.id)), [wiki]);
 
   const openId = openPageId(hash, pageIds);
+  const readerId = hashToId(hash);
   const legend = useMemo(() => legendOf(model, wiki.schema.entityTypes), [model, wiki]);
 
   useEffect(() => {
@@ -63,9 +65,10 @@ export function App() {
   };
   const link = state.selectedEdge === null ? null : model.links.find((l) => l.key === state.selectedEdge);
   const titleOf = (id) => titles.get(id) ?? id;
+  const onClose = () => { window.location.hash = ''; };
 
   return (
-    <div className="app">
+    <div className={readerId !== null ? 'app has-reader' : 'app'}>
       <GraphPane
         model={model}
         legend={legend}
@@ -82,6 +85,7 @@ export function App() {
           </div>
         )}
       </GraphPane>
+      {readerId !== null && <ReaderPane id={readerId} wiki={wiki} onClose={onClose} />}
       <TreePane
         tree={tree}
         openId={openId}

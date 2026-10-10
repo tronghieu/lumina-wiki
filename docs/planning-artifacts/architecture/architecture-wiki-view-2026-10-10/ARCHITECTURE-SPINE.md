@@ -238,9 +238,11 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 - **Rule:** `src/viewer/ui/lib/render.mjs` exports one pure function from `(body, links, wikilinkPattern)` to an HTML string.
   - It uses `markdown-it` with `html: false` and `linkify: false`.
   - It replaces the image renderer with one that prints the alt text as plain text. It emits no `<img>`.
-  - It removes HTML comments outside fenced code before rendering. With raw HTML off they would otherwise print as text.
+  - It drops HTML comments with a block rule and an inline rule of the parser, so code spans and code blocks keep theirs. With raw HTML off a comment would otherwise print as text.
+  - Its work is linear in the page size: the wikilink rule refuses in constant time what the engine's pattern would refuse slowly, and the server's link scan in `readPage` does the same. A test bounds the time on hostile input.
+  - A test pins the output to an allow-list of tags and attributes, and another fails when any client file other than the reader injects HTML.
   - It renders wikilinks with an inline rule built from `wikilinkPattern`. It looks up capture group 1, trimmed, in `links`: an id becomes an in-app link (AD-15); `null` or an absent key becomes a marked, inert span.
-  - A markdown link whose href starts with `http:`, `https:`, or `mailto:` is external and gets `target="_blank"` and `rel="noopener noreferrer"`. Any other href, another scheme included, renders as inert text. The same rule decides whether choosing a `url` node in the graph opens anything.
+  - A markdown link whose href starts with `http://`, `https://`, or `mailto:` is external; a web link gets `target="_blank"`, `rel="noopener noreferrer"`, and a visible mark. Any other href, another scheme included, renders as inert text. One module, `ui/lib/links.mjs`, holds this allow-list for the reader, the relations list, and `url` nodes in the graph.
   - The React tree injects this string at exactly one element. No other component sets inner HTML.
   - `force-graph` writes labels as HTML in its tooltip. Every string handed to it as a node or link label passes through one escape helper in `ui/lib/`.
 
@@ -433,6 +435,7 @@ sequenceDiagram
 - Moving community detection to a module both viewers import: when a third consumer appears.
 - Engine debt the viewer inherits and does not fix: `findEntityFile` in `wiki.mjs` and `resolveWikilinkTarget` in `lint.mjs` disagree on an ambiguous bare slug; lint check L05 uses exact match while the resolver accepts a unique basename. The viewer follows the resolver.
 - Engine behavior the viewer lives with: `runLint` throws on a `null` row in `edges.jsonl`, so `/api/lint` fails on such a file while the graph still loads. A numeric frontmatter title loses its written form (`007` shows as `7`), because the engine's parser returns a number.
+- An aliased wikilink inside a table cell: the table splits it at the `|`, and the escaped form `[[a\|b]]` is a different target to the engine's pattern. The viewer follows the engine.
 - Upgrading `force-graph` past 1.51.4: when a needed fix lands.
 - Light theme, translated interface text, math, syntax highlighting, images: spec non-goals.
 - Wikis beyond about 1,000 pages (paged graph, body search on the server): no known wiki is near it.

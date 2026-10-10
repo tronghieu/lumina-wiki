@@ -167,9 +167,30 @@ export async function readPage(root, id) {
   const page = describePage(id, text);
   const resolve = resolver(files.keys());
   const links = Object.create(null);
-  for (const m of page.body.matchAll(new RegExp(WIKILINK_RE.source, 'g'))) {
+  // The engine pattern decides what a wikilink is. The cheap checks skip starts it would
+  // reject only after scanning to the end of the text, which stalls the single-threaded server.
+  const body = page.body;
+  const re = new RegExp(WIKILINK_RE.source, 'y');
+  let p = 0, close = -1, pipe = -1;
+  for (;;) {
+    const i = body.indexOf('[[', p);
+    if (i === -1) break;
+    if (close < i + 2) {
+      close = body.indexOf(']', i + 2);
+      if (close === -1) break;
+    }
+    if (body[close + 1] !== ']') { p = close + 1; continue; }
+    if (pipe < i + 2) {
+      pipe = body.indexOf('|', i + 2);
+      if (pipe === -1) pipe = Infinity;
+    }
+    if (close === i + 2 || body[i + 2] === '|' || pipe === close - 1) { p = i + 1; continue; }
+    re.lastIndex = i;
+    const m = re.exec(body);
+    if (m === null) { p = i + 1; continue; }
     const target = m[1].trim();
     links[target] = resolve(target);
+    p = i + m[0].length;
   }
   return { ...page, links };
 }

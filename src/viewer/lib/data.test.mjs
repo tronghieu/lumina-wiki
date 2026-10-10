@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import * as data from './data.mjs';
 import { readWiki, readPage, readLint } from './data.mjs';
 import { resolveWikilinkTarget, buildBasenameIndex, runLint } from '../../scripts/lint.mjs';
-import { EDGE_TYPES } from '../../scripts/schemas.mjs';
+import { EDGE_TYPES, WIKILINK_RE } from '../../scripts/schemas.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONTRACT = join(HERE, '..', 'test-fixtures', 'contract');
@@ -348,5 +348,46 @@ test('a finding file that names no page is not matched by base name', async () =
         assert.ok(f.nodeId === null || f.nodeId === f.file.slice(0, -3), `${f.file} -> ${f.nodeId}`);
       }
     }
+  });
+});
+
+const FM = '---\ntitle: T\n---\n';
+
+test('wikilink scan: link keys equal the engine pattern on every page and on awkward bodies', async () => {
+  await withCopy(async (root) => {
+    const awkward = '[[a]] [[a|b]] [[ a ]] [[|x]] [[]] [[a|]] [[a [[b]] [[[c]]] text ] [[d]] [[e]] [[e]]\n'
+      + '```\n[[fenced]]\n```\n[[https://a.b]]\n';
+    await writeFile(join(root, 'wiki', 'concepts', 'awkward.md'), FM + awkward);
+    for (const id of await pageIdsOnDisk(root)) {
+      const page = await readPage(root, id);
+      const want = new Set([...page.body.matchAll(new RegExp(WIKILINK_RE.source, 'g'))].map((m) => m[1].trim()));
+      assert.deepEqual(new Set(Object.keys(page.links)), want, id);
+    }
+  });
+});
+
+test('wikilink scan: pathological bodies return within 2000 ms', async () => {
+  const bodies = {
+    brackets: '['.repeat(400_000),
+    openPipe: '[[a|'.repeat(100_000),
+    loneClose: '[[a'.repeat(66_000) + ']',
+    pipeClose: '[[|'.repeat(66_000) + ']]',
+  };
+  await withCopy(async (root) => {
+    for (const [name, body] of Object.entries(bodies)) {
+      await writeFile(join(root, 'wiki', 'concepts', `slow-${name}.md`), FM + body);
+    }
+    for (const name of Object.keys(bodies)) {
+      const t0 = performance.now();
+      await readPage(root, `concepts/slow-${name}`);
+      const ms = performance.now() - t0;
+      console.log(`readPage ${name}: ${ms.toFixed(0)} ms`);
+      assert.ok(ms < 2000, `${name} took ${ms} ms`);
+    }
+    const t0 = performance.now();
+    await readWiki(root);
+    const ms = performance.now() - t0;
+    console.log(`readWiki: ${ms.toFixed(0)} ms`);
+    assert.ok(ms < 2000, `readWiki took ${ms} ms`);
   });
 });

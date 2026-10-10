@@ -70,3 +70,11 @@
 - source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
   summary: No test proves that the viewer finds its running copy when the workspace is entered through a non-real path on Windows (a short name or a junction).
   evidence: Replacing `fs.realpathSync.native(root)` with `root` in `src/viewer/view.mjs` passes every test on macOS, because `process.cwd()` is already physical there. A Windows-only case that starts the viewer from the unresolved `os.tmpdir()` spelling would settle it.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/5-reader-pane.md`
+  summary: The engine's wikilink pattern is quadratic on text with many `[[` and no closing `]]`; `lint.mjs` still runs it unguarded.
+  evidence: `WIKILINK_RE` scans to the end of the text from every `[[` before failing. The viewer guards its own two uses (the server's `readPage` and the client renderer). Lint applies the pattern per line and per frontmatter value, which limits the cost, but one very long line would still stall `lumi-check`. A constant-time pre-filter like the one in `src/viewer/lib/data.mjs` would close it.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
+  summary: One run of the whole viewer suite in about 45 failed once in `view.test.mjs`; it did not reproduce.
+  evidence: Seen by a reviewer during a full `npm run test:viewer` run with all test files in parallel; the subtest was not captured. Forty runs of `view.test.mjs` alone passed, and three CI runs on three operating systems passed. If it returns, look first at the 10 s deadline for the ready line under CPU contention.

@@ -1,5 +1,5 @@
 // Wiki text is untrusted. Only these schemes may leave the viewer.
-const EXTERNAL = /^(?:https?:|mailto:)/i;
+const EXTERNAL = /^(?:https?:\/\/|mailto:)/i;
 const WEB = /^https?:\/\//i;
 
 export function externalHref(address) {
