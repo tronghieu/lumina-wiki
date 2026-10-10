@@ -30,7 +30,9 @@ Three panes when a page is open:
 
 ## Graph pane
 
-Inherited from the project-mode graph view: animated force layout, drag, zoom, pan, node size by degree, hover highlight of a node and its neighbors, legend, search, orphan toggle, local graph by hop count, community coloring with a community list.
+Inherited from the project-mode graph view: animated force layout, drag, zoom, pan, node size by degree, hover highlight of a node and its neighbors, legend, orphan toggle, local graph by hop count, community coloring with a community list.
+
+The resting view holds one filter box, two switches, and the legend. Nothing else sits over the graph until the reader asks for it.
 
 Specific to the wiki:
 
@@ -41,7 +43,7 @@ Specific to the wiki:
 | Citations | Drawn as their own relation between source nodes |
 | Confidence | Visible on an edge that carries it, and usable as a filter |
 | External URL target | A distinct kind of leaf node; it has no reader page |
-| Filters | Entity type, relation type, confidence, orphans |
+| Filters | One filter box: plain text keeps pages whose title matches; `type:`, `rel:`, and `conf:` terms keep one kind of page, relation, or confidence; a leading `-` excludes. Focusing the box offers the keys and this wiki's values. Two switches beside it: orphans, and depth around the open page. A legend entry toggles its `type:` term |
 | Lint findings | A ring on the node, behind a toggle that is off by default |
 | Choosing a node | Opens that page in the reader and reveals it in the tree |
 
@@ -54,6 +56,7 @@ Specific to the wiki:
 - Shows each page by title, falling back to slug.
 - Marks a page that has lint findings.
 - Choosing a page opens it in the reader and highlights it in the graph.
+- A search box above the tree finds a page by title or slug and opens it. It is separate from the graph filter: one opens a page, the other narrows the graph.
 
 ## Reader pane
 

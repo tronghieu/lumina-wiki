@@ -53,7 +53,7 @@ function Rows({ rows, openId, collapsed, onToggle, onOpen, selectedRef, nested =
   );
 }
 
-export function TreePane({ tree, openId, collapsed, onToggle, onOpen }) {
+export function TreePane({ tree, openId, collapsed, onToggle, onOpen, children }) {
   const selectedRef = useRef(null);
   const scrolledTo = useRef(null);
 
@@ -62,7 +62,7 @@ export function TreePane({ tree, openId, collapsed, onToggle, onOpen }) {
   useEffect(() => {
     if (openId === null) scrolledTo.current = null;
     else if (scrolledTo.current !== openId && selectedRef.current) {
-      selectedRef.current.scrollIntoView({ block: 'nearest' });
+      selectedRef.current.scrollIntoView({ block: 'center' });
       scrolledTo.current = openId;
     }
   }, [openId, collapsed]);
@@ -70,6 +70,7 @@ export function TreePane({ tree, openId, collapsed, onToggle, onOpen }) {
   return (
     <aside className="pane pane-tree" aria-label={STRINGS.treeLabel}>
       <h2 className="tree-title">{STRINGS.treeTitle}</h2>
+      {children}
       {tree.length === 0 ? (
         <p className="status">{STRINGS.treeEmpty}</p>
       ) : (

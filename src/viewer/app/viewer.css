@@ -47,7 +47,7 @@ html, body {
 .status { margin: 0; color: var(--muted); }
 
 /* Tree pane */
-.tree-title, .legend-title {
+.tree-title {
   margin: 0 0 6px;
   font-size: 11px;
   font-weight: 600;
@@ -94,7 +94,7 @@ html, body {
 
 /* Graph pane overlays */
 .graph-canvas { position: absolute; inset: 0; }
-.legend, .caption {
+.controls, .caption {
   position: absolute;
   left: 12px;
   background: var(--panel-bg);
@@ -102,12 +102,10 @@ html, body {
   border-radius: 6px;
   padding: 8px 10px;
 }
-.legend { top: 12px; pointer-events: none; }
-.legend-item { display: flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .legend-swatch.is-hollow { background: transparent; border: 1.5px solid #6c7086; }
 .legend-swatch.is-hollow.is-missing { border-color: var(--error); }
-.caption { bottom: 12px; max-width: calc(100% - 24px); display: flex; align-items: center; gap: 8px; }
+.caption { bottom: 12px; z-index: 2; max-width: calc(100% - 24px); display: flex; align-items: center; gap: 8px; }
 .caption-close {
   border: 0;
   background: none;
@@ -115,6 +113,43 @@ html, body {
   font: inherit;
   cursor: pointer;
 }
+
+/* Graph controls (filter box, switches, legend) and the tree-pane search box. */
+.controls { top: 12px; width: 240px; max-width: calc(100% - 24px); padding: 8px; z-index: 1; pointer-events: auto; }
+.filter { position: relative; }
+.filter-input { width: 100%; padding: 4px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.filter-input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); }
+.filter-suggestions { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 2; max-height: 220px; overflow-y: auto; margin: 2px 0 0; padding: 0; list-style: none; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 4px; }
+.filter:focus-within .filter-suggestions { display: block; }
+.filter-suggestion { display: block; width: 100%; padding: 3px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.filter-suggestion:hover, .filter-suggestion:focus-visible { background: var(--input-bg); }
+.filter-suggestion-hint { margin-left: 8px; color: var(--muted); font-size: 11px; }
+.filter-switches { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.control-item, .control-select { display: inline-flex; align-items: center; gap: 6px; }
+.control-item { cursor: pointer; }
+.control-item input { margin: 0; accent-color: var(--accent); }
+.control-select select { padding: 1px 4px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.control-item input:focus-visible, .control-select select:focus-visible { outline: 1px solid var(--accent); }
+.legend-list { display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 0; padding: 0; list-style: none; }
+.legend-entry { display: inline-flex; align-items: center; gap: 5px; padding: 1px 4px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.legend-entry:hover, .legend-entry[aria-pressed="true"] { background: var(--input-bg); }
+.legend-entry.is-off { opacity: 0.4; }
+.legend-entry:focus-visible { outline: 1px solid var(--accent); }
+.filter-empty { margin: 6px 0 0; }
+.filter-clear { border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.filter-clear:focus-visible { outline: 1px solid var(--accent); }
+
+.search { position: sticky; top: 0; z-index: 1; margin-bottom: 8px; padding-bottom: 6px; background: var(--panel-bg); }
+.search-input { width: 100%; padding: 4px 8px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.search-input:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); }
+.search-results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 40vh; overflow-y: auto; }
+.search-result { display: block; width: 100%; padding: 3px 6px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result:hover { background: var(--input-bg); }
+.search-result:focus-visible { outline: 1px solid var(--accent); }
+.search-result-type { margin-left: 6px; color: var(--muted); font-size: 11px; }
+.search-result-id { margin-left: 6px; color: var(--muted); font-size: 11px; }
+.search-empty { margin: 6px 0 0; }
+.search-more { margin: 4px 0 0; }
 
 /* Load failure */
 .notice {

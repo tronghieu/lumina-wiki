@@ -3,9 +3,8 @@
 export const initialState = Object.freeze({
   collapsed: Object.freeze({}),
   selectedEdge: null,
-  // Bucket key -> true when that bucket is hidden (e.g. 'node:type:sources', 'rel:cites', 'conf:low').
-  hidden: Object.freeze({}),
-  hideLonely: false,
+  filter: '',
+  showOrphans: true,
   hops: null,
   query: '',
 });
@@ -28,15 +27,13 @@ export function reducer(state, action) {
       for (const p of action.paths) delete collapsed[p];
       return { ...state, collapsed };
     }
-    case 'toggleHidden': {
-      const hidden = { ...state.hidden };
-      if (Object.hasOwn(state.hidden, action.key)) delete hidden[action.key];
-      else Object.defineProperty(hidden, action.key, OWN_TRUE);
-      return { ...state, hidden };
+    case 'setFilter': {
+      const value = typeof action.value === 'string' ? action.value : '';
+      return state.filter === value ? state : { ...state, filter: value };
     }
-    case 'setHideLonely': {
+    case 'setShowOrphans': {
       const value = action.value === true;
-      return state.hideLonely === value ? state : { ...state, hideLonely: value };
+      return state.showOrphans === value ? state : { ...state, showOrphans: value };
     }
     case 'setHops': {
       const value = action.value === 1 || action.value === 2 || action.value === 3 ? action.value : null;
@@ -45,10 +42,6 @@ export function reducer(state, action) {
     case 'setQuery': {
       const value = typeof action.value === 'string' ? action.value : '';
       return state.query === value ? state : { ...state, query: value };
-    }
-    case 'resetView': {
-      if (Object.keys(state.hidden).length === 0 && !state.hideLonely && state.hops === null) return state;
-      return { ...state, hidden: {}, hideLonely: false, hops: null };
     }
     case 'selectEdge':
       return state.selectedEdge === action.key ? state : { ...state, selectedEdge: action.key };

@@ -5,10 +5,11 @@ import { TreePane } from './panes/TreePane.jsx';
 import { hashToId, idToHash, openPageId } from './lib/hash.mjs';
 import { initialState, reducer } from './lib/state.mjs';
 import { ancestorsOf, buildTree } from './lib/tree.mjs';
-import { buildGraphModel, edgeCaption, legendOf } from './lib/graph-model.mjs';
+import { buildGraphModel, edgeCaption, legendOf, EMPTY_WIKI } from './lib/graph-model.mjs';
 import { STRINGS } from './lib/strings.mjs';
-
-const EMPTY_WIKI = { nodes: [], edges: [], schema: { entityTypes: [] } };
+import { vocabulary, visibleSets, selectedLink } from './lib/filter.mjs';
+import { GraphControls } from './panes/GraphControls.jsx';
+import { SearchBox } from './panes/SearchBox.jsx';
 
 function subscribeHash(cb) {
   window.addEventListener('hashchange', cb);
@@ -26,7 +27,7 @@ export function App() {
     fetch('/api/wiki', { signal: AbortSignal.timeout(15000) })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((w) => {
-        const ok = Array.isArray(w?.nodes) && Array.isArray(w?.edges) && Array.isArray(w?.schema?.entityTypes) && typeof w.schema.wikilinkPattern === 'string';
+        const ok = Array.isArray(w?.nodes) && Array.isArray(w?.edges) && Array.isArray(w?.schema?.entityTypes) && Array.isArray(w.schema.relationTypes) && typeof w.schema.wikilinkPattern === 'string';
         if (!ok) throw new Error('bad body');
         if (live) setLoad({ status: 'ready', wiki: w });
       })
@@ -43,6 +44,17 @@ export function App() {
   const openId = openPageId(hash, pageIds);
   const readerId = hashToId(hash);
   const legend = useMemo(() => legendOf(model, wiki.schema.entityTypes), [model, wiki]);
+  const vocab = useMemo(() => vocabulary(model, wiki), [model, wiki]);
+  const visible = useMemo(
+    () => visibleSets(model, wiki, state, openId),
+    [model, wiki, state.filter, state.showOrphans, state.hops, openId],
+  );
+  const canUseDepth = visible.open !== null;
+
+  // A selection the filter hides must not reappear when the filter relaxes.
+  useEffect(() => {
+    if (state.selectedEdge !== null && !visible.linkKeys.has(state.selectedEdge)) dispatch({ type: 'clearEdge' });
+  }, [state.selectedEdge, visible]);
 
   useEffect(() => {
     if (openId !== null) dispatch({ type: 'openFolders', paths: ancestorsOf(openId) });
@@ -63,7 +75,7 @@ export function App() {
     if (id === openId) dispatch({ type: 'openFolders', paths: ancestorsOf(id) });
     window.location.hash = idToHash(id);
   };
-  const link = state.selectedEdge === null ? null : model.links.find((l) => l.key === state.selectedEdge);
+  const link = selectedLink(model, visible, state.selectedEdge);
   const titleOf = (id) => titles.get(id) ?? id;
   const onClose = () => { window.location.hash = ''; };
 
@@ -71,13 +83,24 @@ export function App() {
     <div className={readerId !== null ? 'app has-reader' : 'app'}>
       <GraphPane
         model={model}
-        legend={legend}
+        visible={visible}
         openId={openId}
         selectedEdge={state.selectedEdge}
         onOpen={onOpen}
         onSelectEdge={(key) => dispatch({ type: 'selectEdge', key })}
         onClearEdge={() => dispatch({ type: 'clearEdge' })}
       >
+        <GraphControls
+          vocabulary={vocab}
+          legend={legend}
+          filter={state.filter}
+          showOrphans={state.showOrphans}
+          hops={state.hops}
+          canUseDepth={canUseDepth}
+          matched={visible.matchCount}
+          total={model.nodes.length}
+          dispatch={dispatch}
+        />
         {link && (
           <div className="caption" role="status" aria-label={STRINGS.captionLabel}>
             <span className="caption-text">{edgeCaption(link, titleOf)}</span>
@@ -92,7 +115,9 @@ export function App() {
         collapsed={state.collapsed}
         onToggle={(path) => dispatch({ type: 'toggleFolder', path })}
         onOpen={onOpen}
-      />
+      >
+        <SearchBox nodes={wiki.nodes} query={state.query} onQuery={(value) => dispatch({ type: 'setQuery', value })} onOpen={onOpen} />
+      </TreePane>
     </div>
   );
 }

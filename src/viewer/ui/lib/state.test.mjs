@@ -13,11 +13,12 @@ test('initialState is frozen with the documented shape', () => {
   assert.deepEqual(initialState, {
     collapsed: {},
     selectedEdge: null,
-    hidden: {},
-    hideLonely: false,
+    filter: '',
+    showOrphans: true,
     hops: null,
     query: '',
   });
+  assert.deepEqual(Object.keys(initialState).sort(), ['collapsed', 'filter', 'hops', 'query', 'selectedEdge', 'showOrphans']);
 });
 
 test('toggleFolder closes then opens', () => {
@@ -70,23 +71,27 @@ test('inherited and special folder names toggle like any other', () => {
   }
 });
 
-test('toggleHidden hides then shows, including special keys', () => {
-  for (const key of ['node:url', 'rel:constructor', 'constructor', '__proto__']) {
-    const hid = reducer(frozen(initialState), { type: 'toggleHidden', key });
-    assert.ok(Object.hasOwn(hid.hidden, key), key);
-    assert.equal(hid.hidden[key], true, key);
-    const shown = reducer(frozen(hid), { type: 'toggleHidden', key });
-    assert.ok(!Object.hasOwn(shown.hidden, key), key);
-  }
+test('setFilter sets, coerces non-strings to empty, and is a no-op when unchanged', () => {
+  const f = reducer(frozen(initialState), { type: 'setFilter', value: 'type:sources' });
+  assert.equal(f.filter, 'type:sources');
+  const s = frozen(f);
+  assert.equal(reducer(s, { type: 'setFilter', value: 'type:sources' }), s);
+  for (const v of [5, null, undefined, {}, true]) assert.equal(reducer(s, { type: 'setFilter', value: v }).filter, '', String(v));
+  const i = frozen(initialState);
+  for (const v of ['', 5, undefined, null]) assert.equal(reducer(i, { type: 'setFilter', value: v }), i, String(v));
+  assert.equal(s.filter, 'type:sources');
 });
 
-test('setHideLonely sets and is a no-op when unchanged', () => {
-  const on = reducer(frozen(initialState), { type: 'setHideLonely', value: true });
-  assert.equal(on.hideLonely, true);
-  const s = frozen(on);
-  assert.equal(reducer(s, { type: 'setHideLonely', value: true }), s);
+test('setShowOrphans stores a boolean and is a no-op when unchanged', () => {
+  const off = reducer(frozen(initialState), { type: 'setShowOrphans', value: false });
+  assert.equal(off.showOrphans, false);
+  const s = frozen(off);
+  assert.equal(reducer(s, { type: 'setShowOrphans', value: false }), s);
+  assert.equal(reducer(s, { type: 'setShowOrphans', value: true }).showOrphans, true);
+  for (const v of ['true', 1, null, undefined]) assert.equal(reducer(s, { type: 'setShowOrphans', value: v }), s, String(v));
   const i = frozen(initialState);
-  assert.equal(reducer(i, { type: 'setHideLonely', value: false }), i);
+  assert.equal(reducer(i, { type: 'setShowOrphans', value: true }), i);
+  for (const v of ['true', 1, undefined]) assert.equal(reducer(i, { type: 'setShowOrphans', value: v }).showOrphans, false, String(v));
 });
 
 test('setHops accepts null, 1, 2, 3 and maps anything else to null', () => {
@@ -106,18 +111,4 @@ test('setQuery sets, coerces non-strings to empty, and is a no-op when unchanged
   assert.equal(reducer(s, { type: 'setQuery', value: 5 }).query, '');
   const i = frozen(initialState);
   assert.equal(reducer(i, { type: 'setQuery', value: undefined }), i);
-});
-
-test('resetView restores filters, keeps query, collapsed and selectedEdge', () => {
-  let s = { ...initialState, query: 'q', collapsed: { a: true }, selectedEdge: 'k' };
-  s = reducer(s, { type: 'toggleHidden', key: 'rel:cites' });
-  s = reducer(s, { type: 'setHideLonely', value: true });
-  s = reducer(s, { type: 'setHops', value: 2 });
-  const next = reducer(frozen(s), { type: 'resetView' });
-  assert.deepEqual(next, { ...initialState, query: 'q', collapsed: { a: true }, selectedEdge: 'k' });
-});
-
-test('resetView is a no-op at default filters even with a query', () => {
-  const s = frozen({ ...initialState, query: 'q' });
-  assert.equal(reducer(s, { type: 'resetView' }), s);
 });

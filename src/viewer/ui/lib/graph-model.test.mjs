@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   TYPE_PALETTE, NEUTRAL, typeColor, buildGraphModel, nodeTooltip, edgeCaption,
-  nodeLabelHtml, linkLabelHtml, legendOf,
+  nodeLabelHtml, linkLabelHtml, legendOf, EMPTY_WIKI,
 } from './graph-model.mjs';
 import { STRINGS } from './strings.mjs';
 
@@ -163,4 +163,12 @@ test('html labels are escaped', () => {
   const l = linkLabelHtml({ type: '<b>x</b>', confidence: '"><script>' });
   assert.ok(!l.includes('<b>') && !l.includes('<script'));
   assert.equal(linkLabelHtml({ type: '<b>', confidence: null }), '&lt;b&gt;');
+});
+
+test('the placeholder wiki builds an empty model and an empty legend', () => {
+  const m = buildGraphModel(EMPTY_WIKI);
+  assert.deepEqual([m.nodes, m.links], [[], []]);
+  assert.equal(m.neighbors.size, 0);
+  assert.equal(m.degree.size, 0);
+  assert.deepEqual(legendOf(m, EMPTY_WIKI.schema.entityTypes), []);
 });

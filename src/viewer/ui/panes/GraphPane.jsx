@@ -6,14 +6,14 @@ import { STRINGS } from '../lib/strings.mjs';
 
 const idOf = (x) => (typeof x === 'object' ? x.id : x);
 const hollow = (n) => n.kind !== 'page';
-const SWATCH = { fill: '', hollow: ' is-hollow', missing: ' is-hollow is-missing' };
 
-export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelectEdge, onClearEdge, children }) {
+export function GraphPane({ model, visible, openId, selectedEdge, onOpen, onSelectEdge, onClearEdge, children }) {
   const canvasRef = useRef(null);
   const graphRef = useRef(null);
   const hoverRef = useRef(null);
   const openRef = useRef(openId);
   const edgeRef = useRef(selectedEdge);
+  const visRef = useRef(visible);
   const cbRef = useRef({ onOpen, onSelectEdge, onClearEdge });
   cbRef.current = { onOpen, onSelectEdge, onClearEdge };
 
@@ -41,11 +41,14 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
 
     const focus = () => {
       const h = hoverRef.current;
-      return h !== null ? h : byId.has(openRef.current) ? openRef.current : null;
+      if (h !== null) return h;
+      const o = openRef.current;
+      return byId.has(o) ? o : null;
     };
+    // Only relations that survive the filters keep a neighbour bright.
     const lit = (id) => {
       const f = focus();
-      return f === null || id === f || model.neighbors.get(f)?.has(id);
+      return f === null || id === f || visRef.current.neighbors.get(f)?.has(id);
     };
     const touches = (l) => {
       const f = focus();
@@ -58,6 +61,8 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
       .width(el.clientWidth).height(el.clientHeight)
       .backgroundColor(bg)
       .graphData({ nodes, links })
+      .nodeVisibility((n) => visRef.current.nodeIds.has(n.id))
+      .linkVisibility((l) => visRef.current.linkKeys.has(l.key))
       .nodeId('id').nodeRelSize(4).nodeVal('val')
       .cooldownTime(Infinity).d3AlphaMin(0.001)
       .nodeColor((n) => (hollow(n) ? bg : lit(n.id) ? n.color : n.color + '33'))
@@ -117,15 +122,16 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
       .nodeLabel(nodeLabelHtml)
       .linkLabel(linkLabelHtml)
       .showPointerCursor((o) => !!o && (o.kind ? o.kind === 'page' || (o.kind === 'url' && !!urlNodeHref(o.id)) : !!o.source))
-      .onNodeHover((n) => { hoverRef.current = n ? n.id : null; redraw(); })
+      .onNodeHover((n) => { hoverRef.current = n && visRef.current.nodeIds.has(n.id) ? n.id : null; redraw(); })
       .onNodeClick((n) => {
+        if (!visRef.current.nodeIds.has(n.id)) return;
         if (n.kind === 'page') cbRef.current.onOpen(n.id);
         else if (n.kind === 'url') {
           const href = urlNodeHref(n.id);
           if (href) window.open(href, '_blank', 'noopener,noreferrer');
         }
       })
-      .onLinkClick((l) => cbRef.current.onSelectEdge(l.key))
+      .onLinkClick((l) => { if (visRef.current.linkKeys.has(l.key)) cbRef.current.onSelectEdge(l.key); })
       .onBackgroundClick(() => cbRef.current.onClearEdge());
 
     g.d3Force('charge').strength(-200);
@@ -143,7 +149,8 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
     g.onEngineStop(() => {
       if (fitted) return;
       fitted = true;
-      if (!touched && nodes.length > 1) g.zoomToFit(400, 40);
+      // Fitting to zero or one node zooms absurdly far or does nothing, so fall back to all nodes.
+      if (!touched && nodes.length > 1) g.zoomToFit(400, 40, visRef.current.nodeIds.size > 1 ? (n) => visRef.current.nodeIds.has(n.id) : undefined);
     });
     graphRef.current = g;
 
@@ -159,6 +166,29 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
       if (g._destructor) g._destructor();
     };
   }, [model]);
+
+  // Filtering only toggles visibility: the graph and its layout are never rebuilt.
+  const firstVisRun = useRef(true);
+  useEffect(() => {
+    visRef.current = visible;
+    const g = graphRef.current;
+    if (!g) return;
+    g.nodeVisibility(g.nodeVisibility()).linkVisibility(g.linkVisibility());
+    redraw();
+    // The first run has no layout yet; the engine-stop fit covers it.
+    if (firstVisRun.current) { firstVisRun.current = false; return; }
+    // Refit only when narrowing left nothing on screen; otherwise the view must not move.
+    const el = canvasRef.current;
+    const shown = g.graphData().nodes.filter((n) => visible.nodeIds.has(n.id) && n.x !== undefined);
+    if (shown.length === 0) return;
+    const onScreen = shown.some((n) => {
+      const p = g.graph2ScreenCoords(n.x, n.y);
+      return p.x >= 0 && p.y >= 0 && p.x <= el.clientWidth && p.y <= el.clientHeight;
+    });
+    if (onScreen) return;
+    if (shown.length === 1) g.centerAt(shown[0].x, shown[0].y, 400);
+    else g.zoomToFit(400, 40, (n) => visible.nodeIds.has(n.id));
+  }, [visible, model]);
 
   // openId changes must not rebuild the graph; the ref feeds the accessors.
   useEffect(() => {
@@ -182,17 +212,6 @@ export function GraphPane({ model, legend, openId, selectedEdge, onOpen, onSelec
     <section className="pane pane-graph" aria-label={STRINGS.graphLabel}>
       <div className="graph-canvas" ref={canvasRef} />
       {model.nodes.length === 0 && <p className="status graph-empty">{STRINGS.graphEmpty}</p>}
-      {legend.length > 0 && (
-        <div className="legend">
-          <h2 className="legend-title">{STRINGS.legendTitle}</h2>
-          {legend.map((e) => (
-            <div className="legend-item" key={e.key}>
-              <span className={`legend-swatch${SWATCH[e.variant] || ''}`} style={e.variant === 'fill' ? { background: e.color } : undefined} />
-              {e.label}
-            </div>
-          ))}
-        </div>
-      )}
       {children}
     </section>
   );

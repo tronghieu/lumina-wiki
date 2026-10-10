@@ -37,6 +37,14 @@ function assignCurvature(links) {
   }
 }
 
+// Stand-in for the wiki before it loads, so the app can compute the model unconditionally.
+export const EMPTY_WIKI = Object.freeze({
+  nodes: Object.freeze([]),
+  edges: Object.freeze([]),
+  communities: Object.freeze([]),
+  schema: Object.freeze({ entityTypes: Object.freeze([]), relationTypes: Object.freeze([]), wikilinkPattern: '' }),
+});
+
 export function buildGraphModel(wiki) {
   const ids = new Set(wiki.nodes.map((n) => n.id));
   const links = [];

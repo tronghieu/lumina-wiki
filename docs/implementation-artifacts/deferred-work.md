@@ -78,3 +78,11 @@
 - source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
   summary: One run of the whole viewer suite in about 45 failed once in `view.test.mjs`; it did not reproduce.
   evidence: Seen by a reviewer during a full `npm run test:viewer` run with all test files in parallel; the subtest was not captured. Forty runs of `view.test.mjs` alone passed, and three CI runs on three operating systems passed. If it returns, look first at the 10 s deadline for the ready line under CPU contention.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/8-installer-and-skill.md`
+  summary: An upgrade run without `--profile` installs the full profile even when the workspace was installed as `minimal`.
+  evidence: `src/installer/commands.js` takes `profile` from the command options only (`opts.profile === 'minimal' ? 'minimal' : 'full'`) and never reads the existing manifest's `profile`. A hub-managed wiki that is re-installed to gain the viewer would gain per-project skill folders and stubs. Keeping the manifest's profile when the option is absent would fix it; that changes upgrade behavior and needs its own change.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/6-filters-local-graph-search.md`
+  summary: Filter suggestions follow the last term of the text, not the term under the caret.
+  evidence: `suggest` in `src/viewer/ui/lib/query.mjs` reads the text after the last space. Editing a term in the middle of a filter offers suggestions for the final term instead. It would need the caret position passed in from `GraphControls.jsx` and the replacement spliced at that position.
