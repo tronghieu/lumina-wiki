@@ -68,12 +68,14 @@ Body:
 |---|---|
 | Headings, lists, emphasis, block quotes, links, tables, plain code blocks | Rendered |
 | YAML frontmatter block | Not shown as raw text; selected fields appear in the header |
-| Lumina marker comments (`<!-- lumina:* -->`, `<!-- user-edited -->`) | Not shown |
+| HTML comments outside code blocks, Lumina markers included | Not shown |
 | Wikilink with a target | A link that opens the target page |
 | Wikilink with no target | Visibly marked broken, not clickable |
 | External link | Opens outside the viewer |
-| Raw HTML in the page | Never executed; shown inert or dropped |
-| Math, syntax highlighting, diagrams, embedded images | Out of this iteration; source text shows as written |
+| Raw HTML in the page | Never executed; shown as plain text |
+| Math, syntax highlighting, diagrams | Out of this iteration; source text shows as written |
+| Embedded image | Out of this iteration; its alt text shows |
+| Markdown link with no scheme | Inert text; only wikilinks navigate inside the viewer |
 
 Relations:
 

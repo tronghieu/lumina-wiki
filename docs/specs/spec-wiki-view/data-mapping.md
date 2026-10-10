@@ -11,7 +11,7 @@ What the viewer reads from a workspace and how each piece becomes something on s
 | `wiki/graph/citations.jsonl` | Source-to-source citations |
 | `src/scripts/schemas.mjs` | Entity types and folders, relation types, symmetry, terminal types, exemptions |
 
-The viewer reads nothing under `raw/`. All inputs are read from disk when the browser asks, so a reload is always current.
+The viewer serves nothing under `raw/`. Lint, which runs inside it, checks that the `raw/` paths a page names exist. All inputs are read from disk when the browser asks, so a reload is always current.
 
 No existing `wiki.mjs` read command emits the full node and edge set: `list-entities` gives nodes only, and `read-edges` works per slug.
 
@@ -36,7 +36,7 @@ Line shape in `edges.jsonl`:
 - Symmetric relation types are stored once, with endpoints sorted. Draw one undirected edge.
 - Relation types with a named reverse are stored in both directions. Draw one directed edge per pair, not two.
 - No reverse is stored when the relation type is terminal, or when the target matches an exemption: `foundations/**`, `outputs/**`, `reflections/**`, or an external URL.
-- `cites` and `cited_by` never appear in `edges.jsonl`.
+- `cites` and `cited_by` do not belong in `edges.jsonl`. A legacy row found there is treated as a citation.
 
 `docs/project-context.md` describes the edge line as `{source,target,type,confidence}`. The code writes `{from,type,to}`. The code is correct; that doc line needs fixing.
 
@@ -63,7 +63,7 @@ Resolution follows lint's `resolveWikilinkTarget`:
 3. A path-qualified target resolves on exact match only.
 4. A bare name shared by several pages does not resolve.
 
-The viewer and lint must never disagree on whether a link resolves. Sharing one implementation is the way to guarantee it.
+`resolveWikilinkTarget` is the single judge of whether a link resolves, for the viewer and for edge endpoints. Lint check L05 is stricter: it accepts exact matches only, so a link that resolves by unique basename works in the reader and may still carry an L05 finding.
 
 Reflection pages carry no body wikilinks by rule.
 
@@ -82,6 +82,7 @@ Reflection pages carry no body wikilinks by rule.
 The viewer shows the findings `lint.mjs --json` reports for the workspace when the page loads.
 
 - Finding keys: `id`, `severity` (error, warning, info), `fixable`, `file`, `line`, `message`.
-- `file` is a wiki-relative path such as `sources/lora.md`. There is no slug field, so a finding maps to a node by path.
-- The marked page set must equal the set of files lint reports.
+- `file` is a wiki-relative `.md` path for page checks, the edge endpoint as written for edge checks, and a `.jsonl` path for citation checks.
+- A finding maps to a page by resolving `file` with `resolveWikilinkTarget`. A finding that resolves to no page is listed once for the whole wiki.
+- The marked page set equals the set of pages the findings resolve to.
 - The viewer shows findings. It never applies or offers a fix.

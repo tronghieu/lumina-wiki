@@ -5,6 +5,7 @@ companions:
   - data-mapping.md
   - delivery.md
   - ../spec-project-docs-overlay/graph-view.md
+  - ../../planning-artifacts/architecture/architecture-wiki-view-2026-10-10/ARCHITECTURE-SPINE.md
   - ../../project-context.md
 sources: []
 ---
@@ -39,13 +40,13 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
   - **success:** At one hop, only the selected page and the pages directly related to it remain.
 - **CAP-7**
   - **intent:** User can browse every page in a tree organized the way `wiki/` is, including nested readings and chapters.
-  - **success:** The tree holds the same page set `list-entities` reports, plus the index and the log. Nested units sit under their source or book.
+  - **success:** The tree holds every markdown file under `wiki/` outside `wiki/graph/`, the index and the log included. Nested units sit under their source or book.
 - **CAP-8**
   - **intent:** Opening a page shows it as a rendered document in a pane between the graph and the tree.
   - **success:** Choosing a page in the tree opens the reader in the middle, showing title, type, and rendered body. Frontmatter and Lumina marker comments never show as raw text. Closing the reader returns to two panes.
 - **CAP-9**
   - **intent:** User can follow links between pages inside the reader, and go back.
-  - **success:** `[[slug]]`, `[[type/slug]]`, and `[[slug|alias]]` open their target. A link with no target is visibly marked broken. Browser Back returns to the previous page. Viewer and lint agree on every link in the fixture.
+  - **success:** `[[slug]]`, `[[type/slug]]`, and `[[slug|alias]]` open their target. A link with no target is visibly marked broken. Browser Back returns to the previous page. Every link in the fixture resolves exactly as lint's `resolveWikilinkTarget` resolves it.
 - **CAP-10**
   - **intent:** The reader lists the open page's relations grouped by relation type, inbound and outbound, each one a link.
   - **success:** A concept page lists the sources that introduce it, and choosing one opens that source.
@@ -63,7 +64,7 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
   - **success:** CI rebuilds the bundle and fails on any difference from the committed one, on every pull request and before publish. `ci:package` requires the bundle file.
 - **CAP-15**
   - **intent:** User can see which pages have lint findings, in the graph and the tree, and read the findings for the open page.
-  - **success:** With a seeded missing-reverse-edge error, the page is marked in the tree and, with the lint toggle on, in the graph. The reader lists the finding's check id and message. The marked set equals what `lint --json` reports.
+  - **success:** With a seeded missing-reverse-edge error, the page is marked in the tree and, with the lint toggle on, in the graph. The reader lists the finding's check id and message. The marked set equals the pages that the findings of `lint --json` resolve to; findings that name no page are listed once for the whole wiki.
 - **CAP-16**
   - **intent:** The viewer runs only while someone keeps it running, and leaves nothing behind.
   - **success:** Ending the command frees the port and leaves no process and no file in the workspace. Starting it again for the same workspace reports the address already serving it. A port held by something else leads to another port and a clear message, never a silent failure.
@@ -74,13 +75,13 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 - Layout is fixed: graph on the left as the primary surface, tree on the right, reader in the middle (see `viewer-ui.md`).
 - The viewer is served by a local HTTP server built on Node built-ins only. It adds no runtime dependency and makes no outbound request.
 - The server runs in the foreground. No daemon, no detached child, no state file, no idle timer. Whoever starts it owns its life: the agent host as a background task, or the user in a terminal (see `delivery.md`).
-- The server binds `127.0.0.1` only, rejects any request whose `Host` header is not its own loopback address, accepts GET only, sends no CORS headers, and resolves every file path through `safePath`. It exposes wiki content and its own assets, nothing else.
+- The server binds `127.0.0.1` only, rejects any request whose `Host` header is not its own loopback address, accepts GET only, and sends no CORS headers. It never builds a filesystem path from request input: page ids and asset names are looked up in maps it built itself. It exposes wiki content and its own assets, nothing else.
 - One source of truth. Entity types, relation types, symmetry, and exemptions come from `schemas.mjs`. Wikilinks resolve by the same rules as lint. The viewer holds no second hard-coded list (see `data-mapping.md`).
 - Page content is untrusted, because pages are written from ingested external sources. Nothing from a page body, frontmatter, or slug runs as script or raw HTML, and the page carries a restrictive content security policy.
 - The viewer bundle is built by the maintainer and committed to git. A user's machine never runs a bundler.
 - Policy amendment: `devDependencies` are allowed for building the viewer bundle and for nothing else. The CLI, installer, and scripts keep shipping as authored source. Runtime `dependencies`, the ban on `postinstall`, the ban on native modules on user machines, and zero telemetry are unchanged.
 - Policy amendment: the architecture rule "Daemonless — no server, no long-running process" now allows a foreground viewer server. A background daemon is still not allowed.
-- Libraries bundled into the viewer are build-time inputs, not runtime dependencies. Each passes the existing license audit and is listed in the third-party notices.
+- Libraries bundled into the viewer are build-time inputs, not runtime dependencies. Each carries an allowed license (MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause) and is listed in the third-party notices.
 - Viewer logic lives in plain `.mjs` modules tested with `node --test`. The React layer stays thin. No Jest or Vitest.
 - CLI cold start stays under 300 ms: server and viewer code are lazily imported.
 - The UI is built with React 19 and is a separate viewer from the project-mode one. It reuses that viewer's graph styling (see `../spec-project-docs-overlay/graph-view.md`).
@@ -108,9 +109,9 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 
 - `/lumi-view` is a core skill, installed in every classic workspace on every classic host.
 - The skill asks the host to run the server as a background task where the host has one, and otherwise hands the user the command.
-- "Open" means the default browser, with the address reported when that is not possible.
+- The server does not open a browser. The skill reports the address, and the user opens it.
 - Reload is manual. The server does not push changes in this iteration.
-- The reader renders standard markdown: headings, lists, emphasis, block quotes, links, tables, plain code blocks. Basis: no skill or page template tells the agent to write math, fenced code, diagrams, or images into a page.
+- The reader renders standard markdown: headings, lists, emphasis, block quotes, links, tables, plain code blocks. An embedded image shows as its alt text. Basis: no skill or page template tells the agent to write math, fenced code, diagrams, or images into a page.
 - Edge targets that are external URLs show as a distinct kind of leaf node with no reader page.
 - A relation stored in both directions is drawn as one directed edge. An edge that names a page that does not exist shows as a missing node.
 - Search covers titles and slugs only.
@@ -123,5 +124,5 @@ A pain to solve plus an opportunity. In a Lumina wiki the agent writes and the h
 
 ## Open Questions
 
-- Does the foreground server behave on Windows: start, Ctrl-C, port release? Untested.
-- Does Linux CI produce the same bundle bytes as macOS? Untested. The fallback is defined in `delivery.md`.
+- Ctrl-C in a Windows terminal is checked by hand before release. CI covers start, request rejection, and port release on Windows.
+- Same bundle bytes on Linux, macOS, and Windows are proven by the first CI run of the bundle check. The fallback is defined in `delivery.md`.

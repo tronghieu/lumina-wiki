@@ -45,7 +45,7 @@ A local server is reachable by any process on the machine and, without care, by 
 | Reject a `Host` header that is neither `127.0.0.1:<port>` nor `localhost:<port>` | DNS rebinding |
 | GET only | Any write path |
 | No CORS headers | Another site reading responses |
-| Every file path through `safePath` | Path traversal out of `wiki/` |
+| Request input never becomes a path; ids and asset names are looked up | Path traversal out of `wiki/` |
 | Expose wiki content and own assets only | Exposure of `raw/`, config, or secrets |
 | Content security policy on the shell | Script injected through page content |
 
@@ -61,6 +61,8 @@ A local server is reachable by any process on the machine and, without care, by 
 Fallback, if Linux CI yields different bytes than macOS: stop committing the bundle, build it in `prepack`, and assert the built assets exist before publish.
 
 Rejected: bundling on the user's machine. `esbuild` is a 10.6 MB native binary with its own `postinstall`. It would become a runtime dependency and move build failures onto users.
+
+Chosen renderer: `markdown-it`, over `marked`. It ignores raw HTML and rejects script URLs by default, and it needs no DOM-based sanitizer, so it is testable under `node --test`. Cost: 27 kB more after gzip.
 
 Rejected: React without a build. React 19 ships no UMD build. The last version that does, 18.3.1, dates from April 2024.
 
@@ -80,6 +82,7 @@ Rejected: React without a build. React 19 ships no UMD build. The last version t
 | `docs/planning-artifacts/architecture.md` | "Daemonless — no server, no long-running process" | Allow a foreground viewer server; still no background daemon |
 | `docs/planning-artifacts/prd.md` NFR-M2 | No vendored or redistributed third-party code | Already untrue since the project-mode viewer; restate to match practice |
 | `docs/project-context.md` edge shape | `{source,target,type,confidence}` | Correct to `{from,type,to,confidence}` |
+| `docs/planning-artifacts/architecture.md` license audit | MIT/ISC/Apache-2.0 only | Add BSD-2-Clause and BSD-3-Clause; a BSD module already ships inside the project-mode viewer |
 
 Unchanged: runtime `dependencies`, no `postinstall`, no native modules on user machines, zero telemetry, cold start under 300 ms, no test framework.
 
@@ -87,7 +90,7 @@ Unchanged: runtime `dependencies`, no `postinstall`, no native modules on user m
 
 - `package.json` `files` is a per-file allowlist. The bundle, the shell, and the styles must be added by name.
 - `scripts/ci-package.mjs` holds the list of files a package must contain. The bundle belongs there.
-- A classic install copies top-level `src/scripts/` files from an explicit array in `copyScripts`. Only `src/scripts/lib/*.mjs` is picked up by directory listing. Copy failures there are swallowed, so a missing asset would fail silently at install and loudly at first run.
+- `copyScripts` swallows copy failures, so the viewer does not use it. It installs from its own explicit list, which stops the install when a file is missing.
 - Third-party notices currently live at `src/project/vendor/THIRD-PARTY-NOTICES.md`.
 - The publish workflow runs from a `v*` tag in `.github/workflows/publish.yml`.
 
@@ -114,9 +117,11 @@ Build spike, macOS arm64, Node 24:
 
 | Measure | Result |
 |---|---|
-| Inputs | `react` and `react-dom` 19.3.0, `force-graph` 1.51.4, `marked` 18.1.0, `esbuild` 0.28.2 |
+| Inputs, first run | `react` and `react-dom` 19.3.0, `force-graph` 1.51.4, `marked` 18.1.0, `esbuild` 0.28.2 |
 | Same bytes | Two native builds, a different absolute path, and `esbuild-wasm` all matched |
 | Size | 449,479 bytes raw, 142,251 gzipped |
+| Second run, with `markdown-it` 15.0.2 in place of `marked` | 502,466 bytes raw, 169,361 gzipped; two builds matched |
+| Licenses in the install tree | MIT 24, ISC 16, BSD-3-Clause 1, BSD-2-Clause 1, PSF-2.0 1 (`argparse`, used only by a CLI and not bundled) |
 | Build time | About 55 ms |
 | Not tested | Linux |
 

@@ -1,0 +1,295 @@
+<title>Wiki View Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column, 44rem wide; diagrams and tables break out to 60rem; a pane sketch opens the page. */
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --fg: #1c2030;
+  --muted: #5a6078;
+  --line: #d9dcea;
+  --accent: #2f55c8;
+  --accent-soft: #e4eaff;
+  --node-a: #c2410c;
+  --node-b: #15803d;
+  --node-c: #7c3aed;
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11111b; --surface: #181825; --fg: #cdd6f4; --muted: #a6adc8; --line: #363a4f;
+    --accent: #89b4fa; --accent-soft: #232a45;
+    --node-a: #fab387; --node-b: #a6e3a1; --node-c: #cba6f7;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11111b; --surface: #181825; --fg: #cdd6f4; --muted: #a6adc8; --line: #363a4f;
+  --accent: #89b4fa; --accent-soft: #232a45;
+  --node-a: #fab387; --node-b: #a6e3a1; --node-c: #cba6f7;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 1rem/1.6 var(--font-body);
+  padding-inline: 1.25rem;
+  padding-block: 2.5rem 4rem;
+}
+.page { max-width: 60rem; margin-inline: auto; display: flex; flex-direction: column; gap: 3rem; }
+.col { max-width: 44rem; display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+section { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p, ul, ol { margin: 0; }
+ul, ol { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.lede { font-size: 1.15rem; color: var(--muted); }
+.kicker { font: 500 0.75rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+code { font: 400 0.88em var(--font-mono); background: var(--accent-soft); padding: 0.1em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Pane sketch */
+.panes { display: grid; grid-template-columns: 5fr 4fr 2.5fr; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.pane { padding: 1rem; min-width: 0; display: flex; flex-direction: column; gap: 0.75rem; min-height: 13rem; }
+.pane + .pane { border-left: 1px solid var(--line); }
+.pane-name { font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.pane svg { width: 100%; height: auto; flex: 1; }
+.edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+.n-a { fill: var(--node-a); } .n-b { fill: var(--node-b); } .n-c { fill: var(--node-c); }
+.n-open { stroke: var(--accent); stroke-width: 3; }
+.bar { height: 0.55rem; border-radius: 3px; background: var(--line); }
+.bar.title { height: 0.9rem; width: 60%; background: var(--fg); opacity: 0.75; }
+.bar.link { width: 35%; background: var(--accent); opacity: 0.7; }
+.tree { list-style: none; padding: 0; font: 400 0.78rem/1.5 var(--font-mono); color: var(--muted); gap: 0.1rem; }
+.tree li { overflow-wrap: anywhere; }
+.tree .in { padding-left: 0.9rem; }
+.tree .sel { color: var(--accent); font-weight: 500; }
+.caption { font-size: 0.9rem; color: var(--muted); }
+
+/* Tables and diagrams */
+.wide { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.6rem 0.9rem 0.6rem 0; border-bottom: 1px solid var(--line); }
+th { font: 500 0.72rem/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+pre.mermaid { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; overflow-x: auto; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1.5rem 2rem; }
+.rule { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; padding-top: 0.9rem; border-top: 2px solid var(--accent); }
+.rule p { font-size: 0.95rem; color: var(--muted); }
+.rule .ref { font: 400 0.72rem/1 var(--font-mono); color: var(--muted); }
+
+.note { background: var(--accent-soft); border-radius: 10px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.4rem; }
+footer { border-top: 1px solid var(--line); padding-top: 1.25rem; font-size: 0.9rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.3rem; }
+
+@media (max-width: 640px) {
+  .panes { grid-template-columns: 1fr; }
+  .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
+  .pane { min-height: 0; }
+  td:first-child { white-space: normal; }
+}
+</style>
+
+<div class="page">
+
+  <header class="col">
+    <span class="kicker">LuminaWiki · feature architecture</span>
+    <h1>Wiki View Architecture</h1>
+    <p class="lede">A local, read-only viewer for a Lumina wiki. The agent writes the wiki. You read it here, with the typed graph beside the page.</p>
+  </header>
+
+  <section>
+    <div class="panes" role="img" aria-label="Sketch of the viewer: graph on the left, reader in the middle, page tree on the right">
+      <div class="pane">
+        <span class="pane-name">Graph</span>
+        <svg viewBox="0 0 220 130" aria-hidden="true">
+          <path class="edge" d="M48 34 L110 66 L170 30 M110 66 L62 104 M110 66 L176 100 M170 30 L176 100"/>
+          <circle class="n-a" cx="48" cy="34" r="9"/>
+          <circle class="n-b n-open" cx="110" cy="66" r="13"/>
+          <circle class="n-a" cx="170" cy="30" r="8"/>
+          <circle class="n-c" cx="62" cy="104" r="7"/>
+          <circle class="n-c" cx="176" cy="100" r="10"/>
+        </svg>
+      </div>
+      <div class="pane">
+        <span class="pane-name">Reader</span>
+        <div class="bar title"></div>
+        <div class="bar" style="width:92%"></div>
+        <div class="bar" style="width:78%"></div>
+        <div class="bar link"></div>
+        <div class="bar" style="width:85%"></div>
+        <div class="bar" style="width:48%"></div>
+      </div>
+      <div class="pane">
+        <span class="pane-name">Tree</span>
+        <ul class="tree">
+          <li>concepts/</li>
+          <li class="in sel">low-rank-adaptation</li>
+          <li class="in">attention</li>
+          <li>sources/</li>
+          <li class="in">lora</li>
+          <li>index</li>
+        </ul>
+      </div>
+    </div>
+    <p class="caption col">The graph is the main surface, on the left. The tree is on the right. The reader appears between them when a page is open. One page is open at a time, and all three panes follow it.</p>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Three layers, one direction</h2>
+      <p>Each layer knows only the one beneath it. Nothing writes to the wiki. Nothing is cached, so a browser reload always shows what is on disk.</p>
+    </div>
+    <div class="wide">
+<pre class="mermaid">
+flowchart LR
+  files[(wiki pages, edges, citations)] --> rm[Read model]
+  engine[Existing engine: lint, schemas] --> rm
+  rm --> http[Local server]
+  http -->|JSON over 127.0.0.1| ui[React client]
+  src[Client source] -->|esbuild, maintainer only| bundle[Committed bundle]
+  bundle --> http
+</pre>
+    </div>
+    <div class="wide">
+      <table>
+        <thead><tr><th>Layer</th><th>Job</th><th>Never does</th></tr></thead>
+        <tbody>
+          <tr><td>Read model</td><td>Turns wiki files into nodes, edges, pages, and lint findings. Reuses the engine's own resolver and type tables.</td><td>Knows about HTTP</td></tr>
+          <tr><td>Local server</td><td>Serves three assets and four JSON routes on <code>127.0.0.1</code>. Runs in the foreground until stopped.</td><td>Adds or changes data</td></tr>
+          <tr><td>React client</td><td>Draws the graph, the tree, and the reader from what the server sent.</td><td>Reads files or resolves a link itself</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>What happens when you ask for the viewer</h2>
+      <p>The <code>lumi-view</code> skill runs one command. The server finds a port, prints its address once, and stays up for as long as its starter keeps it.</p>
+    </div>
+    <div class="wide">
+<pre class="mermaid">
+sequenceDiagram
+  participant H as Agent host or you
+  participant V as view.mjs
+  participant B as Browser
+  H->>V: node _lumina/viewer/view.mjs
+  V->>V: find the wiki, probe 20 ports, listen
+  V-->>H: one JSON line with the address
+  B->>V: GET /
+  B->>V: GET /api/wiki
+  V-->>B: schema, nodes, edges, communities
+  B->>V: GET /api/lint
+  B->>V: GET /api/page for the open page
+  V-->>B: frontmatter, body, resolved links
+  H->>V: stop
+  V-->>H: port released, nothing left on disk
+</pre>
+    </div>
+    <div class="col">
+      <ul>
+        <li>The port is derived from the wiki's path, so the address stays the same between starts.</li>
+        <li>A second start finds the running server by asking <code>/api/health</code> and reports its address. No state file is involved.</li>
+        <li>If a sandbox refuses the port, the command fails with a named reason, and the skill gives you the same command to run in a terminal.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Rules that keep the parts in step</h2>
+      <p>Five units are built separately. These are the decisions none of them may make alone.</p>
+    </div>
+    <div class="rules">
+      <div class="rule"><span class="ref">AD-4</span><h3>One name per page</h3><p>A page's id is its path under <code>wiki/</code> without <code>.md</code>. The graph, the tree, and every link use that same string.</p></div>
+      <div class="rule"><span class="ref">AD-5</span><h3>One resolver</h3><p>Links and edge endpoints are resolved by lint's <code>resolveWikilinkTarget</code>, on the server. The client only looks ids up.</p></div>
+      <div class="rule"><span class="ref">AD-6</span><h3>Edges cleaned once</h3><p>A relation stored in both directions becomes one arrow. A symmetric relation becomes one line. Output is sorted, so clusters come out the same everywhere.</p></div>
+      <div class="rule"><span class="ref">AD-7</span><h3>A fixed contract</h3><p>Seven routes, with every key and value pinned. One fixture workspace feeds the tests on both sides.</p></div>
+      <div class="rule"><span class="ref">AD-21</span><h3>Three functions</h3><p>The read model exports <code>readWiki</code>, <code>readPage</code>, and <code>readLint</code>. The server serializes what they return and adds nothing.</p></div>
+      <div class="rule"><span class="ref">AD-15</span><h3>One owner per fact</h3><p>The open page lives in the URL hash and nowhere else. Back and reload work without extra code.</p></div>
+      <div class="rule"><span class="ref">AD-3</span><h3>Reuse by export</h3><p>Engine code is imported, never copied. The one exception, community detection, has a test that compares it with the original.</p></div>
+      <div class="rule"><span class="ref">AD-22</span><h3>One owner per file</h3><p>Every file belongs to exactly one unit, shared files included.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Why it is safe to leave running</h2>
+      <p>Wiki pages are written from sources the agent ingested, so their content is treated as untrusted. A local server is also reachable by other programs and by web pages in your browser.</p>
+    </div>
+    <div class="wide">
+      <table>
+        <thead><tr><th>Guard</th><th>Stops</th></tr></thead>
+        <tbody>
+          <tr><td>Listens on <code>127.0.0.1</code> only</td><td>Access from the network</td></tr>
+          <tr><td>Checks the <code>Host</code> header</td><td>A website reaching it through DNS rebinding</td></tr>
+          <tr><td>GET only, no CORS headers</td><td>Any write, and other sites reading responses</td></tr>
+          <tr><td>Request text is never used as a path</td><td>Reading files outside the wiki</td></tr>
+          <tr><td>Markdown rendered with raw HTML off</td><td>Script hidden in a page body</td></tr>
+          <tr><td>Graph labels escaped</td><td>Script hidden in a page title</td></tr>
+          <tr><td>Images shown as their alt text</td><td>A tracking request to another server</td></tr>
+          <tr><td>Strict content security policy</td><td>Anything the guards above missed</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>How the client reaches users</h2>
+      <p>The client is the only built file in the package. It is built by the maintainer, committed to git, and checked on every pull request.</p>
+    </div>
+    <div class="wide">
+<pre class="mermaid">
+flowchart LR
+  ui[React source] --> build[build-viewer script]
+  build --> js[viewer.js in git]
+  js --> ci[CI on Linux, macOS, Windows]
+  ci -->|rebuild and compare| ok{Same bytes?}
+  ok -->|yes| pub[Publish to npm]
+  ok -->|no| stop[Release blocked]
+  pub --> inst[Installer copies an explicit file list]
+</pre>
+    </div>
+    <div class="col">
+      <ul>
+        <li>No bundler runs on a user's machine. Starting the viewer needs only Node.</li>
+        <li>The installer stops if a listed file is missing, so a broken package cannot install quietly.</li>
+        <li>The build fails if a bundled library is missing from the license notices.</li>
+      </ul>
+      <div class="note">
+        <h3>Still checked by hand</h3>
+        <p>Ctrl-C in a Windows terminal, and pane behavior in a real browser. The project allows no browser test framework, so these stay on a manual list before each release.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <h2>Left out on purpose</h2>
+      <ul>
+        <li>Editing from the viewer. The agent edits the wiki.</li>
+        <li>A background daemon, or a server that outlives its starter.</li>
+        <li>Pushing changes to the browser. You reload.</li>
+        <li>A cache. It comes back only if a real wiki takes over a second to load.</li>
+        <li>Math, syntax highlighting, and embedded images in the reader.</li>
+        <li>A <code>lumina view</code> command, and opening the browser for you. Both wait until someone asks.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <span>Full contract: <code>docs/planning-artifacts/architecture/architecture-wiki-view-2026-10-10/ARCHITECTURE-SPINE.md</code></span>
+    <span>What to build: <code>docs/specs/spec-wiki-view/SPEC.md</code></span>
+    <span>Written 2026-10-10. The spine wins where this page and the spine differ.</span>
+  </footer>
+
+</div>
