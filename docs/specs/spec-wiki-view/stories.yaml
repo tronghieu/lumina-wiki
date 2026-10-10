@@ -1,0 +1,106 @@
+- id: "1"
+  title: Build pipeline and client shell
+  description: >-
+    The viewer's build script, bundle check, and test script, wired into CI and publish, plus the authored
+    shell and stylesheet and a first bundle that imports and calls React, force-graph, and markdown-it
+    (SPEC CAP-14; spine AD-16, AD-17, AD-20, AD-22). The committed bundle must come out byte-identical on Linux, macOS, and Windows.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Pin react, react-dom, force-graph, markdown-it, and esbuild to the exact versions in the spine's Stack table.
+    After installing, confirm package-lock.json lists the esbuild binaries for Linux and Windows as well as macOS;
+    regenerate the lockfile from a clean tree if it does not. Register test:viewer in test:all and as its own ci.yml
+    step now. Create src/viewer/app/THIRD-PARTY-NOTICES.md with a section for every package in the metafile. If
+    ci:viewer-bundle shows different bytes across operating systems, stop and report; do not switch to building in
+    prepack. Add no test framework.
+- id: "2"
+  title: Read model and contract fixture
+  description: >-
+    readWiki, readPage, and readLint over the classic engine's exports, community detection with its parity test,
+    and the move of WIKILINK_RE into schemas.mjs (SPEC CAP-2, CAP-3, CAP-5, CAP-7, CAP-9, CAP-15; spine AD-3 to AD-6, AD-13, AD-21).
+    The contract fixture workspace and its expected JSON are the shared reference for every later story (spine AD-23).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Write the expected JSON in src/viewer/test-fixtures/contract/ by hand from spine AD-4, AD-6, and AD-7 before
+    writing data.mjs; never generate it from the code under test. Import nothing from wiki.mjs or src/project/,
+    except that the parity test may import src/project/lib/view.mjs. Use no npm package. Keep the engine edit to
+    the WIKILINK_RE move, and run test:scripts after it.
+- id: "3"
+  title: Server and process contract
+  description: >-
+    view.mjs and lib/server.mjs: workspace discovery, port choice and reuse without state, request guards and
+    headers, the seven routes, and named failure reasons (SPEC CAP-1, CAP-13, CAP-16; spine AD-7 to AD-12, AD-18, AD-21).
+    Tests cover start, rejection, reuse, a busy port, and stop on all three operating systems.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    The server serializes what data.mjs returns and adds no key. Tests pick their own free ports and never assume
+    the base port is free. Assert exit 0 on a signal off Windows only; assert port release everywhere. Start no
+    detached process and write no file. Confirm view.mjs runs from the repo against a wiki in another directory.
+- id: "4"
+  title: Graph and tree panes
+  description: >-
+    The graph pane on force-graph with entity-type colors, relation direction, citations, and a legend, and the
+    page tree built from node ids (SPEC CAP-2, CAP-3, CAP-7; spine AD-14, AD-15; viewer-ui.md). Choosing a node or
+    a tree row sets the URL hash, which is the only record of the open page.
+  invoke_dev_with: >-
+    Build against the contract fixture JSON, not hand-made data. Pure logic goes in src/viewer/ui/lib/ with node
+    tests; only the graph pane touches force-graph. Pass every label through the escape helper. Take the palette
+    and force defaults from src/project/view/ without importing or editing those files. Rebuild and commit the bundle.
+- id: "5"
+  title: Reader pane
+  description: >-
+    render.mjs, the reader with its header, body, and relations list, wikilink navigation with Back, and the
+    not-found states (SPEC CAP-8, CAP-9, CAP-10, CAP-11; spine AD-14, AD-15). With this story the three panes stay
+    in step and the viewer can be opened on a real wiki from the repo.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    render.mjs is one pure function tested under node --test, including hostile input: raw HTML, script URLs,
+    images, and HTML comments. Inject its output at exactly one element. Extend the notices if the metafile gained
+    packages. Rebuild and commit the bundle.
+- id: "6"
+  title: Filters, local graph, and search
+  description: >-
+    Filters by entity type, relation type, and confidence, the orphan toggle, the local graph by hop count, and
+    page search by title and slug (SPEC CAP-4, CAP-6, CAP-12; spine AD-5, AD-15). All of it works from the
+    /api/wiki data already loaded.
+  invoke_dev_with: >-
+    View settings live in the one root reducer; add no second store. Filtering, local-graph search, and page
+    search are pure modules in src/viewer/ui/lib/ with node tests. Show only the types received in schema, and
+    group unknown relation types under "other". Rebuild and commit the bundle.
+- id: "7"
+  title: Communities and lint markers
+  description: >-
+    Community coloring with its community list, and lint findings marked in the tree and, behind a toggle, in the
+    graph, with the open page's findings in the reader (SPEC CAP-5, CAP-15; spine AD-6, AD-13). Lint loads after
+    the graph, and its failure never blocks the viewer.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Fetch /api/lint once, after the graph has rendered. Mark a page only for a non-null nodeId, and list the
+    remaining findings in one group for the whole wiki. The lint toggle is off by default in the graph; the tree
+    always marks. Offer no fix. Rebuild and commit the bundle.
+- id: "8"
+  title: Installer and skill
+  description: >-
+    The VIEWER_FILES install list and its coverage test, the package and CI lists, and the lumi-view core skill
+    with its help row (SPEC CAP-1, CAP-14; spine AD-2, AD-19, AD-24). A classic install in a sandbox must start the
+    viewer, and a project-mode install must contain no viewer.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Never run the installer inside the repo; use npm run dev:sandbox. src/installer/viewer-files.js itself needs
+    entries in package.json files and in ci-package requiredFiles. Add _lumina/viewer to the watched paths of both
+    ci-idempotency and ci-agent-host-isolation, and the viewer test-fixtures and ui patterns to the ci-package
+    forbidden list. Add the skill to the AGENTS.md core list. Write skill text in plain language with no emoji.
+    This story and story 9 ship in one release.
+- id: "9"
+  title: Documents and release checks
+  description: >-
+    README and workspace README in three languages, the user guide section in its four-part form in three
+    languages, and the changelog entry (spine AD-24; delivery.md, "Registering the skill"). It ends with the
+    manual checks no test covers.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Describe only what the earlier stories built. Follow the plain-language rule and keep en, vi, and zh in step.
+    Name /lumi-view before the mention of opening the workspace in another markdown app. Report the manual checks
+    and their results to the maintainer: Ctrl-C in a Windows terminal, and pane behavior against viewer-ui.md on
+    the pilot wiki. Do not bump the version or tag a release.

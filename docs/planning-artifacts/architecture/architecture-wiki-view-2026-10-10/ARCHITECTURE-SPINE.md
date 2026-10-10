@@ -311,6 +311,8 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 | `src/scripts/schemas.mjs`, `src/scripts/lint.mjs` (the AD-3 edit only) | Read model |
 | `src/viewer/test-fixtures/` outside `contract/` | each unit, in a folder named after it |
 
+Ownership is authorship, not a ban on generated output. A change to `ui/` runs the build and commits the resulting `app/viewer.js`, and adds a notices section for any library it starts to bundle. A unit adds its own test files to the explicit test lists in `package.json`.
+
 ### AD-23 — One contract fixture feeds both sides
 
 - **Binds:** Read model, Client

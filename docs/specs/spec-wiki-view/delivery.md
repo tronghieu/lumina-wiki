@@ -84,6 +84,8 @@ Rejected: React without a build. React 19 ships no UMD build. The last version t
 | `docs/project-context.md` edge shape | `{source,target,type,confidence}` | Correct to `{from,type,to,confidence}` |
 | `docs/planning-artifacts/architecture.md` license audit | MIT/ISC/Apache-2.0 only | Add BSD-2-Clause and BSD-3-Clause; a BSD module already ships inside the project-mode viewer |
 
+These edits were applied on 2026-10-10, ahead of the build.
+
 Unchanged: runtime `dependencies`, no `postinstall`, no native modules on user machines, zero telemetry, cold start under 300 ms, no test framework.
 
 ## Shipping the assets
