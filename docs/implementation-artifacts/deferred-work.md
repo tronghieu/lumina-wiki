@@ -66,3 +66,7 @@
 - source_spec: `docs/specs/spec-wiki-view/stories/2-read-model-and-contract-fixture.md`
   summary: `runLint` throws on a JSON `null` line in `wiki/graph/edges.jsonl` or `citations.jsonl`, and on a non-string `to` of a reversible edge type.
   evidence: Reproduced during the wiki view read-model review; `parseEdgeLines` in `src/scripts/lint.mjs` pushes any parsed JSON value, and L06 and L17 then read properties of `null`. The viewer's `/api/lint` returns 500 on such a file while `/api/wiki` skips the row. Fix in the engine: keep only rows that are non-null objects.
+
+- source_spec: `docs/specs/spec-wiki-view/stories/3-server-and-process-contract.md`
+  summary: No test proves that the viewer finds its running copy when the workspace is entered through a non-real path on Windows (a short name or a junction).
+  evidence: Replacing `fs.realpathSync.native(root)` with `root` in `src/viewer/view.mjs` passes every test on macOS, because `process.cwd()` is already physical there. A Windows-only case that starts the viewer from the unresolved `os.tmpdir()` spelling would settle it.

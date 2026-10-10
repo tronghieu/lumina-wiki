@@ -128,7 +128,7 @@ flowchart TD
 
 - **Binds:** CAP-1 through CAP-13, CAP-15, CAP-16
 - **Prevents:** the server and the client inventing shapes independently.
-- **Rule:** These routes exist and no others. The server parses with `new URL(req.url, 'http://x')`, matches `pathname` exactly, and ignores unknown query parameters.
+- **Rule:** These routes exist and no others. The server splits the request target at the first `?`, matches the part before it against the routes exactly as sent, with no normalization, and ignores unknown query parameters.
 
 | Route | Content-Type | Returns |
 | --- | --- | --- |
@@ -171,7 +171,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 
 - **Binds:** CAP-1, CAP-16
 - **Prevents:** DNS rebinding; another site reading responses; stale assets after an upgrade; script reaching the page through content.
-- **Rule:** The server listens on `127.0.0.1` only. The server is created with `requireHostHeader: false`, so a request with no `Host` reaches the handler and is refused there. Each request passes, in order: method is GET, else 405 with `Allow: GET`; `Host`, compared case-insensitively, is `127.0.0.1:<port>` or `localhost:<port>`, else 403; route match, else 404. A request target that does not parse is 404. Any other failure inside the handler is 500 with a fixed message, never the thrown text, and the server keeps running. Every response the handler writes, errors included, carries:
+- **Rule:** The server listens on `127.0.0.1` only. The server is created with `requireHostHeader: false`, so a request with no `Host` reaches the handler and is refused there. Each request passes, in order: method is GET, else 405 with `Allow: GET`; `Host`, compared case-insensitively, is `127.0.0.1:<port>` or `localhost:<port>`, else 403; route match, else 404. A request target that matches no route as sent is 404; that covers dot segments, doubled slashes, backslashes, and the absolute form. Any other failure inside the handler is 500 with a fixed message, never the thrown text; the thrown text goes to stderr, and the server keeps running. Every response the handler writes, errors included, carries:
   - `Cache-Control: no-store`
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: no-referrer`
@@ -198,7 +198,9 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
     | `internal` | 3 |
 
   - Any failure not named above, an uncaught one included, is reported as `internal` with exit 3.
-  - SIGINT and SIGTERM close the server and its open connections and exit 0. On Windows a programmatic signal ends the process without running handlers; the port is still released.
+  - SIGINT and SIGTERM close the server and its open connections and exit 0, during startup as well.
+  - A `stale_server` failure names the port of the other viewer. A start whose one line cannot be written exits as `internal`.
+  - A `wiki` entry that is not a folder is `no_workspace`. On Windows a programmatic signal ends the process without running handlers; the port is still released.
   - It writes no file, spawns no child, and sets no timer that outlives a request.
   - It does not open a browser; the skill reports the address.
 
@@ -209,7 +211,7 @@ The client sends `id` through `encodeURIComponent`. A missing or unknown `id` is
 - **Rule:**
   - The real path is `fs.realpathSync.native(root)`. `digest` is sha256 over its UTF-8 bytes. `root` in `/api/health` is the first 16 hex characters of `digest`. The base port is `28000 + digest.readUInt32BE(0) % 1000`. The range is 20 ports from the base.
   - `version` is `packageVersion` from `<root>/_lumina/manifest.json`, read once at start; `null` when that file is missing or unreadable.
-  - A probe of a port is one `node:http` request for `GET /api/health` on `127.0.0.1`. No connection within 1 s, refused or silent, means **free**: a listener on loopback accepts at once, while a refusal can take over a second on Windows. Once connected, it waits up to 2 s for the reply: a JSON reply with `app: "lumina-view"` is a **viewer**; anything else, a timeout included, is **busy**. A probe never follows a redirect and never leaves loopback.
+  - A probe of a port is one `node:http` request for `GET /api/health` on `127.0.0.1`. No connection within 1 s, refused or silent, means **free**: a listener on loopback accepts at once, while a refusal can take over a second on Windows. Any other connection error is **busy**. Once connected, it waits up to 2 s for the reply: a JSON reply with `app: "lumina-view"` is a **viewer**; anything else, a timeout included, is **busy**. A probe never follows a redirect and never leaves loopback.
   - Step 1: probe all 20 ports at once. A viewer with the same `root` ends the search: same `version` reports reuse; a different `version` fails with `stale_server`.
   - Step 2: walk the range from the base. Listen only on a port whose probe said free.
   - `EADDRINUSE` on listen: probe that port again, apply step 1 to the answer, then move on. This is what makes two starts at the same moment end as one server and one reuse. `EACCES` on listen: treat as busy and move on. `EPERM` on listen: fail with `bind_refused` at once.
